@@ -1,0 +1,209 @@
+use crate::course::*;
+use crate::race_parameters::*;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Style {
+    // a.k.a. Strategy
+    Front = 1, // Front runner, 逃げ
+    Pace,      // Pace chaser, 先行
+    Late,      // Late surger, 差し
+    End,       // End closer, 追込
+    Oonige,    // 大逃げ
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Aptitude {
+    S,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Mood {
+    // a.k.a. Motivation
+    Awful = -2, // 絶不調
+    Bad,        // 不調
+    Normal,     // 普通
+    Good,       // 好調
+    Great,      // 絶好調
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Uma {
+    pub speed: u16,
+    pub stamina: u16,
+    pub power: u16,
+    pub guts: u16,
+    pub wit: u16,
+    pub style: Style,
+    pub distance_aptitude: Aptitude,
+    pub track_aptitude: Aptitude,
+    pub style_aptitude: Aptitude,
+}
+
+pub fn track_speed_modifier(track: Track, condition: TrackCondition) -> u16 {
+    match (track, condition) {
+        (Track::Turf, TrackCondition::Firm) => 0,
+        (Track::Turf, TrackCondition::Good) => 0,
+        (Track::Turf, TrackCondition::Soft) => 0,
+        (Track::Turf, TrackCondition::Heavy) => 50,
+        (Track::Dirt, TrackCondition::Firm) => 0,
+        (Track::Dirt, TrackCondition::Good) => 0,
+        (Track::Dirt, TrackCondition::Soft) => 0,
+        (Track::Dirt, TrackCondition::Heavy) => 50,
+    }
+}
+
+pub fn track_power_modifier(track: Track, condition: TrackCondition) -> u16 {
+    match (track, condition) {
+        (Track::Turf, TrackCondition::Firm) => 0,
+        (Track::Turf, TrackCondition::Good) => 50,
+        (Track::Turf, TrackCondition::Soft) => 50,
+        (Track::Turf, TrackCondition::Heavy) => 50,
+        (Track::Dirt, TrackCondition::Firm) => 100,
+        (Track::Dirt, TrackCondition::Good) => 50,
+        (Track::Dirt, TrackCondition::Soft) => 100,
+        (Track::Dirt, TrackCondition::Heavy) => 100,
+    }
+}
+
+pub fn wit_style_coefficient(aptitude: Aptitude) -> f64 {
+    match aptitude {
+        Aptitude::S => 1.1,
+        Aptitude::A => 1.0,
+        Aptitude::B => 0.85,
+        Aptitude::C => 0.75,
+        Aptitude::D => 0.6,
+        Aptitude::E => 0.4,
+        Aptitude::F => 0.2,
+        Aptitude::G => 0.1,
+    }
+}
+
+pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
+    let mut computed = stat;
+    if computed > 1200 {
+        computed = 1200 + (computed - 1200) / 2;
+    }
+    ((computed).max(1) as f64 * multiplier) as u16
+}
+
+pub fn calculate_adjusted_speed(
+    base_speed: u16,
+    track: Track,
+    condition: TrackCondition,
+    course_modifier: f64,
+) -> u16 {
+    let modified_speed = (base_speed as f64 * course_modifier) as u16;
+    let track_modifier = track_speed_modifier(track, condition);
+    modified_speed.saturating_sub(track_modifier).max(1)
+}
+
+pub fn calculate_adjusted_power(base_power: u16, track: Track, condition: TrackCondition) -> u16 {
+    let modifier = track_power_modifier(track, condition);
+    base_power.saturating_sub(modifier).max(1)
+}
+
+pub fn calculate_adjusted_wit(base_wit: u16, track_aptitude: Aptitude) -> u16 {
+    let aptitude_mod = wit_style_coefficient(track_aptitude);
+    ((base_wit as f64 * aptitude_mod) as u16).max(1)
+}
+
+pub fn threshold_stat_bonus(stat_value: u16) -> f64 {
+    if stat_value <= 300 {
+        0.05
+    } else if stat_value <= 600 {
+        0.1
+    } else if stat_value <= 900 {
+        0.15
+    } else {
+        0.2
+    }
+}
+
+pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
+    match stat_type {
+        ThresholdStat::Speed => uma.speed,
+        ThresholdStat::Stamina => uma.stamina,
+        ThresholdStat::Power => uma.power,
+        ThresholdStat::Guts => uma.guts,
+        ThresholdStat::Wit => uma.wit,
+    }
+}
+
+pub fn course_speed_modifier(base: &Uma, course_set_status: &[i32]) -> f64 {
+    if course_set_status.is_empty() {
+        return 1.0;
+    }
+
+    let total_bonus: f64 = course_set_status
+        .iter()
+        .filter_map(|&stat_id| {
+            // Convert i32 to ThresholdStat enum using TryFrom
+            ThresholdStat::try_from(stat_id).ok()
+        })
+        .map(|stat_type| {
+            let stat_value = get_base_stat_by_type(base, stat_type);
+            threshold_stat_bonus(stat_value)
+        })
+        .sum();
+
+    // Return average bonus as multiplier (1.0 + average bonus)
+    let valid_count = course_set_status
+        .iter()
+        .filter(|&&id| ThresholdStat::try_from(id).is_ok())
+        .count();
+
+    if valid_count > 0 {
+        1.0 + (total_bonus / valid_count as f64)
+    } else {
+        1.0
+    }
+}
+
+impl Uma {
+    pub fn new(
+        speed: u16,
+        stamina: u16,
+        power: u16,
+        guts: u16,
+        wit: u16,
+        style: Style,
+        distance_aptitude: Aptitude,
+        track_aptitude: Aptitude,
+        style_aptitude: Aptitude,
+    ) -> Self {
+        Uma {
+            speed,
+            stamina,
+            power,
+            guts,
+            wit,
+            style,
+            distance_aptitude,
+            track_aptitude,
+            style_aptitude,
+        }
+    }
+    pub fn raw_to_base(raw: Uma, mood: Mood) -> Self {
+        // n.b.: In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
+        // multiplier based on team rank. This is out of scope for this simulator.
+        let mood_multiplier = 1.0 + (mood as i8 as f64) * 0.02;
+        Uma {
+            speed: calculate_base_stat(raw.speed, mood_multiplier),
+            stamina: calculate_base_stat(raw.stamina, mood_multiplier),
+            power: calculate_base_stat(raw.power, mood_multiplier),
+            guts: calculate_base_stat(raw.guts, mood_multiplier),
+            wit: calculate_base_stat(raw.wit, mood_multiplier),
+            style: raw.style,
+            distance_aptitude: raw.distance_aptitude,
+            track_aptitude: raw.track_aptitude,
+            style_aptitude: raw.style_aptitude,
+        }
+    }
+}
