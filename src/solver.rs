@@ -6,9 +6,9 @@ use crate::runner::*;
 use crate::skill::*;
 use crate::uma::*;
 
-pub fn modify_stat(stat: &mut u16, modifier: f64) {
+pub fn modify_stat(stat: &mut u16, modifier: i32) {
     // Make sure stat doesn't go below 1
-    *stat = if modifier >= 0.0 {
+    *stat = if modifier >= 0 {
         stat.saturating_add(modifier as u16)
     } else {
         stat.saturating_sub((-modifier) as u16).max(1)
@@ -471,19 +471,19 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
             //state.runner.start_delay = skill.modifier;
         }
         SkillType::TargetSpeed => {
-            state.runner.target_speed += skill.modifier;
+            state.runner.target_speed += skill.modifier as f64;
             //TODO: this.activeTargetSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
         }
         SkillType::Acceleration => {
-            state.runner.acceleration += skill.modifier;
+            state.runner.acceleration += skill.modifier as f64;
             //TODO: this.activeAccelSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
         }
         SkillType::CurrentSpeed => {
-            state.runner.speed += skill.modifier;
+            state.runner.speed += skill.modifier as f64;
             //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
         }
         SkillType::CurrentSpeedWithNaturalDeceleration => {
-            state.runner.speed += skill.modifier;
+            state.runner.speed += skill.modifier as f64;
             //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
         }
         SkillType::Recovery => {
@@ -499,6 +499,13 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
         }
         SkillType::ExtendEvolvedDuration => {
             // TODO: Extend duration of evolved skills
+        }
+        // Unknown skill types - placeholder for future implementation
+        SkillType::Unknown41 => {
+            // TODO: implement these skill types when their effects are known
+        }
+        _ => {
+            // TODO: implement other known skill types
         }
     }
     state.runner.activated_skills[state.runner.phase as usize] += 1;

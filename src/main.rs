@@ -58,8 +58,22 @@ fn main() {
     println!("  Surface: {:?}", course.surface);
     println!("  Course set status: {:?}", course.course_set_status);
 
-    // Create sample skills (empty for now, can be expanded later)
-    let skills: Vec<Skill> = vec![];
+    // Load all skills from JSON file
+    let skills_map = Skill::load_skills_from_file("data/skill_data.json")
+        .expect("Failed to load skill data");
+
+    println!("\nLoaded {} skills from JSON", skills_map.len());
+
+    // Convert skill IDs to actual Skill objects
+    let skills: Vec<Skill> = skill_ids
+        .iter()
+        .filter_map(|id| skills_map.get(&id.to_string()).cloned())
+        .collect();
+
+    println!("Uma has {} skills", skills.len());
+    for skill in &skills {
+        println!("  Skill ID: {}, Rarity: {:?}", skill.id, skill.rarity);
+    }
 
     // Initialize the race state (RaceSolver)
     let race_state = RaceState::new(uma, mood, course, params, skills);
