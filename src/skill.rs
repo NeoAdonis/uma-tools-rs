@@ -9,7 +9,7 @@ pub enum SkillType {
     StaminaUp = 2,
     PowerUp = 3,
     GutsUp = 4,
-    WitUp = 5,
+    WizUp = 5,
     ChangeStyleOonige = 6,
     Fov = 8,
     Recovery = 9,

@@ -31,8 +31,8 @@ pub enum Aptitude {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Mood {
-    // a.k.a. Motivation
+pub enum Motivation {
+    // a.k.a. Mood
     Awful = -2, // 絶不調
     Bad,        // 不調
     Normal,     // 普通
@@ -48,7 +48,7 @@ pub struct Uma {
     pub power: u16,
     pub guts: u16,
     #[serde(rename = "wisdom")]
-    pub wit: u16,
+    pub wiz: u16, // a.k.a. Wit
     #[serde(rename = "strategy")]
     pub style: Style,
     pub distance_aptitude: Aptitude,
@@ -93,7 +93,7 @@ pub fn track_power_modifier(track: Track, condition: TrackCondition) -> u16 {
     }
 }
 
-pub fn wit_style_coefficient(aptitude: Aptitude) -> f64 {
+pub fn wiz_style_coefficient(aptitude: Aptitude) -> f64 {
     match aptitude {
         Aptitude::S => 1.1,
         Aptitude::A => 1.0,
@@ -106,12 +106,12 @@ pub fn wit_style_coefficient(aptitude: Aptitude) -> f64 {
     }
 }
 
-pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
+pub fn calculate_base_stat(stat: u16, coefficient: f64) -> u16 {
     let mut computed = stat;
     if computed > 1200 {
         computed = 1200 + (computed - 1200) / 2;
     }
-    ((computed).max(1) as f64 * multiplier) as u16
+    ((computed).max(1) as f64 * coefficient) as u16
 }
 
 pub fn calculate_adjusted_speed(
@@ -130,9 +130,9 @@ pub fn calculate_adjusted_power(base_power: u16, track: Track, condition: TrackC
     base_power.saturating_sub(modifier).max(1)
 }
 
-pub fn calculate_adjusted_wit(base_wit: u16, track_aptitude: Aptitude) -> u16 {
-    let aptitude_mod = wit_style_coefficient(track_aptitude);
-    ((base_wit as f64 * aptitude_mod) as u16).max(1)
+pub fn calculate_adjusted_wiz(base_wiz: u16, track_aptitude: Aptitude) -> u16 {
+    let aptitude_mod = wiz_style_coefficient(track_aptitude);
+    ((base_wiz as f64 * aptitude_mod) as u16).max(1)
 }
 
 pub fn threshold_stat_bonus(stat_value: u16) -> f64 {
@@ -153,7 +153,7 @@ pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
         ThresholdStat::Stamina => uma.stamina,
         ThresholdStat::Power => uma.power,
         ThresholdStat::Guts => uma.guts,
-        ThresholdStat::Wit => uma.wit,
+        ThresholdStat::Wiz => uma.wiz,
     }
 }
 
@@ -180,7 +180,7 @@ impl Uma {
         stamina: u16,
         power: u16,
         guts: u16,
-        wit: u16,
+        wiz: u16,
         style: Style,
         distance_aptitude: Aptitude,
         track_aptitude: Aptitude,
@@ -191,23 +191,23 @@ impl Uma {
             stamina,
             power,
             guts,
-            wit,
+            wiz,
             style,
             distance_aptitude,
             track_aptitude,
             style_aptitude,
         }
     }
-    pub fn raw_to_base(raw: Uma, mood: Mood) -> Self {
-        // n.b.: In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
+    pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
+        // n.b.: In the Unity Cup (アオハル杯) scenario, a bonus is applied before motivation
         // multiplier based on team rank. This is out of scope for this simulator.
-        let mood_multiplier = 1.0 + (mood as i8 as f64) * 0.02;
+        let motivation_coefficient = 1.0 + (motivation as i8 as f64) * 0.02;
         Uma {
-            speed: calculate_base_stat(raw.speed, mood_multiplier),
-            stamina: calculate_base_stat(raw.stamina, mood_multiplier),
-            power: calculate_base_stat(raw.power, mood_multiplier),
-            guts: calculate_base_stat(raw.guts, mood_multiplier),
-            wit: calculate_base_stat(raw.wit, mood_multiplier),
+            speed: calculate_base_stat(raw.speed, motivation_coefficient),
+            stamina: calculate_base_stat(raw.stamina, motivation_coefficient),
+            power: calculate_base_stat(raw.power, motivation_coefficient),
+            guts: calculate_base_stat(raw.guts, motivation_coefficient),
+            wiz: calculate_base_stat(raw.wiz, motivation_coefficient),
             style: raw.style,
             distance_aptitude: raw.distance_aptitude,
             track_aptitude: raw.track_aptitude,

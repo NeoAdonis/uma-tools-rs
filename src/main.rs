@@ -1,4 +1,5 @@
 //mod condition_parser;
+//mod condition_variables;
 mod course;
 mod race_parameters;
 mod runner;
@@ -42,8 +43,8 @@ fn main() {
         popularity: 0,
     };
 
-    // Set mood to good condition
-    let mood = Mood::Good;
+    // Set sample motivation
+    let motivation = Motivation::Good;
 
     // TODO: load course ID from args
     let course_id = "10913";
@@ -59,8 +60,8 @@ fn main() {
     println!("  Course set status: {:?}", course.course_set_status);
 
     // Load all skills from JSON file
-    let skills_map = Skill::load_skills_from_file("data/skill_data.json")
-        .expect("Failed to load skill data");
+    let skills_map =
+        Skill::load_skills_from_file("data/skill_data.json").expect("Failed to load skill data");
 
     println!("\nLoaded {} skills from JSON", skills_map.len());
 
@@ -76,7 +77,7 @@ fn main() {
     }
 
     // Initialize the race state (RaceSolver)
-    let race_state = RaceState::new(uma, mood, course, params, skills);
+    let race_state = RaceState::new(uma, motivation, course, params, skills);
 
     println!("\nRace initialized successfully!");
     println!("Initial HP: {:.2}", race_state.runner.hp);

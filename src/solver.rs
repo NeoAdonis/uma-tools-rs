@@ -71,10 +71,10 @@ fn base_target_speed(
     }
 }
 
-fn section_multiplier_range(wit_stat: u16) -> (f64, f64) {
-    // Max = WitStat / 5500 * log10(WitStat * 0.1) [%]
+fn section_coefficient_range(wiz_stat: u16) -> (f64, f64) {
+    // Max = WizStat / 5500 * log10(WizStat * 0.1) [%]
     // Min = Max - 0.65 [%]
-    let max = (wit_stat as f64 / 5500.0) * (wit_stat as f64 * 0.1).log10();
+    let max = (wiz_stat as f64 / 5500.0) * (wiz_stat as f64 * 0.1).log10();
     let min = max - 0.65;
     (min / 100.0, max / 100.0)
 }
@@ -257,7 +257,7 @@ fn calculate_last_spurt(
     base_speed: f64,
     max_last_spurt_speed: f64,
     late_race_base_target_speed: f64,
-    wit_stat: u16,
+    wiz_stat: u16,
     track: Track,
     condition: TrackCondition,
     guts_stat: u16,
@@ -329,8 +329,8 @@ fn calculate_last_spurt(
     // Sort candidates by time (best to worst)
     candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
 
-    // Wisdom check: 15 + 0.05 * WitStat [%]
-    let acceptance_chance = (15.0 + 0.05 * wit_stat as f64) / 100.0;
+    // Wisdom check: 15 + 0.05 * WizStat [%]
+    let acceptance_chance = (15.0 + 0.05 * wiz_stat as f64) / 100.0;
 
     // Try each candidate from best to worst
     let mut cumulative_probability = 0.0;
@@ -433,13 +433,13 @@ pub struct RaceState {
 impl RaceState {
     pub fn new(
         uma: Uma,
-        mood: Mood,
+        motivation: Motivation,
         course: Course,
         params: RaceParameters,
         skills: Vec<Skill>,
     ) -> Self {
         let behavior = GameBehavior::Original;
-        let runner = Runner::new(uma, mood, course, params, skills, behavior);
+        let runner = Runner::new(uma, motivation, course, params, skills, behavior);
         RaceState { runner, behavior }
     }
     pub fn step(&mut self, delta_time: f64) {
@@ -461,8 +461,8 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
         SkillType::GutsUp => {
             modify_stat(&mut state.runner.adjusted.guts, skill.modifier);
         }
-        SkillType::WitUp => {
-            modify_stat(&mut state.runner.adjusted.wit, skill.modifier);
+        SkillType::WizUp => {
+            modify_stat(&mut state.runner.adjusted.wiz, skill.modifier);
         }
         SkillType::MultiplyStartDelay => {
             //state.runner.start_delay *= skill.modifier;

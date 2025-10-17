@@ -44,7 +44,7 @@ pub enum ThresholdStat {
     Stamina = 2,
     Power = 3,
     Guts = 4,
-    Wit = 5,
+    Wiz = 5,
 }
 
 #[derive(Clone, Debug, Deserialize)]
