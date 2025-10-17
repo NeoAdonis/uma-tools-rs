@@ -1,17 +1,24 @@
 use crate::course::*;
 use crate::race_parameters::*;
+use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub enum Style {
     // a.k.a. Strategy
+    #[serde(rename = "Nige")]
     Front = 1, // Front runner, 逃げ
+    #[serde(rename = "Senkou")]
     Pace,      // Pace chaser, 先行
+    #[serde(rename = "Sasi")]
     Late,      // Late surger, 差し
+    #[serde(rename = "Oikomi")]
     End,       // End closer, 追込
+    #[serde(rename = "Oonige")]
     Oonige,    // 大逃げ
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Aptitude {
     S,
     A,
@@ -33,17 +40,31 @@ pub enum Mood {
     Great,      // 絶好調
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Uma {
     pub speed: u16,
     pub stamina: u16,
     pub power: u16,
     pub guts: u16,
+    #[serde(rename = "wisdom")]
     pub wit: u16,
+    #[serde(rename = "strategy")]
     pub style: Style,
     pub distance_aptitude: Aptitude,
+    #[serde(rename = "surfaceAptitude")]
     pub track_aptitude: Aptitude,
+    #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,
+}
+
+/// Helper struct for deserializing Uma with skills from JSON
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UmaData {
+    #[serde(flatten)]
+    pub uma: Uma,
+    pub skills: Vec<u32>,
 }
 
 pub fn track_speed_modifier(track: Track, condition: TrackCondition) -> u16 {

@@ -8,23 +8,29 @@ mod uma;
 
 use course::*;
 use race_parameters::*;
+use serde_json;
 use skill::*;
 use solver::*;
 use uma::*;
 
 fn main() {
-    // Create a sample Uma with balanced stats (A-rank stats around 1000)
-    let sample_uma = Uma::new(
-        1000,        // speed
-        900,         // stamina
-        950,         // power
-        850,         // guts
-        1050,        // wit
-        Style::Late, // running style (late surger)
-        Aptitude::A, // distance aptitude
-        Aptitude::A, // track aptitude (turf/dirt)
-        Aptitude::A, // style aptitude
-    );
+    // TODO: load from file
+    let json_data = r#"{
+        "speed": 1500,
+        "stamina": 800,
+        "power": 1200,
+        "guts": 700,
+        "wisdom": 1200,
+        "strategy": "Oikomi",
+        "distanceAptitude": "S",
+        "surfaceAptitude": "A",
+        "strategyAptitude": "A",
+        "skills": [200642]
+    }"#;
+
+    let uma_data = serde_json::from_str::<UmaData>(json_data).expect("Failed to parse JSON");
+    let uma = uma_data.uma;
+    let skill_ids = uma_data.skills;
 
     // Set sample parameters
     let params = RaceParameters {
@@ -84,7 +90,7 @@ fn main() {
     let skills: Vec<Skill> = vec![];
 
     // Initialize the race state (RaceSolver)
-    let race_state = RaceState::new(sample_uma, mood, sample_course, params, skills);
+    let race_state = RaceState::new(uma, mood, sample_course, params, skills);
 
     println!("Race initialized successfully!");
     println!("Initial HP: {:.2}", race_state.runner.hp);
