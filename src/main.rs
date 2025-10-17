@@ -45,53 +45,25 @@ fn main() {
     // Set mood to good condition
     let mood = Mood::Good;
 
-    // Create a sample 2000m turf course (Tokyo Racecourse - typical medium distance)
-    let sample_course = Course {
-        id: 10101,
-        distance: 2000,
-        distance_type: DistanceType::Mile,
-        surface: Track::Turf,
-        turn: Direction::Left,
-        course_set_status: vec![1, 5], // Speed and Wit threshold bonuses
-        finish_time_min: 114,
-        finish_time_max: 126,
-        lane_max: 8,
-        corners: vec![
-            Corner {
-                start: 400,
-                length: 200,
-            },
-            Corner {
-                start: 1400,
-                length: 300,
-            },
-        ],
-        slopes: vec![Slope {
-            start: 800,
-            length: 100,
-            slope: 2,
-        }],
-        straights: vec![
-            Straight {
-                start: 0,
-                end: 400,
-                front_type: FrontType::Audience,
-            },
-            Straight {
-                start: 1700,
-                end: 2000,
-                front_type: FrontType::Audience,
-            },
-        ],
-        race_track_id: 101,
-    };
+    // TODO: load course ID from args
+    let course_id = "10913";
+
+    // Load course data from JSON file
+    let course = Course::from_json_file("data/course_data.json", course_id)
+        .expect("Failed to load course data");
+
+    println!("Loaded course:");
+    println!("  ID: {}", course.id);
+    println!("  Distance: {}m", course.distance);
+    println!("  Surface: {:?}", course.surface);
+    println!("  Course set status: {:?}", course.course_set_status);
 
     // Create sample skills (empty for now, can be expanded later)
     let skills: Vec<Skill> = vec![];
 
     // Initialize the race state (RaceSolver)
-    let race_state = RaceState::new(uma, mood, sample_course, params, skills);
+    let race_state = RaceState::new(uma, mood, course, params, skills);
 
-    println!("Race initialized successfully!");
+    println!("\nRace initialized successfully!");
     println!("Initial HP: {:.2}", race_state.runner.hp);
 }

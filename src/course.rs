@@ -1,6 +1,7 @@
 include!("track_names.rs");
 
 use serde::Deserialize;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 
@@ -11,78 +12,92 @@ pub enum Phase {
     Last, // Last spurt
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum Track {
     Turf = 1, // 芝
-    Dirt,     // ダート
+    Dirt = 2, // ダート
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum Direction {
-    Left = 1, // Clockwise
-    Right,    // Counterclockwise
-    Unused,
-    Straight, // No curves
+    Left = 1,  // Clockwise
+    Right = 2, // Counterclockwise
+    Unused = 3,
+    Straight = 4, // No curves
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum DistanceType {
-    Short = 1, // less than 1600m
-    Mile,      // less than 2000m
-    Medium,    // less than 2400m
-    Long,
+    Short = 1,  // less than 1600m
+    Mile = 2,   // less than 2000m
+    Medium = 3, // less than 2400m
+    Long = 4,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum ThresholdStat {
     Speed = 1,
-    Stamina,
-    Power,
-    Guts,
-    Wit,
+    Stamina = 2,
+    Power = 3,
+    Guts = 4,
+    Wit = 5,
 }
 
-impl TryFrom<i32> for ThresholdStat {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(ThresholdStat::Speed),
-            2 => Ok(ThresholdStat::Stamina),
-            3 => Ok(ThresholdStat::Power),
-            4 => Ok(ThresholdStat::Guts),
-            5 => Ok(ThresholdStat::Wit),
-            _ => Err(()),
-        }
-    }
-}
-
+#[derive(Clone, Debug, Deserialize)]
 pub struct Corner {
-    pub start: u32,  // in meters
-    pub length: u32, // in meters
+    pub start: f64,  // in meters
+    pub length: f64, // in meters
 }
 
+#[derive(Clone, Debug, Deserialize)]
 pub struct Slope {
-    pub start: u32,  // in meters
-    pub length: u32, // in meters
+    pub start: f64,  // in meters
+    pub length: f64, // in meters
     pub slope: i32,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum FrontType {
     Audience = 1,
-    Opposite,
+    Opposite = 2,
+    Unknown = 3,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Straight {
-    pub start: u32, // in meters
-    pub end: u32,   // in meters
+    pub start: f64, // in meters
+    pub end: f64,   // in meters
     pub front_type: FrontType,
 }
 
+#[derive(Clone, Debug)]
 pub struct Course {
     pub id: u16,
-    pub distance: i32, // in meters
+    data: CourseData,
+}
+
+impl std::ops::Deref for Course {
+    type Target = CourseData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CourseData {
+    pub distance: i32,
     pub distance_type: DistanceType,
     pub surface: Track,
     pub turn: Direction,
-    pub course_set_status: Vec<i32>,
+    pub course_set_status: Vec<ThresholdStat>,
     pub finish_time_min: u32,
     pub finish_time_max: u32,
     pub lane_max: u32,
@@ -90,6 +105,8 @@ pub struct Course {
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
     pub race_track_id: i32,
+    #[serde(skip)]
+    _course: (), // unused in current implementation
 }
 
 impl Course {
@@ -111,5 +128,52 @@ impl Course {
     }
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         get_track_name(self.id, language)
+    }
+
+    /// Load a specific course by ID from a JSON file
+    ///
+    /// # Arguments
+    /// * `json_path` - Path to the JSON file containing course data
+    /// * `course_id` - The course ID to look up (e.g., "10101")
+    ///
+    /// # Returns
+    /// * `Ok(Course)` - The course data with the ID field populated
+    /// * `Err` - If the file can't be read, JSON is invalid, or course ID not found
+    pub fn from_json_file(
+        json_path: &str,
+        course_id: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        use std::fs;
+        let json_content = fs::read_to_string(json_path)?;
+        Self::from_json_str(&json_content, course_id)
+    }
+
+    /// Load a specific course by ID from a JSON string
+    ///
+    /// # Arguments
+    /// * `json_str` - JSON string containing course data
+    /// * `course_id` - The course ID to look up (e.g., "10101")
+    ///
+    /// # Returns
+    /// * `Ok(Course)` - The course data with the ID field populated
+    /// * `Err` - If the JSON is invalid or course ID not found
+    pub fn from_json_str(
+        json_str: &str,
+        course_id: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        use std::collections::HashMap;
+
+        let courses: HashMap<String, CourseData> = serde_json::from_str(json_str)?;
+
+        let data = courses
+            .get(course_id)
+            .ok_or_else(|| format!("Course ID '{}' not found in JSON", course_id))?
+            .clone();
+
+        let id = course_id
+            .parse::<u16>()
+            .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
+
+        Ok(Course { id, data })
     }
 }

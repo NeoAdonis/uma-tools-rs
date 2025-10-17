@@ -9,13 +9,13 @@ pub enum Style {
     #[serde(rename = "Nige")]
     Front = 1, // Front runner, 逃げ
     #[serde(rename = "Senkou")]
-    Pace,      // Pace chaser, 先行
+    Pace, // Pace chaser, 先行
     #[serde(rename = "Sasi")]
-    Late,      // Late surger, 差し
+    Late, // Late surger, 差し
     #[serde(rename = "Oikomi")]
-    End,       // End closer, 追込
+    End, // End closer, 追込
     #[serde(rename = "Oonige")]
-    Oonige,    // 大逃げ
+    Oonige, // 大逃げ
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -157,34 +157,21 @@ pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
     }
 }
 
-pub fn course_speed_modifier(base: &Uma, course_set_status: &[i32]) -> f64 {
+pub fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) -> f64 {
     if course_set_status.is_empty() {
         return 1.0;
     }
 
     let total_bonus: f64 = course_set_status
         .iter()
-        .filter_map(|&stat_id| {
-            // Convert i32 to ThresholdStat enum using TryFrom
-            ThresholdStat::try_from(stat_id).ok()
-        })
-        .map(|stat_type| {
+        .map(|&stat_type| {
             let stat_value = get_base_stat_by_type(base, stat_type);
             threshold_stat_bonus(stat_value)
         })
         .sum();
 
     // Return average bonus as multiplier (1.0 + average bonus)
-    let valid_count = course_set_status
-        .iter()
-        .filter(|&&id| ThresholdStat::try_from(id).is_ok())
-        .count();
-
-    if valid_count > 0 {
-        1.0 + (total_bonus / valid_count as f64)
-    } else {
-        1.0
-    }
+    1.0 + (total_bonus / course_set_status.len() as f64)
 }
 
 impl Uma {
