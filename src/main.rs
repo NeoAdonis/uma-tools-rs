@@ -1,5 +1,5 @@
-//mod condition_parser;
-//mod condition_variables;
+mod condition_parser;
+mod condition_variables;
 mod course;
 mod race_parameters;
 mod runner;
