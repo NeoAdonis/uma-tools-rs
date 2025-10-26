@@ -57,12 +57,20 @@ pub struct Corner {
 pub struct Slope {
     pub start: f64,  // in meters
     pub length: f64, // in meters
-    pub slope: i32,
+    slope: i32,
 }
 
 impl Slope {
     pub fn is_uphill(&self) -> bool {
         self.slope > 0
+    }
+
+    pub fn is_downhill(&self) -> bool {
+        self.slope < 0
+    }
+
+    pub fn slope_percent(&self) -> f64 {
+        self.slope as f64 / 10000.0
     }
 }
 

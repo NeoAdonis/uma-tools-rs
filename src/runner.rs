@@ -45,7 +45,7 @@ pub struct Runner {
     pub is_rushed: bool, // TODO: implement
     pub rush_section: Option<u8>,
     pub is_start_dash: bool,
-    pub downhill_accel: Option<f64>,
+    pub slope_acceleration: Option<f64>,
     pub phase: Phase,
     pub last_spurt: Option<LastSpurt>,
     pub current_corner_idx: Option<usize>,
@@ -196,7 +196,7 @@ impl Runner {
             rush_section,
             is_rushed: false,
             is_start_dash: true,
-            downhill_accel: None,
+            slope_acceleration: None,
             last_spurt: None,
             current_corner_idx: None,
             current_slope_idx: None,
@@ -213,8 +213,8 @@ impl Runner {
         }
     }
 
-    pub fn accelerate(&mut self, is_uphill: bool, skill_modifier: f64) {
-        let base_accel = if is_uphill { 0.0004 } else { 0.0006 };
+    pub fn accelerate(&mut self, skill_modifier: f64) {
+        let base_accel = if self.is_uphill() { 0.0004 } else { 0.0006 };
 
         let power_component = (500.0 * self.adjusted.power as f64).sqrt();
         let strategy_coef =
@@ -246,19 +246,30 @@ impl Runner {
     }
 
     pub fn target_speed(&self) -> f64 {
-        self.base_target_speed + self.downhill_accel.unwrap_or(0.0)
+        self.base_target_speed + self.slope_acceleration.unwrap_or(0.0)
+    }
+
+    pub fn is_uphill(&self) -> bool {
+        self.slope_acceleration.map_or(false, |s| s > 0.0)
     }
 
     pub fn is_downhill_accel(&self) -> bool {
-        self.downhill_accel.is_some()
+        self.slope_acceleration.map_or(false, |s| s < 0.0)
     }
 
-    pub fn toggle_downhill_accel(&mut self, downhill: Option<f64>) {
-        if downhill.is_some() && downhill.unwrap() >= 0.0 {
-            panic!("Downhill slope must have negative slope value");
+    pub fn start_uphill_acceleration(&mut self, slope: f64) {
+        self.slope_acceleration = Some(-slope * 200.0 / self.adjusted.power as f64);
+    }
+
+    pub fn start_downhill_acceleration(&mut self, slope: f64) {
+        if slope > 0.0 {
+            panic!("Not a downhill slope");
         }
-        // TODO: review; should be 0.3 + SlopePer/10 [m/s]
-        self.downhill_accel = downhill.map(|s| s.abs() / 10.0 + 0.3);
+        self.slope_acceleration = Some(-slope / 10.0 + 0.3);
+    }
+
+    pub fn stop_slope_acceleration(&mut self) {
+        self.slope_acceleration = None;
     }
 
     pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {

@@ -370,6 +370,7 @@ impl RaceState {
             params,
         }
     }
+
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
         //  Check end of corner
@@ -416,8 +417,8 @@ impl RaceState {
         };
         //  Calculate acceleration/deceleration
         if self.runner.speed < self.runner.target_speed() {
-            // TODO: calculate parameters
-            self.runner.accelerate(false, 0.0);
+            // TODO: calculate skill modifier
+            self.runner.accelerate(0.0);
         } else {
             self.runner.decelerate();
         }
@@ -439,23 +440,7 @@ impl RaceState {
             self.runner.is_downhill_accel(),
         ) * delta_time;
         //  Check for slope
-        // TODO: implement slope effects, including is_downhill_accel flag
-        if self.runner.current_slope_idx.is_none() {
-            if let Some(next_idx) = self.find_next_slope() {
-                if self.runner.position >= self.course.slopes[next_idx].start {
-                    //self.on_slope_enter(next_idx);
-                    self.runner.current_slope_idx = Some(next_idx);
-                }
-            }
-        } else {
-            let idx = self.runner.current_slope_idx.unwrap();
-            if self.runner.position
-                >= self.course.slopes[idx].start + self.course.slopes[idx].length
-            {
-                //self.on_slope_exit(idx);
-                self.runner.current_slope_idx = None;
-            }
-        }
+        self.update_slope();
         // Post-Update
         // Events
         //  Check start of corner
@@ -469,18 +454,66 @@ impl RaceState {
             }
         }
     }
+
+    fn update_slope(&mut self) {
+        // TODO: implement slope effects
+        if self.runner.current_slope_idx.is_none() {
+            if let Some(next_idx) = self.find_next_slope() {
+                if self.runner.position >= self.course.slopes[next_idx].start {
+                    //self.on_slope_enter(next_idx);
+                    if self.course.slopes[next_idx].is_uphill() {
+                        self.runner.start_uphill_acceleration(
+                            self.course.slopes[next_idx].slope_percent(),
+                        );
+                    }
+                    self.runner.current_slope_idx = Some(next_idx);
+                }
+            }
+        } else {
+            let idx = self.runner.current_slope_idx.unwrap();
+            if self.runner.position
+                >= self.course.slopes[idx].start + self.course.slopes[idx].length
+            {
+                //self.on_slope_exit(idx);
+                self.runner.stop_slope_acceleration();
+                self.runner.current_slope_idx = None;
+            } else if self.course.slopes[idx].is_downhill() {
+                let has_second_passed = false; // TODO: track time on slope
+                if has_second_passed {
+                    if self.runner.is_downhill_accel() {
+                        // 20% chance to stop each second
+                        let roll = 0.5; // TODO: random roll
+                        if roll < 0.2 {
+                            self.runner.stop_slope_acceleration();
+                        }
+                    } else {
+                        let roll = 0.5; // TODO: random roll
+                        let chance = self.runner.adjusted.wiz as f64 * 0.0004;
+                        if roll < chance {
+                            self.runner.start_downhill_acceleration(
+                                self.course.slopes[idx].slope_percent(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn find_next_slope(&self) -> Option<usize> {
         self.course
             .slopes
             .iter()
             .position(|c| c.start > self.runner.position)
     }
+
     fn find_next_corner(&self) -> Option<usize> {
         self.course
             .corners
             .iter()
             .position(|c| c.start > self.runner.position)
     }
+
     pub fn run(&mut self) {
         let dt = 1.0 / 15.0; // 15 FPS
         // TODO: replace `for` with `while`
@@ -489,6 +522,7 @@ impl RaceState {
             self.step(dt);
         }
     }
+
     pub fn update_phase(&mut self) {
         //  - Early: section < 4
         //  - Mid: section >= 4 && section < 16
