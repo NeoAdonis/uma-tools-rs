@@ -422,21 +422,10 @@ impl RaceState {
             self.runner.decelerate();
         }
         //  Update phase:
-        //  - Early: section < 4
-        //  - Mid: section >= 4 && section < 16
-        //  - Late: section >= 16 && section < 20
-        //  - Last spurt: section >= 20
-        self.runner.phase = if self.runner.position < self.course.section_length() * 4.0 {
-            Phase::Early
-        } else if self.runner.position < self.course.section_length() * 16.0 {
-            Phase::Mid
-        } else if self.runner.position < self.course.section_length() * 20.0 {
-            Phase::Late
-        } else {
-            Phase::Last
-        };
+        self.update_phase();
         //  Calculate distance and position
-        self.runner.update_speed(delta_time, self.course.base_speed());
+        self.runner
+            .update_speed(delta_time, self.course.base_speed());
         self.runner.position += self.runner.speed * delta_time;
         self.runner.hp -= calculate_hp_consumption_per_second(
             self.runner.speed,
@@ -499,6 +488,21 @@ impl RaceState {
         for _ in 0..1 {
             self.step(dt);
         }
+    }
+    pub fn update_phase(&mut self) {
+        //  - Early: section < 4
+        //  - Mid: section >= 4 && section < 16
+        //  - Late: section >= 16 && section < 20
+        //  - Last spurt: section >= 20
+        self.runner.phase = if self.runner.position < self.course.section_length() * 4.0 {
+            Phase::Early
+        } else if self.runner.position < self.course.section_length() * 16.0 {
+            Phase::Mid
+        } else if self.runner.position < self.course.section_length() * 20.0 {
+            Phase::Late
+        } else {
+            Phase::Last
+        };
     }
 }
 
