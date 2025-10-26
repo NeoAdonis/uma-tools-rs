@@ -44,6 +44,7 @@ pub struct Runner {
     pub activated_skills: Vec<Skill>,
     pub is_rushed: bool, // TODO: implement
     pub rush_section: Option<u8>,
+    pub is_start_dash: bool,
     pub phase: Phase,
     pub last_spurt: Option<LastSpurt>,
     pub current_corner_idx: Option<usize>,
@@ -179,7 +180,7 @@ impl Runner {
             motivation,
             gate_roll: gate_roll as u8,
             speed: 3.0,
-            acceleration: 24.0, // start dash
+            acceleration: 0.0, // start dash acceleration is applied separately
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
@@ -193,6 +194,7 @@ impl Runner {
             position: 0.0,
             rush_section,
             is_rushed: false,
+            is_start_dash: true,
             last_spurt: None,
             current_corner_idx: None,
             current_slope_idx: None,
@@ -209,7 +211,7 @@ impl Runner {
         }
     }
 
-    pub fn accelerate(&mut self, is_uphill: bool, is_start_dash: bool, skill_modifier: f64) {
+    pub fn accelerate(&mut self, is_uphill: bool, skill_modifier: f64) {
         let base_accel = if is_uphill { 0.0004 } else { 0.0006 };
 
         let power_component = (500.0 * self.adjusted.power as f64).sqrt();
@@ -222,7 +224,7 @@ impl Runner {
         let base_acceleration =
             base_accel * power_component * strategy_coef * ground_modifier * distance_modifier;
 
-        let start_dash_modifier = if is_start_dash { 24.0 } else { 0.0 };
+        let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
         self.acceleration = base_acceleration + skill_modifier + start_dash_modifier;
     }
@@ -239,5 +241,18 @@ impl Runner {
                 Phase::Late | Phase::Last => -1.0,
             }
         };
+    }
+
+    pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
+        // TODO: review
+        self.speed += self.acceleration * delta_time;
+        if self.speed > self.target_speed {
+            self.speed = self.target_speed;
+        }
+        if self.is_start_dash && self.speed >= 0.85 * course_base_speed {
+            self.is_start_dash = false;
+        } else if !self.is_start_dash && self.speed < self.min_speed {
+            self.speed = self.min_speed;
+        }
     }
 }

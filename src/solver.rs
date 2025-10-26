@@ -417,7 +417,7 @@ impl RaceState {
         //  Calculate acceleration/deceleration
         if self.runner.speed < self.runner.target_speed {
             // TODO: calculate parameters
-            self.runner.accelerate(false, false, 0.0);
+            self.runner.accelerate(false, 0.0);
         } else {
             self.runner.decelerate();
         }
@@ -436,14 +436,7 @@ impl RaceState {
             Phase::Last
         };
         //  Calculate distance and position
-        // TODO: review
-        self.runner.speed += self.runner.acceleration * delta_time;
-        if self.runner.speed < self.runner.min_speed {
-            self.runner.speed = self.runner.min_speed;
-        }
-        if self.runner.speed > self.runner.target_speed {
-            self.runner.speed = self.runner.target_speed;
-        }
+        self.runner.update_speed(delta_time, self.course.base_speed());
         self.runner.position += self.runner.speed * delta_time;
         self.runner.hp -= calculate_hp_consumption_per_second(
             self.runner.speed,
