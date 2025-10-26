@@ -154,8 +154,11 @@ fn main() {
     }
 
     // Initialize the race state (RaceSolver)
-    let race_state = RaceState::new(uma, motivation, course, params, skills);
+    let mut race_state = RaceState::new(uma, motivation, course, params, skills);
 
     println!("\nRace initialized successfully!");
     println!("Initial HP: {:.2}", race_state.runner.hp);
+
+    // Simulate
+    race_state.run();
 }

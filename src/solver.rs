@@ -1,5 +1,3 @@
-use std::clone;
-
 use crate::course::*;
 use crate::race_parameters::*;
 use crate::runner::*;
@@ -262,7 +260,7 @@ fn calculate_last_spurt(
     condition: TrackCondition,
     guts_stat: u16,
     rng_roll: f64, // Random value between 0.0 and 1.0 for wisdom check
-) -> (f64, f64) {
+) -> LastSpurt {
     // Last spurt calculation estimates stamina usage up to 60m before goal line
     let calculation_distance = remaining_distance - 60.0;
 
@@ -277,7 +275,10 @@ fn calculate_last_spurt(
     );
 
     if current_hp >= max_hp_required {
-        return (max_last_spurt_speed, remaining_distance);
+        return LastSpurt {
+            max_speed: max_last_spurt_speed,
+            target_distance: remaining_distance,
+        };
     }
 
     // Build list of candidates by lowering speed by 0.1 m/s each step
@@ -337,16 +338,25 @@ fn calculate_last_spurt(
     for candidate in &candidates {
         cumulative_probability += acceptance_chance;
         if rng_roll < cumulative_probability {
-            return (candidate.speed, candidate.distance);
+            return LastSpurt {
+                max_speed: candidate.speed,
+                target_distance: candidate.distance,
+            };
         }
     }
 
     // If all checks fail, use the slowest (last) candidate
     if let Some(last) = candidates.last() {
-        (last.speed, last.distance)
+        LastSpurt {
+            max_speed: last.speed,
+            target_distance: last.distance,
+        }
     } else {
         // Fallback: use late-race base speed for full distance
-        (late_race_base_target_speed, remaining_distance)
+        LastSpurt {
+            max_speed: late_race_base_target_speed,
+            target_distance: remaining_distance,
+        }
     }
 }
 
@@ -427,6 +437,8 @@ fn process_skills(skills: &[Skill], phase: Phase, perspective: Perspective) {
 
 pub struct RaceState {
     pub runner: Runner,
+    pub course: Course,
+    pub params: RaceParameters,
     pub behavior: GameBehavior,
 }
 
@@ -439,11 +451,184 @@ impl RaceState {
         skills: Vec<Skill>,
     ) -> Self {
         let behavior = GameBehavior::Original;
-        let runner = Runner::new(uma, motivation, course, params, skills, behavior);
-        RaceState { runner, behavior }
+        let runner = Runner::new(uma, motivation, &course, &params, skills, behavior);
+        RaceState {
+            runner,
+            course,
+            params,
+            behavior,
+        }
     }
     pub fn step(&mut self, delta_time: f64) {
-        self.runner.step(delta_time);
+        // Pre-Update
+        //  Check end of corner
+        // TODO: implement corner effects
+        if let Some(idx) = self.runner.current_corner_idx {
+            if self.runner.position
+                >= self.course.corners[idx].start + self.course.corners[idx].length
+            {
+                //self.on_corner_exit(idx); // and straight entry
+                self.runner.current_corner_idx = None;
+            }
+        }
+        // Update
+        //  Activate skills
+        // TODO: implement
+        //  Recover HP by skills
+        // TODO: implement
+        //  Update last spurt state
+        // TODO: review
+        if (self.runner.position >= self.course.distance as f64 / 2.0)
+            && (self.runner.last_spurt.is_none())
+        {
+            self.runner.last_spurt = Some(calculate_last_spurt(
+                self.runner.hp,
+                self.course.distance as f64 - self.runner.position,
+                self.course.base_speed(),
+                last_spurt_speed_max(
+                    self.course.base_speed(),
+                    self.runner.base.style,
+                    self.runner.base.speed,
+                    self.runner.base.guts,
+                    self.runner.base.distance_aptitude,
+                    self.behavior,
+                ),
+                base_target_speed(
+                    self.course.base_speed(),
+                    self.runner.base.style,
+                    Phase::Late,
+                    self.runner.adjusted.speed,
+                    self.runner.base.distance_aptitude,
+                ),
+                self.runner.base.wiz,
+                self.course.surface,
+                self.params.condition,
+                self.runner.base.guts,
+                0.5, // TODO: random roll
+            ));
+        }
+        //  Update target speed
+        // TODO: review
+        self.runner.target_speed = if let Some(last_spurt) = &self.runner.last_spurt {
+            last_spurt.max_speed
+        } else {
+            base_target_speed(
+                self.course.base_speed(),
+                self.runner.base.style,
+                self.runner.phase,
+                self.runner.adjusted.speed,
+                self.runner.base.distance_aptitude,
+            )
+        };
+        //  Calculate acceleration/deceleration
+        // TODO: review
+        if self.runner.speed < self.runner.target_speed {
+            calculate_acceleration(
+                self.runner.adjusted.power,
+                self.runner.base.style,
+                self.runner.phase,
+                self.runner.base.track_aptitude,
+                self.runner.base.distance_aptitude,
+                if let Some(idx) = self.runner.current_slope_idx {
+                    self.course.slopes[idx].is_uphill()
+                } else {
+                    false
+                },
+                false, // TODO: is_start_dash
+                0.0,   // TODO: skill_modifier
+            );
+        } else {
+            calculate_deceleration(
+                self.runner.phase,
+                self.runner.hp <= 0.0,
+                false, // TODO: is_pace_down
+            );
+        }
+        //  Update phase:
+        //  - Early: section < 4
+        //  - Mid: section >= 4 && section < 16
+        //  - Late: section >= 16 && section < 20
+        //  - Last spurt: section >= 20
+        self.runner.phase = if self.runner.position < self.course.section_length() * 4.0 {
+            Phase::Early
+        } else if self.runner.position < self.course.section_length() * 16.0 {
+            Phase::Mid
+        } else if self.runner.position < self.course.section_length() * 20.0 {
+            Phase::Late
+        } else {
+            Phase::Last
+        };
+        //  Calculate distance and position
+        // TODO: review
+        self.runner.speed += self.runner.acceleration * delta_time;
+        if self.runner.speed < self.runner.min_speed {
+            self.runner.speed = self.runner.min_speed;
+        }
+        if self.runner.speed > self.runner.target_speed {
+            self.runner.speed = self.runner.target_speed;
+        }
+        self.runner.position += self.runner.speed * delta_time;
+        self.runner.hp -= calculate_hp_consumption_per_second(
+            self.runner.speed,
+            self.course.base_speed(),
+            self.course.surface,
+            self.params.condition,
+            self.runner.phase,
+            self.runner.adjusted.guts,
+            self.runner.is_rushed,
+            false, // TODO: is_pace_down
+            false, // TODO: is_downhill_accel
+        ) * delta_time;
+        //  Check for slope
+        // TODO: implement slope effects
+        if self.runner.current_slope_idx.is_none() {
+            if let Some(next_idx) = self.find_next_slope() {
+                if self.runner.position >= self.course.slopes[next_idx].start {
+                    //self.on_slope_enter(next_idx);
+                    self.runner.current_slope_idx = Some(next_idx);
+                }
+            }
+        } else {
+            let idx = self.runner.current_slope_idx.unwrap();
+            if self.runner.position
+                >= self.course.slopes[idx].start + self.course.slopes[idx].length
+            {
+                //self.on_slope_exit(idx);
+                self.runner.current_slope_idx = None;
+            }
+        }
+        // Post-Update
+        // Events
+        //  Check start of corner
+        // TODO: implement corner effects
+        if self.runner.current_corner_idx.is_none() {
+            if let Some(next_idx) = self.find_next_corner() {
+                if self.runner.position >= self.course.corners[next_idx].start {
+                    //self.on_corner_enter(next_idx); // and straight exit
+                    self.runner.current_corner_idx = Some(next_idx);
+                }
+            }
+        }
+    }
+    fn find_next_slope(&self) -> Option<usize> {
+        self.course
+            .slopes
+            .iter()
+            .position(|c| c.start > self.runner.position)
+    }
+    fn find_next_corner(&self) -> Option<usize> {
+        self.course
+            .corners
+            .iter()
+            .position(|c| c.start > self.runner.position)
+    }
+    pub fn run(&mut self) {
+        let dt = 1.0 / 15.0; // 15 FPS
+        // TODO: replace `for` with `while`
+        //while self.runner.position < self.course.distance as f64 {
+        for _ in 0..1 {
+            self.step(dt);
+        }
     }
 }
 
@@ -487,7 +672,6 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
             //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
         }
         SkillType::Recovery => {
-            state.runner.activated_recoveries += 1;
             //state.recover(skill.modifier);
             if state.behavior != GameBehavior::Original && state.runner.phase >= Phase::Mid {
                 //TODO: this.updateLastSpurtState();
@@ -500,13 +684,14 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
         SkillType::ExtendEvolvedDuration => {
             // TODO: Extend duration of evolved skills
         }
-        // Unknown skill types - placeholder for future implementation
-        SkillType::Unknown41 => {
-            // TODO: implement these skill types when their effects are known
-        }
-        _ => {
-            // TODO: implement other known skill types
-        }
+        SkillType::ChangeStyleOonige => todo!(),
+        SkillType::Fov => todo!(),
+        SkillType::RushTime => todo!(),
+        SkillType::LaneMovementSpeed => todo!(),
+        SkillType::RushChance => todo!(),
+        SkillType::AllStatsUp => todo!(),
+        SkillType::LaneChange => todo!(),
+        SkillType::Unknown41 => todo!(),
     }
-    state.runner.activated_skills[state.runner.phase as usize] += 1;
+    //state.runner.activated_skills[state.runner.phase as usize] += 1;
 }

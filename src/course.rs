@@ -60,6 +60,12 @@ pub struct Slope {
     pub slope: i32,
 }
 
+impl Slope {
+    pub fn is_uphill(&self) -> bool {
+        self.slope > 0
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FrontType {
@@ -104,7 +110,7 @@ pub struct CourseData {
     pub corners: Vec<Corner>,
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
-    pub race_track_id: i32,
+    pub race_track_id: u16,
     #[serde(skip)]
     _course: (), // unused in current implementation
 }
@@ -119,15 +125,27 @@ impl Course {
     //         _ => DistanceType::Long,
     //     }
     // }
+
+    // in meters
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / 24.0
     }
+
     // in m/s
     pub fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
+
+    /// Get the track name in the specified language
+    ///
+    /// # Arguments
+    /// * `language` - Desired language
+    ///
+    /// # Returns
+    /// * `Some(&'static str)` - The track name if available in the specified language
+    /// * `None` - If the track name is not available in the specified language
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
-        get_track_name(self.id, language)
+        get_track_name(self.race_track_id, language)
     }
 
     /// Load a specific course by ID from a JSON file

@@ -19,23 +19,33 @@ pub fn hp_style_coefficient(style: Style) -> f64 {
     }
 }
 
+pub struct LastSpurt {
+    pub max_speed: f64,
+    pub target_distance: f64,
+}
+
 pub struct Runner {
     pub base: Uma,
     pub adjusted: Uma,
     pub motivation: Motivation,
-    pub start_delay: u16,
+    pub start_delay: f64, // in seconds
     pub gate_roll: u8,
     pub speed: f64,        // in m/s
     pub acceleration: f64, // in m/s^2
+    pub position: f64,     // in m
     pub hp: f64,
     pub max_hp: f64,
     pub hp_guts_modifier: f64,
-    pub hp_subpar_accept_chance: f64, //TODO: investigate
     pub min_speed: f64,
     pub target_speed: f64,
-    pub activated_recoveries: u8,
-    pub activated_skills: [u8; 4],
+    pub available_skills: Vec<Skill>,
+    pub activated_skills: Vec<Skill>,
+    pub is_rushed: bool, // TODO: implement
+    pub rush_section: Option<u8>,
     pub phase: Phase,
+    pub last_spurt: Option<LastSpurt>,
+    pub current_corner_idx: Option<usize>,
+    pub current_slope_idx: Option<usize>,
 }
 
 pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
@@ -60,12 +70,18 @@ pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> 
     }
 }
 
+enum StartType {
+    Good,
+    Normal,
+    Late,
+}
+
 impl Runner {
     pub fn new(
         uma: Uma,
         motivation: Motivation,
-        course: Course,
-        params: RaceParameters,
+        course: &Course,
+        params: &RaceParameters,
         skills: Vec<Skill>,
         behavior: GameBehavior,
     ) -> Self {
@@ -75,6 +91,18 @@ impl Runner {
         let base_uma = Uma::raw_to_base(uma, motivation);
         // 2. Calculate skill activation chance and determine whether skills can activate
         let skill_chance = (1.0 - 90.0 / uma.wiz as f64).max(0.2);
+        let available_skills = skills
+            .into_iter()
+            .filter(|skill| {
+                // Unique and green skills always activate
+                if skill.is_unique() || skill.is_green() {
+                    return true;
+                }
+                // Other skills activate based on chance
+                let roll: f64 = 0.0; // TODO: random
+                roll < skill_chance
+            })
+            .collect::<Vec<Skill>>();
         // 3. Activate out of gate skills
         // TODO: implement
         // let gold_indices: Vec<usize> = skills.iter().enumerate()
@@ -89,7 +117,7 @@ impl Runner {
         // 5. Set starting location based off gate number
         // TODO: implement starting location; assume no effect for now
         // 6. Calculate start delay
-        start_delay *= 0.5; // TODO: random
+        start_delay *= 0.05; // TODO: random up to 0.1 seconds
         // 7. Calculate adjusted stats
         let adjusted_uma = adjust_stats(&base_uma, &course, &params);
         // 8. Convert stamina to HP
@@ -98,12 +126,10 @@ impl Runner {
         // 9. Set starting speed (this is done in the constructor)
         // 10. Determine rush chance
         let rush_chance = (0.65 / (0.1 * uma.wiz as f64 + 1.0).log10()).powf(2.0);
+        let roll: f64 = 1.0; // TODO: random
+        let rush_section = if roll < rush_chance { Some(2) } else { None }; // TODO: random section from 2 to 9
 
         // Initialize race state
-        let min_speed =
-            0.85 * course.base_speed() + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001;
-        let hp_guts_modifier = 1.0 + 200.0 / (600.0 * adjusted_uma.guts as f64).sqrt();
-        let hp_subpar_accept_chance = (15.0 + 0.05 * adjusted_uma.wiz as f64).round();
         Runner {
             base: base_uma,
             adjusted: adjusted_uma,
@@ -111,34 +137,31 @@ impl Runner {
             gate_roll: gate_roll as u8,
             speed: 3.0,
             acceleration: 24.0, // start dash
-            min_speed: min_speed,
+            min_speed: 0.85 * course.base_speed() + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
-            start_delay: start_delay as u16,
-            activated_recoveries: 0,
-            activated_skills: [0; 4],
+            start_delay,
+            available_skills,
+            activated_skills: Vec::new(),
             phase: Phase::Early,
             hp: max_hp,
             max_hp: max_hp,
-            hp_guts_modifier: hp_guts_modifier,
-            hp_subpar_accept_chance: hp_subpar_accept_chance,
+            hp_guts_modifier: 1.0 + 200.0 / (600.0 * adjusted_uma.guts as f64).sqrt(),
+            position: 0.0,
+            rush_section,
+            is_rushed: false,
+            last_spurt: None,
+            current_corner_idx: None,
+            current_slope_idx: None,
         }
     }
 
-    pub fn step(&mut self, dt: f64) {
-        // TODO: implement
-        // Pre-Update
-        //  Check end of corner
-        // Update
-        //  Activate skills
-        //  Recover HP by skills
-        //  Update last spurt state
-        //  Update target speed
-        //  Calculate acceleration
-        //  Update phase
-        //  Calculate distance and position
-        //  Check for slope
-        // Post-Update
-        // Events
-        //  Check start of corner
+    // TODO: report
+    #[allow(dead_code)]
+    fn start_type(&self) -> StartType {
+        match self.start_delay {
+            d if d < 0.02 => StartType::Good,
+            d if d > 0.08 => StartType::Late,
+            _ => StartType::Normal,
+        }
     }
 }

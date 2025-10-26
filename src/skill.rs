@@ -111,6 +111,31 @@ impl Skill {
         Skill { id, data }
     }
 
+    pub fn is_green(self: &Skill) -> bool {
+        for alternative in &self.alternatives {
+            for effect in &alternative.effects {
+                match effect.skill_type {
+                    SkillType::SpeedUp
+                    | SkillType::StaminaUp
+                    | SkillType::PowerUp
+                    | SkillType::GutsUp
+                    | SkillType::WizUp => {
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        false
+    }
+
+    pub fn is_unique(self: &Skill) -> bool {
+        matches!(
+            self.rarity,
+            SkillRarity::Unique | SkillRarity::UniqueUpgraded | SkillRarity::UniqueNatural
+        )
+    }
+
     /// Load all skills from a JSON file into a HashMap
     ///
     /// # Arguments

@@ -18,7 +18,7 @@ pub enum Season {
     Summer,     // 夏
     Autumn,     // 秋
     Winter,     // 冬
-    Sakura,     // 桜, Cherry Blossom Season
+    Sakura,     // 桜, Cherry Blossom Season; a subset of Spring
 }
 
 pub enum Time {
@@ -47,4 +47,5 @@ pub struct RaceParameters {
     pub time: Time,
     pub grade: Grade,
     pub popularity: i32,
+    pub gates: u8,
 }
