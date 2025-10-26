@@ -175,29 +175,6 @@ pub fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) ->
 }
 
 impl Uma {
-    pub fn new(
-        speed: u16,
-        stamina: u16,
-        power: u16,
-        guts: u16,
-        wiz: u16,
-        style: Style,
-        distance_aptitude: Aptitude,
-        track_aptitude: Aptitude,
-        style_aptitude: Aptitude,
-    ) -> Self {
-        Uma {
-            speed,
-            stamina,
-            power,
-            guts,
-            wiz,
-            style,
-            distance_aptitude,
-            track_aptitude,
-            style_aptitude,
-        }
-    }
     pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
         // n.b.: In the Unity Cup (アオハル杯) scenario, a bonus is applied before motivation
         // multiplier based on team rank. This is out of scope for this simulator.
