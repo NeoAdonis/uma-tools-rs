@@ -3,6 +3,7 @@ use crate::race_parameters::*;
 use crate::skill::*;
 use crate::uma::*;
 
+#[allow(dead_code)]
 pub enum GameBehavior {
     Original,         // when the game was first released
     FirstAnniversary, // after the first anniversary update
@@ -71,7 +72,49 @@ pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> 
     }
 }
 
-enum StartType {
+fn acceleration_strategy_phase_coefficient(style: Style, phase: Phase) -> f64 {
+    match (style, phase) {
+        // Early-race
+        (Style::Front, Phase::Early) => 1.0,
+        (Style::Pace, Phase::Early) => 0.985,
+        (Style::Late, Phase::Early) => 0.975,
+        (Style::End, Phase::Early) => 0.945,
+        (Style::Oonige, Phase::Early) => 1.17,
+        // Mid-race
+        (Style::Front | Style::Pace | Style::Late | Style::End, Phase::Mid) => 1.0,
+        (Style::Oonige, Phase::Mid) => 0.94,
+        // Late-race and Last spurt
+        (Style::Front, Phase::Late | Phase::Last) => 0.996,
+        (Style::Pace, Phase::Late | Phase::Last) => 0.996,
+        (Style::Late, Phase::Late | Phase::Last) => 1.0,
+        (Style::End, Phase::Late | Phase::Last) => 0.997,
+        (Style::Oonige, Phase::Late | Phase::Last) => 0.956,
+    }
+}
+
+fn ground_type_proficiency_modifier(aptitude: Aptitude) -> f64 {
+    match aptitude {
+        Aptitude::S => 1.05,
+        Aptitude::A => 1.0,
+        Aptitude::B => 0.9,
+        Aptitude::C => 0.8,
+        Aptitude::D => 0.7,
+        Aptitude::E => 0.5,
+        Aptitude::F => 0.3,
+        Aptitude::G => 0.1,
+    }
+}
+
+fn acceleration_distance_proficiency_modifier(aptitude: Aptitude) -> f64 {
+    match aptitude {
+        Aptitude::S | Aptitude::A | Aptitude::B | Aptitude::C | Aptitude::D => 1.0,
+        Aptitude::E => 0.6,
+        Aptitude::F => 0.5,
+        Aptitude::G => 0.4,
+    }
+}
+
+pub enum StartType {
     Good,
     Normal,
     Late,
@@ -158,11 +201,43 @@ impl Runner {
 
     // TODO: report
     #[allow(dead_code)]
-    fn start_type(&self) -> StartType {
+    pub fn start_type(&self) -> StartType {
         match self.start_delay {
             d if d < 0.02 => StartType::Good,
             d if d > 0.08 => StartType::Late,
             _ => StartType::Normal,
         }
+    }
+
+    pub fn accelerate(&mut self, is_uphill: bool, is_start_dash: bool, skill_modifier: f64) {
+        let base_accel = if is_uphill { 0.0004 } else { 0.0006 };
+
+        let power_component = (500.0 * self.adjusted.power as f64).sqrt();
+        let strategy_coef =
+            acceleration_strategy_phase_coefficient(self.adjusted.style, self.phase);
+        let ground_modifier = ground_type_proficiency_modifier(self.adjusted.track_aptitude);
+        let distance_modifier =
+            acceleration_distance_proficiency_modifier(self.adjusted.distance_aptitude);
+
+        let base_acceleration =
+            base_accel * power_component * strategy_coef * ground_modifier * distance_modifier;
+
+        let start_dash_modifier = if is_start_dash { 24.0 } else { 0.0 };
+
+        self.acceleration = base_acceleration + skill_modifier + start_dash_modifier;
+    }
+
+    pub fn decelerate(&mut self) {
+        self.acceleration = if self.hp <= 0.0 {
+            -1.2
+        // } else if pace_down_mode {
+        //     -0.5
+        } else {
+            match self.phase {
+                Phase::Early => -1.2,
+                Phase::Mid => -0.8,
+                Phase::Late | Phase::Last => -1.0,
+            }
+        };
     }
 }

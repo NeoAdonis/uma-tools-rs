@@ -96,94 +96,6 @@ fn last_spurt_speed_max(
     base_component + speed_component + guts_component
 }
 
-fn acceleration_strategy_phase_coefficient(style: Style, phase: Phase) -> f64 {
-    match (style, phase) {
-        // Early-race
-        (Style::Front, Phase::Early) => 1.0,
-        (Style::Pace, Phase::Early) => 0.985,
-        (Style::Late, Phase::Early) => 0.975,
-        (Style::End, Phase::Early) => 0.945,
-        (Style::Oonige, Phase::Early) => 1.17,
-        // Mid-race
-        (Style::Front | Style::Pace | Style::Late | Style::End, Phase::Mid) => 1.0,
-        (Style::Oonige, Phase::Mid) => 0.94,
-        // Late-race and Last spurt
-        (Style::Front, Phase::Late | Phase::Last) => 0.996,
-        (Style::Pace, Phase::Late | Phase::Last) => 0.996,
-        (Style::Late, Phase::Late | Phase::Last) => 1.0,
-        (Style::End, Phase::Late | Phase::Last) => 0.997,
-        (Style::Oonige, Phase::Late | Phase::Last) => 0.956,
-    }
-}
-
-fn ground_type_proficiency_modifier(aptitude: Aptitude) -> f64 {
-    match aptitude {
-        Aptitude::S => 1.05,
-        Aptitude::A => 1.0,
-        Aptitude::B => 0.9,
-        Aptitude::C => 0.8,
-        Aptitude::D => 0.7,
-        Aptitude::E => 0.5,
-        Aptitude::F => 0.3,
-        Aptitude::G => 0.1,
-    }
-}
-
-fn acceleration_distance_proficiency_modifier(aptitude: Aptitude) -> f64 {
-    match aptitude {
-        Aptitude::S | Aptitude::A | Aptitude::B | Aptitude::C | Aptitude::D => 1.0,
-        Aptitude::E => 0.6,
-        Aptitude::F => 0.5,
-        Aptitude::G => 0.4,
-    }
-}
-
-fn calculate_acceleration(
-    power_stat: u16,
-    style: Style,
-    phase: Phase,
-    track_aptitude: Aptitude,
-    distance_aptitude: Aptitude,
-    is_uphill: bool,
-    is_start_dash: bool,
-    skill_modifier: f64,
-) -> f64 {
-    // Accel = BaseAccel * sqrt(500.0 * PowerStat) * StrategyPhaseCoefficient
-    //         * GroundTypeProficiencyModifier * DistanceProficiencyModifier
-    //         + SkillModifier + StartDashModifier
-
-    // Base acceleration: 0.0006 normally, 0.0004 when uphill
-    let base_accel = if is_uphill { 0.0004 } else { 0.0006 };
-
-    let power_component = (500.0 * power_stat as f64).sqrt();
-    let strategy_coef = acceleration_strategy_phase_coefficient(style, phase);
-    let ground_modifier = ground_type_proficiency_modifier(track_aptitude);
-    let distance_modifier = acceleration_distance_proficiency_modifier(distance_aptitude);
-
-    let base_acceleration =
-        base_accel * power_component * strategy_coef * ground_modifier * distance_modifier;
-
-    // Start dash adds 24.0 m/s^2 additional acceleration
-    let start_dash_modifier = if is_start_dash { 24.0 } else { 0.0 };
-
-    base_acceleration + skill_modifier + start_dash_modifier
-}
-
-fn calculate_deceleration(phase: Phase, out_of_hp: bool, pace_down_mode: bool) -> f64 {
-    if out_of_hp {
-        -1.2
-    } else if pace_down_mode {
-        // Pace Down mode added after 1.5 anniversary (assumed on 1st anniv. update)
-        -0.5
-    } else {
-        match phase {
-            Phase::Early => -1.2,
-            Phase::Mid => -0.8,
-            Phase::Late | Phase::Last => -1.0,
-        }
-    }
-}
-
 fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
     match (track, condition) {
         (Track::Turf, TrackCondition::Firm) => 1.0,
@@ -212,13 +124,9 @@ fn calculate_hp_consumption_per_second(
     is_pace_down: bool,
     is_downhill_accel: bool,
 ) -> f64 {
-    // HPConsumptionPerSecond = 20.0 * (CurrentSpeed - BaseSpeed + 12.0)^2 / 144.0
-    //                          * StatusModifier * GroundModifier
-
     let speed_diff = current_speed - base_speed + 12.0;
     let base_consumption = 20.0 * speed_diff.powi(2) / 144.0;
 
-    // Status modifier (multiplicative)
     let mut status_modifier = 1.0;
     if is_rushed {
         status_modifier *= 1.6;
@@ -245,35 +153,45 @@ struct LastSpurtCandidate {
     speed: f64,
     distance: f64,
     time: f64,
-    hp_required: f64,
 }
 
 fn calculate_last_spurt(
-    current_hp: f64,
+    runner: &Runner,
     remaining_distance: f64,
     base_speed: f64,
-    max_last_spurt_speed: f64,
-    late_race_base_target_speed: f64,
-    wiz_stat: u16,
     track: Track,
     condition: TrackCondition,
-    guts_stat: u16,
     rng_roll: f64, // Random value between 0.0 and 1.0 for wisdom check
 ) -> LastSpurt {
-    // Last spurt calculation estimates stamina usage up to 60m before goal line
+    let max_last_spurt_speed = last_spurt_speed_max(
+        base_speed,
+        runner.adjusted.style,
+        runner.adjusted.speed,
+        runner.adjusted.guts,
+        runner.adjusted.distance_aptitude,
+    );
+    let late_race_base_target_speed = base_target_speed(
+        base_speed,
+        runner.adjusted.style,
+        Phase::Late,
+        runner.adjusted.speed,
+        runner.adjusted.distance_aptitude,
+    );
+
+    // Estimate stamina usage up to 60m before goal line
     let calculation_distance = remaining_distance - 60.0;
 
-    // Quick check: if HP is sufficient for max speed, use it immediately
+    // If HP is sufficient for max speed, use it immediately
     let max_hp_required = estimate_hp_consumption(
         max_last_spurt_speed,
         calculation_distance,
         base_speed,
         track,
         condition,
-        guts_stat,
+        runner.adjusted.guts,
     );
 
-    if current_hp >= max_hp_required {
+    if runner.hp >= max_hp_required {
         return LastSpurt {
             max_speed: max_last_spurt_speed,
             target_distance: remaining_distance,
@@ -293,15 +211,15 @@ fn calculate_last_spurt(
             base_speed,
             track,
             condition,
-            guts_stat,
+            runner.adjusted.guts,
         );
 
         // Find distance we can actually run at this speed with available HP
-        let usable_distance = if hp_required <= current_hp {
+        let usable_distance = if hp_required <= runner.hp {
             remaining_distance
         } else {
             // Scale down distance based on HP available
-            let hp_ratio = current_hp / hp_required;
+            let hp_ratio = runner.hp / hp_required;
             (calculation_distance * hp_ratio) + 60.0
         };
 
@@ -320,19 +238,15 @@ fn calculate_last_spurt(
             speed: test_speed,
             distance: usable_distance,
             time,
-            hp_required,
         });
 
         test_speed -= 0.1;
     }
 
-    // Sort candidates by time (best to worst)
-    candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
-
-    // Wisdom check: 15 + 0.05 * WizStat [%]
-    let acceptance_chance = (15.0 + 0.05 * wiz_stat as f64) / 100.0;
+    let acceptance_chance = (15.0 + 0.05 * runner.adjusted.wiz as f64) / 100.0;
 
     // Try each candidate from best to worst
+    candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
     let mut cumulative_probability = 0.0;
     for candidate in &candidates {
         cumulative_probability += acceptance_chance;
@@ -352,6 +266,7 @@ fn calculate_last_spurt(
         }
     } else {
         // Fallback: use late-race base speed for full distance
+        // TODO: ensure this case is unreachable
         LastSpurt {
             max_speed: late_race_base_target_speed,
             target_distance: remaining_distance,
@@ -411,27 +326,27 @@ fn estimate_hp_consumption(
 // }
 
 fn process_skills(skills: &[Skill], phase: Phase, perspective: Perspective) {
-    for skill in skills {
-        // Check if skill can activate in this phase and perspective
-        // if skill.perspective != perspective && skill.perspective != Perspective::All {
-        //     continue;
-        // }
+    // for skill in skills {
+    // Check if skill can activate in this phase and perspective
+    // if skill.perspective != perspective && skill.perspective != Perspective::All {
+    //     continue;
+    // }
 
-        // // Check each effect of the skill
-        // for effect in &skill.effects {
-        //     // Check if effect can activate in this phase
-        //     if effect.phase != phase && effect.phase != Phase::All {
-        //         continue;
-        //     }
+    // // Check each effect of the skill
+    // for effect in &skill.effects {
+    //     // Check if effect can activate in this phase
+    //     if effect.phase != phase && effect.phase != Phase::All {
+    //         continue;
+    //     }
 
-        //     // Roll for activation chance
-        //     let roll: f64 = 0;
-        //     if roll < effect.activation_chance {
-        //         // Activate the skill effect
-        //         activate_skill(state, effect);
-        //     }
-        // }
-    }
+    //     // Roll for activation chance
+    //     let roll: f64 = 0;
+    //     if roll < effect.activation_chance {
+    //         // Activate the skill effect
+    //         activate_skill(state, effect);
+    //     }
+    // }
+    // }
 }
 
 pub struct RaceState {
@@ -478,27 +393,11 @@ impl RaceState {
             && (self.runner.last_spurt.is_none())
         {
             self.runner.last_spurt = Some(calculate_last_spurt(
-                self.runner.hp,
+                &self.runner,
                 self.course.distance as f64 - self.runner.position,
                 self.course.base_speed(),
-                last_spurt_speed_max(
-                    self.course.base_speed(),
-                    self.runner.base.style,
-                    self.runner.base.speed,
-                    self.runner.base.guts,
-                    self.runner.base.distance_aptitude,
-                ),
-                base_target_speed(
-                    self.course.base_speed(),
-                    self.runner.base.style,
-                    Phase::Late,
-                    self.runner.adjusted.speed,
-                    self.runner.base.distance_aptitude,
-                ),
-                self.runner.base.wiz,
                 self.course.surface,
                 self.params.condition,
-                self.runner.base.guts,
                 0.5, // TODO: random roll
             ));
         }
@@ -509,35 +408,18 @@ impl RaceState {
         } else {
             base_target_speed(
                 self.course.base_speed(),
-                self.runner.base.style,
+                self.runner.adjusted.style,
                 self.runner.phase,
                 self.runner.adjusted.speed,
-                self.runner.base.distance_aptitude,
+                self.runner.adjusted.distance_aptitude,
             )
         };
         //  Calculate acceleration/deceleration
-        // TODO: review
         if self.runner.speed < self.runner.target_speed {
-            calculate_acceleration(
-                self.runner.adjusted.power,
-                self.runner.base.style,
-                self.runner.phase,
-                self.runner.base.track_aptitude,
-                self.runner.base.distance_aptitude,
-                if let Some(idx) = self.runner.current_slope_idx {
-                    self.course.slopes[idx].is_uphill()
-                } else {
-                    false
-                },
-                false, // TODO: is_start_dash
-                0.0,   // TODO: skill_modifier
-            );
+            // TODO: calculate parameters
+            self.runner.accelerate(false, false, 0.0);
         } else {
-            calculate_deceleration(
-                self.runner.phase,
-                self.runner.hp <= 0.0,
-                false, // TODO: is_pace_down
-            );
+            self.runner.decelerate();
         }
         //  Update phase:
         //  - Early: section < 4
@@ -669,7 +551,8 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
         SkillType::Recovery => {
             // TODO: implement recovery logic
             //state.recover(skill.modifier);
-            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && state.runner.phase >= Phase::Mid {
+            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && state.runner.phase >= Phase::Mid
+            {
                 //state.runner.last_spurt = calculate_last_spurt(current_hp, remaining_distance, base_speed, max_last_spurt_speed, late_race_base_target_speed, wiz_stat, track, condition, guts_stat, rng_roll);
             }
         }
