@@ -9,10 +9,79 @@ mod uma;
 
 use course::*;
 use race_parameters::*;
+use rand::distr::*;
+use rand::prelude::*;
 use serde_json;
 use skill::*;
 use solver::*;
 use uma::*;
+
+// TODO: remove
+impl Distribution<Motivation> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Motivation {
+        match rng.random_range(0..5) {
+            0 => Motivation::Awful,
+            1 => Motivation::Bad,
+            2 => Motivation::Normal,
+            3 => Motivation::Good,
+            _ => Motivation::Great,
+        }
+    }
+}
+impl Distribution<TrackCondition> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TrackCondition {
+        match rng.random_range(0..4) {
+            0 => TrackCondition::Firm,
+            1 => TrackCondition::Good,
+            2 => TrackCondition::Soft,
+            _ => TrackCondition::Heavy,
+        }
+    }
+}
+impl Distribution<Weather> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Weather {
+        match rng.random_range(0..4) {
+            0 => Weather::Sunny,
+            1 => Weather::Cloudy,
+            2 => Weather::Rainy,
+            _ => Weather::Snowy,
+        }
+    }
+}
+impl Distribution<Grade> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Grade {
+        match rng.random_range(0..7) {
+            0 => Grade::G1,
+            1 => Grade::G2,
+            2 => Grade::G3,
+            3 => Grade::OP,
+            4 => Grade::PreOP,
+            5 => Grade::Maiden,
+            _ => Grade::Debut,
+        }
+    }
+}
+impl Distribution<Time> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Time {
+        match rng.random_range(0..4) {
+            0 => Time::Morning,
+            1 => Time::Noon,
+            2 => Time::Evening,
+            _ => Time::Night,
+        }
+    }
+}
+impl Distribution<Season> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Season {
+        match rng.random_range(0..5) {
+            0 => Season::Spring,
+            1 => Season::Summer,
+            2 => Season::Autumn,
+            3 => Season::Winter,
+            _ => Season::Sakura,
+        }
+    }
+}
 
 fn main() {
     // TODO: load from file
@@ -29,22 +98,26 @@ fn main() {
         "skills": [200642]
     }"#;
 
+    // TODO: do not use RNG
+    let mut rng = rand::rng();
+
     let uma_data = serde_json::from_str::<UmaData>(json_data).expect("Failed to parse JSON");
     let uma = uma_data.uma;
     let skill_ids = uma_data.skills;
 
-    // Set sample parameters
+    // TODO: load parameters from args
     let params = RaceParameters {
-        condition: TrackCondition::Good,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G3,
+        condition: rng.random::<TrackCondition>(),
+        weather: rng.random::<Weather>(),
+        season: rng.random::<Season>(),
+        time: rng.random::<Time>(),
+        grade: rng.random::<Grade>(),
         popularity: 0,
+        gates: 18,
     };
 
-    // Set sample motivation
-    let motivation = Motivation::Good;
+    // TODO: load motivation from args
+    let motivation = rng.random::<Motivation>();
 
     // TODO: load course ID from args
     let course_id = "10913";
@@ -55,6 +128,10 @@ fn main() {
 
     println!("Loaded course:");
     println!("  ID: {}", course.id);
+    println!(
+        "  Name: {}",
+        course.track_name(Language::English).unwrap_or("Unknown")
+    );
     println!("  Distance: {}m", course.distance);
     println!("  Surface: {:?}", course.surface);
     println!("  Course set status: {:?}", course.course_set_status);
