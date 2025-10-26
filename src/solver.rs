@@ -403,7 +403,7 @@ impl RaceState {
         }
         //  Update target speed
         // TODO: review
-        self.runner.target_speed = if let Some(last_spurt) = &self.runner.last_spurt {
+        self.runner.base_target_speed = if let Some(last_spurt) = &self.runner.last_spurt {
             last_spurt.max_speed
         } else {
             base_target_speed(
@@ -415,7 +415,7 @@ impl RaceState {
             )
         };
         //  Calculate acceleration/deceleration
-        if self.runner.speed < self.runner.target_speed {
+        if self.runner.speed < self.runner.target_speed() {
             // TODO: calculate parameters
             self.runner.accelerate(false, 0.0);
         } else {
@@ -447,10 +447,10 @@ impl RaceState {
             self.runner.adjusted.guts,
             self.runner.is_rushed,
             false, // TODO: is_pace_down
-            false, // TODO: is_downhill_accel
+            self.runner.is_downhill_accel(),
         ) * delta_time;
         //  Check for slope
-        // TODO: implement slope effects
+        // TODO: implement slope effects, including is_downhill_accel flag
         if self.runner.current_slope_idx.is_none() {
             if let Some(next_idx) = self.find_next_slope() {
                 if self.runner.position >= self.course.slopes[next_idx].start {
@@ -526,7 +526,7 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
             //state.runner.start_delay = skill.modifier;
         }
         SkillType::TargetSpeed => {
-            state.runner.target_speed += skill.modifier as f64;
+            state.runner.base_target_speed += skill.modifier as f64;
             //TODO: this.activeTargetSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
         }
         SkillType::Acceleration => {

@@ -39,12 +39,13 @@ pub struct Runner {
     pub max_hp: f64,
     pub hp_guts_modifier: f64,
     pub min_speed: f64,
-    pub target_speed: f64,
+    pub base_target_speed: f64,
     pub available_skills: Vec<Skill>,
     pub activated_skills: Vec<Skill>,
     pub is_rushed: bool, // TODO: implement
     pub rush_section: Option<u8>,
     pub is_start_dash: bool,
+    pub downhill_accel: Option<f64>,
     pub phase: Phase,
     pub last_spurt: Option<LastSpurt>,
     pub current_corner_idx: Option<usize>,
@@ -183,7 +184,7 @@ impl Runner {
             acceleration: 0.0, // start dash acceleration is applied separately
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
-            target_speed: 0.85 * course.base_speed(),
+            base_target_speed: 0.85 * course.base_speed(),
             start_delay,
             available_skills,
             activated_skills: Vec::new(),
@@ -195,6 +196,7 @@ impl Runner {
             rush_section,
             is_rushed: false,
             is_start_dash: true,
+            downhill_accel: None,
             last_spurt: None,
             current_corner_idx: None,
             current_slope_idx: None,
@@ -243,11 +245,27 @@ impl Runner {
         };
     }
 
+    pub fn target_speed(&self) -> f64 {
+        self.base_target_speed + self.downhill_accel.unwrap_or(0.0)
+    }
+
+    pub fn is_downhill_accel(&self) -> bool {
+        self.downhill_accel.is_some()
+    }
+
+    pub fn toggle_downhill_accel(&mut self, downhill: Option<f64>) {
+        if downhill.is_some() && downhill.unwrap() >= 0.0 {
+            panic!("Downhill slope must have negative slope value");
+        }
+        // TODO: review; should be 0.3 + SlopePer/10 [m/s]
+        self.downhill_accel = downhill.map(|s| s.abs() / 10.0 + 0.3);
+    }
+
     pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
         // TODO: review
         self.speed += self.acceleration * delta_time;
-        if self.speed > self.target_speed {
-            self.speed = self.target_speed;
+        if self.speed > self.target_speed() {
+            self.speed = self.target_speed();
         }
         if self.is_start_dash && self.speed >= 0.85 * course_base_speed {
             self.is_start_dash = false;
