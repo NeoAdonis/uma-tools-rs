@@ -3,11 +3,12 @@ use crate::race_parameters::*;
 use crate::skill::*;
 use crate::uma::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GameBehavior {
     Original,         // when the game was first released
     FirstAnniversary, // after the first anniversary update
 }
+
+pub static GAME_BEHAVIOR: GameBehavior = GameBehavior::Original;
 
 pub fn hp_style_coefficient(style: Style) -> f64 {
     match style {
@@ -83,7 +84,6 @@ impl Runner {
         course: &Course,
         params: &RaceParameters,
         skills: Vec<Skill>,
-        behavior: GameBehavior,
     ) -> Self {
         // 1. Calculate base stats
         let mut start_delay = 1.0;
@@ -137,7 +137,8 @@ impl Runner {
             gate_roll: gate_roll as u8,
             speed: 3.0,
             acceleration: 24.0, // start dash
-            min_speed: 0.85 * course.base_speed() + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
+            min_speed: 0.85 * course.base_speed()
+                + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
             start_delay,
             available_skills,

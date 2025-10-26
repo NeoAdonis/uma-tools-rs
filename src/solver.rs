@@ -83,14 +83,13 @@ fn last_spurt_speed_max(
     speed_stat: u16,
     guts_stat: u16,
     distance_aptitude: Aptitude,
-    behavior: GameBehavior,
 ) -> f64 {
     let base_target_late = base_speed * strategy_phase_coefficient(style, Phase::Late);
     let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
     let speed_component = (500.0 * speed_stat as f64).sqrt()
         * distance_proficiency_modifier(distance_aptitude)
         * 0.002;
-    let guts_component = match behavior {
+    let guts_component = match GAME_BEHAVIOR {
         GameBehavior::Original => 0.0,
         GameBehavior::FirstAnniversary => (450.0 * guts_stat as f64).powf(0.597) * 0.0001,
     };
@@ -439,7 +438,6 @@ pub struct RaceState {
     pub runner: Runner,
     pub course: Course,
     pub params: RaceParameters,
-    pub behavior: GameBehavior,
 }
 
 impl RaceState {
@@ -450,13 +448,11 @@ impl RaceState {
         params: RaceParameters,
         skills: Vec<Skill>,
     ) -> Self {
-        let behavior = GameBehavior::Original;
-        let runner = Runner::new(uma, motivation, &course, &params, skills, behavior);
+        let runner = Runner::new(uma, motivation, &course, &params, skills);
         RaceState {
             runner,
             course,
             params,
-            behavior,
         }
     }
     pub fn step(&mut self, delta_time: f64) {
@@ -491,7 +487,6 @@ impl RaceState {
                     self.runner.base.speed,
                     self.runner.base.guts,
                     self.runner.base.distance_aptitude,
-                    self.behavior,
                 ),
                 base_target_speed(
                     self.course.base_speed(),
@@ -672,11 +667,11 @@ pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
             //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
         }
         SkillType::Recovery => {
+            // TODO: implement recovery logic
             //state.recover(skill.modifier);
-            if state.behavior != GameBehavior::Original && state.runner.phase >= Phase::Mid {
-                //TODO: this.updateLastSpurtState();
+            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && state.runner.phase >= Phase::Mid {
+                //state.runner.last_spurt = calculate_last_spurt(current_hp, remaining_distance, base_speed, max_last_spurt_speed, late_race_base_target_speed, wiz_stat, track, condition, guts_stat, rng_roll);
             }
-            //TODO: if (!CC_GLOBAL && this.phase >= 2 && !this.isLastSpurt) this.updateLastSpurtState();
         }
         SkillType::ActivateRandomGold => {
             // TODO: activate random gold skill
