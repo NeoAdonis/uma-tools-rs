@@ -3,6 +3,9 @@ use crate::hp::*;
 use crate::race_parameters::*;
 use crate::skill::*;
 use crate::uma::*;
+use rand::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[allow(dead_code)]
 pub enum GameBehavior {
@@ -51,6 +54,7 @@ pub struct Runner {
     pub last_spurt: Option<LastSpurt>,
     pub current_corner_idx: Option<usize>,
     pub current_slope_idx: Option<usize>,
+    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
 }
 
 pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
@@ -211,10 +215,11 @@ impl Runner {
         course: &Course,
         params: &RaceParameters,
         skills: Vec<Skill>,
+        rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     ) -> Self {
         // 1. Calculate base stats
         let mut start_delay = 1.0;
-        let gate_roll: i32 = 1; // TODO: random
+        let gate_roll: i32 = rng.borrow_mut().random_range(0..=100);
         let base_uma = Uma::raw_to_base(uma, motivation);
         // 2. Calculate skill activation chance and determine whether skills can activate
         let skill_chance = (1.0 - 90.0 / uma.wiz as f64).max(0.2);
@@ -226,7 +231,7 @@ impl Runner {
                     return true;
                 }
                 // Other skills activate based on chance
-                let roll: f64 = 0.0; // TODO: random
+                let roll: f64 = rng.borrow_mut().random();
                 roll < skill_chance
             })
             .collect::<Vec<Skill>>();
@@ -244,7 +249,7 @@ impl Runner {
         // 5. Set starting location based off gate number
         // TODO: implement starting location; assume no effect for now
         // 6. Calculate start delay
-        start_delay *= 0.05; // TODO: random up to 0.1 seconds
+        start_delay *= rng.borrow_mut().random_range(0.0..=0.1);
         // 7. Calculate adjusted stats
         let adjusted_uma = adjust_stats(&base_uma, &course, &params);
         // 8. Convert stamina to HP
@@ -253,8 +258,12 @@ impl Runner {
         // 9. Set starting speed (this is done in the constructor)
         // 10. Determine rush chance
         let rush_chance = (0.65 / (0.1 * uma.wiz as f64 + 1.0).log10()).powf(2.0);
-        let roll: f64 = 1.0; // TODO: random
-        let rush_section = if roll < rush_chance { Some(2) } else { None }; // TODO: random section from 2 to 9
+        let roll: f64 = rng.borrow_mut().random();
+        let rush_section = if roll < rush_chance {
+            Some(rng.borrow_mut().random_range(2..=9))
+        } else {
+            None
+        };
 
         // Initialize race state
         Runner {
@@ -282,6 +291,7 @@ impl Runner {
             last_spurt: None,
             current_corner_idx: None,
             current_slope_idx: None,
+            rng,
         }
     }
 
@@ -403,7 +413,6 @@ impl Runner {
         &mut self,
         course: &Course,
         condition: TrackCondition,
-        rng_roll: f64, // Random value between 0.0 and 1.0 for wisdom check
     ) {
         // TODO: review function
 
@@ -490,6 +499,7 @@ impl Runner {
         }
 
         let acceptance_chance = (15.0 + 0.05 * self.adjusted.wiz as f64) / 100.0;
+        let rng_roll: f64 = self.rng.borrow_mut().random();
 
         // Try each candidate from best to worst
         candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());

@@ -4,6 +4,9 @@ use crate::race_parameters::*;
 use crate::runner::*;
 use crate::skill::*;
 use crate::uma::*;
+use rand::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub fn modify_stat(stat: &mut u16, modifier: i32) {
     // Make sure stat doesn't go below 1
@@ -70,6 +73,7 @@ pub struct RaceState {
     pub runner: Runner,
     pub course: Course,
     pub params: RaceParameters,
+    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
 }
 
 impl RaceState {
@@ -80,11 +84,13 @@ impl RaceState {
         params: RaceParameters,
         skills: Vec<Skill>,
     ) -> Self {
-        let runner = Runner::new(uma, motivation, &course, &params, skills);
+        let seed = params.rng_seed;
+        let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
         RaceState {
-            runner,
+            runner: Runner::new(uma, motivation, &course, &params, skills, Rc::clone(&rng)),
             course,
             params,
+            rng,
         }
     }
 
@@ -133,11 +139,8 @@ impl RaceState {
 
     fn update_last_spurt_state(&mut self) {
         if self.runner.phase >= Phase::Mid && self.runner.last_spurt.is_none() {
-            self.runner.calculate_last_spurt(
-                &self.course,
-                self.params.condition,
-                0.5, // TODO: random roll
-            );
+            self.runner
+                .calculate_last_spurt(&self.course, self.params.condition);
         }
     }
 
@@ -182,12 +185,12 @@ impl RaceState {
                 if has_second_passed {
                     if self.runner.is_downhill_accel() {
                         // 20% chance to stop each second
-                        let roll = 0.5; // TODO: random roll
+                        let roll: f64 = self.rng.borrow_mut().random();
                         if roll < 0.2 {
                             self.runner.stop_slope_acceleration();
                         }
                     } else {
-                        let roll = 0.5; // TODO: random roll
+                        let roll: f64 = self.rng.borrow_mut().random();
                         let chance = self.runner.adjusted.wiz as f64 * 0.0004;
                         if roll < chance {
                             self.runner.start_downhill_acceleration(

@@ -115,6 +115,7 @@ fn main() {
         grade: rng.random::<Grade>(),
         popularity: 0,
         gates: 18,
+        rng_seed: rng.random(),
     };
 
     // TODO: load motivation from args
