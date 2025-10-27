@@ -90,46 +90,24 @@ impl RaceState {
 
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
-        //  Check end of corner
-        // TODO: implement corner effects
-        if let Some(idx) = self.runner.current_corner_idx {
-            if self.runner.position
-                >= self.course.corners[idx].start + self.course.corners[idx].length
-            {
-                //self.on_corner_exit(idx); // and straight entry
-                self.runner.current_corner_idx = None;
-            }
-        }
+        self.check_corner_end();
         // Update
-        //  Activate skills
-        // TODO: implement
-        //  Recover HP by skills
-        // TODO: implement
-        //  Update last spurt state
+        // TODO: implement "Activate skills"
+        // TODO: implement "Recover HP by skills"
         self.update_last_spurt_state();
-        //  Update target speed
-        // TODO: review
-        self.runner.update_target_speed(self.course.base_speed());
-        //  Calculate acceleration/deceleration
-        if self.runner.speed < self.runner.target_speed() {
-            // TODO: calculate skill modifier
-            self.runner.accelerate(0.0);
-        } else {
-            self.runner.decelerate();
-        }
-        //  Update phase:
+        self.runner.update_target_speed(self.course.base_speed()); // TODO: review
+        self.runner.update_acceleration();
         self.update_phase();
-        //  Calculate distance and position
         self.runner
             .update_speed(delta_time, self.course.base_speed());
         self.runner.update_position(delta_time);
-        //  Update HP
         self.update_hp(delta_time);
-        //  Check for slope
         self.update_slope();
         // Post-Update
-        // Events
-        //  Check start of corner
+        self.check_corner_start();
+    }
+
+    fn check_corner_start(&mut self) {
         // TODO: implement corner effects
         if self.runner.current_corner_idx.is_none() {
             if let Some(next_idx) = self.find_next_corner() {
@@ -137,6 +115,18 @@ impl RaceState {
                     //self.on_corner_enter(next_idx); // and straight exit
                     self.runner.current_corner_idx = Some(next_idx);
                 }
+            }
+        }
+    }
+
+    fn check_corner_end(&mut self) {
+        // TODO: implement corner effects
+        if let Some(idx) = self.runner.current_corner_idx {
+            if self.runner.position
+                >= self.course.corners[idx].start + self.course.corners[idx].length
+            {
+                //self.on_corner_exit(idx); // and straight entry
+                self.runner.current_corner_idx = None;
             }
         }
     }

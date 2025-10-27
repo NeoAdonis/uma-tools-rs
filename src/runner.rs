@@ -386,6 +386,15 @@ impl Runner {
         }
     }
 
+    pub fn update_acceleration(&mut self) {
+        if self.speed < self.target_speed() {
+            // TODO: calculate skill modifier
+            self.accelerate(0.0);
+        } else {
+            self.decelerate();
+        }
+    }
+
     pub fn update_position(&mut self, delta_time: f64) {
         self.position += self.speed * delta_time;
     }
