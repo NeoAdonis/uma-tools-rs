@@ -62,12 +62,7 @@ pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> 
     // n.b.: In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
     Uma {
-        speed: calculate_adjusted_speed(
-            uma.speed,
-            course.surface,
-            parameters.condition,
-            course_modifier,
-        ),
+        speed: calculate_adjusted_speed(uma.speed, parameters.condition, course_modifier),
         stamina: uma.stamina,
         power: calculate_adjusted_power(uma.power, course.surface, parameters.condition),
         guts: uma.guts,
@@ -409,11 +404,7 @@ impl Runner {
         self.position += self.speed * delta_time;
     }
 
-    pub fn calculate_last_spurt(
-        &mut self,
-        course: &Course,
-        condition: TrackCondition,
-    ) {
+    pub fn calculate_last_spurt(&mut self, course: &Course, condition: TrackCondition) {
         // TODO: review function
 
         let max_last_spurt_speed = last_spurt_speed_max(

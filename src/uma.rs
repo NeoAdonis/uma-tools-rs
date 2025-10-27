@@ -67,16 +67,10 @@ pub struct UmaData {
     pub skills: Vec<u32>,
 }
 
-pub fn track_speed_modifier(track: Track, condition: TrackCondition) -> u16 {
-    match (track, condition) {
-        (Track::Turf, TrackCondition::Firm) => 0,
-        (Track::Turf, TrackCondition::Good) => 0,
-        (Track::Turf, TrackCondition::Soft) => 0,
-        (Track::Turf, TrackCondition::Heavy) => 50,
-        (Track::Dirt, TrackCondition::Firm) => 0,
-        (Track::Dirt, TrackCondition::Good) => 0,
-        (Track::Dirt, TrackCondition::Soft) => 0,
-        (Track::Dirt, TrackCondition::Heavy) => 50,
+pub fn track_speed_modifier(condition: TrackCondition) -> u16 {
+    match condition {
+        TrackCondition::Heavy => 50,
+        _ => 0,
     }
 }
 
@@ -116,12 +110,11 @@ pub fn calculate_base_stat(stat: u16, coefficient: f64) -> u16 {
 
 pub fn calculate_adjusted_speed(
     base_speed: u16,
-    track: Track,
     condition: TrackCondition,
     course_modifier: f64,
 ) -> u16 {
     let modified_speed = (base_speed as f64 * course_modifier) as u16;
-    let track_modifier = track_speed_modifier(track, condition);
+    let track_modifier = track_speed_modifier(condition);
     modified_speed.saturating_sub(track_modifier).max(1)
 }
 
