@@ -1,6 +1,7 @@
 mod condition_parser;
 mod condition_variables;
 mod course;
+mod hp;
 mod race_parameters;
 mod runner;
 mod skill;

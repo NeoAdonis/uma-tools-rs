@@ -1,4 +1,5 @@
 use crate::course::*;
+use crate::hp::*;
 use crate::race_parameters::*;
 use crate::runner::*;
 use crate::skill::*;
@@ -13,296 +14,12 @@ pub fn modify_stat(stat: &mut u16, modifier: i32) {
     };
 }
 
-fn strategy_phase_coefficient(style: Style, phase: Phase) -> f64 {
-    match (style, phase) {
-        // Early-race
-        (Style::Front, Phase::Early) => 1.0,
-        (Style::Pace, Phase::Early) => 0.978,
-        (Style::Late, Phase::Early) => 0.938,
-        (Style::End, Phase::Early) => 0.931,
-        (Style::Oonige, Phase::Early) => 1.063,
-        // Mid-race
-        (Style::Front, Phase::Mid) => 0.98,
-        (Style::Pace, Phase::Mid) => 0.991,
-        (Style::Late, Phase::Mid) => 0.998,
-        (Style::End, Phase::Mid) => 1.0,
-        (Style::Oonige, Phase::Mid) => 0.962,
-        // Late-race and Last spurt
-        (Style::Front, Phase::Late | Phase::Last) => 0.962,
-        (Style::Pace, Phase::Late | Phase::Last) => 0.975,
-        (Style::Late, Phase::Late | Phase::Last) => 0.994,
-        (Style::End, Phase::Late | Phase::Last) => 1.0,
-        (Style::Oonige, Phase::Late | Phase::Last) => 0.95,
-    }
-}
-
-fn distance_proficiency_modifier(aptitude: Aptitude) -> f64 {
-    match aptitude {
-        Aptitude::S => 1.05,
-        Aptitude::A => 1.0,
-        Aptitude::B => 0.9,
-        Aptitude::C => 0.8,
-        Aptitude::D => 0.6,
-        Aptitude::E => 0.4,
-        Aptitude::F => 0.2,
-        Aptitude::G => 0.1,
-    }
-}
-
-fn base_target_speed(
-    base_speed: f64,
-    style: Style,
-    phase: Phase,
-    speed_stat: u16,
-    distance_aptitude: Aptitude,
-) -> f64 {
-    let base = base_speed * strategy_phase_coefficient(style, phase);
-    // Speed stat only affects target speed during late-race and last spurt
-    match phase {
-        Phase::Early | Phase::Mid => base,
-        Phase::Late | Phase::Last => {
-            let speed_modifier = (500.0 * speed_stat as f64).sqrt()
-                * distance_proficiency_modifier(distance_aptitude)
-                * 0.002;
-            base + speed_modifier
-        }
-    }
-}
-
 fn section_coefficient_range(wiz_stat: u16) -> (f64, f64) {
     // Max = WizStat / 5500 * log10(WizStat * 0.1) [%]
     // Min = Max - 0.65 [%]
     let max = (wiz_stat as f64 / 5500.0) * (wiz_stat as f64 * 0.1).log10();
     let min = max - 0.65;
     (min / 100.0, max / 100.0)
-}
-
-fn last_spurt_speed_max(
-    base_speed: f64,
-    style: Style,
-    speed_stat: u16,
-    guts_stat: u16,
-    distance_aptitude: Aptitude,
-) -> f64 {
-    let base_target_late = base_speed * strategy_phase_coefficient(style, Phase::Late);
-    let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
-    let speed_component = (500.0 * speed_stat as f64).sqrt()
-        * distance_proficiency_modifier(distance_aptitude)
-        * 0.002;
-    let guts_component = match GAME_BEHAVIOR {
-        GameBehavior::Original => 0.0,
-        GameBehavior::FirstAnniversary => (450.0 * guts_stat as f64).powf(0.597) * 0.0001,
-    };
-    base_component + speed_component + guts_component
-}
-
-fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
-    match (track, condition) {
-        (Track::Turf, TrackCondition::Firm) => 1.0,
-        (Track::Turf, TrackCondition::Good) => 1.0,
-        (Track::Turf, TrackCondition::Soft) => 1.02,
-        (Track::Turf, TrackCondition::Heavy) => 1.02,
-        (Track::Dirt, TrackCondition::Firm) => 1.0,
-        (Track::Dirt, TrackCondition::Good) => 1.0,
-        (Track::Dirt, TrackCondition::Soft) => 1.01,
-        (Track::Dirt, TrackCondition::Heavy) => 1.02,
-    }
-}
-
-fn hp_guts_modifier(guts_stat: u16) -> f64 {
-    1.0 + (200.0 / (600.0 * guts_stat as f64).sqrt())
-}
-
-fn calculate_hp_consumption_per_second(
-    current_speed: f64,
-    base_speed: f64,
-    track: Track,
-    condition: TrackCondition,
-    phase: Phase,
-    guts_stat: u16,
-    is_rushed: bool,
-    is_pace_down: bool,
-    is_downhill_accel: bool,
-) -> f64 {
-    let speed_diff = current_speed - base_speed + 12.0;
-    let base_consumption = 20.0 * speed_diff.powi(2) / 144.0;
-
-    let mut status_modifier = 1.0;
-    if is_rushed {
-        status_modifier *= 1.6;
-    }
-    if is_pace_down {
-        status_modifier *= 0.6;
-    }
-    if is_downhill_accel {
-        status_modifier *= 0.4;
-    }
-
-    let ground_modifier = hp_ground_modifier(track, condition);
-
-    let consumption = base_consumption * status_modifier * ground_modifier;
-
-    // In late-race and last spurt, HP consumption is multiplied by guts modifier
-    match phase {
-        Phase::Late | Phase::Last => consumption * hp_guts_modifier(guts_stat),
-        _ => consumption,
-    }
-}
-
-struct LastSpurtCandidate {
-    speed: f64,
-    distance: f64,
-    time: f64,
-}
-
-fn calculate_last_spurt(
-    runner: &Runner,
-    remaining_distance: f64,
-    base_speed: f64,
-    track: Track,
-    condition: TrackCondition,
-    rng_roll: f64, // Random value between 0.0 and 1.0 for wisdom check
-) -> LastSpurt {
-    let max_last_spurt_speed = last_spurt_speed_max(
-        base_speed,
-        runner.adjusted.style,
-        runner.adjusted.speed,
-        runner.adjusted.guts,
-        runner.adjusted.distance_aptitude,
-    );
-    let late_race_base_target_speed = base_target_speed(
-        base_speed,
-        runner.adjusted.style,
-        Phase::Late,
-        runner.adjusted.speed,
-        runner.adjusted.distance_aptitude,
-    );
-
-    // Estimate stamina usage up to 60m before goal line
-    let calculation_distance = remaining_distance - 60.0;
-
-    // If HP is sufficient for max speed, use it immediately
-    let max_hp_required = estimate_hp_consumption(
-        max_last_spurt_speed,
-        calculation_distance,
-        base_speed,
-        track,
-        condition,
-        runner.adjusted.guts,
-    );
-
-    if runner.hp >= max_hp_required {
-        return LastSpurt {
-            max_speed: max_last_spurt_speed,
-            target_distance: remaining_distance,
-        };
-    }
-
-    // Build list of candidates by lowering speed by 0.1 m/s each step
-    let mut candidates = Vec::new();
-    let mut test_speed = max_last_spurt_speed;
-
-    while test_speed >= late_race_base_target_speed {
-        // Calculate distance where this speed would be used
-        // This is where HP runs out or reaches the end
-        let hp_required = estimate_hp_consumption(
-            test_speed,
-            calculation_distance,
-            base_speed,
-            track,
-            condition,
-            runner.adjusted.guts,
-        );
-
-        // Find distance we can actually run at this speed with available HP
-        let usable_distance = if hp_required <= runner.hp {
-            remaining_distance
-        } else {
-            // Scale down distance based on HP available
-            let hp_ratio = runner.hp / hp_required;
-            (calculation_distance * hp_ratio) + 60.0
-        };
-
-        // Calculate time to finish (ignoring acceleration)
-        // Time for last spurt portion + time for remaining at late-race base speed
-        let last_spurt_distance = usable_distance;
-        let remaining_at_base = remaining_distance - last_spurt_distance;
-
-        let time = if remaining_at_base > 0.0 {
-            last_spurt_distance / test_speed + remaining_at_base / late_race_base_target_speed
-        } else {
-            remaining_distance / test_speed
-        };
-
-        candidates.push(LastSpurtCandidate {
-            speed: test_speed,
-            distance: usable_distance,
-            time,
-        });
-
-        test_speed -= 0.1;
-    }
-
-    let acceptance_chance = (15.0 + 0.05 * runner.adjusted.wiz as f64) / 100.0;
-
-    // Try each candidate from best to worst
-    candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
-    let mut cumulative_probability = 0.0;
-    for candidate in &candidates {
-        cumulative_probability += acceptance_chance;
-        if rng_roll < cumulative_probability {
-            return LastSpurt {
-                max_speed: candidate.speed,
-                target_distance: candidate.distance,
-            };
-        }
-    }
-
-    // If all checks fail, use the slowest (last) candidate
-    if let Some(last) = candidates.last() {
-        LastSpurt {
-            max_speed: last.speed,
-            target_distance: last.distance,
-        }
-    } else {
-        // Fallback: use late-race base speed for full distance
-        // TODO: ensure this case is unreachable
-        LastSpurt {
-            max_speed: late_race_base_target_speed,
-            target_distance: remaining_distance,
-        }
-    }
-}
-
-fn estimate_hp_consumption(
-    speed: f64,
-    distance: f64,
-    base_speed: f64,
-    track: Track,
-    condition: TrackCondition,
-    guts_stat: u16,
-) -> f64 {
-    // Estimate HP consumption for running at constant speed over distance
-    // Using the HP consumption formula with Phase::Last
-
-    // Time = distance / speed
-    let time = distance / speed;
-
-    // Calculate HP consumption per second at this speed
-    // Assuming no special status modifiers (not rushed, not pace-down, not downhill)
-    let hp_per_second = calculate_hp_consumption_per_second(
-        speed,
-        base_speed,
-        track,
-        condition,
-        Phase::Last, // Last spurt phase for guts modifier
-        guts_stat,
-        false, // is_rushed
-        false, // is_pace_down
-        false, // is_downhill_accel
-    );
-
-    hp_per_second * time
 }
 
 // TODO: implement blocking logic
@@ -389,32 +106,10 @@ impl RaceState {
         //  Recover HP by skills
         // TODO: implement
         //  Update last spurt state
-        // TODO: review
-        if (self.runner.position >= self.course.distance as f64 / 2.0)
-            && (self.runner.last_spurt.is_none())
-        {
-            self.runner.last_spurt = Some(calculate_last_spurt(
-                &self.runner,
-                self.course.distance as f64 - self.runner.position,
-                self.course.base_speed(),
-                self.course.surface,
-                self.params.condition,
-                0.5, // TODO: random roll
-            ));
-        }
+        self.update_last_spurt_state();
         //  Update target speed
         // TODO: review
-        self.runner.base_target_speed = if let Some(last_spurt) = &self.runner.last_spurt {
-            last_spurt.max_speed
-        } else {
-            base_target_speed(
-                self.course.base_speed(),
-                self.runner.adjusted.style,
-                self.runner.phase,
-                self.runner.adjusted.speed,
-                self.runner.adjusted.distance_aptitude,
-            )
-        };
+        self.runner.update_target_speed(self.course.base_speed());
         //  Calculate acceleration/deceleration
         if self.runner.speed < self.runner.target_speed() {
             // TODO: calculate skill modifier
@@ -427,18 +122,9 @@ impl RaceState {
         //  Calculate distance and position
         self.runner
             .update_speed(delta_time, self.course.base_speed());
-        self.runner.position += self.runner.speed * delta_time;
-        self.runner.hp -= calculate_hp_consumption_per_second(
-            self.runner.speed,
-            self.course.base_speed(),
-            self.course.surface,
-            self.params.condition,
-            self.runner.phase,
-            self.runner.adjusted.guts,
-            self.runner.is_rushed,
-            false, // TODO: is_pace_down
-            self.runner.is_downhill_accel(),
-        ) * delta_time;
+        self.runner.update_position(delta_time);
+        //  Update HP
+        self.update_hp(delta_time);
         //  Check for slope
         self.update_slope();
         // Post-Update
@@ -453,6 +139,30 @@ impl RaceState {
                 }
             }
         }
+    }
+
+    fn update_last_spurt_state(&mut self) {
+        if self.runner.phase >= Phase::Mid && self.runner.last_spurt.is_none() {
+            self.runner.calculate_last_spurt(
+                &self.course,
+                self.params.condition,
+                0.5, // TODO: random roll
+            );
+        }
+    }
+
+    fn update_hp(&mut self, delta_time: f64) {
+        self.runner.hp -= calculate_hp_consumption_per_second(
+            self.runner.speed,
+            self.course.base_speed(),
+            self.course.surface,
+            self.params.condition,
+            self.runner.phase,
+            self.runner.adjusted.guts,
+            self.runner.is_rushed,
+            self.runner.is_pace_down(),
+            self.runner.is_downhill_accel(),
+        ) * delta_time;
     }
 
     fn update_slope(&mut self) {
