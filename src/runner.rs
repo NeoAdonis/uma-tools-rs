@@ -54,6 +54,7 @@ pub struct Runner {
     pub last_spurt: Option<LastSpurt>,
     pub current_corner_idx: Option<usize>,
     pub current_slope_idx: Option<usize>,
+    pub current_straight_idx: Option<usize>,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
 }
 
@@ -197,6 +198,7 @@ fn last_spurt_speed_max(
     base_component + speed_component + guts_component
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum StartType {
     Good,
     Normal,
@@ -286,12 +288,11 @@ impl Runner {
             last_spurt: None,
             current_corner_idx: None,
             current_slope_idx: None,
+            current_straight_idx: None,
             rng,
         }
     }
 
-    // TODO: report
-    #[allow(dead_code)]
     pub fn start_type(&self) -> StartType {
         match self.start_delay {
             d if d < 0.02 => StartType::Good,

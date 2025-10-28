@@ -85,6 +85,14 @@ pub struct Corner {
     pub length: f64, // in meters
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SlopeType {
+    Flat = 0,
+    Uphill = 1,
+    Downhill = 2,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Slope {
     pub start: f64,  // in meters
@@ -109,6 +117,17 @@ impl Slope {
 
     pub fn slope_percent(&self) -> f64 {
         self.slope as f64 / 10000.0
+    }
+
+    /// Get the slope type classification
+    pub fn slope_type(&self) -> SlopeType {
+        if self.slope > 0 {
+            SlopeType::Uphill
+        } else if self.slope < 0 {
+            SlopeType::Downhill
+        } else {
+            SlopeType::Flat
+        }
     }
 }
 
@@ -201,6 +220,17 @@ impl Course {
         get_track_name(self.race_track_id, language)
     }
 
+    /// Check if this is an exchange race (dirt grade)
+    ///
+    /// Exchange races take place at: Ooi (10101), Kawasaki (10103), Funabashi (10104), or Morioka (10105)
+    ///
+    /// # Returns
+    /// * `true` - If this is an exchange race
+    /// * `false` - Otherwise
+    pub fn is_exchange_race(&self) -> bool {
+        matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
+    }
+
     /// Load a specific course by ID from a JSON file
     ///
     /// # Arguments
@@ -246,5 +276,45 @@ impl Course {
             .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
 
         Ok(Course { id, data })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_exchange_race() {
+        // Create a minimal CourseData for testing
+        let create_test_course = |track_id: u16| -> Course {
+            let data = CourseData {
+                distance: 2000,
+                distance_type: DistanceType::Mile,
+                surface: Track::Dirt,
+                turn: Direction::Left,
+                course_set_status: vec![],
+                finish_time_min: 120000,
+                finish_time_max: 150000,
+                lane_max: 18,
+                corners: vec![],
+                slopes: vec![],
+                straights: vec![],
+                race_track_id: track_id,
+                _course: (),
+            };
+            Course::new_test(track_id, data)
+        };
+
+        // Exchange race tracks (should return true)
+        assert!(create_test_course(10101).is_exchange_race()); // Ooi
+        assert!(create_test_course(10103).is_exchange_race()); // Kawasaki
+        assert!(create_test_course(10104).is_exchange_race()); // Funabashi
+        assert!(create_test_course(10105).is_exchange_race()); // Morioka
+
+        // Non-exchange race tracks (should return false)
+        assert!(!create_test_course(10001).is_exchange_race()); // Sapporo
+        assert!(!create_test_course(10006).is_exchange_race()); // Tokyo
+        assert!(!create_test_course(10008).is_exchange_race()); // Kyoto
+        assert!(!create_test_course(10201).is_exchange_race()); // Longchamp
     }
 }

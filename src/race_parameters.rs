@@ -6,6 +6,7 @@ pub enum TrackCondition {
     Heavy,     // 不良
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Weather {
     Sunny = 1, // 晴
     Cloudy,    // 曇
@@ -13,6 +14,7 @@ pub enum Weather {
     Snowy,     // 雪
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Season {
     Spring = 1, // 春
     Summer,     // 夏
@@ -21,6 +23,7 @@ pub enum Season {
     Sakura,     // 桜, Cherry Blossom Season; a subset of Spring
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Time {
     None,
     Morning, // 午前
@@ -29,7 +32,10 @@ pub enum Time {
     Night,   // 夜
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Grade {
+    // n.b. Besides G1 races, important races (e.g. URA Finals, ChamMe, etc.)
+    // generally fall under this category as well.
     G1 = 100,
     G2 = 200,
     G3 = 300,
