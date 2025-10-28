@@ -8,6 +8,7 @@ mod race_transitions;
 mod random_triggers;
 mod runner;
 mod skill;
+mod skill_activation;
 mod solver;
 mod trigger_builder;
 mod trigger_system;

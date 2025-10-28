@@ -4,7 +4,12 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /// Main scheduler coordinating all trigger types
+///
+/// This scheduler stores `SkillActivationLogic` which separates triggers
+/// from guards. When a trigger fires, we evaluate only the guard conditions.
 pub struct TriggerScheduler {
+    pub skill_logics: Vec<crate::skill_activation::SkillActivationLogic>,
+
     // Monotonic triggers - use priority queues for O(log n) activation
     pub time_triggers: BinaryHeap<TimeTrigger>,
     pub distance_triggers: BinaryHeap<DistanceTrigger>,
@@ -35,6 +40,7 @@ pub struct TriggerScheduler {
 impl TriggerScheduler {
     pub fn new() -> Self {
         TriggerScheduler {
+            skill_logics: Vec::new(),
             time_triggers: BinaryHeap::new(),
             distance_triggers: BinaryHeap::new(),
             hp_triggers: BinaryHeap::new(),
@@ -59,9 +65,7 @@ impl Default for TriggerScheduler {
     }
 }
 
-// ============================================================================
-// MONOTONIC TRIGGERS (Priority Queue Based)
-// ============================================================================
+// ========== MONOTONIC TRIGGERS (Priority Queue Based) ==========
 
 /// Triggers based on elapsed time (monotonic increasing)
 #[derive(Clone, Debug)]
@@ -187,7 +191,7 @@ impl Eq for HpTrigger {}
 pub struct PhaseTransitionTrigger {
     pub phase: Phase,
     pub boundary_distance: f64, // Pre-computed from section boundaries
-    pub skill_indices: Vec<usize>, // Multiple skills can trigger on same phase
+    pub skill_indices: Vec<usize>,
 }
 
 impl Ord for PhaseTransitionTrigger {
@@ -214,9 +218,7 @@ impl PartialEq for PhaseTransitionTrigger {
 
 impl Eq for PhaseTransitionTrigger {}
 
-// ============================================================================
-// SPATIAL TRIGGERS (Course Geometry Based)
-// ============================================================================
+// ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
 
 /// Triggers when entering/exiting a corner
 #[derive(Clone, Debug)]
@@ -250,13 +252,12 @@ pub struct StraightTrigger {
     pub skill_indices: Vec<usize>,
 }
 
-// ============================================================================
-// ONE-TIME TRIGGERS
-// ============================================================================
+// ========== ONE-TIME TRIGGERS ==========
 
+/// One-time triggers that fire once and mark as activated
 #[derive(Clone, Debug)]
 pub struct OnetimeTrigger {
-    pub skill_index: usize,
+    pub skill_index: usize, // Index into TriggerScheduler.skill_logics
     pub trigger_type: OnetimeType,
     pub activated: bool,
 }
@@ -268,9 +269,7 @@ pub enum OnetimeType {
     HpEmpty,             // is_hp_empty_onetime
 }
 
-// ============================================================================
-// RANDOM TRIGGERS
-// ============================================================================
+// ========== RANDOM TRIGGERS ==========
 
 #[derive(Clone, Debug)]
 pub struct RandomActivation {
@@ -281,9 +280,7 @@ pub struct RandomActivation {
     pub activated: bool,
 }
 
-// ============================================================================
-// ACTIVATION TRACKING
-// ============================================================================
+// ========== ACTIVATION TRACKING ==========
 
 #[derive(Default, Debug, Clone)]
 pub struct ActivationCounts {

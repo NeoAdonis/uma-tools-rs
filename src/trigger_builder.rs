@@ -1,51 +1,49 @@
-//! Trigger Builder - Converts skill conditions into an efficient trigger scheduler
-//!
-//! This module processes skill conditions and builds an optimized TriggerScheduler that
-//! enables event-driven skill activation instead of checking all skills every simulation step.
+//! Trigger Builder - Converts skill conditions into trigger-guard separation
+//! This module is part of the trigger-guard separation architecture.
+//! See `skill_activation.rs` for detailed explanation.
 //!
 //! # Architecture
 //!
-//! Skills have conditions like "activate_time>=5.0" or "distance_rate>=50". Instead of
-//! evaluating these conditions every frame (O(m × n) where m = steps, n = skills), we:
+//! For each skill alternative:
+//! 1. **Parse condition** - Parse condition string into AST
+//! 2. **Pre-roll random triggers** - Determine random activation points
+//! 3. **Split condition** - Separate triggers from guards using `split_condition()`
+//! 4. **Create SkillActivationLogic** - Store triggers + guards together
+//! 5. **Index triggers** - Add to appropriate scheduler queues/lists
 //!
-//! 1. **Parse conditions** - Extract all comparisons from condition trees
-//! 2. **Classify triggers** - Categorize based on variable behavior:
-//!    - MonotonicIncreasing: time, distance_rate, furlong (use priority queue)
-//!    - MonotonicDecreasing: remain_distance, hp_per (use priority queue)
-//!    - PhaseTransition: phase changes (use pre-computed boundaries)
-//!    - Spatial: corner/slope events (handled by transition managers)
-//!    - Onetime: last_straight_onetime, change_order_onetime, hp_empty_onetime
-//!    - Random: Evaluated once at race start and cached
-//!    - Continuous: Variables that need checking every step (minimized)
+//! # Example
 //!
-//! 3. **Pre-roll random conditions** - All random triggers evaluated before race starts
-//! 4. **Build priority queues** - Heap-based scheduling for monotonic variables
+//! ```ignore
+//! Input skill condition: "hp_per>=20 & is_finalcorner_random==1 & ground_type==2"
 //!
-//! # Performance
+//! After splitting:
+//!   SkillActivationLogic {
+//!     skill_index: 0,
+//!     triggers: [RandomActivation { distance: 1850m }],
+//!     guard_condition: "hp_per>=20 & ground_type==2",
+//!   }
 //!
-//! This reduces complexity from O(m × n) to O(m × c + k log n) where:
-//! - m = simulation steps
-//! - n = number of skills
-//! - c = continuous-check skills (very small subset)
-//! - k = number of trigger activations
-//!
-//! For a typical race: m ≈ 1500 (100s @ 15fps), n ≈ 50 skills, c ≈ 5
-//! - Naive: 75,000 condition checks
-//! - Event-driven: ~7,500 checks + minimal heap operations
+//! Runtime behavior:
+//!   At 1850m:
+//!     - Random trigger fires
+//!     - Evaluate ONLY guards: "hp_per>=20 & ground_type==2"
+//!     - If true, activate skill
+//! ```
 
 use crate::condition_parser::*;
-use crate::condition_variables::*;
 use crate::course::*;
 use crate::random_triggers::preroll_random_triggers;
 use crate::skill::*;
 use crate::trigger_system::*;
-use crate::units::*;
 use rand::Rng;
 
 /// Build a complete TriggerScheduler from a list of skills
 ///
-/// This function processes each skill's condition to extract triggers and populate
-/// the appropriate data structures in the scheduler for efficient runtime checking.
+/// This uses trigger-guard separation. For each skill:
+/// 1. Pre-roll random triggers
+/// 2. Split condition into triggers + guards
+/// 3. Create SkillActivationLogic
+/// 4. Index triggers into scheduler queues
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -53,27 +51,66 @@ pub fn build_trigger_scheduler(
 ) -> TriggerScheduler {
     let mut scheduler = TriggerScheduler::new();
 
-    // Pre-roll all random triggers
+    // Pre-roll all random triggers (still needed for random activation distances)
     scheduler.random_activations = preroll_random_triggers(skills, course, rng);
 
-    // Process each skill to extract triggers
+    // Process each skill and create SkillActivationLogic
     for (skill_idx, skill) in skills.iter().enumerate() {
-        // Skip if this skill was randomly disabled
-        if let Some(activation) = scheduler.random_activations.get(&skill_idx) {
+        // Check if this skill has a random activation (clone to avoid borrow issues)
+        let random_activation = scheduler.random_activations.get(&skill_idx).cloned();
+
+        // Skip if random activation failed (skill never activates)
+        if let Some(ref activation) = random_activation {
             if !activation.activated {
                 continue;
             }
         }
 
         // Process each alternative condition
-        for alternative in &skill.alternatives {
-            if let Ok(condition) = parse_condition(&alternative.condition) {
-                extract_triggers_from_condition(
-                    &condition.comp_list,
+        for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
+            // Parse condition
+            let condition = match parse_condition(&alternative.condition) {
+                Ok(cond) => cond,
+                Err(_) => continue, // Skip unparseable conditions
+            };
+
+            // Parse precondition (if any)
+            let precondition = if !alternative.precondition.is_empty() {
+                parse_condition(&alternative.precondition).ok()
+            } else {
+                None
+            };
+
+            // Split condition into triggers and guards
+            // This returns MULTIPLE branches if there are OR conditions
+            let branches = crate::skill_activation::split_condition(&condition, random_activation.as_ref());
+
+            // Create SkillActivationLogic for each branch
+            for (triggers, guard_condition) in branches {
+                // Add continuous trigger if no triggers found
+                let final_triggers = if triggers.is_empty() {
+                    vec![crate::skill_activation::TriggerCondition::Continuous]
+                } else {
+                    triggers.clone()
+                };
+
+                // Create SkillActivationLogic
+                let logic = crate::skill_activation::SkillActivationLogic::new(
                     skill_idx,
-                    &mut scheduler,
-                    course,
+                    alt_idx,
+                    final_triggers.clone(),
+                    guard_condition,
+                    precondition.clone(),
                 );
+
+                // Store in scheduler
+                let logic_idx = scheduler.skill_logics.len();
+                scheduler.skill_logics.push(logic);
+
+                // Index each trigger into appropriate scheduler structure
+                for trigger in &final_triggers {
+                    index_trigger(trigger, logic_idx, &mut scheduler, course);
+                }
             }
         }
     }
@@ -81,235 +118,124 @@ pub fn build_trigger_scheduler(
     scheduler
 }
 
-/// Extract triggers from a parsed condition tree
-fn extract_triggers_from_condition(
-    comp_list: &CompList,
-    skill_idx: usize,
+/// Index a trigger into the appropriate scheduler structure
+///
+/// Takes a trigger from SkillActivationLogic and adds it to the correct queue/list.
+/// The `logic_idx` is the index into `scheduler.skill_logics`.
+fn index_trigger(
+    trigger: &crate::skill_activation::TriggerCondition,
+    logic_idx: usize,
     scheduler: &mut TriggerScheduler,
     course: &Course,
 ) {
-    // Visit all comparisons in the condition tree
-    comp_list.visit_all_comps(&mut |comp| {
-        match comp.var.trigger_class() {
-            TriggerClass::MonotonicIncreasing => {
-                add_monotonic_increasing_trigger(comp, skill_idx, scheduler, course);
-            }
-            TriggerClass::MonotonicDecreasing => {
-                add_monotonic_decreasing_trigger(comp, skill_idx, scheduler);
-            }
-            TriggerClass::PhaseTransition => {
-                add_phase_trigger(comp, skill_idx, scheduler, course);
-            }
-            TriggerClass::SpatialCorner => {
-                add_corner_trigger(comp, skill_idx, scheduler, course);
-            }
-            TriggerClass::SpatialSlope => {
-                add_slope_trigger(comp, skill_idx, scheduler, course);
-            }
-            TriggerClass::SpatialStraight => {
-                add_straight_trigger(comp, skill_idx, scheduler);
-            }
-            TriggerClass::Onetime => {
-                add_onetime_trigger(comp, skill_idx, scheduler);
-            }
-            TriggerClass::Continuous => {
-                if !scheduler.continuous_triggers.contains(&skill_idx) {
-                    scheduler.continuous_triggers.push(skill_idx);
-                }
-            }
-            _ => {
-                // Static, Random, MultiUmaStub, Unknown - handle separately or ignore
-            }
-        }
-    });
-}
+    use crate::skill_activation::TriggerCondition;
 
-fn add_monotonic_increasing_trigger(
-    comp: &Comp,
-    skill_idx: usize,
-    scheduler: &mut TriggerScheduler,
-    course: &Course,
-) {
-    match &comp.var {
-        VarType::Phase(PhaseVar::AccumulateTime) => {
-            let threshold = comp.value as f64;
+    match trigger {
+        TriggerCondition::Time { threshold, operator } => {
             scheduler.time_triggers.push(TimeTrigger {
-                threshold_seconds: threshold,
-                skill_index: skill_idx,
-                operator: comp.op,
+                threshold_seconds: *threshold,
+                skill_index: logic_idx,
+                operator: *operator,
             });
         }
-        VarType::Distance(DistanceVar::DistanceRate) => {
-            let threshold = comp.value as f64;
-            // DistanceRate is a percentage (0-100), convert to meters
+
+        TriggerCondition::DistanceCovered { threshold, operator } => {
+            // Convert percentage to meters
             let threshold_meters = threshold / 100.0 * course.distance as f64;
             scheduler.distance_triggers.push(DistanceTrigger {
                 threshold_meters,
-                skill_index: skill_idx,
-                operator: comp.op,
+                skill_index: logic_idx,
+                operator: *operator,
                 trigger_type: DistanceTriggerType::DistanceRate,
             });
         }
-        VarType::Distance(DistanceVar::Furlong) => {
-            let threshold = comp.value as f64;
-            let threshold_meters = furlongs_to_meters(threshold);
-            scheduler.distance_triggers.push(DistanceTrigger {
-                threshold_meters,
-                skill_index: skill_idx,
-                operator: comp.op,
-                trigger_type: DistanceTriggerType::Furlong,
-            });
-        }
-        VarType::Activation(ActivationVar::ActivateCountAll)
-        | VarType::Activation(ActivationVar::ActivateCountStart)
-        | VarType::Activation(ActivationVar::ActivateCountMiddle)
-        | VarType::Activation(ActivationVar::ActivateCountLaterHalf)
-        | VarType::Activation(ActivationVar::ActivateCountEndAfter)
-        | VarType::Activation(ActivationVar::ActivateCountHeal) => {
-            // These need continuous checking as they depend on other skills activating
-            if !scheduler.continuous_triggers.contains(&skill_idx) {
-                scheduler.continuous_triggers.push(skill_idx);
-            }
-        }
-        _ => {}
-    }
-}
 
-fn add_monotonic_decreasing_trigger(
-    comp: &Comp,
-    skill_idx: usize,
-    scheduler: &mut TriggerScheduler,
-) {
-    match &comp.var {
-        VarType::Distance(DistanceVar::RemainDistance) => {
-            let threshold = comp.value as f64;
+        TriggerCondition::DistanceRemaining { threshold, operator } => {
             scheduler.distance_triggers.push(DistanceTrigger {
-                threshold_meters: threshold,
-                skill_index: skill_idx,
-                operator: comp.op,
+                threshold_meters: *threshold,
+                skill_index: logic_idx,
+                operator: *operator,
                 trigger_type: DistanceTriggerType::RemainDistance,
             });
         }
-        VarType::Status(StatusVar::HpPer) => {
-            let threshold = comp.value as f64;
+
+        TriggerCondition::HpPercent { threshold, operator } => {
             scheduler.hp_triggers.push(HpTrigger {
-                threshold_percent: threshold,
-                skill_index: skill_idx,
-                operator: comp.op,
-            });
-        }
-        _ => {}
-    }
-}
-
-fn add_phase_trigger(
-    comp: &Comp,
-    skill_idx: usize,
-    scheduler: &mut TriggerScheduler,
-    course: &Course,
-) {
-    if let VarType::Phase(PhaseVar::Phase) = &comp.var {
-        let phase_value = comp.value;
-        let phase = match phase_value {
-            0 => Phase::Early,
-            1 => Phase::Mid,
-            2 => Phase::Late,
-            _ => return, // Unknown phase
-        };
-
-        // Calculate boundary distance for this phase
-        let boundary_distance = match phase {
-            Phase::Early => 0.0,
-            Phase::Mid => course.section_length() * 4.0,
-            Phase::Late => course.section_length() * 16.0,
-            Phase::Last => course.section_length() * 20.0,
-        };
-
-        // Find or create phase trigger for this boundary
-        // We can't use iter_mut on BinaryHeap, so we'll convert to Vec, modify, and rebuild
-        let mut triggers: Vec<PhaseTransitionTrigger> = scheduler.phase_triggers.drain().collect();
-
-        if let Some(existing) = triggers
-            .iter_mut()
-            .find(|t| t.boundary_distance == boundary_distance)
-        {
-            existing.skill_indices.push(skill_idx);
-        } else {
-            triggers.push(PhaseTransitionTrigger {
-                phase,
-                boundary_distance,
-                skill_indices: vec![skill_idx],
+                threshold_percent: *threshold,
+                skill_index: logic_idx,
+                operator: *operator,
             });
         }
 
-        // Rebuild the heap
-        scheduler.phase_triggers.extend(triggers);
-    }
-}
+        TriggerCondition::PhaseChange { phase, operator: _ } => {
+            // Calculate boundary distance for this phase
+            let boundary_distance = match phase {
+                Phase::Early => 0.0,
+                Phase::Mid => course.section_length() * 4.0,
+                Phase::Late => course.section_length() * 16.0,
+                Phase::Last => course.section_length() * 20.0,
+            };
 
-fn add_corner_trigger(
-    comp: &Comp,
-    skill_idx: usize,
-    scheduler: &mut TriggerScheduler,
-    _course: &Course,
-) {
-    if let VarType::Course(CourseVar::Corner) = &comp.var {
-        // This is a general "is in a corner" check
-        // We'll add to both entry and exit lists to check on both events
-        // The actual condition will be evaluated at runtime
+            // Find or create phase trigger for this boundary
+            let mut triggers: Vec<PhaseTransitionTrigger> = scheduler.phase_triggers.drain().collect();
 
-        // For now, treat as continuous since we don't know which specific corner
-        if !scheduler.continuous_triggers.contains(&skill_idx) {
-            scheduler.continuous_triggers.push(skill_idx);
+            if let Some(existing) = triggers.iter_mut().find(|t| t.boundary_distance == boundary_distance) {
+                existing.skill_indices.push(logic_idx);
+            } else {
+                triggers.push(PhaseTransitionTrigger {
+                    phase: *phase,
+                    boundary_distance,
+                    skill_indices: vec![logic_idx],
+                });
+            }
+
+            scheduler.phase_triggers.extend(triggers);
         }
-    }
-}
 
-fn add_slope_trigger(
-    comp: &Comp,
-    skill_idx: usize,
-    scheduler: &mut TriggerScheduler,
-    _course: &Course,
-) {
-    if let VarType::Course(CourseVar::Slope) = &comp.var {
-        // Similar to corners, general slope check - continuous
-        if !scheduler.continuous_triggers.contains(&skill_idx) {
-            scheduler.continuous_triggers.push(skill_idx);
+        TriggerCondition::RandomActivation { .. } => {
+            // Random triggers are handled specially - they're stored in random_activations
+            // We'll check them when we reach the activation distance
+            // For now, we don't need to index them separately
         }
-    }
-}
 
-fn add_straight_trigger(comp: &Comp, skill_idx: usize, scheduler: &mut TriggerScheduler) {
-    // Straight triggers need continuous checking
-    if !scheduler.continuous_triggers.contains(&skill_idx) {
-        scheduler.continuous_triggers.push(skill_idx);
-    }
-}
-
-fn add_onetime_trigger(comp: &Comp, skill_idx: usize, scheduler: &mut TriggerScheduler) {
-    match &comp.var {
-        VarType::Course(CourseVar::IsLastStraightOnetime) => {
+        TriggerCondition::LastStraightEntry => {
             scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: skill_idx,
+                skill_index: logic_idx,
                 trigger_type: OnetimeType::LastStraightEntry,
                 activated: false,
             });
         }
-        VarType::Position(PositionVar::ChangeOrderOnetime) => {
-            let delta = comp.value;
+
+        TriggerCondition::PositionChange { delta } => {
             scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: skill_idx,
-                trigger_type: OnetimeType::PositionChange(delta),
+                skill_index: logic_idx,
+                trigger_type: OnetimeType::PositionChange(*delta),
                 activated: false,
             });
         }
-        VarType::Status(StatusVar::IsHpEmptyOnetime) => {
+
+        TriggerCondition::HpEmpty => {
             scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: skill_idx,
+                skill_index: logic_idx,
                 trigger_type: OnetimeType::HpEmpty,
                 activated: false,
             });
         }
-        _ => {}
+
+        TriggerCondition::Continuous => {
+            if !scheduler.continuous_triggers.contains(&logic_idx) {
+                scheduler.continuous_triggers.push(logic_idx);
+            }
+        }
+
+        // Spatial triggers - TODO: Implement properly
+        TriggerCondition::CornerTransition { .. }
+        | TriggerCondition::SlopeTransition { .. }
+        | TriggerCondition::StraightTransition { .. } => {
+            // For now, treat as continuous
+            if !scheduler.continuous_triggers.contains(&logic_idx) {
+                scheduler.continuous_triggers.push(logic_idx);
+            }
+        }
     }
 }

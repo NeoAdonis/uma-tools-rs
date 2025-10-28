@@ -44,34 +44,6 @@ fn section_coefficient_range(wiz_stat: u16) -> (f64, f64) {
 // TODO: implement rush logic
 // ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.awbjufvej6ud
 
-// fn displayed_time(seconds: f64) -> f64 {
-//     seconds * 1.18
-// }
-
-fn process_skills(skills: &[Skill], phase: Phase, perspective: Perspective) {
-    // for skill in skills {
-    // Check if skill can activate in this phase and perspective
-    // if skill.perspective != perspective && skill.perspective != Perspective::All {
-    //     continue;
-    // }
-
-    // // Check each effect of the skill
-    // for effect in &skill.effects {
-    //     // Check if effect can activate in this phase
-    //     if effect.phase != phase && effect.phase != Phase::All {
-    //         continue;
-    //     }
-
-    //     // Roll for activation chance
-    //     let roll: f64 = 0;
-    //     if roll < effect.activation_chance {
-    //         // Activate the skill effect
-    //         activate_skill(state, effect);
-    //     }
-    // }
-    // }
-}
-
 pub struct RaceState {
     pub runner: Runner,
     pub course: Course,
@@ -115,13 +87,21 @@ impl RaceState {
         }
     }
 
+    // TODO: complete implementation and report
+    #[allow(dead_code)]
+    fn displayed_time(&self) -> f64 {
+        self.elapsed_time * 1.18
+    }
+
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
         self.check_corner_end();
         self.check_straight_end();
         self.elapsed_time += delta_time; // Track race time
+
         // Update
-        // TODO: implement "Activate skills"
+        self.check_skill_activations();
+
         // TODO: implement "Recover HP by skills"
         self.update_last_spurt_state();
         self.runner.update_target_speed(self.course.base_speed()); // TODO: review
@@ -132,6 +112,7 @@ impl RaceState {
         self.runner.update_position(delta_time);
         self.update_hp(delta_time);
         self.update_slope();
+
         // Post-Update
         self.check_corner_start();
         self.check_straight_start();
@@ -236,8 +217,9 @@ impl RaceState {
                         let roll: f64 = self.rng.borrow_mut().random();
                         let chance = self.runner.adjusted.wiz as f64 * 0.0004;
                         if roll < chance {
-                            self.runner
-                                .start_downhill_acceleration(self.course.slopes[idx].slope_percent());
+                            self.runner.start_downhill_acceleration(
+                                self.course.slopes[idx].slope_percent(),
+                            );
                         }
                     }
                 }
@@ -257,6 +239,13 @@ impl RaceState {
             .corners
             .iter()
             .position(|c| c.start > self.runner.position)
+    }
+
+    /// Check and activate skills based on triggers
+    fn check_skill_activations(&mut self) {
+        // TODO: Check monotonic triggers (time, distance, HP)
+        // TODO: Check random activation triggers
+        // TODO: Check continuous triggers
     }
 
     pub fn run(&mut self) {

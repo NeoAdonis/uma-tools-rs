@@ -1,7 +1,10 @@
-//! Condition Evaluator - Evaluates skill activation conditions against race state
+//! Condition Evaluator - Evaluates guard conditions against race state
 //!
-//! This module implements the runtime condition evaluation engine that determines
-//! whether a skill's activation conditions are met.
+//! This module evaluates guard conditions, i.e., conditions that determine whether
+//! a triggered skill can activate or not.
+//!
+//! Trigger conditions (random gates, monotonic thresholds, onetime events) are handled
+//! by the trigger system and should NEVER reach this evaluator.
 //!
 //! # Architecture
 //!
@@ -39,17 +42,45 @@ use crate::runner::*;
 use crate::solver::RaceState;
 use crate::uma::*;
 
-/// Evaluate a complete condition against current race state
+/// Evaluate a guard condition against current race state
 ///
-/// Returns `true` if the condition is satisfied, `false` otherwise.
+/// **IMPORTANT**: This should ONLY be called with guard conditions after trigger-guard
+/// separation. Trigger variables (random gates, monotonic triggers, onetime events) will
+/// cause a panic if they reach this evaluator.
 ///
-/// # Example
+/// Returns `true` if the guard condition is satisfied, `false` otherwise.
+///
+/// # Usage
+///
+/// This function is called by the trigger system when a trigger fires:
+///
 /// ```ignore
-/// let condition = parse_condition("hp_per <= 50 & phase >= 2")?;
-/// if evaluate_condition(&condition, &race_state) {
-///     // Activate skill
+/// // When HP trigger fires at 50%:
+/// let skill_logic = &skill_activation_logics[trigger.skill_logic_idx];
+///
+/// if let Some(guard) = &skill_logic.guard_condition {
+///     // Evaluate ONLY the guard (no trigger variables)
+///     if evaluate_condition(guard, &race_state) {
+///         activate_skill(&race_state, &skill);
+///     }
 /// }
 /// ```
+///
+/// # Example Guard Conditions
+///
+/// Valid (guard variables only):
+/// - `"ground_type==2 & motivation>=4"` ✓
+/// - `"running_style==1 & season==1"` ✓
+/// - `"hp_per>=20"` ✓ (Note: hp_per is a guard when checked AT trigger time)
+///
+/// Invalid (contains trigger variables):
+/// - `"phase_random==1 & hp_per>=20"` ✗ (will panic)
+/// - `"is_last_straight_onetime==1"` ✗ (will panic)
+///
+/// # Panics
+///
+/// Panics if the condition contains trigger variables that should have been
+/// separated during the splitting phase.
 pub fn evaluate_condition(condition: &Condition, state: &RaceState) -> bool {
     evaluate_comp_list(&condition.comp_list, state)
 }
@@ -176,7 +207,9 @@ fn get_distance_value(var: &DistanceVar, state: &RaceState) -> i32 {
         DistanceVar::DistanceDiffTopFloat => 0, // STUB: 0 decimeters behind first
 
         // Random trigger - handled by trigger system
-        DistanceVar::DistanceRateAfterRandom => 0, // STUB: Not applicable in evaluation
+        DistanceVar::DistanceRateAfterRandom => {
+            panic!("BUG: distance_rate_after_random should not be evaluated - it's a trigger variable!")
+        }
 
         // Remaining distance for any player character
         DistanceVar::RemainDistanceViewerId => {
@@ -236,7 +269,9 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState) -> i32 {
         | PhaseVar::PhaseLaterhalfRandom
         | PhaseVar::PhaseLatterHalfStraightRandom
         | PhaseVar::PhaseRandom
-        | PhaseVar::PhaseStraightRandom => 0, // STUB: Not applicable in evaluation
+        | PhaseVar::PhaseStraightRandom => {
+            panic!("BUG: Random phase trigger {:?} should not be evaluated - it's a trigger variable!", var)
+        }
 
         // Phase subdivisions
         PhaseVar::PhaseFirstquarter => {
@@ -313,8 +348,10 @@ fn get_course_value(var: &CourseVar, state: &RaceState) -> i32 {
             }
         }
 
-        // One-time trigger - not evaluated here
-        CourseVar::IsLastStraightOnetime => 0, // STUB: Handled by trigger system
+        // One-time trigger - handled by trigger system
+        CourseVar::IsLastStraightOnetime => {
+            panic!("BUG: is_last_straight_onetime should not be evaluated - it's a trigger variable!")
+        }
 
         // Current lane: 0=inner, 1=middle, 2=outer, 3=outside
         CourseVar::LaneType => 0, // STUB: Lane tracking not yet implemented
@@ -350,7 +387,9 @@ fn get_course_value(var: &CourseVar, state: &RaceState) -> i32 {
         | CourseVar::LastStraightRandom
         | CourseVar::StraightRandom
         | CourseVar::UpSlopeRandom
-        | CourseVar::UpSlopeRandomLaterHalf => 0, // STUB: Not applicable in evaluation
+        | CourseVar::UpSlopeRandomLaterHalf => {
+            panic!("BUG: Random course trigger {:?} should not be evaluated - it's a trigger variable!", var)
+        }
     }
 }
 
@@ -510,8 +549,10 @@ fn get_status_value(var: &StatusVar, state: &RaceState) -> i32 {
         StatusVar::BehindNearLaneTimeSet1 => 0, // STUB
         StatusVar::InfrontNearLaneTime => 0,    // STUB
 
-        // One-time trigger
-        StatusVar::IsHpEmptyOnetime => 0, // STUB: Handled by trigger system
+        // One-time trigger - handled by trigger system
+        StatusVar::IsHpEmptyOnetime => {
+            panic!("BUG: is_hp_empty_onetime should not be evaluated - it's a trigger variable!")
+        }
 
         // Continuous checks
         StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
@@ -536,8 +577,10 @@ fn get_position_value(var: &PositionVar, state: &RaceState) -> i32 {
         PositionVar::NearCount => 0,        // STUB: No other umas nearby
         PositionVar::NearInfrontCount => 0, // STUB: No umas ahead
 
-        // Change in order (onetime trigger)
-        PositionVar::ChangeOrderOnetime => 0, // STUB: Handled by trigger system
+        // Change in order - handled by trigger system
+        PositionVar::ChangeOrderOnetime => {
+            panic!("BUG: change_order_onetime should not be evaluated - it's a trigger variable!")
+        }
 
         // Multi-uma stubs
         PositionVar::ChangeOrderUpEndAfter => 0, // STUB: Never overtaken
@@ -589,11 +632,12 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState) -> i32 {
 }
 
 /// Get trigger values (random lot)
-fn get_trigger_value(var: &TriggerVar, state: &RaceState) -> i32 {
+fn get_trigger_value(var: &TriggerVar, _state: &RaceState) -> i32 {
     match var {
-        // Random lot is pre-rolled at race start
-        // This should not be evaluated here - it's handled by trigger system
-        TriggerVar::RandomLot => 0, // STUB: Handled by random trigger pre-rolling
+        // Pre-rolled at race start - handled by trigger system
+        TriggerVar::RandomLot => {
+            panic!("BUG: random_lot should not be evaluated - it's a trigger variable!")
+        }
     }
 }
 
