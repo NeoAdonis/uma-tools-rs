@@ -1,3 +1,4 @@
+mod condition_evaluator;
 mod condition_parser;
 mod condition_variables;
 mod course;
