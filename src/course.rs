@@ -3,13 +3,45 @@ include!("track_names.rs");
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Phase {
     Early,
     Mid,
     Late,
     Last, // Last spurt
+}
+
+impl Phase {
+    /// Get the boundaries (start, end) in meters for this phase on a given course
+    ///
+    /// Phases are divided into 24 sections:
+    /// - Early: sections 0-3 (0.0 to section_length * 4.0)
+    /// - Mid: sections 4-15 (section_length * 4.0 to section_length * 16.0)
+    /// - Late: sections 16-19 (section_length * 16.0 to section_length * 20.0)
+    /// - Last: sections 20-23 (section_length * 20.0 to course distance)
+    pub fn boundaries(&self, course: &Course) -> (f64, f64) {
+        let section = course.section_length();
+        match self {
+            Phase::Early => (0.0, section * 4.0),
+            Phase::Mid => (section * 4.0, section * 16.0),
+            Phase::Late => (section * 16.0, section * 20.0),
+            Phase::Last => (section * 20.0, course.distance as f64),
+        }
+    }
+
+    /// Determine which phase a given position falls into
+    pub fn from_position(position: f64, course: &Course) -> Phase {
+        let section_length = course.section_length();
+        if position < section_length * 4.0 {
+            Phase::Early
+        } else if position < section_length * 16.0 {
+            Phase::Mid
+        } else if position < section_length * 20.0 {
+            Phase::Late
+        } else {
+            Phase::Last
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
@@ -61,6 +93,12 @@ pub struct Slope {
 }
 
 impl Slope {
+    /// Create a new Slope for testing purposes
+    #[cfg(test)]
+    pub fn new(start: f64, length: f64, slope: i32) -> Self {
+        Slope { start, length, slope }
+    }
+
     pub fn is_uphill(&self) -> bool {
         self.slope > 0
     }
@@ -120,10 +158,17 @@ pub struct CourseData {
     pub straights: Vec<Straight>,
     pub race_track_id: u16,
     #[serde(skip)]
-    _course: (), // unused in current implementation
+    #[cfg_attr(test, allow(dead_code))]
+    pub(crate) _course: (), // unused in current implementation
 }
 
 impl Course {
+    /// Create a new Course for testing purposes
+    #[cfg(test)]
+    pub fn new_test(id: u16, data: CourseData) -> Self {
+        Course { id, data }
+    }
+
     // return distance type from distance
     // fn distance_type(&self) -> DistanceType {
     //     match self.distance {

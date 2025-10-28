@@ -1,8 +1,11 @@
 use crate::course::*;
 use crate::hp::*;
 use crate::race_parameters::*;
+use crate::race_transitions::*;
 use crate::runner::*;
 use crate::skill::*;
+use crate::trigger_builder::*;
+use crate::trigger_system::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
@@ -74,6 +77,9 @@ pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    pub trigger_scheduler: TriggerScheduler,
+    pub corner_manager: CornerManager,
+    pub slope_manager: SlopeManager,
 }
 
 impl RaceState {
@@ -86,11 +92,22 @@ impl RaceState {
     ) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
+
+        // Create runner first (it filters available skills based on wiz)
+        let runner = Runner::new(uma, motivation, &course, &params, skills, Rc::clone(&rng));
+
+        // Build trigger scheduler from the available skills (after filtering)
+        let trigger_scheduler =
+            build_trigger_scheduler(&runner.available_skills, &course, &mut *rng.borrow_mut());
+
         RaceState {
-            runner: Runner::new(uma, motivation, &course, &params, skills, Rc::clone(&rng)),
+            runner,
             course,
             params,
             rng,
+            trigger_scheduler,
+            corner_manager: CornerManager::new(),
+            slope_manager: SlopeManager::new(),
         }
     }
 
@@ -114,26 +131,24 @@ impl RaceState {
     }
 
     fn check_corner_start(&mut self) {
-        // TODO: implement corner effects
-        if self.runner.current_corner_idx.is_none() {
-            if let Some(next_idx) = self.find_next_corner() {
-                if self.runner.position >= self.course.corners[next_idx].start {
-                    //self.on_corner_enter(next_idx); // and straight exit
-                    self.runner.current_corner_idx = Some(next_idx);
-                }
-            }
+        // Check for corner entry using the corner manager
+        if let Some(corner_idx) = self
+            .corner_manager
+            .check_entry(self.runner.position, &self.course.corners)
+        {
+            self.runner.current_corner_idx = Some(corner_idx);
+            // TODO: Trigger corner entry skills
         }
     }
 
     fn check_corner_end(&mut self) {
-        // TODO: implement corner effects
-        if let Some(idx) = self.runner.current_corner_idx {
-            if self.runner.position
-                >= self.course.corners[idx].start + self.course.corners[idx].length
-            {
-                //self.on_corner_exit(idx); // and straight entry
-                self.runner.current_corner_idx = None;
-            }
+        // Check for corner exit using the corner manager
+        if let Some(corner_idx) = self
+            .corner_manager
+            .check_exit(self.runner.position, &self.course.corners)
+        {
+            self.runner.current_corner_idx = None;
+            // TODO: Trigger corner exit skills
         }
     }
 
@@ -159,28 +174,27 @@ impl RaceState {
     }
 
     fn update_slope(&mut self) {
-        // TODO: implement slope effects
-        if self.runner.current_slope_idx.is_none() {
-            if let Some(next_idx) = self.find_next_slope() {
-                if self.runner.position >= self.course.slopes[next_idx].start {
-                    //self.on_slope_enter(next_idx);
-                    if self.course.slopes[next_idx].is_uphill() {
-                        self.runner.start_uphill_acceleration(
-                            self.course.slopes[next_idx].slope_percent(),
-                        );
-                    }
-                    self.runner.current_slope_idx = Some(next_idx);
-                }
+        // Check for slope entry using the slope manager
+        if let Some((slope_idx, _slope_type)) = self
+            .slope_manager
+            .check_entry(self.runner.position, &self.course.slopes)
+        {
+            // TODO: Trigger slope entry skills
+            if self.course.slopes[slope_idx].is_uphill() {
+                self.runner
+                    .start_uphill_acceleration(self.course.slopes[slope_idx].slope_percent());
             }
-        } else {
-            let idx = self.runner.current_slope_idx.unwrap();
-            if self.runner.position
-                >= self.course.slopes[idx].start + self.course.slopes[idx].length
-            {
-                //self.on_slope_exit(idx);
-                self.runner.stop_slope_acceleration();
-                self.runner.current_slope_idx = None;
-            } else if self.course.slopes[idx].is_downhill() {
+            self.runner.current_slope_idx = Some(slope_idx);
+        } else if let Some(slope_idx) = self
+            .slope_manager
+            .check_exit(self.runner.position, &self.course.slopes)
+        {
+            // TODO: Trigger slope exit skills
+            self.runner.stop_slope_acceleration();
+            self.runner.current_slope_idx = None;
+        } else if let Some(idx) = self.runner.current_slope_idx {
+            // On slope - check for downhill acceleration
+            if self.course.slopes[idx].is_downhill() {
                 let has_second_passed = false; // TODO: track time on slope
                 if has_second_passed {
                     if self.runner.is_downhill_accel() {
@@ -193,9 +207,8 @@ impl RaceState {
                         let roll: f64 = self.rng.borrow_mut().random();
                         let chance = self.runner.adjusted.wiz as f64 * 0.0004;
                         if roll < chance {
-                            self.runner.start_downhill_acceleration(
-                                self.course.slopes[idx].slope_percent(),
-                            );
+                            self.runner
+                                .start_downhill_acceleration(self.course.slopes[idx].slope_percent());
                         }
                     }
                 }
@@ -227,19 +240,7 @@ impl RaceState {
     }
 
     pub fn update_phase(&mut self) {
-        //  - Early: section < 4
-        //  - Mid: section >= 4 && section < 16
-        //  - Late: section >= 16 && section < 20
-        //  - Last spurt: section >= 20
-        self.runner.phase = if self.runner.position < self.course.section_length() * 4.0 {
-            Phase::Early
-        } else if self.runner.position < self.course.section_length() * 16.0 {
-            Phase::Mid
-        } else if self.runner.position < self.course.section_length() * 20.0 {
-            Phase::Late
-        } else {
-            Phase::Last
-        };
+        self.runner.phase = Phase::from_position(self.runner.position, &self.course);
     }
 }
 

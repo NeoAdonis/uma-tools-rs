@@ -488,6 +488,181 @@ impl VarType {
             }
         }
     }
+
+    /// Returns the trigger classification for this variable
+    /// This determines how the variable should be evaluated in the event-driven trigger system
+    pub fn trigger_class(&self) -> TriggerClass {
+        use VarType::*;
+        use TriggerClass::*;
+
+        match self {
+            // STATIC - Evaluated once at race start
+            BaseStat(_) => Static,
+            RaceParam(_) => Static,
+            Distance(DistanceVar::CourseDistance) => Static,
+            Course(CourseVar::DistanceType) => Static,
+            Course(CourseVar::GroundType) => Static,
+            Course(CourseVar::GroundCondition) => Static,
+            Course(CourseVar::TrackId) => Static,
+            Course(CourseVar::Rotation) => Static,
+            Course(CourseVar::IsBasisDistance) => Static,
+            Course(CourseVar::CornerCount) => Static, // Under investigation: number of corners on course
+            RunningStyle(RunningStyleVar::RunningStyle) => Static,
+            Always => Static,
+
+            // MONOTONIC INCREASING - Priority queue based
+            Phase(PhaseVar::AccumulateTime) => MonotonicIncreasing,
+            Distance(DistanceVar::DistanceRate) => MonotonicIncreasing,
+            Distance(DistanceVar::Furlong) => MonotonicIncreasing, // Under investigation: distance in furlongs
+            Activation(ActivationVar::ActivateCountAll) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountStart) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountMiddle) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountLaterHalf) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountEndAfter) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountHeal) => MonotonicIncreasing,
+            Activation(ActivationVar::ActivateCountAllTeam) => MonotonicIncreasing, // Multi-uma
+
+            // MONOTONIC DECREASING - Priority queue based
+            Distance(DistanceVar::RemainDistance) => MonotonicDecreasing,
+            Distance(DistanceVar::RemainDistanceViewerId) => MonotonicDecreasing, // Multi-uma
+            Status(StatusVar::HpPer) => MonotonicDecreasing, // Can increase via recovery
+
+            // PHASE TRANSITIONS - Priority queue based
+            Phase(PhaseVar::Phase) => PhaseTransition,
+            Phase(PhaseVar::PhaseFirstquarter) => PhaseTransition, // Early phase
+            Phase(PhaseVar::PhaseFirsthalf) => PhaseTransition,    // Early + Mid
+            Phase(PhaseVar::PhaseLaterhalf) => PhaseTransition,    // Late + Last
+            Phase(PhaseVar::IsFinalcorner) => PhaseTransition,     // Under investigation
+            Phase(PhaseVar::IsFinalcornerLaterhalf) => PhaseTransition,
+
+            // SPATIAL TRIGGERS - Course geometry based
+            Course(CourseVar::Corner) => SpatialCorner,
+            Course(CourseVar::Slope) => SpatialSlope,
+            Course(CourseVar::IsLastStraight) => SpatialStraight,
+            Course(CourseVar::StraightFrontType) => SpatialStraight,
+
+            // ONE-TIME TRIGGERS
+            Course(CourseVar::IsLastStraightOnetime) => Onetime,
+            Position(PositionVar::ChangeOrderOnetime) => Onetime,
+            Position(PositionVar::ChangeOrderUpEndAfter) => Onetime,    // Under investigation
+            Position(PositionVar::ChangeOrderUpFinalcornerAfter) => Onetime,
+            Position(PositionVar::ChangeOrderUpMiddle) => Onetime,
+            Status(StatusVar::IsHpEmptyOnetime) => Onetime,
+
+            // RANDOM TRIGGERS - Pre-rolled at race start
+            Trigger(TriggerVar::RandomLot) => Random,
+            Phase(PhaseVar::PhaseRandom) => Random,
+            Phase(PhaseVar::PhaseFirsthalfRandom) => Random,
+            Phase(PhaseVar::PhaseFirstquarterRandom) => Random,
+            Phase(PhaseVar::PhaseLaterhalfRandom) => Random,
+            Phase(PhaseVar::PhaseCornerRandom) => Random,
+            Phase(PhaseVar::PhaseStraightRandom) => Random,
+            Phase(PhaseVar::PhaseFirstHalfStraightRandom) => Random,
+            Phase(PhaseVar::PhaseLatterHalfStraightRandom) => Random,
+            Phase(PhaseVar::IsFinalcornerRandom) => Random,
+            Course(CourseVar::CornerRandom) => Random,
+            Course(CourseVar::AllCornerRandom) => Random,
+            Course(CourseVar::StraightRandom) => Random,
+            Course(CourseVar::LastStraightRandom) => Random,
+            Course(CourseVar::UpSlopeRandom) => Random,
+            Course(CourseVar::UpSlopeRandomLaterHalf) => Random,
+            Course(CourseVar::DownSlopeRandom) => Random,
+            Distance(DistanceVar::DistanceRateAfterRandom) => Random,
+
+            // MULTI-UMA STUBS - Requires other umas (placeholder)
+            Position(PositionVar::Order) => MultiUmaStub,
+            Position(PositionVar::OrderRate) => MultiUmaStub,
+            Position(PositionVar::NearCount) => MultiUmaStub,
+            Position(PositionVar::NearInfrontCount) => MultiUmaStub,
+            Position(PositionVar::OvertakeTargetTime) => MultiUmaStub,
+            Position(PositionVar::OvertakeTargetNoOrderUpTime) => MultiUmaStub,
+            Position(PositionVar::OrderRateIn20Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateIn40Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateIn50Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateIn80Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateOut20Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateOut40Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateOut50Continue) => MultiUmaStub,
+            Position(PositionVar::OrderRateOut70Continue) => MultiUmaStub,
+            Distance(DistanceVar::DistanceDiffTop) => MultiUmaStub,
+            Distance(DistanceVar::DistanceDiffTopFloat) => MultiUmaStub,
+            Distance(DistanceVar::DistanceDiffRate) => MultiUmaStub,
+            Distance(DistanceVar::BashinDiffBehind) => MultiUmaStub,
+            Distance(DistanceVar::BashinDiffInfront) => MultiUmaStub,
+            Blocking(_) => MultiUmaStub,
+            Status(StatusVar::IsSurrounded) => MultiUmaStub,
+            Status(StatusVar::BehindNearLaneTime) => MultiUmaStub,
+            Status(StatusVar::BehindNearLaneTimeSet1) => MultiUmaStub,
+            Status(StatusVar::InfrontNearLaneTime) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountSenkoOtherself) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountSashiOtherself) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountOikomiOtherself) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountSame) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleCountSameRate) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationCountNige) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationCountSenko) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationCountSashi) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationCountOikomi) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountNige) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSenko) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSashi) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountOikomi) => MultiUmaStub,
+            Activation(ActivationVar::IsExistCharaId) => MultiUmaStub,
+            Activation(ActivationVar::IsExistSkillId) => MultiUmaStub,
+            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => MultiUmaStub,
+            Activation(ActivationVar::SameSkillHorseCount) => MultiUmaStub,
+            Temptation(_) => MultiUmaStub,
+
+            // CONTINUOUS - Must check every step (minimized)
+            Status(StatusVar::IsLastspurt) => Continuous,
+            Status(StatusVar::Lastspurt) => Continuous,
+            Status(StatusVar::IsTemptation) => Continuous,
+            Status(StatusVar::IsBadstart) => Continuous,  // Under investigation
+            Status(StatusVar::IsOvertake) => Continuous,  // Under investigation
+            Status(StatusVar::IsMoveLane) => Continuous,
+            Status(StatusVar::IsBehindIn) => Continuous, // Under investigation
+            Activation(ActivationVar::CompeteFightCount) => Continuous, // Under investigation
+            Activation(ActivationVar::IsActivateAnySkill) => Continuous,
+            Activation(ActivationVar::IsActivateHealSkill) => Continuous,
+            Activation(ActivationVar::IsActivateOtherSkillDetail) => Continuous,
+            Activation(ActivationVar::IsUsedSkillId) => Continuous,
+            Course(CourseVar::LaneType) => Continuous, // Under investigation
+
+            // UNKNOWN
+            VarType::Unknown(_) => TriggerClass::Unknown,
+        }
+    }
+}
+
+/// Classification of how a variable should be triggered/evaluated
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerClass {
+    /// Static values determined at race start (track type, distance, etc.)
+    Static,
+    /// Monotonically increasing values (time, distance covered, activation counts)
+    MonotonicIncreasing,
+    /// Monotonically decreasing values (remaining distance, HP)
+    MonotonicDecreasing,
+    /// Phase transitions (Early -> Mid -> Late -> Last)
+    PhaseTransition,
+    /// Corner entry/exit events
+    SpatialCorner,
+    /// Slope entry/exit events
+    SpatialSlope,
+    /// Straight entry/exit events
+    SpatialStraight,
+    /// One-time triggers that fire once then never again
+    Onetime,
+    /// Random triggers pre-rolled at race start
+    Random,
+    /// Multi-uma variables requiring other umas (placeholder/stub)
+    MultiUmaStub,
+    /// Continuous checks required every step (minimized)
+    Continuous,
+    /// Unknown variable type
+    Unknown,
 }
 
 #[cfg(test)]

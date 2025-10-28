@@ -3,10 +3,15 @@ mod condition_variables;
 mod course;
 mod hp;
 mod race_parameters;
+mod race_transitions;
+mod random_triggers;
 mod runner;
 mod skill;
 mod solver;
+mod trigger_builder;
+mod trigger_system;
 mod uma;
+mod units;
 
 use course::*;
 use race_parameters::*;

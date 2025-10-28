@@ -111,6 +111,7 @@ impl Skill {
         Skill { id, data }
     }
 
+    /// Check if this skill is a "green" skill (stat boosting)
     pub fn is_green(self: &Skill) -> bool {
         for alternative in &self.alternatives {
             for effect in &alternative.effects {
@@ -129,11 +130,19 @@ impl Skill {
         false
     }
 
+    /// Check if this skill is a unique skill (i.e. only available to an specific Uma)
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
             self.rarity,
             SkillRarity::Unique | SkillRarity::UniqueUpgraded | SkillRarity::UniqueNatural
         )
+    }
+
+    /// Check if this skill contains any recovery effects
+    pub fn is_recovery(&self) -> bool {
+        self.alternatives
+            .iter()
+            .any(|alt| alt.effects.iter().any(|ef| ef.skill_type == SkillType::Recovery))
     }
 
     /// Load all skills from a JSON file into a HashMap

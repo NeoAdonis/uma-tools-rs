@@ -98,6 +98,35 @@ impl fmt::Display for Comp {
     }
 }
 
+impl CompList {
+    /// Visit all comparisons in the tree, calling the provided function for each
+    ///
+    /// This is useful for extracting all variables from a condition without
+    /// evaluating the boolean logic.
+    ///
+    /// # Arguments
+    /// * `visitor` - Function to call for each Comp in the tree
+    ///
+    /// # Example
+    /// ```ignore
+    /// condition.comp_list.visit_all_comps(|comp| {
+    ///     println!("Variable: {}, Operator: {}, Value: {}", comp.var, comp.op, comp.value);
+    /// });
+    /// ```
+    pub fn visit_all_comps<F>(&self, visitor: &mut F)
+    where
+        F: FnMut(&Comp),
+    {
+        match self {
+            CompList::Single(comp) => visitor(comp),
+            CompList::Binary { left, right, .. } => {
+                left.visit_all_comps(visitor);
+                right.visit_all_comps(visitor);
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Lexer {
     input: Vec<char>,
