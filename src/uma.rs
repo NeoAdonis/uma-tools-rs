@@ -40,6 +40,7 @@ pub enum Motivation {
     Great,      // 絶好調
 }
 
+/// Core stats for an Umamusume.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Uma {

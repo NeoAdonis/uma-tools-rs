@@ -30,6 +30,8 @@ pub struct LastSpurt {
     pub target_distance: f64,
 }
 
+/// An Uma with additional data related to racing,
+/// that is, an Uma who is running.
 pub struct Runner {
     pub base: Uma,
     pub adjusted: Uma,
@@ -58,9 +60,10 @@ pub struct Runner {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
 }
 
+/// Adjust base stats according to course and race parameters.
 pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
     let course_modifier = course_speed_modifier(&uma, &course.course_set_status);
-    // n.b.: In single mode, all uma gain 400 on stats after adjustment.
+    // n.b. In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
     Uma {
         speed: calculate_adjusted_speed(uma.speed, parameters.condition, course_modifier),
@@ -198,6 +201,8 @@ fn last_spurt_speed_max(
     base_component + speed_component + guts_component
 }
 
+// n.b. While no comparison checks for a good start,
+// it is used in Team Trials to award bonus points.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum StartType {
     Good,

@@ -203,6 +203,18 @@ impl Course {
         self.distance as f64 / 24.0
     }
 
+    pub fn quarterway(&self) -> f64 {
+        self.distance as f64 / 4.0
+    }
+
+    pub fn halfway(&self) -> f64 {
+        self.distance as f64 / 2.0
+    }
+
+    pub fn is_basis_distance(&self) -> bool {
+        self.distance % 400 == 0
+    }
+
     // in m/s
     pub fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
