@@ -80,6 +80,8 @@ pub struct RaceState {
     pub trigger_scheduler: TriggerScheduler,
     pub corner_manager: CornerManager,
     pub slope_manager: SlopeManager,
+    pub straight_manager: StraightManager,
+    pub elapsed_time: f64, // Race time in seconds (shared by all umas)
 }
 
 impl RaceState {
@@ -108,12 +110,16 @@ impl RaceState {
             trigger_scheduler,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),
+            straight_manager: StraightManager::new(),
+            elapsed_time: 0.0,
         }
     }
 
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
         self.check_corner_end();
+        self.check_straight_end();
+        self.elapsed_time += delta_time; // Track race time
         // Update
         // TODO: implement "Activate skills"
         // TODO: implement "Recover HP by skills"
@@ -128,6 +134,7 @@ impl RaceState {
         self.update_slope();
         // Post-Update
         self.check_corner_start();
+        self.check_straight_start();
     }
 
     fn check_corner_start(&mut self) {
@@ -149,6 +156,28 @@ impl RaceState {
         {
             self.runner.current_corner_idx = None;
             // TODO: Trigger corner exit skills
+        }
+    }
+
+    fn check_straight_start(&mut self) {
+        // Check for straight entry using the straight manager
+        if let Some(straight_idx) = self
+            .straight_manager
+            .check_entry(self.runner.position, &self.course.straights)
+        {
+            self.runner.current_straight_idx = Some(straight_idx);
+            // TODO: Trigger straight entry skills
+        }
+    }
+
+    fn check_straight_end(&mut self) {
+        // Check for straight exit using the straight manager
+        if let Some(straight_idx) = self
+            .straight_manager
+            .check_exit(self.runner.position, &self.course.straights)
+        {
+            self.runner.current_straight_idx = None;
+            // TODO: Trigger straight exit skills
         }
     }
 

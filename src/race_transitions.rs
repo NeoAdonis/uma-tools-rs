@@ -1,4 +1,4 @@
-use crate::course::{Corner, Slope};
+use crate::course::{Corner, Slope, Straight};
 use crate::trigger_system::SlopeType;
 
 /// Manages corner entry/exit detection
@@ -116,6 +116,57 @@ impl Default for SlopeManager {
     }
 }
 
+/// Manages straight entry/exit detection
+pub struct StraightManager {
+    current_straight: Option<usize>,
+}
+
+impl StraightManager {
+    pub fn new() -> Self {
+        StraightManager {
+            current_straight: None,
+        }
+    }
+
+    /// Check for straight entry, returns straight index if entered
+    pub fn check_entry(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
+        if self.current_straight.is_some() {
+            return None; // Already in a straight
+        }
+
+        for (idx, straight) in straights.iter().enumerate() {
+            if position >= straight.start && position < straight.end {
+                self.current_straight = Some(idx);
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    /// Check for straight exit, returns straight index if exited
+    pub fn check_exit(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
+        if let Some(idx) = self.current_straight {
+            let straight = &straights[idx];
+            if position >= straight.end {
+                self.current_straight = None;
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    /// Get the current straight index if in a straight
+    pub fn current_straight(&self) -> Option<usize> {
+        self.current_straight
+    }
+}
+
+impl Default for StraightManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +177,15 @@ mod tests {
 
     fn create_test_slope(start: f64, length: f64, slope: i32) -> Slope {
         Slope::new(start, length, slope)
+    }
+
+    fn create_test_straight(start: f64, end: f64) -> Straight {
+        use crate::course::FrontType;
+        Straight {
+            start,
+            end,
+            front_type: FrontType::Audience,
+        }
     }
 
     #[test]
@@ -226,5 +286,59 @@ mod tests {
 
         // Already exited
         assert_eq!(manager.check_exit(175.0, &slopes), None);
+    }
+
+    #[test]
+    fn test_straight_entry() {
+        let mut manager = StraightManager::new();
+        let straights = vec![create_test_straight(100.0, 150.0)];
+
+        // Before straight
+        assert_eq!(manager.check_entry(50.0, &straights), None);
+
+        // At straight start
+        assert_eq!(manager.check_entry(100.0, &straights), Some(0));
+
+        // Already in straight
+        assert_eq!(manager.check_entry(125.0, &straights), None);
+    }
+
+    #[test]
+    fn test_straight_exit() {
+        let mut manager = StraightManager::new();
+        let straights = vec![create_test_straight(100.0, 150.0)];
+
+        // Enter straight
+        manager.check_entry(100.0, &straights);
+
+        // Still in straight
+        assert_eq!(manager.check_exit(125.0, &straights), None);
+
+        // At straight end
+        assert_eq!(manager.check_exit(150.0, &straights), Some(0));
+
+        // Already exited
+        assert_eq!(manager.check_exit(175.0, &straights), None);
+    }
+
+    #[test]
+    fn test_multiple_straights() {
+        let mut manager = StraightManager::new();
+        let straights = vec![
+            create_test_straight(100.0, 150.0),
+            create_test_straight(200.0, 230.0),
+        ];
+
+        // Enter first straight
+        assert_eq!(manager.check_entry(100.0, &straights), Some(0));
+
+        // Exit first straight
+        assert_eq!(manager.check_exit(150.0, &straights), Some(0));
+
+        // Enter second straight
+        assert_eq!(manager.check_entry(200.0, &straights), Some(1));
+
+        // Exit second straight
+        assert_eq!(manager.check_exit(230.0, &straights), Some(1));
     }
 }
