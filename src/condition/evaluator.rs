@@ -107,11 +107,7 @@ fn evaluate_comparison(comp: &Comp, state: &RaceState) -> bool {
         VarType::Activation(ActivationVar::IsUsedSkillId) => {
             // Check if skill with ID == comp.value has been activated
             let skill_id_str = comp.value.to_string();
-            let skill_exists = state
-                .runner
-                .activated_skills
-                .iter()
-                .any(|skill| skill.id == skill_id_str);
+            let skill_exists = state.runner.activated_skill_ids.contains(&skill_id_str);
 
             match comp.op {
                 CompOp::Equal => skill_exists,
@@ -677,7 +673,7 @@ mod tests {
     use crate::course::*;
     use crate::race::parameters::*;
     use crate::skill::*;
-    use crate::uma::{Aptitude};
+    use crate::uma::Aptitude;
 
     /// Helper to create a minimal test race state
     fn create_test_race_state() -> RaceState {
@@ -731,15 +727,11 @@ mod tests {
     fn test_is_used_skill_id_with_activated_skill() {
         let mut state = create_test_race_state();
 
-        // Create a test skill with ID "202051"
-        let skill_data = SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![],
-        };
-        let skill = Skill::new("202051".to_string(), skill_data);
-
-        // Add the skill to activated_skills
-        state.runner.activated_skills.push(skill);
+        // Add skill ID "202051" to activated_skill_ids
+        state
+            .runner
+            .activated_skill_ids
+            .insert("202051".to_string());
 
         // Create comparison: is_used_skill_id == 202051
         let comp = Comp {
@@ -773,15 +765,11 @@ mod tests {
     fn test_is_used_skill_id_with_different_skill() {
         let mut state = create_test_race_state();
 
-        // Create a test skill with ID "203781" (different from what we're checking)
-        let skill_data = SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![],
-        };
-        let skill = Skill::new("203781".to_string(), skill_data);
-
-        // Add the skill to activated_skills
-        state.runner.activated_skills.push(skill);
+        // Add skill ID "203781" to activated_skill_ids (different from what we're checking)
+        state
+            .runner
+            .activated_skill_ids
+            .insert("203781".to_string());
 
         // Create comparison: is_used_skill_id == 202051
         let comp = Comp {
@@ -798,15 +786,11 @@ mod tests {
     fn test_is_used_skill_id_not_equal() {
         let mut state = create_test_race_state();
 
-        // Create a test skill with ID "202051"
-        let skill_data = SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![],
-        };
-        let skill = Skill::new("202051".to_string(), skill_data);
-
-        // Add the skill to activated_skills
-        state.runner.activated_skills.push(skill);
+        // Add skill ID "202051" to activated_skill_ids
+        state
+            .runner
+            .activated_skill_ids
+            .insert("202051".to_string());
 
         // Create comparison: is_used_skill_id != 202051
         let comp = Comp {

@@ -140,9 +140,43 @@ impl Skill {
 
     /// Check if this skill contains any recovery effects
     pub fn is_recovery(&self) -> bool {
-        self.alternatives
-            .iter()
-            .any(|alt| alt.effects.iter().any(|ef| ef.skill_type == SkillType::Recovery))
+        self.alternatives.iter().any(|alt| {
+            alt.effects
+                .iter()
+                .any(|ef| ef.skill_type == SkillType::Recovery)
+        })
+    }
+
+    /// Check if this skill should activate out of gate (before race begins)
+    pub fn should_activate_out_of_gate(&self) -> bool {
+        // Green skills (stat boosts) always activate at start
+        if self.is_green() {
+            return true;
+        }
+
+        // Unique skills always activate at start
+        if self.is_unique() {
+            return true;
+        }
+
+        // Skills with always==1 condition activate at start
+        if let Some(alt) = self.alternatives.first() {
+            if alt.condition == "always==1" {
+                return true;
+            }
+
+            // Start delay modification skills activate at start
+            if alt.effects.iter().any(|ef| {
+                matches!(
+                    ef.skill_type,
+                    SkillType::MultiplyStartDelay | SkillType::SetStartDelay
+                )
+            }) {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Load all skills from a JSON file into a HashMap

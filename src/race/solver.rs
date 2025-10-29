@@ -1,11 +1,13 @@
 use crate::course::{Course, Phase};
 use crate::race::hp::*;
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
+use crate::race::runner::{
+    ActiveTimedEffect, GAME_BEHAVIOR, GameBehavior, Runner, SkillActivationRecord,
+};
 use crate::race::transitions::*;
-use crate::uma::skill::*;
 use crate::trigger::builder::*;
 use crate::trigger::system::*;
+use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
@@ -112,6 +114,9 @@ impl RaceState {
         self.runner.update_position(delta_time);
         self.update_hp(delta_time);
         self.update_slope();
+
+        // Update skill durations and remove expired effects
+        self.update_skill_durations();
 
         // Post-Update
         self.check_corner_start();
@@ -248,6 +253,21 @@ impl RaceState {
         // TODO: Check continuous triggers
     }
 
+    /// Update skill durations and remove expired effects
+    fn update_skill_durations(&mut self) {
+        let before_count = self.runner.active_timed_effects.len();
+
+        // Remove expired effects
+        self.runner
+            .active_timed_effects
+            .retain(|effect| effect.expires_at > self.elapsed_time);
+
+        // Recalculate modifiers if any effects expired
+        if self.runner.active_timed_effects.len() != before_count {
+            self.runner.recalculate_skill_modifiers();
+        }
+    }
+
     pub fn run(&mut self) {
         let dt = 1.0 / 15.0; // 15 FPS
         // TODO: replace `for` with `while`
@@ -262,67 +282,120 @@ impl RaceState {
     }
 }
 
-pub fn activate_skill(state: &mut RaceState, skill: &SkillEffect) {
-    match skill.skill_type {
-        SkillType::SpeedUp => {
-            modify_stat(&mut state.runner.adjusted.speed, skill.modifier);
-        }
-        SkillType::StaminaUp => {
-            modify_stat(&mut state.runner.adjusted.stamina, skill.modifier);
-        }
-        SkillType::PowerUp => {
-            modify_stat(&mut state.runner.adjusted.power, skill.modifier);
-        }
-        SkillType::GutsUp => {
-            modify_stat(&mut state.runner.adjusted.guts, skill.modifier);
-        }
-        SkillType::WizUp => {
-            modify_stat(&mut state.runner.adjusted.wiz, skill.modifier);
-        }
-        SkillType::MultiplyStartDelay => {
-            //state.runner.start_delay *= skill.modifier;
-        }
-        SkillType::SetStartDelay => {
-            //state.runner.start_delay = skill.modifier;
-        }
-        SkillType::TargetSpeed => {
-            state.runner.base_target_speed += skill.modifier as f64;
-            //TODO: this.activeTargetSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
-        }
-        SkillType::Acceleration => {
-            state.runner.acceleration += skill.modifier as f64;
-            //TODO: this.activeAccelSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier});
-        }
-        SkillType::CurrentSpeed => {
-            state.runner.speed += skill.modifier as f64;
-            //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
-        }
-        SkillType::CurrentSpeedWithNaturalDeceleration => {
-            state.runner.speed += skill.modifier as f64;
-            //TODO: this.activeCurrentSpeedSkills.push({skillId: s.skillId, perspective: s.perspective, durationTimer: this.getNewTimer(-scaledDuration), modifier: ef.modifier,naturalDeceleration: ef.type == SkillType.CurrentSpeedWithNaturalDeceleration});
-        }
-        SkillType::Recovery => {
-            // TODO: implement recovery logic
-            //state.recover(skill.modifier);
-            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && state.runner.phase >= Phase::Mid
-            {
-                //state.runner.last_spurt = calculate_last_spurt(current_hp, remaining_distance, base_speed, max_last_spurt_speed, late_race_base_target_speed, wiz_stat, track, condition, guts_stat, rng_roll);
+/// Activate a skill by its index and alternative index
+pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_index: usize) {
+    // Clone the skill data we need to avoid borrow checker issues
+    let skill_id = state.runner.available_skills[skill_index].id.clone();
+    let alternative =
+        state.runner.available_skills[skill_index].alternatives[alternative_index].clone();
+
+    // Calculate scaled duration
+    let base_duration = alternative.base_duration as f64 / 10000.0; // Convert from 10000ths of a second
+    let scaled_duration = base_duration * state.runner.skill_modifiers.duration_scaling;
+
+    // Apply each effect in the alternative
+    for effect in &alternative.effects {
+        match effect.skill_type {
+            // Instant stat modifications (permanent)
+            SkillType::SpeedUp => {
+                modify_stat(&mut state.runner.adjusted.speed, effect.modifier);
             }
+            SkillType::StaminaUp => {
+                modify_stat(&mut state.runner.adjusted.stamina, effect.modifier);
+            }
+            SkillType::PowerUp => {
+                modify_stat(&mut state.runner.adjusted.power, effect.modifier);
+            }
+            SkillType::GutsUp => {
+                modify_stat(&mut state.runner.adjusted.guts, effect.modifier);
+            }
+            SkillType::WizUp => {
+                modify_stat(&mut state.runner.adjusted.wiz, effect.modifier);
+            }
+
+            // Timed effects (tracked in active_timed_effects)
+            SkillType::Acceleration
+            | SkillType::TargetSpeed
+            | SkillType::CurrentSpeed
+            | SkillType::CurrentSpeedWithNaturalDeceleration
+            | SkillType::ExtendEvolvedDuration => {
+                let expires_at = state.elapsed_time + scaled_duration;
+                state.runner.active_timed_effects.push(ActiveTimedEffect {
+                    skill_id: skill_id.clone(),
+                    skill_index,
+                    alternative_index,
+                    effect: effect.clone(),
+                    expires_at,
+                });
+            }
+
+            // Recovery (HP restoration)
+            SkillType::Recovery => {
+                state.runner.hp =
+                    (state.runner.hp + effect.modifier as f64).min(state.runner.max_hp);
+
+                // Increment heal skill count
+                state.trigger_scheduler.activation_counts.increment_heal();
+
+                // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
+                if !matches!(GAME_BEHAVIOR, GameBehavior::Original)
+                    && state.runner.phase >= Phase::Mid
+                {
+                    // TODO: implement last_spurt recalculation
+                }
+            }
+
+            // Activate random gold skill
+            SkillType::ActivateRandomGold => {
+                if !state.runner.golden_skill_indices.is_empty() {
+                    let idx = state
+                        .runner
+                        .rng
+                        .borrow_mut()
+                        .random_range(0..state.runner.golden_skill_indices.len());
+                    let golden_skill_idx = state.runner.golden_skill_indices[idx];
+                    // Recursively activate the golden skill (use first alternative)
+                    activate_skill(state, golden_skill_idx, 0);
+                }
+            }
+
+            // Start delay modifications
+            SkillType::MultiplyStartDelay => {
+                state.runner.start_delay *= effect.modifier as f64 / 10000.0;
+            }
+            SkillType::SetStartDelay => {
+                state.runner.start_delay = effect.modifier as f64 / 10000.0;
+            }
+
+            // Unimplemented skill types
+            SkillType::ChangeStyleOonige => todo!(),
+            SkillType::Fov => todo!(),
+            SkillType::RushTime => todo!(),
+            SkillType::LaneMovementSpeed => todo!(),
+            SkillType::RushChance => todo!(),
+            SkillType::AllStatsUp => todo!(),
+            SkillType::LaneChange => todo!(),
+            SkillType::Unknown41 => todo!(),
         }
-        SkillType::ActivateRandomGold => {
-            // TODO: activate random gold skill
-        }
-        SkillType::ExtendEvolvedDuration => {
-            // TODO: Extend duration of evolved skills
-        }
-        SkillType::ChangeStyleOonige => todo!(),
-        SkillType::Fov => todo!(),
-        SkillType::RushTime => todo!(),
-        SkillType::LaneMovementSpeed => todo!(),
-        SkillType::RushChance => todo!(),
-        SkillType::AllStatsUp => todo!(),
-        SkillType::LaneChange => todo!(),
-        SkillType::Unknown41 => todo!(),
     }
-    //state.runner.activated_skills[state.runner.phase as usize] += 1;
+
+    // Recalculate skill modifiers from active effects
+    state.runner.recalculate_skill_modifiers();
+
+    // Track skill activation
+    state.runner.activated_skill_ids.insert(skill_id.clone());
+    state.runner.activated_skills.push(SkillActivationRecord {
+        skill_id,
+        skill_index,
+        alternative_index,
+        distance: state.runner.position,
+    });
+
+    // Increment activation counts for condition evaluation
+    let section_length = state.course.distance as f64 / 24.0;
+    state.trigger_scheduler.activation_counts.increment(
+        state.runner.phase,
+        state.runner.position,
+        section_length,
+    );
 }

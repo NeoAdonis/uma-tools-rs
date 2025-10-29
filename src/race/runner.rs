@@ -5,6 +5,7 @@ use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 #[allow(dead_code)]
@@ -30,6 +31,45 @@ pub struct LastSpurt {
     pub target_distance: f64,
 }
 
+/// Skill modifiers that are applied during race calculations
+#[derive(Debug, Clone)]
+pub struct SkillModifiers {
+    pub target_speed: f64,
+    pub current_speed: f64,
+    pub acceleration: f64,
+    pub duration_scaling: f64, // Multiplicative, defaults to 1.0
+}
+
+impl Default for SkillModifiers {
+    fn default() -> Self {
+        Self {
+            target_speed: 0.0,
+            current_speed: 0.0,
+            acceleration: 0.0,
+            duration_scaling: 1.0, // Multiplicative default
+        }
+    }
+}
+
+/// A timed skill effect that is currently active
+#[derive(Debug, Clone)]
+pub struct ActiveTimedEffect {
+    pub skill_id: String,
+    pub skill_index: usize,
+    pub alternative_index: usize,
+    pub effect: SkillEffect,
+    pub expires_at: f64, // Race time (seconds) when effect expires
+}
+
+/// Record of a skill activation during the race
+#[derive(Debug, Clone)]
+pub struct SkillActivationRecord {
+    pub skill_id: String,
+    pub skill_index: usize,
+    pub alternative_index: usize,
+    pub distance: f64, // Distance when activated
+}
+
 /// An Uma with additional data related to racing,
 /// that is, an Uma who is running.
 pub struct Runner {
@@ -47,7 +87,11 @@ pub struct Runner {
     pub min_speed: f64,
     pub base_target_speed: f64,
     pub available_skills: Vec<Skill>,
-    pub activated_skills: Vec<Skill>,
+    pub activated_skills: Vec<SkillActivationRecord>,
+    pub activated_skill_ids: HashSet<String>,
+    pub skill_modifiers: SkillModifiers,
+    pub active_timed_effects: Vec<ActiveTimedEffect>,
+    pub golden_skill_indices: Vec<usize>,
     pub is_rushed: bool, // TODO: implement
     pub rush_section: Option<u8>,
     pub is_start_dash: bool,
@@ -237,23 +281,49 @@ impl Runner {
                 roll < skill_chance
             })
             .collect::<Vec<Skill>>();
-        // 3. Activate out of gate skills
-        // TODO: implement
-        // let gold_indices: Vec<usize> = skills.iter().enumerate()
-        //     .filter(|(_, skill)| {
-        //         (skill.rarity == SkillRarity::Gold || skill.rarity == SkillRarity::Evolution)
-        //             && skill.effects.iter().all(|ef| ef.skill_type > SkillType::WizUp)
-        //     })
-        //     .map(|(i, _)| i)
-        //     .collect();
-        // 4. Use item.
-        // n.b.: This is the same as setting race parameters ahead of time so no action needed here.
-        // 5. Set starting location based off gate number
-        // TODO: implement starting location; assume no effect for now
-        // 6. Calculate start delay
-        start_delay *= rng.borrow_mut().random_range(0.0..=0.1);
-        // 7. Calculate adjusted stats
+
+        // 3. Partition skills into out-of-gate and runtime skills
+        let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
+            .into_iter()
+            .partition(|skill| skill.should_activate_out_of_gate());
+
+        // 4. Calculate adjusted stats (before out-of-gate skills)
         let adjusted_uma = adjust_stats(&base_uma, course, params);
+
+        // 5. Apply out-of-gate skills
+        // TODO: This needs to be refactored to call activate_skill() properly to ensure:
+        // - ActivationCounts::increment() is called for each activation
+        // - Skill activation tracking is consistent
+        // - Skills triggered by activation counts (e.g., "Groundwork" id 201601 with activate_count_start>=3) work correctly
+        //
+        // Current inline approach bypasses activation tracking, which means:
+        // - Green skills don't contribute to activation_count
+        // - Skills that depend on activate_count_start won't trigger properly
+        //
+        // Proper implementation requires:
+        // 1. Create RaceState first (with initial values)
+        // 2. For each out-of-gate skill, call activate_skill(state, skill_index, alternative_index)
+        // 3. This will properly increment ActivationCounts and handle all side effects
+        // 4. Extract final adjusted_uma from state.runner after all activations
+        //
+        // For now, we stub this to maintain compilation while the architecture is in place.
+        let activated_skill_ids = HashSet::new();
+
+        // Stub: Out-of-gate skill activation should happen here
+        // Once RaceState is created, we can properly activate out-of-gate skills:
+        // for (idx, skill) in out_of_gate_skills.iter().enumerate() {
+        //     activate_skill(&mut state, idx, 0);
+        // }
+        //
+        // Note: out_of_gate_skills are removed from available_skills,
+        // so they won't be available during the race for re-activation.
+
+        // 6. Use item.
+        // n.b.: This is the same as setting race parameters ahead of time so no action needed here.
+        // 7. Set starting location based off gate number
+        // TODO: implement starting location; assume no effect for now
+        // 8. Calculate start delay random component
+        start_delay *= rng.borrow_mut().random_range(0.0..=0.1);
         // 8. Convert stamina to HP
         let max_hp = 0.8 * hp_style_coefficient(adjusted_uma.style) * (adjusted_uma.stamina as f64)
             + course.distance as f64;
@@ -267,6 +337,16 @@ impl Runner {
             None
         };
 
+        // Build golden skill indices for random activation (from runtime_skills only)
+        let golden_skill_indices = runtime_skills
+            .iter()
+            .enumerate()
+            .filter(|(_, skill)| {
+                skill.rarity == SkillRarity::Gold || skill.rarity == SkillRarity::Evolution
+            })
+            .map(|(i, _)| i)
+            .collect::<Vec<usize>>();
+
         // Initialize race state
         Runner {
             base: base_uma,
@@ -279,8 +359,12 @@ impl Runner {
                 + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
             base_target_speed: 0.85 * course.base_speed(),
             start_delay,
-            available_skills,
+            available_skills: runtime_skills,
             activated_skills: Vec::new(),
+            activated_skill_ids,
+            skill_modifiers: SkillModifiers::default(),
+            active_timed_effects: Vec::new(),
+            golden_skill_indices,
             phase: Phase::Early,
             hp: max_hp,
             max_hp,
@@ -298,6 +382,32 @@ impl Runner {
         }
     }
 
+    /// Recalculate skill modifiers from active timed effects
+    pub fn recalculate_skill_modifiers(&mut self) {
+        let mut mods = SkillModifiers::default();
+
+        for effect in &self.active_timed_effects {
+            match effect.effect.skill_type {
+                SkillType::Acceleration => {
+                    mods.acceleration += effect.effect.modifier as f64;
+                }
+                SkillType::TargetSpeed => {
+                    mods.target_speed += effect.effect.modifier as f64;
+                }
+                SkillType::CurrentSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
+                    mods.current_speed += effect.effect.modifier as f64;
+                }
+                SkillType::ExtendEvolvedDuration => {
+                    // Duration scaling is multiplicative
+                    mods.duration_scaling *= effect.effect.modifier as f64 / 10000.0;
+                }
+                _ => {}
+            }
+        }
+
+        self.skill_modifiers = mods;
+    }
+
     pub fn start_type(&self) -> StartType {
         match self.start_delay {
             d if d < 0.02 => StartType::Good,
@@ -306,7 +416,7 @@ impl Runner {
         }
     }
 
-    pub fn accelerate(&mut self, skill_modifier: f64) {
+    pub fn accelerate(&mut self) {
         let base_accel = if self.is_uphill() { 0.0004 } else { 0.0006 };
 
         let power_component = (500.0 * self.adjusted.power as f64).sqrt();
@@ -321,7 +431,8 @@ impl Runner {
 
         let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
-        self.acceleration = base_acceleration + skill_modifier + start_dash_modifier;
+        self.acceleration =
+            base_acceleration + self.skill_modifiers.acceleration + start_dash_modifier;
     }
 
     pub fn decelerate(&mut self) {
@@ -339,7 +450,9 @@ impl Runner {
     }
 
     pub fn target_speed(&self) -> f64 {
-        self.base_target_speed + self.slope_acceleration.unwrap_or(0.0)
+        self.base_target_speed
+            + self.slope_acceleration.unwrap_or(0.0)
+            + self.skill_modifiers.target_speed
     }
 
     pub fn is_uphill(&self) -> bool {
@@ -385,11 +498,15 @@ impl Runner {
     }
 
     pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
-        // TODO: review
+        // Update speed based on acceleration
         self.speed += self.acceleration * delta_time;
+
+        // Clamp to target speed
         if self.speed > self.target_speed() {
             self.speed = self.target_speed();
         }
+
+        // Handle start dash end and min speed
         if self.is_start_dash && self.speed >= 0.85 * course_base_speed {
             self.is_start_dash = false;
         } else if !self.is_start_dash && self.speed < self.min_speed {
@@ -399,15 +516,21 @@ impl Runner {
 
     pub fn update_acceleration(&mut self) {
         if self.speed < self.target_speed() {
-            // TODO: calculate skill modifier
-            self.accelerate(0.0);
+            self.accelerate();
         } else {
             self.decelerate();
         }
     }
 
+    /// Get the effective speed including skill modifiers
+    /// This is the actual speed used for position calculations
+    pub fn effective_speed(&self) -> f64 {
+        self.speed + self.skill_modifiers.current_speed
+    }
+
     pub fn update_position(&mut self, delta_time: f64) {
-        self.position += self.speed * delta_time;
+        // Use effective_speed which includes current_speed modifiers
+        self.position += self.effective_speed() * delta_time;
     }
 
     pub fn calculate_last_spurt(&mut self, course: &Course, condition: TrackCondition) {
