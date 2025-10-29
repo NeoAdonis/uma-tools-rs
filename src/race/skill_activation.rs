@@ -60,7 +60,7 @@ pub struct SkillActivationLogic {
 }
 
 /// Tracks whether this skill has been checked/activated
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ActivationState {
     /// Has this skill successfully activated?
     pub has_activated: bool,
@@ -72,16 +72,6 @@ pub struct ActivationState {
     /// For continuous triggers: last frame this was checked
     /// Prevents duplicate checks in same frame
     pub last_checked_frame: Option<usize>,
-}
-
-impl Default for ActivationState {
-    fn default() -> Self {
-        ActivationState {
-            has_activated: false,
-            trigger_attempted: false,
-            last_checked_frame: None,
-        }
-    }
 }
 
 /// A trigger condition that determines WHEN to check a skill

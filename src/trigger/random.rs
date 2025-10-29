@@ -19,11 +19,11 @@ pub fn preroll_random_triggers(
 
     for (skill_idx, skill) in skills.iter().enumerate() {
         for alternative in &skill.alternatives {
-            if let Ok(condition) = parse_condition(&alternative.condition) {
-                if let Some(activation) = roll_condition(&condition, course, rng) {
-                    activations.insert(skill_idx, activation);
-                    break; // Only one alternative per skill activates
-                }
+            if let Ok(condition) = parse_condition(&alternative.condition)
+                && let Some(activation) = roll_condition(&condition, course, rng)
+            {
+                activations.insert(skill_idx, activation);
+                break; // Only one alternative per skill activates
             }
         }
     }
@@ -457,8 +457,8 @@ fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::course::*;
     use crate::course::geometry::*;
+    use crate::course::*;
 
     fn create_test_course() -> Course {
         Course::new_test(

@@ -62,7 +62,7 @@ pub struct Runner {
 
 /// Adjust base stats according to course and race parameters.
 pub fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
-    let course_modifier = course_speed_modifier(&uma, &course.course_set_status);
+    let course_modifier = course_speed_modifier(uma, &course.course_set_status);
     // n.b. In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
     Uma {
@@ -253,7 +253,7 @@ impl Runner {
         // 6. Calculate start delay
         start_delay *= rng.borrow_mut().random_range(0.0..=0.1);
         // 7. Calculate adjusted stats
-        let adjusted_uma = adjust_stats(&base_uma, &course, &params);
+        let adjusted_uma = adjust_stats(&base_uma, course, params);
         // 8. Convert stamina to HP
         let max_hp = 0.8 * hp_style_coefficient(adjusted_uma.style) * (adjusted_uma.stamina as f64)
             + course.distance as f64;
@@ -283,7 +283,7 @@ impl Runner {
             activated_skills: Vec::new(),
             phase: Phase::Early,
             hp: max_hp,
-            max_hp: max_hp,
+            max_hp,
             hp_guts_modifier: 1.0 + 200.0 / (600.0 * adjusted_uma.guts as f64).sqrt(),
             position: 0.0,
             rush_section,
@@ -343,11 +343,11 @@ impl Runner {
     }
 
     pub fn is_uphill(&self) -> bool {
-        self.slope_acceleration.map_or(false, |s| s > 0.0)
+        self.slope_acceleration.is_some_and(|s| s > 0.0)
     }
 
     pub fn is_downhill_accel(&self) -> bool {
-        self.slope_acceleration.map_or(false, |s| s < 0.0)
+        self.slope_acceleration.is_some_and(|s| s < 0.0)
     }
 
     pub fn start_uphill_acceleration(&mut self, slope: f64) {

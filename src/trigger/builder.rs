@@ -33,9 +33,9 @@
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
 use crate::race::skill_activation::*;
-use crate::uma::skill::*;
 use crate::trigger::random::preroll_random_triggers;
 use crate::trigger::system::*;
+use crate::uma::skill::*;
 use rand::Rng;
 
 /// Build a complete TriggerScheduler from a list of skills
@@ -61,10 +61,10 @@ pub fn build_trigger_scheduler(
         let random_activation = scheduler.random_activations.get(&skill_idx).cloned();
 
         // Skip if random activation failed (skill never activates)
-        if let Some(ref activation) = random_activation {
-            if !activation.activated {
-                continue;
-            }
+        if let Some(ref activation) = random_activation
+            && !activation.activated
+        {
+            continue;
         }
 
         // Process each alternative condition

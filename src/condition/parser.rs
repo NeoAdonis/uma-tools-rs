@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::condition::variables::VarType;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -248,7 +248,7 @@ impl Lexer {
                 }
                 Some(c)
                     if c.is_ascii_digit()
-                        || (c == '-' && self.peek(1).map_or(false, |p| p.is_ascii_digit())) =>
+                        || (c == '-' && self.peek(1).is_some_and(|p| p.is_ascii_digit())) =>
                 {
                     tokens.push(self.read_number()?);
                 }
