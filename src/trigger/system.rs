@@ -1,5 +1,7 @@
-use crate::condition_parser::CompOp;
-use crate::course::{Corner, Phase, Slope};
+use crate::condition::parser::CompOp;
+use crate::course::Phase;
+use crate::course::geometry::{Corner, Slope, SlopeType};
+use crate::race::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
@@ -8,7 +10,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 /// This scheduler stores `SkillActivationLogic` which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
 pub struct TriggerScheduler {
-    pub skill_logics: Vec<crate::skill_activation::SkillActivationLogic>,
+    pub skill_logics: Vec<SkillActivationLogic>,
 
     // Monotonic triggers - use priority queues for O(log n) activation
     pub time_triggers: BinaryHeap<TimeTrigger>,
@@ -110,9 +112,9 @@ pub struct DistanceTrigger {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DistanceTriggerType {
-    RemainDistance,  // Decreasing: triggers when remain_distance <= threshold
-    DistanceRate,    // Increasing: triggers when position >= threshold
-    Furlong,         // Increasing: triggers when position >= threshold (in furlongs)
+    RemainDistance, // Decreasing: triggers when remain_distance <= threshold
+    DistanceRate,   // Increasing: triggers when position >= threshold
+    Furlong,        // Increasing: triggers when position >= threshold (in furlongs)
 }
 
 impl Ord for DistanceTrigger {
@@ -235,13 +237,6 @@ pub struct SlopeTransitionTrigger {
     pub slope: Slope, // Reference to actual slope geometry
     pub slope_type: SlopeType,
     pub skill_indices: Vec<usize>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum SlopeType {
-    Uphill,
-    Downhill,
-    Any,
 }
 
 /// Triggers when on specific straights

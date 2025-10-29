@@ -30,11 +30,12 @@
 //!     - If true, activate skill
 //! ```
 
-use crate::condition_parser::*;
-use crate::course::*;
-use crate::random_triggers::preroll_random_triggers;
-use crate::skill::*;
-use crate::trigger_system::*;
+use crate::condition::parser::*;
+use crate::course::{Course, Phase};
+use crate::race::skill_activation::*;
+use crate::uma::skill::*;
+use crate::trigger::random::preroll_random_triggers;
+use crate::trigger::system::*;
 use rand::Rng;
 
 /// Build a complete TriggerScheduler from a list of skills
@@ -83,19 +84,19 @@ pub fn build_trigger_scheduler(
 
             // Split condition into triggers and guards
             // This returns MULTIPLE branches if there are OR conditions
-            let branches = crate::skill_activation::split_condition(&condition, random_activation.as_ref());
+            let branches = split_condition(&condition, random_activation.as_ref());
 
             // Create SkillActivationLogic for each branch
             for (triggers, guard_condition) in branches {
                 // Add continuous trigger if no triggers found
                 let final_triggers = if triggers.is_empty() {
-                    vec![crate::skill_activation::TriggerCondition::Continuous]
+                    vec![TriggerCondition::Continuous]
                 } else {
                     triggers.clone()
                 };
 
                 // Create SkillActivationLogic
-                let logic = crate::skill_activation::SkillActivationLogic::new(
+                let logic = SkillActivationLogic::new(
                     skill_idx,
                     alt_idx,
                     final_triggers.clone(),
@@ -123,15 +124,18 @@ pub fn build_trigger_scheduler(
 /// Takes a trigger from SkillActivationLogic and adds it to the correct queue/list.
 /// The `logic_idx` is the index into `scheduler.skill_logics`.
 fn index_trigger(
-    trigger: &crate::skill_activation::TriggerCondition,
+    trigger: &TriggerCondition,
     logic_idx: usize,
     scheduler: &mut TriggerScheduler,
     course: &Course,
 ) {
-    use crate::skill_activation::TriggerCondition;
+    use crate::race::skill_activation::TriggerCondition;
 
     match trigger {
-        TriggerCondition::Time { threshold, operator } => {
+        TriggerCondition::Time {
+            threshold,
+            operator,
+        } => {
             scheduler.time_triggers.push(TimeTrigger {
                 threshold_seconds: *threshold,
                 skill_index: logic_idx,
@@ -139,7 +143,10 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::DistanceCovered { threshold, operator } => {
+        TriggerCondition::DistanceCovered {
+            threshold,
+            operator,
+        } => {
             // Convert percentage to meters
             let threshold_meters = threshold / 100.0 * course.distance as f64;
             scheduler.distance_triggers.push(DistanceTrigger {
@@ -150,7 +157,10 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::DistanceRemaining { threshold, operator } => {
+        TriggerCondition::DistanceRemaining {
+            threshold,
+            operator,
+        } => {
             scheduler.distance_triggers.push(DistanceTrigger {
                 threshold_meters: *threshold,
                 skill_index: logic_idx,
@@ -159,7 +169,10 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::HpPercent { threshold, operator } => {
+        TriggerCondition::HpPercent {
+            threshold,
+            operator,
+        } => {
             scheduler.hp_triggers.push(HpTrigger {
                 threshold_percent: *threshold,
                 skill_index: logic_idx,
@@ -177,9 +190,13 @@ fn index_trigger(
             };
 
             // Find or create phase trigger for this boundary
-            let mut triggers: Vec<PhaseTransitionTrigger> = scheduler.phase_triggers.drain().collect();
+            let mut triggers: Vec<PhaseTransitionTrigger> =
+                scheduler.phase_triggers.drain().collect();
 
-            if let Some(existing) = triggers.iter_mut().find(|t| t.boundary_distance == boundary_distance) {
+            if let Some(existing) = triggers
+                .iter_mut()
+                .find(|t| t.boundary_distance == boundary_distance)
+            {
                 existing.skill_indices.push(logic_idx);
             } else {
                 triggers.push(PhaseTransitionTrigger {

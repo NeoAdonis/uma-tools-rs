@@ -36,10 +36,10 @@
 //!
 //! These are clearly marked with `// STUB:` comments.
 
-use crate::condition_parser::*;
-use crate::condition_variables::*;
-use crate::runner::*;
-use crate::solver::RaceState;
+use crate::condition::parser::*;
+use crate::condition::variables::*;
+use crate::race::runner::{Runner, StartType};
+use crate::race::solver::RaceState;
 use crate::uma::*;
 
 /// Evaluate a guard condition against current race state
@@ -208,7 +208,9 @@ fn get_distance_value(var: &DistanceVar, state: &RaceState) -> i32 {
 
         // Random trigger - handled by trigger system
         DistanceVar::DistanceRateAfterRandom => {
-            panic!("BUG: distance_rate_after_random should not be evaluated - it's a trigger variable!")
+            panic!(
+                "BUG: distance_rate_after_random should not be evaluated - it's a trigger variable!"
+            )
         }
 
         // Remaining distance for any player character
@@ -270,7 +272,10 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState) -> i32 {
         | PhaseVar::PhaseLatterHalfStraightRandom
         | PhaseVar::PhaseRandom
         | PhaseVar::PhaseStraightRandom => {
-            panic!("BUG: Random phase trigger {:?} should not be evaluated - it's a trigger variable!", var)
+            panic!(
+                "BUG: Random phase trigger {:?} should not be evaluated - it's a trigger variable!",
+                var
+            )
         }
 
         // Phase subdivisions
@@ -350,7 +355,9 @@ fn get_course_value(var: &CourseVar, state: &RaceState) -> i32 {
 
         // One-time trigger - handled by trigger system
         CourseVar::IsLastStraightOnetime => {
-            panic!("BUG: is_last_straight_onetime should not be evaluated - it's a trigger variable!")
+            panic!(
+                "BUG: is_last_straight_onetime should not be evaluated - it's a trigger variable!"
+            )
         }
 
         // Current lane: 0=inner, 1=middle, 2=outer, 3=outside
@@ -388,7 +395,10 @@ fn get_course_value(var: &CourseVar, state: &RaceState) -> i32 {
         | CourseVar::StraightRandom
         | CourseVar::UpSlopeRandom
         | CourseVar::UpSlopeRandomLaterHalf => {
-            panic!("BUG: Random course trigger {:?} should not be evaluated - it's a trigger variable!", var)
+            panic!(
+                "BUG: Random course trigger {:?} should not be evaluated - it's a trigger variable!",
+                var
+            )
         }
     }
 }
@@ -569,7 +579,7 @@ fn get_status_value(var: &StatusVar, state: &RaceState) -> i32 {
 }
 
 /// Get position-related values (mostly multi-uma stubs)
-fn get_position_value(var: &PositionVar, state: &RaceState) -> i32 {
+fn get_position_value(var: &PositionVar, _state: &RaceState) -> i32 {
     match var {
         // All multi-uma stubs - return sensible single-uma values
         PositionVar::Order => 1,            // STUB: Always first place
@@ -615,7 +625,7 @@ fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
 }
 
 /// Get temptation/rush values (all multi-uma stubs)
-fn get_temptation_value(var: &TemptationVar, state: &RaceState) -> i32 {
+fn get_temptation_value(var: &TemptationVar, _state: &RaceState) -> i32 {
     match var {
         // Self temptation count
         TemptationVar::TemptationCount => {
@@ -665,8 +675,9 @@ fn distance_to_furlongs(distance_meters: f64) -> i32 {
 mod tests {
     use super::*;
     use crate::course::*;
-    use crate::race_parameters::*;
+    use crate::race::parameters::*;
     use crate::skill::*;
+    use crate::uma::{Aptitude};
 
     /// Helper to create a minimal test race state
     fn create_test_race_state() -> RaceState {
@@ -677,12 +688,12 @@ mod tests {
             guts: 1200,
             wiz: 1200,
             style: Style::Late,
-            distance_aptitude: crate::uma::Aptitude::S,
-            track_aptitude: crate::uma::Aptitude::S,
-            style_aptitude: crate::uma::Aptitude::S,
+            distance_aptitude: Aptitude::S,
+            track_aptitude: Aptitude::S,
+            style_aptitude: Aptitude::S,
         };
 
-        let course_data = crate::course::CourseData {
+        let course_data = CourseData {
             distance: 2000,
             distance_type: DistanceType::Mile,
             surface: Track::Turf,
@@ -817,12 +828,12 @@ mod tests {
             guts: 1200,
             wiz: 1200,
             style: Style::Late,
-            distance_aptitude: crate::uma::Aptitude::S,
-            track_aptitude: crate::uma::Aptitude::S,
-            style_aptitude: crate::uma::Aptitude::S,
+            distance_aptitude: Aptitude::S,
+            track_aptitude: Aptitude::S,
+            style_aptitude: Aptitude::S,
         };
 
-        let course_data = crate::course::CourseData {
+        let course_data = CourseData {
             distance: 2000,
             distance_type: DistanceType::Mile,
             surface: Track::Turf,

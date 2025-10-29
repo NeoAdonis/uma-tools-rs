@@ -1,5 +1,4 @@
-use crate::course::{Corner, Slope, Straight};
-use crate::trigger_system::SlopeType;
+use crate::course::geometry::*;
 
 /// Manages corner entry/exit detection
 pub struct CornerManager {
@@ -65,11 +64,7 @@ impl SlopeManager {
     }
 
     /// Check for slope entry, returns (slope index, slope type) if entered
-    pub fn check_entry(
-        &mut self,
-        position: f64,
-        slopes: &[Slope],
-    ) -> Option<(usize, SlopeType)> {
+    pub fn check_entry(&mut self, position: f64, slopes: &[Slope]) -> Option<(usize, SlopeType)> {
         if self.current_slope.is_some() {
             return None; // Already on a slope
         }
@@ -77,15 +72,7 @@ impl SlopeManager {
         for (idx, slope) in slopes.iter().enumerate() {
             if position >= slope.start && position < slope.start + slope.length {
                 self.current_slope = Some(idx);
-
-                let slope_type = if slope.is_uphill() {
-                    SlopeType::Uphill
-                } else if slope.is_downhill() {
-                    SlopeType::Downhill
-                } else {
-                    SlopeType::Any
-                };
-
+                let slope_type = slope.slope_type();
                 return Some((idx, slope_type));
             }
         }
@@ -180,7 +167,6 @@ mod tests {
     }
 
     fn create_test_straight(start: f64, end: f64) -> Straight {
-        use crate::course::FrontType;
         Straight {
             start,
             end,

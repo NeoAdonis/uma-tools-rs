@@ -1,8 +1,10 @@
-use crate::condition_parser::{parse_condition, CompList, Condition};
-use crate::condition_variables::*;
-use crate::course::{Course, Phase};
+use crate::condition::parser::*;
+use crate::condition::variables::*;
+use crate::course::Course;
+use crate::course::Phase as CoursePhase;
+use crate::course::geometry::SlopeType;
 use crate::skill::Skill;
-use crate::trigger_system::{RandomActivation, SlopeType};
+use crate::trigger::system::RandomActivation;
 use rand::prelude::*;
 use std::collections::HashMap;
 
@@ -67,14 +69,19 @@ fn roll_condition(
 struct RollContext {
     has_random: bool,
     activation_distance: f64,
-    phase_restriction: Option<Phase>,
+    phase_restriction: Option<CoursePhase>,
     corner_restriction: Option<usize>,
     slope_restriction: Option<SlopeType>,
     failed: bool,
 }
 
 /// Visit all comparisons in a CompList and process random variables
-fn visit_comps(comp_list: &CompList, context: &mut RollContext, course: &Course, rng: &mut impl Rng) {
+fn visit_comps(
+    comp_list: &CompList,
+    context: &mut RollContext,
+    course: &Course,
+    rng: &mut impl Rng,
+) {
     match comp_list {
         CompList::Single(comp) => {
             process_random_comp(comp, context, course, rng);
@@ -88,7 +95,7 @@ fn visit_comps(comp_list: &CompList, context: &mut RollContext, course: &Course,
 
 /// Process a single comparison that might contain a random variable
 fn process_random_comp(
-    comp: &crate::condition_parser::Comp,
+    comp: &Comp,
     context: &mut RollContext,
     course: &Course,
     rng: &mut impl Rng,
@@ -112,10 +119,10 @@ fn process_random_comp(
         Phase(PhaseVar::PhaseRandom) => {
             // phase_random==X where X is phase (0=Early, 1=Mid, 2=Late, 3=Last)
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -129,10 +136,10 @@ fn process_random_comp(
             // phase_firsthalf_random==X where X is phase
             // Activates at random point during first half of specified phase
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -147,10 +154,10 @@ fn process_random_comp(
             // phase_firstquarter_random==X where X is phase
             // Activates at random point during first quarter of specified phase
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -165,10 +172,10 @@ fn process_random_comp(
             // phase_laterhalf_random==X where X is phase
             // Activates at random point during second half of specified phase
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -183,10 +190,10 @@ fn process_random_comp(
             // phase_corner_random==X where X is phase
             // Picks random point during a corner in specified phase
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -214,10 +221,10 @@ fn process_random_comp(
             // phase_straight_random==X where X is phase
             // Picks random point during a straight in specified phase
             let phase = match comp.value {
-                0 => crate::course::Phase::Early,
-                1 => crate::course::Phase::Mid,
-                2 => crate::course::Phase::Late,
-                3 => crate::course::Phase::Last,
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
                 _ => return,
             };
 
@@ -253,7 +260,8 @@ fn process_random_comp(
                     .collect();
 
                 if !first_half_straights.is_empty() {
-                    let straight = first_half_straights[rng.random_range(0..first_half_straights.len())];
+                    let straight =
+                        first_half_straights[rng.random_range(0..first_half_straights.len())];
                     let end = straight.end.min(halfway);
                     context.activation_distance = rng.random_range(straight.start..end);
                     context.has_random = true;
@@ -275,7 +283,8 @@ fn process_random_comp(
                     .collect();
 
                 if !second_half_straights.is_empty() {
-                    let straight = second_half_straights[rng.random_range(0..second_half_straights.len())];
+                    let straight =
+                        second_half_straights[rng.random_range(0..second_half_straights.len())];
                     let start = straight.start.max(halfway);
                     context.activation_distance = rng.random_range(start..straight.end);
                     context.has_random = true;
@@ -335,7 +344,8 @@ fn process_random_comp(
             // last_straight_random==1
             // Picks random point on final straight
             if let Some(last_straight) = course.straights.last() {
-                context.activation_distance = rng.random_range(last_straight.start..last_straight.end);
+                context.activation_distance =
+                    rng.random_range(last_straight.start..last_straight.end);
                 context.has_random = true;
             }
         }
@@ -447,7 +457,8 @@ fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::course::{Corner, CourseData, Direction, DistanceType, Slope, Straight, Track};
+    use crate::course::*;
+    use crate::course::geometry::*;
 
     fn create_test_course() -> Course {
         Course::new_test(
@@ -475,7 +486,7 @@ mod tests {
                 straights: vec![Straight {
                     start: 0.0,
                     end: 100.0,
-                    front_type: crate::course::FrontType::Audience,
+                    front_type: FrontType::Audience,
                 }],
                 race_track_id: 1,
                 _course: (),
@@ -550,15 +561,21 @@ mod tests {
             let dist = activation.activation_distance;
 
             // Should be in Mid phase (400-1600)
-            assert!(dist >= 400.0 && dist <= 1600.0,
-                "Distance {} not in Mid phase range [400, 1600]", dist);
+            assert!(
+                dist >= 400.0 && dist <= 1600.0,
+                "Distance {} not in Mid phase range [400, 1600]",
+                dist
+            );
 
             // Should be in corner2 (500-650), which is the only corner overlapping with Mid
-            assert!(dist >= 500.0 && dist <= 650.0,
-                "Distance {} not in corner2 segment [500, 650]", dist);
+            assert!(
+                dist >= 500.0 && dist <= 650.0,
+                "Distance {} not in corner2 segment [500, 650]",
+                dist
+            );
 
             // Verify phase restriction is set
-            assert_eq!(activation.phase_restriction, Some(crate::course::Phase::Mid));
+            assert_eq!(activation.phase_restriction, Some(Phase::Mid));
         }
     }
 
@@ -580,15 +597,21 @@ mod tests {
             let dist = activation.activation_distance;
 
             // Should be in Early phase (0-400)
-            assert!(dist >= 0.0 && dist <= 400.0,
-                "Distance {} not in Early phase range [0, 400]", dist);
+            assert!(
+                dist >= 0.0 && dist <= 400.0,
+                "Distance {} not in Early phase range [0, 400]",
+                dist
+            );
 
             // Should be in straight segment [0-100] ∩ [0-400] = [0-100]
-            assert!(dist >= 0.0 && dist <= 100.0,
-                "Distance {} not in straight segment [0, 100]", dist);
+            assert!(
+                dist >= 0.0 && dist <= 100.0,
+                "Distance {} not in straight segment [0, 100]",
+                dist
+            );
 
             // Verify phase restriction is set
-            assert_eq!(activation.phase_restriction, Some(crate::course::Phase::Early));
+            assert_eq!(activation.phase_restriction, Some(Phase::Early));
         }
     }
 }

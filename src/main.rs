@@ -1,27 +1,17 @@
-mod condition_evaluator;
-mod condition_parser;
-mod condition_variables;
+mod condition;
 mod course;
-mod hp;
-mod race_parameters;
-mod race_transitions;
-mod random_triggers;
-mod runner;
-mod skill;
-mod skill_activation;
-mod solver;
-mod trigger_builder;
-mod trigger_system;
+mod race;
+mod trigger;
 mod uma;
 mod units;
 
 use course::*;
-use race_parameters::*;
+use race::parameters::*;
+use race::solver::*;
 use rand::distr::*;
 use rand::prelude::*;
 use serde_json;
-use skill::*;
-use solver::*;
+use uma::skill::*;
 use uma::*;
 
 // TODO: remove

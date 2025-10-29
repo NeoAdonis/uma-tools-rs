@@ -5,7 +5,7 @@
 //! (which must be true AT activation time).
 //!
 //! # Overview
-//! 
+//!
 //! The skill activation process is divided into three main components:
 //!
 //! 1. **Triggers** determine WHEN to evaluate a skill
@@ -20,18 +20,19 @@
 //! 3. **Activation State** tracks whether skill has fired
 //!    - One-time triggers mark skill as "attempted" after first check
 //!    - Continuous triggers can be checked multiple times
-//! 
+//!
 //! # Example
-//! 
+//!
 //! Consider a skill with condition: `hp_per>=20 & is_finalcorner_random==1`
 //!
 //! **Random Gate**: `is_finalcorner_random` pre-rolls to distance 1850m
 //! **Guard**: `hp_per>=20` must be true when we reach 1850m
 
-use crate::condition_parser::*;
-use crate::condition_variables::*;
+use crate::condition::parser::*;
+use crate::condition::variables::*;
 use crate::course::Phase;
-use crate::trigger_system::SlopeType;
+use crate::course::geometry::SlopeType;
+use crate::trigger::system::RandomActivation;
 
 /// Complete activation logic for a skill
 /// Replaces the old approach of scattering skill indices across multiple heaps
@@ -120,7 +121,7 @@ pub enum TriggerCondition {
     /// Entering or exiting a corner
     CornerTransition {
         corner_index: Option<usize>, // None = any corner
-        is_entry: bool,               // true = enter, false = exit
+        is_entry: bool,              // true = enter, false = exit
     },
 
     /// Entering or exiting a slope
@@ -244,7 +245,7 @@ impl SkillActivationLogic {
 /// - Guards: `hp_per>=20 & ground_type==2`
 pub fn split_condition(
     condition: &Condition,
-    random_activation: Option<&crate::trigger_system::RandomActivation>,
+    random_activation: Option<&RandomActivation>,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
     split_comp_list(&condition.comp_list, random_activation)
 }
@@ -252,7 +253,7 @@ pub fn split_condition(
 /// Recursively split a CompList, handling OR branches
 fn split_comp_list(
     comp_list: &CompList,
-    random_activation: Option<&crate::trigger_system::RandomActivation>,
+    random_activation: Option<&RandomActivation>,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
     match comp_list {
         CompList::Single(comp) => {
@@ -318,7 +319,7 @@ fn split_comp_list(
 /// Split a single comparison into trigger and guard
 fn split_single_comp(
     comp: &Comp,
-    random_activation: Option<&crate::trigger_system::RandomActivation>,
+    random_activation: Option<&RandomActivation>,
 ) -> (Vec<TriggerCondition>, Option<Condition>) {
     let role = comp.var.variable_role();
 
@@ -459,7 +460,7 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
             let slope_type = match comp.value {
                 1 => SlopeType::Uphill,
                 2 => SlopeType::Downhill,
-                _ => SlopeType::Any,
+                _ => SlopeType::Flat,
             };
             Some(TriggerCondition::SlopeTransition {
                 slope_type,
@@ -482,7 +483,7 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::condition_parser::parse_condition;
+    use crate::condition::parser::parse_condition;
 
     #[test]
     fn test_split_simple_guard_only() {
@@ -532,7 +533,7 @@ mod tests {
         let condition = parse_condition("phase_random==1&hp_per>=20").unwrap();
 
         // Simulate random activation
-        let activation = crate::trigger_system::RandomActivation {
+        let activation = RandomActivation {
             activation_distance: 800.0,
             phase_restriction: Some(Phase::Mid),
             corner_restriction: None,
@@ -571,10 +572,7 @@ mod tests {
 
         // Should extract onetime trigger
         assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::LastStraightEntry
-        ));
+        assert!(matches!(triggers[0], TriggerCondition::LastStraightEntry));
 
         // No guards
         assert!(guards.is_none());
@@ -584,9 +582,10 @@ mod tests {
     fn test_split_or_condition() {
         // Condition: (phase_random==1 & hp_per>=20) @ (corner==2 & ground_type==1)
         // This should create 2 separate branches
-        let condition = parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
+        let condition =
+            parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
 
-        let activation = crate::trigger_system::RandomActivation {
+        let activation = RandomActivation {
             activation_distance: 800.0,
             phase_restriction: Some(Phase::Mid),
             corner_restriction: None,
@@ -601,13 +600,20 @@ mod tests {
 
         // Branch 1: random trigger + hp guard
         let (triggers1, guards1) = &branches[0];
-        assert!(triggers1.iter().any(|t| matches!(t, TriggerCondition::RandomActivation { .. })));
+        assert!(
+            triggers1
+                .iter()
+                .any(|t| matches!(t, TriggerCondition::RandomActivation { .. }))
+        );
         assert!(guards1.is_some());
 
         // Branch 2: corner trigger + ground_type guard
         let (triggers2, guards2) = &branches[1];
-        assert!(triggers2.iter().any(|t| matches!(t, TriggerCondition::CornerTransition { .. })));
+        assert!(
+            triggers2
+                .iter()
+                .any(|t| matches!(t, TriggerCondition::CornerTransition { .. }))
+        );
         assert!(guards2.is_some());
     }
 }
-

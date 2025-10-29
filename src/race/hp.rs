@@ -1,5 +1,5 @@
 use crate::course::*;
-use crate::race_parameters::*;
+use crate::race::parameters::{TrackCondition};
 
 fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
     match (track, condition) {

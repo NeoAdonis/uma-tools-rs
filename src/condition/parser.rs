@@ -1,5 +1,5 @@
-use crate::condition_variables::VarType;
 use std::fmt;
+use crate::condition::variables::VarType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {

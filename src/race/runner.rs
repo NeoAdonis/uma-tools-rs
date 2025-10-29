@@ -1,7 +1,7 @@
 use crate::course::*;
-use crate::hp::*;
-use crate::race_parameters::*;
-use crate::skill::*;
+use crate::race::hp::*;
+use crate::race::parameters::{RaceParameters, TrackCondition};
+use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;

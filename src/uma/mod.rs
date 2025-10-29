@@ -1,5 +1,7 @@
-use crate::course::*;
-use crate::race_parameters::*;
+pub mod skill;
+
+use crate::course::{Track, ThresholdStat};
+use crate::race::parameters::{TrackCondition};
 use serde::Deserialize;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
