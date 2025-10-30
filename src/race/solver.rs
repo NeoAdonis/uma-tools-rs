@@ -311,6 +311,13 @@ pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_ind
             SkillType::WizUp => {
                 modify_stat(&mut state.runner.adjusted.wiz, effect.modifier);
             }
+            SkillType::AllStatsUp => {
+                modify_stat(&mut state.runner.adjusted.speed, effect.modifier);
+                modify_stat(&mut state.runner.adjusted.stamina, effect.modifier);
+                modify_stat(&mut state.runner.adjusted.power, effect.modifier);
+                modify_stat(&mut state.runner.adjusted.guts, effect.modifier);
+                modify_stat(&mut state.runner.adjusted.wiz, effect.modifier);
+            }
 
             // Timed effects (tracked in active_timed_effects)
             SkillType::Acceleration
@@ -366,13 +373,16 @@ pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_ind
                 state.runner.start_delay = effect.modifier as f64 / 10000.0;
             }
 
+            // Style change
+            SkillType::ChangeStyleOonige => {
+                state.runner.adjusted.style = Style::Oonige;
+            }
+
             // Unimplemented skill types
-            SkillType::ChangeStyleOonige => todo!(),
             SkillType::Fov => todo!(),
             SkillType::RushTime => todo!(),
             SkillType::LaneMovementSpeed => todo!(),
             SkillType::RushChance => todo!(),
-            SkillType::AllStatsUp => todo!(),
             SkillType::LaneChange => todo!(),
             SkillType::Unknown41 => todo!(),
         }

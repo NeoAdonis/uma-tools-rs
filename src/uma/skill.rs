@@ -120,7 +120,8 @@ impl Skill {
                     | SkillType::StaminaUp
                     | SkillType::PowerUp
                     | SkillType::GutsUp
-                    | SkillType::WizUp => {
+                    | SkillType::WizUp
+                    | SkillType::AllStatsUp => {
                         return true;
                     }
                     _ => {}
