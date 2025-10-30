@@ -492,8 +492,8 @@ impl VarType {
     /// Returns the trigger classification for this variable
     /// This determines how the variable should be evaluated in the event-driven trigger system
     pub fn trigger_class(&self) -> TriggerClass {
-        use VarType::*;
         use TriggerClass::*;
+        use VarType::*;
 
         match self {
             // STATIC - Evaluated once at race start
@@ -544,7 +544,7 @@ impl VarType {
             // ONE-TIME TRIGGERS
             Course(CourseVar::IsLastStraightOnetime) => Onetime,
             Position(PositionVar::ChangeOrderOnetime) => Onetime,
-            Position(PositionVar::ChangeOrderUpEndAfter) => Onetime,    // Under investigation
+            Position(PositionVar::ChangeOrderUpEndAfter) => Onetime, // Under investigation
             Position(PositionVar::ChangeOrderUpFinalcornerAfter) => Onetime,
             Position(PositionVar::ChangeOrderUpMiddle) => Onetime,
             Status(StatusVar::IsHpEmptyOnetime) => Onetime,
@@ -608,7 +608,9 @@ impl VarType {
             RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountNige) => MultiUmaStub,
             RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSenko) => MultiUmaStub,
             RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSashi) => MultiUmaStub,
-            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountOikomi) => MultiUmaStub,
+            RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountOikomi) => {
+                MultiUmaStub
+            }
             Activation(ActivationVar::IsExistCharaId) => MultiUmaStub,
             Activation(ActivationVar::IsExistSkillId) => MultiUmaStub,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => MultiUmaStub,
@@ -619,8 +621,8 @@ impl VarType {
             Status(StatusVar::IsLastspurt) => Continuous,
             Status(StatusVar::Lastspurt) => Continuous,
             Status(StatusVar::IsTemptation) => Continuous,
-            Status(StatusVar::IsBadstart) => Continuous,  // Under investigation
-            Status(StatusVar::IsOvertake) => Continuous,  // Under investigation
+            Status(StatusVar::IsBadstart) => Continuous, // Under investigation
+            Status(StatusVar::IsOvertake) => Continuous, // Under investigation
             Status(StatusVar::IsMoveLane) => Continuous,
             Status(StatusVar::IsBehindIn) => Continuous, // Under investigation
             Activation(ActivationVar::CompeteFightCount) => Continuous, // Under investigation
@@ -678,9 +680,11 @@ pub enum VariableRole {
     /// Examples: is_last_straight_onetime==1, change_order_onetime<0, is_hp_empty_onetime==1
     OnetimeEvent,
 
-    /// Monotonic trigger - fires when threshold crossed
-    /// Examples: accumulatetime>=5, hp_per<=50, distance_rate>=50
-    MonotonicTrigger,
+    /// Monotonic guard - can act as trigger OR guard depending on context
+    /// When paired with explicit triggers (RandomGate/Spatial/Phase): acts as GUARD
+    /// When alone (no explicit triggers): acts as TRIGGER
+    /// Examples: hp_per<=50, accumulatetime>=5, distance_rate>=50
+    MonotonicGuard,
 
     /// Phase transition trigger - fires when entering new phase
     /// Example: phase>=2
@@ -690,9 +694,13 @@ pub enum VariableRole {
     /// Examples: corner!=0, slope==1, is_last_straight==1
     SpatialTrigger,
 
-    /// Guard condition - must be true at trigger activation time
-    /// Examples: ground_type==2, motivation>=4, running_style==1
-    Guard,
+    /// Static guard - never changes during race, evaluated once at race start
+    /// Examples: ground_type==2, distance_type==4, running_style==1, motivation>=4
+    StaticGuard,
+
+    /// Dynamic guard - can change during race, must be checked when trigger fires
+    /// Examples: order<=3, is_lastspurt==1, blocked_side_continuetime>=2
+    DynamicGuard,
 
     /// Always true - special case
     AlwaysTrue,
@@ -701,8 +709,8 @@ pub enum VariableRole {
 impl VarType {
     /// Classify variable role for trigger-guard separation
     pub fn variable_role(&self) -> VariableRole {
-        use VariableRole::*;
         use VarType::*;
+        use VariableRole::*;
 
         match self {
             // RANDOM GATES - Activate at pre-rolled location, check guards there
@@ -730,20 +738,20 @@ impl VarType {
             Position(PositionVar::ChangeOrderOnetime) => OnetimeEvent,
             Status(StatusVar::IsHpEmptyOnetime) => OnetimeEvent,
 
-            // MONOTONIC TRIGGERS - Fire when threshold crossed
+            // MONOTONIC GUARDS - Can act as trigger or guard depending on context
             // Time-based
-            Phase(PhaseVar::AccumulateTime) => MonotonicTrigger,
+            Phase(PhaseVar::AccumulateTime) => MonotonicGuard,
 
             // Distance-based (increasing)
-            Distance(DistanceVar::DistanceRate) => MonotonicTrigger,
-            Distance(DistanceVar::Furlong) => MonotonicTrigger,
+            Distance(DistanceVar::DistanceRate) => MonotonicGuard,
+            Distance(DistanceVar::Furlong) => MonotonicGuard,
 
             // Distance-based (decreasing)
-            Distance(DistanceVar::RemainDistance) => MonotonicTrigger,
-            Distance(DistanceVar::RemainDistanceViewerId) => MonotonicTrigger,
+            Distance(DistanceVar::RemainDistance) => MonotonicGuard,
+            Distance(DistanceVar::RemainDistanceViewerId) => MonotonicGuard,
 
             // HP-based (decreasing)
-            Status(StatusVar::HpPer) => MonotonicTrigger,
+            Status(StatusVar::HpPer) => MonotonicGuard,
 
             // PHASE TRIGGERS - Fire when entering new phase
             Phase(PhaseVar::Phase) => PhaseTrigger,
@@ -769,102 +777,101 @@ impl VarType {
             // ALWAYS TRUE
             VarType::Always => AlwaysTrue,
 
-            // GUARD CONDITIONS - Must be true at activation time
-            // All other variables are guards that must be checked when triggers fire
+            // STATIC GUARDS - Never change during race
             // Static race parameters
-            RaceParam(RaceParamVar::Grade) => Guard,
-            RaceParam(RaceParamVar::IsDirtgrade) => Guard,
-            RaceParam(RaceParamVar::Motivation) => Guard,
-            RaceParam(RaceParamVar::Popularity) => Guard,
-            RaceParam(RaceParamVar::PostNumber) => Guard,
-            RaceParam(RaceParamVar::Season) => Guard,
-            RaceParam(RaceParamVar::Time) => Guard,
-            RaceParam(RaceParamVar::Weather) => Guard,
-            RaceParam(RaceParamVar::Visiblehorse) => Guard,
+            RaceParam(RaceParamVar::Grade) => StaticGuard,
+            RaceParam(RaceParamVar::IsDirtgrade) => StaticGuard,
+            RaceParam(RaceParamVar::Motivation) => StaticGuard,
+            RaceParam(RaceParamVar::Popularity) => StaticGuard,
+            RaceParam(RaceParamVar::PostNumber) => StaticGuard,
+            RaceParam(RaceParamVar::Season) => StaticGuard,
+            RaceParam(RaceParamVar::Time) => StaticGuard,
+            RaceParam(RaceParamVar::Weather) => StaticGuard,
+            RaceParam(RaceParamVar::Visiblehorse) => StaticGuard,
 
             // Course properties
-            Course(CourseVar::DistanceType) => Guard,
-            Course(CourseVar::GroundCondition) => Guard,
-            Course(CourseVar::GroundType) => Guard,
-            Course(CourseVar::IsBasisDistance) => Guard,
-            Course(CourseVar::Rotation) => Guard,
-            Course(CourseVar::TrackId) => Guard,
-            Course(CourseVar::CornerCount) => Guard,
-            Distance(DistanceVar::CourseDistance) => Guard,
+            Course(CourseVar::DistanceType) => StaticGuard,
+            Course(CourseVar::GroundCondition) => StaticGuard,
+            Course(CourseVar::GroundType) => StaticGuard,
+            Course(CourseVar::IsBasisDistance) => StaticGuard,
+            Course(CourseVar::Rotation) => StaticGuard,
+            Course(CourseVar::TrackId) => StaticGuard,
+            Course(CourseVar::CornerCount) => StaticGuard,
+            Distance(DistanceVar::CourseDistance) => StaticGuard,
 
             // Base stats
-            BaseStat(_) => Guard,
+            BaseStat(_) => StaticGuard,
 
             // Running style
-            RunningStyle(RunningStyleVar::RunningStyle) => Guard,
-            RunningStyle(_) => Guard,  // All other running style vars are guards
+            RunningStyle(RunningStyleVar::RunningStyle) => StaticGuard,
+            RunningStyle(_) => DynamicGuard, // Other running style vars are dynamic (multi-uma)
 
             // Status flags (continuous checks, but act as guards)
-            Status(StatusVar::IsLastspurt) => Guard,
-            Status(StatusVar::Lastspurt) => Guard,
-            Status(StatusVar::IsTemptation) => Guard,
-            Status(StatusVar::IsBadstart) => Guard,
-            Status(StatusVar::IsOvertake) => Guard,
-            Status(StatusVar::IsMoveLane) => Guard,
-            Status(StatusVar::IsBehindIn) => Guard,
-            Status(StatusVar::IsSurrounded) => Guard,
-            Status(StatusVar::BehindNearLaneTime) => Guard,
-            Status(StatusVar::BehindNearLaneTimeSet1) => Guard,
-            Status(StatusVar::InfrontNearLaneTime) => Guard,
+            Status(StatusVar::IsLastspurt) => DynamicGuard,
+            Status(StatusVar::Lastspurt) => DynamicGuard,
+            Status(StatusVar::IsTemptation) => DynamicGuard,
+            Status(StatusVar::IsBadstart) => DynamicGuard,
+            Status(StatusVar::IsOvertake) => DynamicGuard,
+            Status(StatusVar::IsMoveLane) => DynamicGuard,
+            Status(StatusVar::IsBehindIn) => DynamicGuard,
+            Status(StatusVar::IsSurrounded) => DynamicGuard,
+            Status(StatusVar::BehindNearLaneTime) => DynamicGuard,
+            Status(StatusVar::BehindNearLaneTimeSet1) => DynamicGuard,
+            Status(StatusVar::InfrontNearLaneTime) => DynamicGuard,
 
             // Activation counts (can act as guards checked at trigger time)
-            Activation(ActivationVar::ActivateCountAll) => Guard,
-            Activation(ActivationVar::ActivateCountStart) => Guard,
-            Activation(ActivationVar::ActivateCountMiddle) => Guard,
-            Activation(ActivationVar::ActivateCountLaterHalf) => Guard,
-            Activation(ActivationVar::ActivateCountEndAfter) => Guard,
-            Activation(ActivationVar::ActivateCountHeal) => Guard,
-            Activation(ActivationVar::ActivateCountAllTeam) => Guard,
-            Activation(ActivationVar::IsActivateAnySkill) => Guard,
-            Activation(ActivationVar::IsActivateHealSkill) => Guard,
-            Activation(ActivationVar::IsActivateOtherSkillDetail) => Guard,
-            Activation(ActivationVar::IsUsedSkillId) => Guard,
-            Activation(ActivationVar::IsExistSkillId) => Guard,
-            Activation(ActivationVar::CompeteFightCount) => Guard,
-            Activation(_) => Guard,
+            Activation(ActivationVar::ActivateCountAll) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountStart) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountMiddle) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountLaterHalf) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountEndAfter) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountHeal) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountAllTeam) => DynamicGuard,
+            Activation(ActivationVar::IsActivateAnySkill) => DynamicGuard,
+            Activation(ActivationVar::IsActivateHealSkill) => DynamicGuard,
+            Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
+            Activation(ActivationVar::IsUsedSkillId) => DynamicGuard,
+            Activation(ActivationVar::IsExistSkillId) => DynamicGuard,
+            Activation(ActivationVar::CompeteFightCount) => DynamicGuard,
+            Activation(_) => DynamicGuard,
 
             // Position/Order (multi-uma, but act as guards)
-            Position(PositionVar::Order) => Guard,
-            Position(PositionVar::OrderRate) => Guard,
-            Position(PositionVar::NearCount) => Guard,
-            Position(PositionVar::NearInfrontCount) => Guard,
-            Position(PositionVar::ChangeOrderUpEndAfter) => Guard,
-            Position(PositionVar::ChangeOrderUpFinalcornerAfter) => Guard,
-            Position(PositionVar::ChangeOrderUpMiddle) => Guard,
-            Position(PositionVar::OrderRateIn20Continue) => Guard,
-            Position(PositionVar::OrderRateIn40Continue) => Guard,
-            Position(PositionVar::OrderRateIn50Continue) => Guard,
-            Position(PositionVar::OrderRateIn80Continue) => Guard,
-            Position(PositionVar::OrderRateOut20Continue) => Guard,
-            Position(PositionVar::OrderRateOut40Continue) => Guard,
-            Position(PositionVar::OrderRateOut50Continue) => Guard,
-            Position(PositionVar::OrderRateOut70Continue) => Guard,
-            Position(PositionVar::OvertakeTargetTime) => Guard,
-            Position(PositionVar::OvertakeTargetNoOrderUpTime) => Guard,
+            Position(PositionVar::Order) => DynamicGuard,
+            Position(PositionVar::OrderRate) => DynamicGuard,
+            Position(PositionVar::NearCount) => DynamicGuard,
+            Position(PositionVar::NearInfrontCount) => DynamicGuard,
+            Position(PositionVar::ChangeOrderUpEndAfter) => DynamicGuard,
+            Position(PositionVar::ChangeOrderUpFinalcornerAfter) => DynamicGuard,
+            Position(PositionVar::ChangeOrderUpMiddle) => DynamicGuard,
+            Position(PositionVar::OrderRateIn20Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateIn40Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateIn50Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateIn80Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateOut20Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateOut40Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateOut50Continue) => DynamicGuard,
+            Position(PositionVar::OrderRateOut70Continue) => DynamicGuard,
+            Position(PositionVar::OvertakeTargetTime) => DynamicGuard,
+            Position(PositionVar::OvertakeTargetNoOrderUpTime) => DynamicGuard,
 
             // Distance (multi-uma, but act as guards)
-            Distance(DistanceVar::DistanceDiffTop) => Guard,
-            Distance(DistanceVar::DistanceDiffTopFloat) => Guard,
-            Distance(DistanceVar::DistanceDiffRate) => Guard,
-            Distance(DistanceVar::BashinDiffBehind) => Guard,
-            Distance(DistanceVar::BashinDiffInfront) => Guard,
+            Distance(DistanceVar::DistanceDiffTop) => DynamicGuard,
+            Distance(DistanceVar::DistanceDiffTopFloat) => DynamicGuard,
+            Distance(DistanceVar::DistanceDiffRate) => DynamicGuard,
+            Distance(DistanceVar::BashinDiffBehind) => DynamicGuard,
+            Distance(DistanceVar::BashinDiffInfront) => DynamicGuard,
 
             // Blocking
-            Blocking(_) => Guard,
+            Blocking(_) => DynamicGuard,
 
             // Temptation/Rush
-            Temptation(_) => Guard,
+            Temptation(_) => DynamicGuard,
 
             // Lane
-            Course(CourseVar::LaneType) => Guard,
+            Course(CourseVar::LaneType) => DynamicGuard,
 
             // Unknown
-            VarType::Unknown(_) => Guard,
+            VarType::Unknown(_) => DynamicGuard,
         }
     }
 }

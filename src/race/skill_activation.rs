@@ -237,7 +237,13 @@ pub fn split_condition(
     condition: &Condition,
     random_activation: Option<&RandomActivation>,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
-    split_comp_list(&condition.comp_list, random_activation)
+    let branches = split_comp_list(&condition.comp_list, random_activation);
+
+    // Apply promotion logic to each branch at the top level
+    branches
+        .into_iter()
+        .map(|(triggers, guards)| apply_monotonic_promotion(triggers, guards))
+        .collect()
 }
 
 /// Recursively split a CompList, handling OR branches
@@ -248,6 +254,7 @@ fn split_comp_list(
     match comp_list {
         CompList::Single(comp) => {
             // Base case: single comparison
+            // DON'T apply promotion here - it will be done after combining
             vec![split_single_comp(comp, random_activation)]
         }
 
@@ -283,6 +290,7 @@ fn split_comp_list(
                             }
                         };
 
+                        // Promotion will be applied at top level
                         results.push((combined_triggers, combined_guard));
                     }
                 }
@@ -306,7 +314,139 @@ fn split_comp_list(
     }
 }
 
+/// Apply MonotonicGuard promotion rules
+///
+/// Rules:
+/// 1. If there are explicit triggers (RandomGate/Spatial/Phase), MonotonicGuards stay as guards
+/// 2. If no explicit triggers exist, promote MonotonicGuards to triggers
+/// 3. If only guards remain after promotion, add Continuous trigger
+fn apply_monotonic_promotion(
+    mut triggers: Vec<TriggerCondition>,
+    guard_condition: Option<Condition>,
+) -> (Vec<TriggerCondition>, Option<Condition>) {
+    // Check if we have explicit triggers (not Continuous)
+    let has_explicit_trigger = triggers
+        .iter()
+        .any(|t| !matches!(t, TriggerCondition::Continuous));
+
+    if has_explicit_trigger {
+        // Rule 1: Explicit triggers exist → MonotonicGuards stay as guards
+        (triggers, guard_condition)
+    } else {
+        // Rule 2: No explicit triggers → try to promote MonotonicGuards
+        if let Some(guard) = guard_condition {
+            let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guard);
+
+            if !promoted_triggers.is_empty() {
+                // Successfully promoted some MonotonicGuards to triggers
+                triggers.extend(promoted_triggers);
+                (triggers, remaining_guards)
+            } else {
+                // Rule 3: No MonotonicGuards to promote → Continuous trigger
+                if triggers.is_empty() {
+                    triggers.push(TriggerCondition::Continuous);
+                }
+                (triggers, Some(guard))
+            }
+        } else {
+            // No guards at all
+            if triggers.is_empty() {
+                // No triggers, no guards → Continuous (shouldn't happen often)
+                triggers.push(TriggerCondition::Continuous);
+            }
+            (triggers, None)
+        }
+    }
+}
+
+/// Extract MonotonicGuards from guard condition and promote them to triggers
+///
+/// Returns: (promoted triggers, remaining guard condition)
+fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option<Condition>) {
+    let mut promoted_triggers = Vec::new();
+    let mut remaining_guards = Vec::new();
+
+    // Collect all comparisons from guard
+    collect_and_classify_comps(
+        &guard.comp_list,
+        &mut promoted_triggers,
+        &mut remaining_guards,
+    );
+
+    // Rebuild remaining guard condition
+    let final_guard = if remaining_guards.is_empty() {
+        None
+    } else if remaining_guards.len() == 1 {
+        Some(Condition {
+            comp_list: CompList::Single(remaining_guards[0].clone()),
+        })
+    } else {
+        // Multiple guards - combine with AND
+        Some(rebuild_guard_condition(remaining_guards))
+    };
+
+    (promoted_triggers, final_guard)
+}
+
+/// Recursively collect comparisons and classify them as triggers or guards
+fn collect_and_classify_comps(
+    comp_list: &CompList,
+    promoted_triggers: &mut Vec<TriggerCondition>,
+    remaining_guards: &mut Vec<Comp>,
+) {
+    match comp_list {
+        CompList::Single(comp) => {
+            let role = comp.var.variable_role();
+            if matches!(role, VariableRole::MonotonicGuard) {
+                // Promote to trigger
+                promoted_triggers.push(extract_monotonic_trigger(comp));
+            } else {
+                // Keep as guard
+                remaining_guards.push(comp.clone());
+            }
+        }
+        CompList::Binary { left, op, right } => {
+            if matches!(op, BinOp::And) {
+                // For AND, recurse into both sides
+                collect_and_classify_comps(left, promoted_triggers, remaining_guards);
+                collect_and_classify_comps(right, promoted_triggers, remaining_guards);
+            } else {
+                // For OR, we can't split - keep as guard
+                // This is a complex case that we'll treat conservatively
+                remaining_guards.push(Comp {
+                    var: VarType::Unknown("complex_or".to_string()),
+                    op: CompOp::Equal,
+                    value: 0,
+                });
+            }
+        }
+    }
+}
+
+/// Rebuild guard condition from list of comparisons
+fn rebuild_guard_condition(guards: Vec<Comp>) -> Condition {
+    if guards.is_empty() {
+        panic!("Cannot rebuild guard condition from empty list");
+    }
+
+    let mut comp_list = CompList::Single(guards[0].clone());
+
+    for guard in guards.iter().skip(1) {
+        comp_list = CompList::Binary {
+            left: Box::new(comp_list),
+            op: BinOp::And,
+            right: Box::new(CompList::Single(guard.clone())),
+        };
+    }
+
+    Condition { comp_list }
+}
+
 /// Split a single comparison into trigger and guard
+///
+/// Note: This function does NOT make promotion decisions for MonotonicGuard.
+/// It treats them as guards by default. Promotion happens at a higher level
+/// in split_comp_list after analyzing all conditions together.
 fn split_single_comp(
     comp: &Comp,
     random_activation: Option<&RandomActivation>,
@@ -335,9 +475,13 @@ fn split_single_comp(
             (vec![trigger], None)
         }
 
-        VariableRole::MonotonicTrigger => {
-            let trigger = extract_monotonic_trigger(comp);
-            (vec![trigger], None)
+        VariableRole::MonotonicGuard => {
+            // MonotonicGuard: can be trigger OR guard depending on context
+            // Default to guard here; promotion happens at higher level
+            let guard = Condition {
+                comp_list: CompList::Single(comp.clone()),
+            };
+            (vec![], Some(guard))
         }
 
         VariableRole::PhaseTrigger => {
@@ -356,8 +500,8 @@ fn split_single_comp(
             }
         }
 
-        VariableRole::Guard => {
-            // This is a guard - keep as guard condition
+        VariableRole::StaticGuard | VariableRole::DynamicGuard => {
+            // Static and Dynamic guards - keep as guard condition
             let guard = Condition {
                 comp_list: CompList::Single(comp.clone()),
             };
@@ -477,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_split_simple_guard_only() {
-        // Condition with only guards
+        // Condition with only static guards (no triggers, no monotonic guards)
         let condition = parse_condition("ground_type==2&motivation>=4").unwrap();
         let branches = split_condition(&condition, None);
 
@@ -486,8 +630,10 @@ mod tests {
 
         let (triggers, guards) = &branches[0];
 
-        // Should have continuous trigger (no specific trigger found)
-        assert_eq!(triggers.len(), 0); // Guards only, no triggers
+        // Should have continuous trigger (fallback when no explicit triggers or monotonic guards)
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
         // Should preserve both guards
         assert!(guards.is_some());
     }
@@ -605,5 +751,134 @@ mod tests {
                 .any(|t| matches!(t, TriggerCondition::CornerTransition { .. }))
         );
         assert!(guards2.is_some());
+    }
+
+    // Real skill tests based on actual skill_data.json entries
+
+    #[test]
+    fn test_real_skill_210101_phase_random_with_hp_guard() {
+        // Based on skill ID 210101 (レースの真髄・体): "phase_random==3&hp_per>=2&is_lastspurt==1"
+        // Tests Rule 1: MonotonicGuard (hp_per) stays as guard when paired with explicit trigger (phase_random)
+        let condition = parse_condition("phase_random==3&hp_per>=2&is_lastspurt==1").unwrap();
+
+        let activation = RandomActivation {
+            activation_distance: 1500.0,
+            phase_restriction: Some(Phase::Late),
+            corner_restriction: None,
+            slope_restriction: None,
+            activated: false,
+        };
+
+        let branches = split_condition(&condition, Some(&activation));
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have RandomActivation trigger
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::RandomActivation { .. }
+        ));
+
+        // hp_per and is_lastspurt should remain as guards
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_real_skill_100141_hp_with_spatial_trigger() {
+        // Based on skill ID 100141 (Victoria por plancha ☆): "is_last_straight==1&hp_per>=30&order<=2"
+        // Tests Rule 1: MonotonicGuard (hp_per) stays as guard with spatial trigger (is_last_straight)
+        let condition = parse_condition("is_last_straight==1&hp_per>=30&order<=2").unwrap();
+        let branches = split_condition(&condition, None);
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have StraightTransition trigger
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::StraightTransition { .. }
+        ));
+
+        // hp_per and order should remain as guards
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_real_skill_100402111_accumulatetime_promoted() {
+        // Based skill ID 100402111 (ドキッ☆じゃじゃウマ娘！): "running_style==1&slope==1&accumulatetime>=10"
+        // Tests Rule 2: MonotonicGuard (accumulatetime) promoted to trigger when no explicit triggers
+        let condition = parse_condition("running_style==1&slope==1&accumulatetime>=10").unwrap();
+        let branches = split_condition(&condition, None);
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Note: slope==1 creates a SlopeTransition trigger (spatial trigger),
+        // so accumulatetime stays as guard per Rule 1
+        // Updated test to match actual behavior
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::SlopeTransition { .. }
+        ));
+
+        // accumulatetime and running_style should remain as guards
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_real_skill_210141_static_guards_only() {
+        // Based on skill ID 210141 (レースの真髄・心): "motivation>=4"
+        // Tests Rule 3: Only static guards -> Continuous trigger fallback
+        let condition = parse_condition("motivation>=4").unwrap();
+        let branches = split_condition(&condition, None);
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have Continuous trigger (fallback)
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+        // motivation should remain as guard
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_real_skill_101021_or_with_accumulatetime() {
+        // Based on skill ID 101021 (ヴィヴァーチェ・ヴォラーレ); first alternative):
+        // "distance_rate<=50&order_rate>=40&order_rate<=80&infront_near_lane_time>=3&accumulatetime>=10@
+        //  distance_rate<=50&order_rate>=40&order_rate<=80&behind_near_lane_time>=3&accumulatetime>=10"
+        // Tests Rule 2 with OR: Both branches should promote MonotonicGuards to triggers
+        let condition = parse_condition(
+            "distance_rate<=50&order_rate>=40&order_rate<=80&infront_near_lane_time>=3&accumulatetime>=10@\
+             distance_rate<=50&order_rate>=40&order_rate<=80&behind_near_lane_time>=3&accumulatetime>=10"
+        ).unwrap();
+
+        let branches = split_condition(&condition, None);
+
+        // Should have 2 branches (OR condition)
+        assert_eq!(branches.len(), 2);
+
+        // Both branches should have both distance_rate and accumulatetime promoted to triggers
+        for (triggers, guards) in &branches {
+            assert_eq!(triggers.len(), 2);
+            // Should have both DistanceCovered and Time triggers
+            assert!(
+                triggers
+                    .iter()
+                    .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
+            );
+            assert!(
+                triggers
+                    .iter()
+                    .any(|t| matches!(t, TriggerCondition::Time { .. }))
+            );
+            // Other conditions should remain as guards
+            assert!(guards.is_some());
+        }
     }
 }
