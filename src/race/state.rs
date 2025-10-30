@@ -40,28 +40,29 @@ pub struct RaceState {
 }
 
 impl RaceState {
-    pub fn new(
-        uma: Uma,
-        motivation: Motivation,
-        course: Course,
-        params: RaceParameters,
-        skills: Vec<Skill>,
-    ) -> Self {
+    pub fn new(course: Course, params: RaceParameters) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
 
-        // Create runner first (it filters available skills based on wiz)
-        let runner = Runner::new(uma, motivation, &course, &params, skills, Rc::clone(&rng));
-
-        let runners = vec![runner]; // Single runner for now
-
         RaceState {
-            runners,
+            runners: vec![],
             course,
             params,
             rng,
             elapsed_time: 0.0,
         }
+    }
+
+    pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
+        let runner = Runner::new(
+            uma,
+            motivation,
+            &self.course,
+            &self.params,
+            skills,
+            Rc::clone(&self.rng),
+        );
+        self.runners.push(runner);
     }
 
     // TODO: complete implementation and report

@@ -39,7 +39,7 @@
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::race::runner::{Runner, StartType};
-use crate::race::solver::RaceState;
+use crate::race::state::RaceState;
 use crate::uma::*;
 
 /// Evaluate a guard condition against current race state
@@ -728,7 +728,10 @@ mod tests {
 
         let skills = vec![];
 
-        RaceState::new(uma, Motivation::Good, course, params, skills)
+        let mut race_state = RaceState::new(course, params);
+        race_state.add_runner(uma, Motivation::Good, skills);
+
+        race_state
     }
 
     #[test]
@@ -860,7 +863,8 @@ mod tests {
 
         let skills = vec![skill];
 
-        let state = RaceState::new(uma, Motivation::Good, course, params, skills);
+        let mut state = RaceState::new(course, params);
+        state.add_runner(uma, Motivation::Good, skills);
 
         // Create comparison: is_exist_skill_id == 203061
         let comp = Comp {

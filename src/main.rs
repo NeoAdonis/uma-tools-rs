@@ -7,7 +7,7 @@ mod units;
 
 use course::*;
 use race::parameters::*;
-use race::solver::*;
+use race::state::*;
 use rand::distr::*;
 use rand::prelude::*;
 use uma::skill::*;
@@ -151,8 +151,9 @@ fn main() {
         println!("  Skill ID: {}, Rarity: {:?}", skill.id, skill.rarity);
     }
 
-    // Initialize the race state (RaceSolver)
-    let mut race_state = RaceState::new(uma, motivation, course, params, skills);
+    // Initialize the race state
+    let mut race_state = RaceState::new(course, params);
+    race_state.add_runner(uma, motivation, skills);
 
     println!("\nRace initialized successfully!");
     println!("Initial HP: {:.2}", race_state.runners[0].hp);
