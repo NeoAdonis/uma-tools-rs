@@ -1,4 +1,4 @@
-/// Unit conversion utilities for race measurements
+//! Unit conversion utilities for race measurements
 
 /// Bashin (バ身, horse-length) to meters conversion
 /// 1 bashin = 2.5 meters
