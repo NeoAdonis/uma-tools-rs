@@ -2,7 +2,9 @@ use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
 use crate::race::parameters::{RaceParameters, TrackCondition};
-use crate::race::transitions::{CornerManager, SlopeManager, StraightManager};
+use crate::race::transitions::*;
+use crate::trigger::builder::build_trigger_scheduler;
+use crate::trigger::system::TriggerScheduler;
 use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
@@ -107,6 +109,7 @@ pub struct Runner {
     pub corner_manager: CornerManager,
     pub slope_manager: SlopeManager,
     pub straight_manager: StraightManager,
+    pub trigger_scheduler: TriggerScheduler,
 }
 
 /// Adjust base stats according to course and race parameters.
@@ -287,6 +290,11 @@ impl Runner {
             })
             .collect::<Vec<Skill>>();
 
+        // Build trigger scheduler from the available skills (after filtering)
+        // ! TODO: support multiple runners
+        let trigger_scheduler =
+            build_trigger_scheduler(&available_skills, course, &mut *rng.borrow_mut());
+
         // 3. Partition skills into out-of-gate and runtime skills
         let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
             .into_iter()
@@ -387,6 +395,7 @@ impl Runner {
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),
             straight_manager: StraightManager::new(),
+            trigger_scheduler,
         }
     }
 
@@ -760,5 +769,150 @@ impl Runner {
                 target_distance: remaining_distance,
             }
         });
+    }
+
+    pub fn modify_stat(stat: &mut u16, modifier: i32) {
+        // Make sure stat doesn't go below 1
+        *stat = if modifier >= 0 {
+            stat.saturating_add(modifier as u16)
+        } else {
+            stat.saturating_sub((-modifier) as u16).max(1)
+        };
+    }
+
+    /// Activate a skill by its index and alternative index
+    pub fn activate_skill(
+        &mut self,
+        skill_index: usize,
+        alternative_index: usize,
+        elapsed_time: f64,
+        course: &Course,
+    ) {
+        // Clone the skill data we need to avoid borrow checker issues
+        let skill_id = self.available_skills[skill_index].id.clone();
+        let alternative =
+            self.available_skills[skill_index].alternatives[alternative_index].clone();
+
+        // Calculate scaled duration
+        let base_duration = alternative.base_duration as f64 / 10000.0; // Convert from 10000ths of a second
+        let scaled_duration = base_duration * self.skill_modifiers.duration_scaling;
+
+        // Apply each effect in the alternative
+        for effect in &alternative.effects {
+            match effect.skill_type {
+                // Instant stat modifications (permanent)
+                SkillType::SpeedUp => {
+                    Runner::modify_stat(&mut self.adjusted.speed, effect.modifier);
+                }
+                SkillType::StaminaUp => {
+                    Runner::modify_stat(&mut self.adjusted.stamina, effect.modifier);
+                }
+                SkillType::PowerUp => {
+                    Runner::modify_stat(&mut self.adjusted.power, effect.modifier);
+                }
+                SkillType::GutsUp => {
+                    Runner::modify_stat(&mut self.adjusted.guts, effect.modifier);
+                }
+                SkillType::WizUp => {
+                    Runner::modify_stat(&mut self.adjusted.wiz, effect.modifier);
+                }
+                SkillType::AllStatsUp => {
+                    Runner::modify_stat(&mut self.adjusted.speed, effect.modifier);
+                    Runner::modify_stat(&mut self.adjusted.stamina, effect.modifier);
+                    Runner::modify_stat(&mut self.adjusted.power, effect.modifier);
+                    Runner::modify_stat(&mut self.adjusted.guts, effect.modifier);
+                    Runner::modify_stat(&mut self.adjusted.wiz, effect.modifier);
+                }
+                // Timed effects (tracked in active_timed_effects)
+                SkillType::Acceleration
+                | SkillType::TargetSpeed
+                | SkillType::CurrentSpeed
+                | SkillType::CurrentSpeedWithNaturalDeceleration
+                | SkillType::ExtendEvolvedDuration => {
+                    let expires_at = elapsed_time + scaled_duration;
+                    self.active_timed_effects.push(ActiveTimedEffect {
+                        skill_id: skill_id.clone(),
+                        skill_index,
+                        alternative_index,
+                        effect: effect.clone(),
+                        expires_at,
+                    });
+                }
+
+                // Recovery (HP restoration)
+                SkillType::Recovery => {
+                    self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
+
+                    // Increment heal skill count
+                    self.trigger_scheduler.activation_counts.increment_heal();
+
+                    // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
+                    if !matches!(GAME_BEHAVIOR, GameBehavior::Original)
+                        && self.phase >= Phase::Mid
+                    {
+                        // TODO: implement last_spurt recalculation
+                    }
+                }
+
+                // Activate random gold skill
+                SkillType::ActivateRandomGold => {
+                    if !self.golden_skill_indices.is_empty() {
+                        let idx = self
+                            .rng
+                            .borrow_mut()
+                            .random_range(0..self.golden_skill_indices.len());
+                        let golden_skill_idx = self.golden_skill_indices[idx];
+                        // Recursively activate the golden skill (use first alternative)
+                        self.activate_skill(
+                            golden_skill_idx,
+                            0,
+                            elapsed_time,
+                            course,
+                        );
+                    }
+                }
+
+                // Start delay modifications
+                SkillType::MultiplyStartDelay => {
+                    self.start_delay *= effect.modifier as f64 / 10000.0;
+                }
+                SkillType::SetStartDelay => {
+                    self.start_delay = effect.modifier as f64 / 10000.0;
+                }
+
+                // Style change
+                SkillType::ChangeStyleOonige => {
+                    self.adjusted.style = Style::Oonige;
+                }
+
+                // Unimplemented skill types
+                SkillType::Fov => todo!(),
+                SkillType::RushTime => todo!(),
+                SkillType::LaneMovementSpeed => todo!(),
+                SkillType::RushChance => todo!(),
+                SkillType::LaneChange => todo!(),
+                SkillType::Unknown41 => todo!(),
+            }
+        }
+
+        // Recalculate skill modifiers from active effects
+        self.recalculate_skill_modifiers();
+
+        // Track skill activation
+        self.activated_skill_ids.insert(skill_id.clone());
+        self.activated_skills.push(SkillActivationRecord {
+            skill_id,
+            skill_index,
+            alternative_index,
+            distance: self.position,
+        });
+
+        // Increment activation counts for condition evaluation
+        let section_length = course.distance as f64 / 24.0;
+        self.trigger_scheduler.activation_counts.increment(
+            self.phase,
+            self.position,
+            section_length,
+        );
     }
 }

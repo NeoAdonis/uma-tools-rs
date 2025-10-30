@@ -159,7 +159,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Phase(phase_var) => get_phase_value(phase_var, state, runner),
         VarType::Course(course_var) => get_course_value(course_var, state),
         VarType::Spatial(location_var) => get_location_value(location_var, state, runner),
-        VarType::Activation(act_var) => get_activation_value(act_var, state),
+        VarType::Activation(act_var) => get_activation_value(act_var, runner),
         VarType::RaceParam(param_var) => get_race_param_value(param_var, state),
         VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
         VarType::Status(status_var) => get_status_value(status_var, state, runner),
@@ -440,24 +440,30 @@ fn get_race_param_value(var: &RaceParamVar, state: &RaceState) -> i32 {
 
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy
         RaceParamVar::Weather => state.params.weather as i32,
+
+        // Multi-uma stubs
+        RaceParamVar::IsExistCharaId => 0, // STUB: No other characters
+        RaceParamVar::SameSkillHorseCount => 1, // STUB: Only self has this skill
     }
 }
 
 /// Get activation counter values
-fn get_activation_value(var: &ActivationVar, state: &RaceState) -> i32 {
+fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
     match var {
-        ActivationVar::ActivateCountAll => state.trigger_scheduler.activation_counts.all as i32,
+        ActivationVar::ActivateCountAll => runner.trigger_scheduler.activation_counts.all as i32,
         ActivationVar::ActivateCountEndAfter => {
-            state.trigger_scheduler.activation_counts.end_after as i32
+            runner.trigger_scheduler.activation_counts.end_after as i32
         }
-        ActivationVar::ActivateCountHeal => state.trigger_scheduler.activation_counts.heal as i32,
+        ActivationVar::ActivateCountHeal => runner.trigger_scheduler.activation_counts.heal as i32,
         ActivationVar::ActivateCountLaterHalf => {
-            state.trigger_scheduler.activation_counts.later_half as i32
+            runner.trigger_scheduler.activation_counts.later_half as i32
         }
         ActivationVar::ActivateCountMiddle => {
-            state.trigger_scheduler.activation_counts.middle as i32
+            runner.trigger_scheduler.activation_counts.middle as i32
         }
-        ActivationVar::ActivateCountStart => state.trigger_scheduler.activation_counts.start as i32,
+        ActivationVar::ActivateCountStart => {
+            runner.trigger_scheduler.activation_counts.start as i32
+        }
 
         // Multi-uma stub
         ActivationVar::ActivateCountAllTeam => 0, // STUB: No team in single-uma mode
@@ -467,10 +473,7 @@ fn get_activation_value(var: &ActivationVar, state: &RaceState) -> i32 {
         ActivationVar::IsActivateHealSkill => 0, // STUB: Needs per-frame tracking
         ActivationVar::IsActivateOtherSkillDetail => 0, // STUB: Needs tracking
 
-        // Multi-uma stubs
-        ActivationVar::IsExistCharaId => 0, // STUB: No other characters
         ActivationVar::IsOtherCharacterActivateAdvantageSkill => 0, // STUB
-        ActivationVar::SameSkillHorseCount => 1, // STUB: Only self has this skill
 
         // These cases are handled specially because they use the comparison
         // value as parameter instead of comparing against it.

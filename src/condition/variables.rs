@@ -126,18 +126,18 @@ pub enum ActivationVar {
     IsActivateAnySkill,
     IsActivateHealSkill,
     IsActivateOtherSkillDetail,
-    IsExistCharaId,
     IsExistSkillId,
     IsOtherCharacterActivateAdvantageSkill,
     IsUsedSkillId,
-    SameSkillHorseCount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RaceParamVar {
     Grade,
     IsDirtgrade,
+    IsExistCharaId,
     Popularity,
+    SameSkillHorseCount,
     Season,
     Time,
     Visiblehorse,
@@ -380,22 +380,22 @@ impl VarType {
             "is_activate_other_skill_detail" => {
                 VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
             }
-            "is_exist_chara_id" => VarType::Activation(ActivationVar::IsExistCharaId),
             "is_exist_skill_id" => VarType::Activation(ActivationVar::IsExistSkillId),
             "is_other_character_activate_advantage_skill" => {
                 VarType::Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
             }
             "is_used_skill_id" => VarType::Activation(ActivationVar::IsUsedSkillId),
-            "same_skill_horse_count" => VarType::Activation(ActivationVar::SameSkillHorseCount),
 
             // Race parameters
             "grade" => VarType::RaceParam(RaceParamVar::Grade),
             "is_dirtgrade" => VarType::RaceParam(RaceParamVar::IsDirtgrade),
+            "is_exist_chara_id" => VarType::RaceParam(RaceParamVar::IsExistCharaId),
             "popularity" => VarType::RaceParam(RaceParamVar::Popularity),
+            "same_skill_horse_count" => VarType::RaceParam(RaceParamVar::SameSkillHorseCount),
             "season" => VarType::RaceParam(RaceParamVar::Season),
             "time" => VarType::RaceParam(RaceParamVar::Time),
-            "weather" => VarType::RaceParam(RaceParamVar::Weather),
             "visiblehorse" => VarType::RaceParam(RaceParamVar::Visiblehorse),
+            "weather" => VarType::RaceParam(RaceParamVar::Weather),
 
             // Running style
             "running_style_count_nige_otherself" => {
@@ -623,10 +623,8 @@ impl VarType {
             RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountOikomi) => {
                 MultiUmaStub
             }
-            Activation(ActivationVar::IsExistCharaId) => MultiUmaStub,
             Activation(ActivationVar::IsExistSkillId) => MultiUmaStub,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => MultiUmaStub,
-            Activation(ActivationVar::SameSkillHorseCount) => MultiUmaStub,
             Temptation(_) => MultiUmaStub,
 
             // CONTINUOUS - Must check every step (minimized)
@@ -796,11 +794,13 @@ impl VarType {
             // Static race parameters
             RaceParam(RaceParamVar::Grade) => StaticGuard,
             RaceParam(RaceParamVar::IsDirtgrade) => StaticGuard,
+            RaceParam(RaceParamVar::IsExistCharaId) => StaticGuard,
             RaceParam(RaceParamVar::Popularity) => StaticGuard,
+            RaceParam(RaceParamVar::SameSkillHorseCount) => StaticGuard,
             RaceParam(RaceParamVar::Season) => StaticGuard,
             RaceParam(RaceParamVar::Time) => StaticGuard,
-            RaceParam(RaceParamVar::Weather) => StaticGuard,
             RaceParam(RaceParamVar::Visiblehorse) => StaticGuard,
+            RaceParam(RaceParamVar::Weather) => StaticGuard,
 
             // Static status properties
             Status(StatusVar::Motivation) => StaticGuard,
@@ -850,7 +850,7 @@ impl VarType {
             Activation(ActivationVar::IsUsedSkillId) => DynamicGuard,
             Activation(ActivationVar::IsExistSkillId) => DynamicGuard,
             Activation(ActivationVar::CompeteFightCount) => DynamicGuard,
-            Activation(_) => DynamicGuard,
+            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
 
             // Position/Order (multi-uma, but act as guards)
             Position(PositionVar::Order) => DynamicGuard,
