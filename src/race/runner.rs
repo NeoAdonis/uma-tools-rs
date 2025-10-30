@@ -559,9 +559,8 @@ impl Runner {
         // If HP is sufficient for max speed, use it immediately
         let max_hp_required = estimate_hp_consumption(
             max_last_spurt_speed,
+            course,
             calculation_distance,
-            course.base_speed(),
-            course.surface,
             condition,
             self.adjusted.guts,
         );
@@ -582,9 +581,8 @@ impl Runner {
             // This is where HP runs out or reaches the end
             let hp_required = estimate_hp_consumption(
                 test_speed,
+                course,
                 calculation_distance,
-                course.base_speed(),
-                course.surface,
                 condition,
                 self.adjusted.guts,
             );

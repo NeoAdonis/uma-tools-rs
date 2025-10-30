@@ -177,8 +177,7 @@ impl RaceState {
     fn update_hp(&mut self, delta_time: f64) {
         self.runner.hp -= calculate_hp_consumption_per_second(
             self.runner.speed,
-            self.course.base_speed(),
-            self.course.surface,
+            &self.course,
             self.params.condition,
             self.runner.phase,
             self.runner.adjusted.guts,

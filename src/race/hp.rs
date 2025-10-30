@@ -1,5 +1,5 @@
 use crate::course::*;
-use crate::race::parameters::{TrackCondition};
+use crate::race::parameters::TrackCondition;
 
 fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
     match (track, condition) {
@@ -20,8 +20,7 @@ fn hp_guts_modifier(guts_stat: u16) -> f64 {
 
 pub fn calculate_hp_consumption_per_second(
     current_speed: f64,
-    base_speed: f64,
-    track: Track,
+    course: &Course,
     condition: TrackCondition,
     phase: Phase,
     guts_stat: u16,
@@ -29,7 +28,7 @@ pub fn calculate_hp_consumption_per_second(
     is_pace_down: bool,
     is_downhill_accel: bool,
 ) -> f64 {
-    let speed_diff = current_speed - base_speed + 12.0;
+    let speed_diff = current_speed - course.base_speed() + 12.0;
     let base_consumption = 20.0 * speed_diff.powi(2) / 144.0;
 
     let mut status_modifier = 1.0;
@@ -43,7 +42,7 @@ pub fn calculate_hp_consumption_per_second(
         status_modifier *= 0.4;
     }
 
-    let ground_modifier = hp_ground_modifier(track, condition);
+    let ground_modifier = hp_ground_modifier(course.surface, condition);
 
     let consumption = base_consumption * status_modifier * ground_modifier;
 
@@ -56,9 +55,8 @@ pub fn calculate_hp_consumption_per_second(
 
 pub fn estimate_hp_consumption(
     speed: f64,
+    course: &Course,
     distance: f64,
-    base_speed: f64,
-    track: Track,
     condition: TrackCondition,
     guts_stat: u16,
 ) -> f64 {
@@ -72,8 +70,7 @@ pub fn estimate_hp_consumption(
     // Assuming no special status modifiers (not rushed, not pace-down, not downhill)
     let hp_per_second = calculate_hp_consumption_per_second(
         speed,
-        base_speed,
-        track,
+        course,
         condition,
         Phase::Last, // Last spurt phase for guts modifier
         guts_stat,
