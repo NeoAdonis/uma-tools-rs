@@ -7,6 +7,7 @@ pub enum VarType {
     Distance(DistanceVar),         // Distance related
     Phase(PhaseVar),               // Phase/Time related
     Course(CourseVar),             // Course features
+    Spatial(SpatialVar),           // Spatial related
     Activation(ActivationVar),     // Skill activation tracking
     RaceParam(RaceParamVar),       // Race parameters
     RunningStyle(RunningStyleVar), // Running style related
@@ -86,24 +87,28 @@ pub enum PhaseVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CourseVar {
-    AllCornerRandom,
-    Corner,
     CornerCount,
-    CornerRandom,
     DistanceType,
-    DownSlopeRandom,
     GroundCondition,
     GroundType,
     IsBasisDistance,
+    Rotation,
+    TrackId,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpatialVar {
+    AllCornerRandom,
+    Corner,
+    CornerRandom,
+    DownSlopeRandom,
     IsLastStraight,
     IsLastStraightOnetime,
     LaneType,
     LastStraightRandom,
-    Rotation,
     Slope,
     StraightFrontType,
     StraightRandom,
-    TrackId,
     UpSlopeRandom,
     UpSlopeRandomLaterHalf,
 }
@@ -132,9 +137,7 @@ pub enum ActivationVar {
 pub enum RaceParamVar {
     Grade,
     IsDirtgrade,
-    Motivation,
     Popularity,
-    PostNumber,
     Season,
     Time,
     Visiblehorse,
@@ -143,7 +146,6 @@ pub enum RaceParamVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunningStyleVar {
-    RunningStyle,
     RunningStyleCountNigeOtherself,
     RunningStyleCountOikomiOtherself,
     RunningStyleCountSame,
@@ -176,6 +178,10 @@ pub enum StatusVar {
     IsSurrounded,
     IsTemptation,
     Lastspurt,
+    Motivation,
+    PostNumber,
+    TemptationCount,
+    RunningStyle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,7 +199,6 @@ pub enum BlockingVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TemptationVar {
-    TemptationCount,
     TemptationCountBehind,
     TemptationCountInfront,
     TemptationOpponentCountBehind,
@@ -207,6 +212,7 @@ impl fmt::Display for VarType {
             VarType::Position(p) => write!(f, "{}", p),
             VarType::Distance(d) => write!(f, "{}", d),
             VarType::Phase(p) => write!(f, "{}", p),
+            VarType::Spatial(l) => write!(f, "{}", l),
             VarType::Course(c) => write!(f, "{}", c),
             VarType::Activation(a) => write!(f, "{}", a),
             VarType::RaceParam(r) => write!(f, "{}", r),
@@ -255,6 +261,7 @@ macro_rules! impl_display_snake_case {
 impl_display_snake_case!(PositionVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
+impl_display_snake_case!(SpatialVar);
 impl_display_snake_case!(CourseVar);
 impl_display_snake_case!(ActivationVar);
 impl_display_snake_case!(RaceParamVar);
@@ -334,26 +341,28 @@ impl VarType {
             "phase_straight_random" => VarType::Phase(PhaseVar::PhaseStraightRandom),
 
             // Course
-            "all_corner_random" => VarType::Course(CourseVar::AllCornerRandom),
-            "corner" => VarType::Course(CourseVar::Corner),
             "corner_count" => VarType::Course(CourseVar::CornerCount),
-            "corner_random" => VarType::Course(CourseVar::CornerRandom),
             "distance_type" => VarType::Course(CourseVar::DistanceType),
-            "down_slope_random" => VarType::Course(CourseVar::DownSlopeRandom),
             "ground_condition" => VarType::Course(CourseVar::GroundCondition),
             "ground_type" => VarType::Course(CourseVar::GroundType),
             "is_basis_distance" => VarType::Course(CourseVar::IsBasisDistance),
-            "is_last_straight" => VarType::Course(CourseVar::IsLastStraight),
-            "is_last_straight_onetime" => VarType::Course(CourseVar::IsLastStraightOnetime),
-            "lane_type" => VarType::Course(CourseVar::LaneType),
-            "last_straight_random" => VarType::Course(CourseVar::LastStraightRandom),
             "rotation" => VarType::Course(CourseVar::Rotation),
-            "slope" => VarType::Course(CourseVar::Slope),
-            "straight_front_type" => VarType::Course(CourseVar::StraightFrontType),
-            "straight_random" => VarType::Course(CourseVar::StraightRandom),
             "track_id" => VarType::Course(CourseVar::TrackId),
-            "up_slope_random" => VarType::Course(CourseVar::UpSlopeRandom),
-            "up_slope_random_later_half" => VarType::Course(CourseVar::UpSlopeRandomLaterHalf),
+
+            // Spatial
+            "all_corner_random" => VarType::Spatial(SpatialVar::AllCornerRandom),
+            "corner" => VarType::Spatial(SpatialVar::Corner),
+            "corner_random" => VarType::Spatial(SpatialVar::CornerRandom),
+            "down_slope_random" => VarType::Spatial(SpatialVar::DownSlopeRandom),
+            "is_last_straight" => VarType::Spatial(SpatialVar::IsLastStraight),
+            "is_last_straight_onetime" => VarType::Spatial(SpatialVar::IsLastStraightOnetime),
+            "lane_type" => VarType::Spatial(SpatialVar::LaneType),
+            "last_straight_random" => VarType::Spatial(SpatialVar::LastStraightRandom),
+            "slope" => VarType::Spatial(SpatialVar::Slope),
+            "straight_front_type" => VarType::Spatial(SpatialVar::StraightFrontType),
+            "straight_random" => VarType::Spatial(SpatialVar::StraightRandom),
+            "up_slope_random" => VarType::Spatial(SpatialVar::UpSlopeRandom),
+            "up_slope_random_later_half" => VarType::Spatial(SpatialVar::UpSlopeRandomLaterHalf),
 
             // Activation tracking
             "activate_count_all_team" => VarType::Activation(ActivationVar::ActivateCountAllTeam),
@@ -382,16 +391,13 @@ impl VarType {
             // Race parameters
             "grade" => VarType::RaceParam(RaceParamVar::Grade),
             "is_dirtgrade" => VarType::RaceParam(RaceParamVar::IsDirtgrade),
-            "motivation" => VarType::RaceParam(RaceParamVar::Motivation),
             "popularity" => VarType::RaceParam(RaceParamVar::Popularity),
-            "post_number" => VarType::RaceParam(RaceParamVar::PostNumber),
             "season" => VarType::RaceParam(RaceParamVar::Season),
             "time" => VarType::RaceParam(RaceParamVar::Time),
             "weather" => VarType::RaceParam(RaceParamVar::Weather),
             "visiblehorse" => VarType::RaceParam(RaceParamVar::Visiblehorse),
 
             // Running style
-            "running_style" => VarType::RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
                 VarType::RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself)
             }
@@ -439,6 +445,7 @@ impl VarType {
             }
 
             // Status
+            "running_style" => VarType::Status(StatusVar::RunningStyle),
             "behind_near_lane_time" => VarType::Status(StatusVar::BehindNearLaneTime),
             "behind_near_lane_time_set1" => VarType::Status(StatusVar::BehindNearLaneTimeSet1),
             "hp_per" => VarType::Status(StatusVar::HpPer),
@@ -452,6 +459,9 @@ impl VarType {
             "is_surrounded" => VarType::Status(StatusVar::IsSurrounded),
             "is_temptation" => VarType::Status(StatusVar::IsTemptation),
             "lastspurt" => VarType::Status(StatusVar::Lastspurt),
+            "motivation" => VarType::Status(StatusVar::Motivation),
+            "post_number" => VarType::Status(StatusVar::PostNumber),
+            "temptation_count" => VarType::Status(StatusVar::TemptationCount),
 
             // Triggers
             "random_lot" => VarType::Trigger(TriggerVar::RandomLot),
@@ -465,7 +475,6 @@ impl VarType {
             "blocked_side_continuetime" => VarType::Blocking(BlockingVar::BlockedSideContinuetime),
 
             // Rush/Temptation
-            "temptation_count" => VarType::Temptation(TemptationVar::TemptationCount),
             "temptation_count_behind" => VarType::Temptation(TemptationVar::TemptationCountBehind),
             "temptation_count_infront" => {
                 VarType::Temptation(TemptationVar::TemptationCountInfront)
@@ -507,7 +516,9 @@ impl VarType {
             Course(CourseVar::Rotation) => Static,
             Course(CourseVar::IsBasisDistance) => Static,
             Course(CourseVar::CornerCount) => Static, // Under investigation: number of corners on course
-            RunningStyle(RunningStyleVar::RunningStyle) => Static,
+            Status(StatusVar::PostNumber) => Static,
+            Status(StatusVar::RunningStyle) => Static, // TODO: treat as static for now
+            Status(StatusVar::Motivation) => Static,   // TODO: treat as static for now
             Always => Static,
 
             // MONOTONIC INCREASING - Priority queue based
@@ -521,6 +532,7 @@ impl VarType {
             Activation(ActivationVar::ActivateCountEndAfter) => MonotonicIncreasing,
             Activation(ActivationVar::ActivateCountHeal) => MonotonicIncreasing,
             Activation(ActivationVar::ActivateCountAllTeam) => MonotonicIncreasing, // Multi-uma
+            Status(StatusVar::TemptationCount) => MonotonicIncreasing,
 
             // MONOTONIC DECREASING - Priority queue based
             Distance(DistanceVar::RemainDistance) => MonotonicDecreasing,
@@ -536,13 +548,13 @@ impl VarType {
             Phase(PhaseVar::IsFinalcornerLaterhalf) => PhaseTransition,
 
             // SPATIAL TRIGGERS - Course geometry based
-            Course(CourseVar::Corner) => SpatialCorner,
-            Course(CourseVar::Slope) => SpatialSlope,
-            Course(CourseVar::IsLastStraight) => SpatialStraight,
-            Course(CourseVar::StraightFrontType) => SpatialStraight,
+            Spatial(SpatialVar::Corner) => SpatialCorner,
+            Spatial(SpatialVar::Slope) => SpatialSlope,
+            Spatial(SpatialVar::IsLastStraight) => SpatialStraight,
+            Spatial(SpatialVar::StraightFrontType) => SpatialStraight,
 
             // ONE-TIME TRIGGERS
-            Course(CourseVar::IsLastStraightOnetime) => Onetime,
+            Spatial(SpatialVar::IsLastStraightOnetime) => Onetime,
             Position(PositionVar::ChangeOrderOnetime) => Onetime,
             Position(PositionVar::ChangeOrderUpEndAfter) => Onetime, // Under investigation
             Position(PositionVar::ChangeOrderUpFinalcornerAfter) => Onetime,
@@ -560,13 +572,13 @@ impl VarType {
             Phase(PhaseVar::PhaseFirstHalfStraightRandom) => Random,
             Phase(PhaseVar::PhaseLatterHalfStraightRandom) => Random,
             Phase(PhaseVar::IsFinalcornerRandom) => Random,
-            Course(CourseVar::CornerRandom) => Random,
-            Course(CourseVar::AllCornerRandom) => Random,
-            Course(CourseVar::StraightRandom) => Random,
-            Course(CourseVar::LastStraightRandom) => Random,
-            Course(CourseVar::UpSlopeRandom) => Random,
-            Course(CourseVar::UpSlopeRandomLaterHalf) => Random,
-            Course(CourseVar::DownSlopeRandom) => Random,
+            Spatial(SpatialVar::CornerRandom) => Random,
+            Spatial(SpatialVar::AllCornerRandom) => Random,
+            Spatial(SpatialVar::StraightRandom) => Random,
+            Spatial(SpatialVar::LastStraightRandom) => Random,
+            Spatial(SpatialVar::UpSlopeRandom) => Random,
+            Spatial(SpatialVar::UpSlopeRandomLaterHalf) => Random,
+            Spatial(SpatialVar::DownSlopeRandom) => Random,
             Distance(DistanceVar::DistanceRateAfterRandom) => Random,
 
             // MULTI-UMA STUBS - Requires other umas (placeholder)
@@ -630,7 +642,7 @@ impl VarType {
             Activation(ActivationVar::IsActivateHealSkill) => Continuous,
             Activation(ActivationVar::IsActivateOtherSkillDetail) => Continuous,
             Activation(ActivationVar::IsUsedSkillId) => Continuous,
-            Course(CourseVar::LaneType) => Continuous, // Under investigation
+            Spatial(SpatialVar::LaneType) => Continuous, // Under investigation
 
             // UNKNOWN
             VarType::Unknown(_) => TriggerClass::Unknown,
@@ -724,17 +736,17 @@ impl VarType {
             Phase(PhaseVar::PhaseFirstHalfStraightRandom) => RandomGate,
             Phase(PhaseVar::PhaseLatterHalfStraightRandom) => RandomGate,
             Phase(PhaseVar::IsFinalcornerRandom) => RandomGate,
-            Course(CourseVar::CornerRandom) => RandomGate,
-            Course(CourseVar::AllCornerRandom) => RandomGate,
-            Course(CourseVar::StraightRandom) => RandomGate,
-            Course(CourseVar::LastStraightRandom) => RandomGate,
-            Course(CourseVar::UpSlopeRandom) => RandomGate,
-            Course(CourseVar::UpSlopeRandomLaterHalf) => RandomGate,
-            Course(CourseVar::DownSlopeRandom) => RandomGate,
+            Spatial(SpatialVar::CornerRandom) => RandomGate,
+            Spatial(SpatialVar::AllCornerRandom) => RandomGate,
+            Spatial(SpatialVar::StraightRandom) => RandomGate,
+            Spatial(SpatialVar::LastStraightRandom) => RandomGate,
+            Spatial(SpatialVar::UpSlopeRandom) => RandomGate,
+            Spatial(SpatialVar::UpSlopeRandomLaterHalf) => RandomGate,
+            Spatial(SpatialVar::DownSlopeRandom) => RandomGate,
             Distance(DistanceVar::DistanceRateAfterRandom) => RandomGate,
 
             // ONETIME EVENTS - State changes that persist
-            Course(CourseVar::IsLastStraightOnetime) => OnetimeEvent,
+            Spatial(SpatialVar::IsLastStraightOnetime) => OnetimeEvent,
             Position(PositionVar::ChangeOrderOnetime) => OnetimeEvent,
             Status(StatusVar::IsHpEmptyOnetime) => OnetimeEvent,
 
@@ -753,21 +765,24 @@ impl VarType {
             // HP-based (decreasing)
             Status(StatusVar::HpPer) => MonotonicGuard,
 
+            // Temptation count (increasing)
+            Status(StatusVar::TemptationCount) => MonotonicGuard,
+
             // PHASE TRIGGERS - Fire when entering new phase
             Phase(PhaseVar::Phase) => PhaseTrigger,
 
             // SPATIAL TRIGGERS - Fire when entering/exiting course features
             // Corners
-            Course(CourseVar::Corner) => SpatialTrigger,
+            Spatial(SpatialVar::Corner) => SpatialTrigger,
             Phase(PhaseVar::IsFinalcorner) => SpatialTrigger,
             Phase(PhaseVar::IsFinalcornerLaterhalf) => SpatialTrigger,
 
             // Slopes
-            Course(CourseVar::Slope) => SpatialTrigger,
+            Spatial(SpatialVar::Slope) => SpatialTrigger,
 
             // Straights
-            Course(CourseVar::IsLastStraight) => SpatialTrigger,
-            Course(CourseVar::StraightFrontType) => SpatialTrigger,
+            Spatial(SpatialVar::IsLastStraight) => SpatialTrigger,
+            Spatial(SpatialVar::StraightFrontType) => SpatialTrigger,
 
             // Phase subdivisions (spatial within phase)
             Phase(PhaseVar::PhaseFirsthalf) => SpatialTrigger,
@@ -781,13 +796,16 @@ impl VarType {
             // Static race parameters
             RaceParam(RaceParamVar::Grade) => StaticGuard,
             RaceParam(RaceParamVar::IsDirtgrade) => StaticGuard,
-            RaceParam(RaceParamVar::Motivation) => StaticGuard,
             RaceParam(RaceParamVar::Popularity) => StaticGuard,
-            RaceParam(RaceParamVar::PostNumber) => StaticGuard,
             RaceParam(RaceParamVar::Season) => StaticGuard,
             RaceParam(RaceParamVar::Time) => StaticGuard,
             RaceParam(RaceParamVar::Weather) => StaticGuard,
             RaceParam(RaceParamVar::Visiblehorse) => StaticGuard,
+
+            // Static status properties
+            Status(StatusVar::Motivation) => StaticGuard,
+            Status(StatusVar::PostNumber) => StaticGuard,
+            Status(StatusVar::RunningStyle) => StaticGuard, // TODO: treat as static for now
 
             // Course properties
             Course(CourseVar::DistanceType) => StaticGuard,
@@ -803,7 +821,6 @@ impl VarType {
             BaseStat(_) => StaticGuard,
 
             // Running style
-            RunningStyle(RunningStyleVar::RunningStyle) => StaticGuard,
             RunningStyle(_) => DynamicGuard, // Other running style vars are dynamic (multi-uma)
 
             // Status flags (continuous checks, but act as guards)
@@ -868,7 +885,7 @@ impl VarType {
             Temptation(_) => DynamicGuard,
 
             // Lane
-            Course(CourseVar::LaneType) => DynamicGuard,
+            Spatial(SpatialVar::LaneType) => DynamicGuard,
 
             // Unknown
             VarType::Unknown(_) => DynamicGuard,
@@ -900,8 +917,12 @@ mod tests {
             VarType::Distance(DistanceVar::RemainDistance)
         ));
         assert!(matches!(
+            VarType::parse("corner_count"),
+            VarType::Course(CourseVar::CornerCount)
+        ));
+        assert!(matches!(
             VarType::parse("corner"),
-            VarType::Course(CourseVar::Corner)
+            VarType::Spatial(SpatialVar::Corner)
         ));
         assert!(matches!(
             VarType::parse("random_lot"),

@@ -303,7 +303,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::CornerRandom) => {
+        Spatial(SpatialVar::CornerRandom) => {
             // corner_random==X where X is corner number (1-indexed)
             let corner_idx = (comp.value - 1) as usize;
             if corner_idx < course.corners.len() {
@@ -315,7 +315,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::AllCornerRandom) => {
+        Spatial(SpatialVar::AllCornerRandom) => {
             // all_corner_random==1
             // Picks 4 random points (roll random corner, then random point on it, 4 times)
             // TODO: extend to multiple activations
@@ -329,7 +329,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::StraightRandom) => {
+        Spatial(SpatialVar::StraightRandom) => {
             // straight_random==1
             // Picks random straight, then random point on it
             if !course.straights.is_empty() {
@@ -340,7 +340,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::LastStraightRandom) => {
+        Spatial(SpatialVar::LastStraightRandom) => {
             // last_straight_random==1
             // Picks random point on final straight
             if let Some(last_straight) = course.straights.last() {
@@ -350,7 +350,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::UpSlopeRandom) => {
+        Spatial(SpatialVar::UpSlopeRandom) => {
             // up_slope_random==1
             // Picks random point on any uphill
             let uphills: Vec<_> = course.slopes.iter().filter(|s| s.is_uphill()).collect();
@@ -364,7 +364,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::UpSlopeRandomLaterHalf) => {
+        Spatial(SpatialVar::UpSlopeRandomLaterHalf) => {
             // up_slope_random_later_half==1
             // Picks random point on any uphill in second half of race
             let section_len = course.section_length();
@@ -385,7 +385,7 @@ fn process_random_comp(
             }
         }
 
-        Course(CourseVar::DownSlopeRandom) => {
+        Spatial(SpatialVar::DownSlopeRandom) => {
             // down_slope_random==1
             // Picks random point on any downhill
             let downhills: Vec<_> = course.slopes.iter().filter(|s| s.is_downhill()).collect();

@@ -1,6 +1,8 @@
+use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
 use crate::race::parameters::{RaceParameters, TrackCondition};
+use crate::race::transitions::{CornerManager, SlopeManager, StraightManager};
 use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
@@ -102,6 +104,9 @@ pub struct Runner {
     pub current_slope_idx: Option<usize>,
     pub current_straight_idx: Option<usize>,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    pub corner_manager: CornerManager,
+    pub slope_manager: SlopeManager,
+    pub straight_manager: StraightManager,
 }
 
 /// Adjust base stats according to course and race parameters.
@@ -245,7 +250,7 @@ fn last_spurt_speed_max(
     base_component + speed_component + guts_component
 }
 
-// n.b. While no comparison checks for a good start,
+// n.b. While no trigger checks for a good start,
 // it is used in Team Trials to award bonus points.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum StartType {
@@ -379,6 +384,9 @@ impl Runner {
             current_slope_idx: None,
             current_straight_idx: None,
             rng,
+            corner_manager: CornerManager::new(),
+            slope_manager: SlopeManager::new(),
+            straight_manager: StraightManager::new(),
         }
     }
 
@@ -531,6 +539,112 @@ impl Runner {
     pub fn update_position(&mut self, delta_time: f64) {
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * delta_time;
+    }
+
+    pub fn update_phase(&mut self, course: &Course) {
+        self.phase = Phase::from_position(self.position, course);
+    }
+
+    pub fn update_hp(&mut self, delta_time: f64, course: &Course, condition: TrackCondition) {
+        self.hp -= calculate_hp_consumption_per_second(
+            self.speed,
+            course,
+            condition,
+            self.phase,
+            self.adjusted.guts,
+            self.is_rushed,
+            self.is_pace_down(),
+            self.is_downhill_accel(),
+        ) * delta_time;
+    }
+
+    pub fn update_last_spurt_state(&mut self, course: &Course, condition: TrackCondition) {
+        if self.phase >= Phase::Mid && self.last_spurt.is_none() {
+            self.calculate_last_spurt(course, condition);
+        }
+    }
+
+    pub fn check_corner_start(&mut self, corners: &[Corner]) {
+        // Check for corner entry using the corner manager
+        if let Some(corner_idx) = self.corner_manager.check_entry(self.position, corners) {
+            self.current_corner_idx = Some(corner_idx);
+            // TODO: Trigger corner entry skills
+        }
+    }
+
+    pub fn check_corner_end(&mut self, corners: &[Corner]) {
+        // Check for corner exit using the corner manager
+        if let Some(corner_idx) = self.corner_manager.check_exit(self.position, corners) {
+            self.current_corner_idx = None;
+            // TODO: Trigger corner exit skills
+        }
+    }
+
+    pub fn check_straight_start(&mut self, straights: &[Straight]) {
+        // Check for straight entry using the straight manager
+        if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
+            self.current_straight_idx = Some(straight_idx);
+            // TODO: Trigger straight entry skills
+        }
+    }
+
+    pub fn check_straight_end(&mut self, straights: &[Straight]) {
+        // Check for straight exit using the straight manager
+        if let Some(straight_idx) = self.straight_manager.check_exit(self.position, straights) {
+            self.current_straight_idx = None;
+            // TODO: Trigger straight exit skills
+        }
+    }
+
+    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng) {
+        // Check for slope entry using the slope manager
+        if let Some((slope_idx, _slope_type)) =
+            self.slope_manager.check_entry(self.position, slopes)
+        {
+            // TODO: Trigger slope entry skills
+            if slopes[slope_idx].is_uphill() {
+                self.start_uphill_acceleration(slopes[slope_idx].slope_percent());
+            }
+            self.current_slope_idx = Some(slope_idx);
+        } else if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
+            // TODO: Trigger slope exit skills
+            self.stop_slope_acceleration();
+            self.current_slope_idx = None;
+        } else if let Some(idx) = self.current_slope_idx {
+            // On slope - check for downhill acceleration
+            if slopes[idx].is_downhill() {
+                let has_second_passed = false; // TODO: track time on slope
+                if has_second_passed {
+                    if self.is_downhill_accel() {
+                        // 20% chance to stop each second
+                        let roll: f64 = rng.random();
+                        if roll < 0.2 {
+                            self.stop_slope_acceleration();
+                        }
+                    } else {
+                        let roll: f64 = rng.random();
+                        let chance = self.adjusted.wiz as f64 * 0.0004;
+                        if roll < chance {
+                            self.start_downhill_acceleration(slopes[idx].slope_percent());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Update skill durations and remove expired effects
+    pub fn update_skill_durations(&mut self, elapsed_time: f64) {
+        let before_count = self.active_timed_effects.len();
+
+        // Remove expired effects
+        self.active_timed_effects
+            .retain(|effect| effect.expires_at > elapsed_time);
+
+        // Recalculate modifiers if any effects expired
+        if self.active_timed_effects.len() != before_count {
+            self.recalculate_skill_modifiers();
+        }
     }
 
     pub fn calculate_last_spurt(&mut self, course: &Course, condition: TrackCondition) {

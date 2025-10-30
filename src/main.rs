@@ -155,7 +155,7 @@ fn main() {
     let mut race_state = RaceState::new(uma, motivation, course, params, skills);
 
     println!("\nRace initialized successfully!");
-    println!("Initial HP: {:.2}", race_state.runner.hp);
+    println!("Initial HP: {:.2}", race_state.runners[0].hp);
 
     // Simulate
     race_state.run();

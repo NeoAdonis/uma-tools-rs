@@ -1,10 +1,8 @@
 use crate::course::{Course, Phase};
-use crate::race::hp::*;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{
     ActiveTimedEffect, GAME_BEHAVIOR, GameBehavior, Runner, SkillActivationRecord,
 };
-use crate::race::transitions::*;
 use crate::trigger::builder::*;
 use crate::trigger::system::*;
 use crate::uma::skill::*;
@@ -47,14 +45,11 @@ fn section_coefficient_range(wiz_stat: u16) -> (f64, f64) {
 // ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.awbjufvej6ud
 
 pub struct RaceState {
-    pub runner: Runner,
+    pub runners: Vec<Runner>,
     pub course: Course,
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub trigger_scheduler: TriggerScheduler,
-    pub corner_manager: CornerManager,
-    pub slope_manager: SlopeManager,
-    pub straight_manager: StraightManager,
     pub elapsed_time: f64, // Race time in seconds (shared by all umas)
 }
 
@@ -72,19 +67,22 @@ impl RaceState {
         // Create runner first (it filters available skills based on wiz)
         let runner = Runner::new(uma, motivation, &course, &params, skills, Rc::clone(&rng));
 
+        let runners = vec![runner]; // Single runner for now
+
         // Build trigger scheduler from the available skills (after filtering)
-        let trigger_scheduler =
-            build_trigger_scheduler(&runner.available_skills, &course, &mut *rng.borrow_mut());
+        // ! TODO: support multiple runners
+        let trigger_scheduler = build_trigger_scheduler(
+            &runners[0].available_skills,
+            &course,
+            &mut *rng.borrow_mut(),
+        );
 
         RaceState {
-            runner,
+            runners,
             course,
             params,
             rng,
             trigger_scheduler,
-            corner_manager: CornerManager::new(),
-            slope_manager: SlopeManager::new(),
-            straight_manager: StraightManager::new(),
             elapsed_time: 0.0,
         }
     }
@@ -97,152 +95,32 @@ impl RaceState {
 
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
-        self.check_corner_end();
-        self.check_straight_end();
+        for runner in &mut self.runners {
+            runner.check_corner_end(&self.course.corners);
+            runner.check_straight_end(&self.course.straights);
+        }
+
         self.elapsed_time += delta_time; // Track race time
 
         // Update
         self.check_skill_activations();
-
         // TODO: implement "Recover HP by skills"
-        self.update_last_spurt_state();
-        self.runner.update_target_speed(self.course.base_speed()); // TODO: review
-        self.runner.update_acceleration();
-        self.update_phase();
-        self.runner
-            .update_speed(delta_time, self.course.base_speed());
-        self.runner.update_position(delta_time);
-        self.update_hp(delta_time);
-        self.update_slope();
 
-        // Update skill durations and remove expired effects
-        self.update_skill_durations();
-
-        // Post-Update
-        self.check_corner_start();
-        self.check_straight_start();
-    }
-
-    fn check_corner_start(&mut self) {
-        // Check for corner entry using the corner manager
-        if let Some(corner_idx) = self
-            .corner_manager
-            .check_entry(self.runner.position, &self.course.corners)
-        {
-            self.runner.current_corner_idx = Some(corner_idx);
-            // TODO: Trigger corner entry skills
+        for runner in &mut self.runners {
+            runner.update_last_spurt_state(&self.course, self.params.condition);
+            runner.update_target_speed(self.course.base_speed()); // TODO: review
+            runner.update_acceleration();
+            runner.update_phase(&self.course);
+            runner.update_speed(delta_time, self.course.base_speed());
+            runner.update_position(delta_time);
+            runner.update_hp(delta_time, &self.course, self.params.condition);
+            runner.update_slope(&self.course.slopes, &mut *self.rng.borrow_mut());
+            // Update skill durations and remove expired effects
+            runner.update_skill_durations(self.elapsed_time);
+            // Post-Update
+            runner.check_corner_start(&self.course.corners);
+            runner.check_straight_start(&self.course.straights);
         }
-    }
-
-    fn check_corner_end(&mut self) {
-        // Check for corner exit using the corner manager
-        if let Some(corner_idx) = self
-            .corner_manager
-            .check_exit(self.runner.position, &self.course.corners)
-        {
-            self.runner.current_corner_idx = None;
-            // TODO: Trigger corner exit skills
-        }
-    }
-
-    fn check_straight_start(&mut self) {
-        // Check for straight entry using the straight manager
-        if let Some(straight_idx) = self
-            .straight_manager
-            .check_entry(self.runner.position, &self.course.straights)
-        {
-            self.runner.current_straight_idx = Some(straight_idx);
-            // TODO: Trigger straight entry skills
-        }
-    }
-
-    fn check_straight_end(&mut self) {
-        // Check for straight exit using the straight manager
-        if let Some(straight_idx) = self
-            .straight_manager
-            .check_exit(self.runner.position, &self.course.straights)
-        {
-            self.runner.current_straight_idx = None;
-            // TODO: Trigger straight exit skills
-        }
-    }
-
-    fn update_last_spurt_state(&mut self) {
-        if self.runner.phase >= Phase::Mid && self.runner.last_spurt.is_none() {
-            self.runner
-                .calculate_last_spurt(&self.course, self.params.condition);
-        }
-    }
-
-    fn update_hp(&mut self, delta_time: f64) {
-        self.runner.hp -= calculate_hp_consumption_per_second(
-            self.runner.speed,
-            &self.course,
-            self.params.condition,
-            self.runner.phase,
-            self.runner.adjusted.guts,
-            self.runner.is_rushed,
-            self.runner.is_pace_down(),
-            self.runner.is_downhill_accel(),
-        ) * delta_time;
-    }
-
-    fn update_slope(&mut self) {
-        // Check for slope entry using the slope manager
-        if let Some((slope_idx, _slope_type)) = self
-            .slope_manager
-            .check_entry(self.runner.position, &self.course.slopes)
-        {
-            // TODO: Trigger slope entry skills
-            if self.course.slopes[slope_idx].is_uphill() {
-                self.runner
-                    .start_uphill_acceleration(self.course.slopes[slope_idx].slope_percent());
-            }
-            self.runner.current_slope_idx = Some(slope_idx);
-        } else if let Some(slope_idx) = self
-            .slope_manager
-            .check_exit(self.runner.position, &self.course.slopes)
-        {
-            // TODO: Trigger slope exit skills
-            self.runner.stop_slope_acceleration();
-            self.runner.current_slope_idx = None;
-        } else if let Some(idx) = self.runner.current_slope_idx {
-            // On slope - check for downhill acceleration
-            if self.course.slopes[idx].is_downhill() {
-                let has_second_passed = false; // TODO: track time on slope
-                if has_second_passed {
-                    if self.runner.is_downhill_accel() {
-                        // 20% chance to stop each second
-                        let roll: f64 = self.rng.borrow_mut().random();
-                        if roll < 0.2 {
-                            self.runner.stop_slope_acceleration();
-                        }
-                    } else {
-                        let roll: f64 = self.rng.borrow_mut().random();
-                        let chance = self.runner.adjusted.wiz as f64 * 0.0004;
-                        if roll < chance {
-                            self.runner.start_downhill_acceleration(
-                                self.course.slopes[idx].slope_percent(),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn find_next_slope(&self) -> Option<usize> {
-        self.course
-            .slopes
-            .iter()
-            .position(|c| c.start > self.runner.position)
-    }
-
-    fn find_next_corner(&self) -> Option<usize> {
-        self.course
-            .corners
-            .iter()
-            .position(|c| c.start > self.runner.position)
     }
 
     /// Check and activate skills based on triggers
@@ -250,21 +128,6 @@ impl RaceState {
         // TODO: Check monotonic triggers (time, distance, HP)
         // TODO: Check random activation triggers
         // TODO: Check continuous triggers
-    }
-
-    /// Update skill durations and remove expired effects
-    fn update_skill_durations(&mut self) {
-        let before_count = self.runner.active_timed_effects.len();
-
-        // Remove expired effects
-        self.runner
-            .active_timed_effects
-            .retain(|effect| effect.expires_at > self.elapsed_time);
-
-        // Recalculate modifiers if any effects expired
-        if self.runner.active_timed_effects.len() != before_count {
-            self.runner.recalculate_skill_modifiers();
-        }
     }
 
     pub fn run(&mut self) {
@@ -275,48 +138,50 @@ impl RaceState {
             self.step(dt);
         }
     }
-
-    pub fn update_phase(&mut self) {
-        self.runner.phase = Phase::from_position(self.runner.position, &self.course);
-    }
 }
 
 /// Activate a skill by its index and alternative index
-pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_index: usize) {
+pub fn activate_skill(
+    runner: &mut Runner,
+    skill_index: usize,
+    alternative_index: usize,
+    elapsed_time: f64,
+    course: &Course,
+    trigger_scheduler: &mut TriggerScheduler,
+) {
     // Clone the skill data we need to avoid borrow checker issues
-    let skill_id = state.runner.available_skills[skill_index].id.clone();
-    let alternative =
-        state.runner.available_skills[skill_index].alternatives[alternative_index].clone();
+    let skill_id = runner.available_skills[skill_index].id.clone();
+    let alternative = runner.available_skills[skill_index].alternatives[alternative_index].clone();
 
     // Calculate scaled duration
     let base_duration = alternative.base_duration as f64 / 10000.0; // Convert from 10000ths of a second
-    let scaled_duration = base_duration * state.runner.skill_modifiers.duration_scaling;
+    let scaled_duration = base_duration * runner.skill_modifiers.duration_scaling;
 
     // Apply each effect in the alternative
     for effect in &alternative.effects {
         match effect.skill_type {
             // Instant stat modifications (permanent)
             SkillType::SpeedUp => {
-                modify_stat(&mut state.runner.adjusted.speed, effect.modifier);
+                modify_stat(&mut runner.adjusted.speed, effect.modifier);
             }
             SkillType::StaminaUp => {
-                modify_stat(&mut state.runner.adjusted.stamina, effect.modifier);
+                modify_stat(&mut runner.adjusted.stamina, effect.modifier);
             }
             SkillType::PowerUp => {
-                modify_stat(&mut state.runner.adjusted.power, effect.modifier);
+                modify_stat(&mut runner.adjusted.power, effect.modifier);
             }
             SkillType::GutsUp => {
-                modify_stat(&mut state.runner.adjusted.guts, effect.modifier);
+                modify_stat(&mut runner.adjusted.guts, effect.modifier);
             }
             SkillType::WizUp => {
-                modify_stat(&mut state.runner.adjusted.wiz, effect.modifier);
+                modify_stat(&mut runner.adjusted.wiz, effect.modifier);
             }
             SkillType::AllStatsUp => {
-                modify_stat(&mut state.runner.adjusted.speed, effect.modifier);
-                modify_stat(&mut state.runner.adjusted.stamina, effect.modifier);
-                modify_stat(&mut state.runner.adjusted.power, effect.modifier);
-                modify_stat(&mut state.runner.adjusted.guts, effect.modifier);
-                modify_stat(&mut state.runner.adjusted.wiz, effect.modifier);
+                modify_stat(&mut runner.adjusted.speed, effect.modifier);
+                modify_stat(&mut runner.adjusted.stamina, effect.modifier);
+                modify_stat(&mut runner.adjusted.power, effect.modifier);
+                modify_stat(&mut runner.adjusted.guts, effect.modifier);
+                modify_stat(&mut runner.adjusted.wiz, effect.modifier);
             }
 
             // Timed effects (tracked in active_timed_effects)
@@ -325,8 +190,8 @@ pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_ind
             | SkillType::CurrentSpeed
             | SkillType::CurrentSpeedWithNaturalDeceleration
             | SkillType::ExtendEvolvedDuration => {
-                let expires_at = state.elapsed_time + scaled_duration;
-                state.runner.active_timed_effects.push(ActiveTimedEffect {
+                let expires_at = elapsed_time + scaled_duration;
+                runner.active_timed_effects.push(ActiveTimedEffect {
                     skill_id: skill_id.clone(),
                     skill_index,
                     alternative_index,
@@ -337,45 +202,48 @@ pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_ind
 
             // Recovery (HP restoration)
             SkillType::Recovery => {
-                state.runner.hp =
-                    (state.runner.hp + effect.modifier as f64).min(state.runner.max_hp);
+                runner.hp = (runner.hp + effect.modifier as f64).min(runner.max_hp);
 
                 // Increment heal skill count
-                state.trigger_scheduler.activation_counts.increment_heal();
+                trigger_scheduler.activation_counts.increment_heal();
 
                 // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
-                if !matches!(GAME_BEHAVIOR, GameBehavior::Original)
-                    && state.runner.phase >= Phase::Mid
-                {
+                if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && runner.phase >= Phase::Mid {
                     // TODO: implement last_spurt recalculation
                 }
             }
 
             // Activate random gold skill
             SkillType::ActivateRandomGold => {
-                if !state.runner.golden_skill_indices.is_empty() {
-                    let idx = state
-                        .runner
+                if !runner.golden_skill_indices.is_empty() {
+                    let idx = runner
                         .rng
                         .borrow_mut()
-                        .random_range(0..state.runner.golden_skill_indices.len());
-                    let golden_skill_idx = state.runner.golden_skill_indices[idx];
+                        .random_range(0..runner.golden_skill_indices.len());
+                    let golden_skill_idx = runner.golden_skill_indices[idx];
                     // Recursively activate the golden skill (use first alternative)
-                    activate_skill(state, golden_skill_idx, 0);
+                    activate_skill(
+                        runner,
+                        golden_skill_idx,
+                        0,
+                        elapsed_time,
+                        course,
+                        trigger_scheduler,
+                    );
                 }
             }
 
             // Start delay modifications
             SkillType::MultiplyStartDelay => {
-                state.runner.start_delay *= effect.modifier as f64 / 10000.0;
+                runner.start_delay *= effect.modifier as f64 / 10000.0;
             }
             SkillType::SetStartDelay => {
-                state.runner.start_delay = effect.modifier as f64 / 10000.0;
+                runner.start_delay = effect.modifier as f64 / 10000.0;
             }
 
             // Style change
             SkillType::ChangeStyleOonige => {
-                state.runner.adjusted.style = Style::Oonige;
+                runner.adjusted.style = Style::Oonige;
             }
 
             // Unimplemented skill types
@@ -389,22 +257,20 @@ pub fn activate_skill(state: &mut RaceState, skill_index: usize, alternative_ind
     }
 
     // Recalculate skill modifiers from active effects
-    state.runner.recalculate_skill_modifiers();
+    runner.recalculate_skill_modifiers();
 
     // Track skill activation
-    state.runner.activated_skill_ids.insert(skill_id.clone());
-    state.runner.activated_skills.push(SkillActivationRecord {
+    runner.activated_skill_ids.insert(skill_id.clone());
+    runner.activated_skills.push(SkillActivationRecord {
         skill_id,
         skill_index,
         alternative_index,
-        distance: state.runner.position,
+        distance: runner.position,
     });
 
     // Increment activation counts for condition evaluation
-    let section_length = state.course.distance as f64 / 24.0;
-    state.trigger_scheduler.activation_counts.increment(
-        state.runner.phase,
-        state.runner.position,
-        section_length,
-    );
+    let section_length = course.distance as f64 / 24.0;
+    trigger_scheduler
+        .activation_counts
+        .increment(runner.phase, runner.position, section_length);
 }

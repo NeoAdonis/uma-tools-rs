@@ -518,7 +518,7 @@ fn split_single_comp(
 /// Extract onetime event trigger from comparison
 fn extract_onetime_trigger(comp: &Comp) -> TriggerCondition {
     match &comp.var {
-        VarType::Course(CourseVar::IsLastStraightOnetime) => TriggerCondition::LastStraightEntry,
+        VarType::Spatial(SpatialVar::IsLastStraightOnetime) => TriggerCondition::LastStraightEntry,
         VarType::Position(PositionVar::ChangeOrderOnetime) => {
             TriggerCondition::PositionChange { delta: comp.value }
         }
@@ -573,7 +573,7 @@ fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
 /// Extract spatial trigger from comparison
 fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
     match &comp.var {
-        VarType::Course(CourseVar::Corner) => {
+        VarType::Spatial(SpatialVar::Corner) => {
             // corner!=0 means "any corner"
             // corner==X means "specific corner X"
             let corner_index = if comp.value == 0 {
@@ -590,7 +590,7 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
             })
         }
 
-        VarType::Course(CourseVar::Slope) => {
+        VarType::Spatial(SpatialVar::Slope) => {
             let slope_type = match comp.value {
                 1 => SlopeType::Uphill,
                 2 => SlopeType::Downhill,
@@ -602,10 +602,12 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
             })
         }
 
-        VarType::Course(CourseVar::IsLastStraight) => Some(TriggerCondition::StraightTransition {
-            is_final: true,
-            is_entry: true,
-        }),
+        VarType::Spatial(SpatialVar::IsLastStraight) => {
+            Some(TriggerCondition::StraightTransition {
+                is_final: true,
+                is_entry: true,
+            })
+        }
 
         _ => {
             // Other spatial triggers - for now, mark as continuous
