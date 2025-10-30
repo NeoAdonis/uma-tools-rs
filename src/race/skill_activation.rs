@@ -33,6 +33,7 @@ use crate::condition::variables::*;
 use crate::course::Phase;
 use crate::course::geometry::SlopeType;
 use crate::trigger::system::RandomActivation;
+use crate::uma::skill::SkillEffect;
 
 /// Complete activation logic for a skill
 /// Replaces the old approach of scattering skill indices across multiple heaps
@@ -140,6 +141,25 @@ pub enum TriggerCondition {
     /// Must be checked every frame
     /// Used for conditions that can't be efficiently triggered
     Continuous,
+}
+
+/// A timed skill effect that is currently active
+#[derive(Debug, Clone)]
+pub struct ActiveTimedEffect {
+    pub skill_id: String,
+    pub skill_index: usize,
+    pub alternative_index: usize,
+    pub effect: SkillEffect,
+    pub expires_at: f64, // Race time (seconds) when effect expires
+}
+
+/// Record of a skill activation during the race
+#[derive(Debug, Clone)]
+pub struct SkillActivationRecord {
+    pub skill_id: String,
+    pub skill_index: usize,
+    pub alternative_index: usize,
+    pub distance: f64, // Distance when activated
 }
 
 impl TriggerCondition {

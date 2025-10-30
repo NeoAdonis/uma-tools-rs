@@ -1,5 +1,6 @@
 use crate::course::*;
 use crate::race::parameters::TrackCondition;
+use crate::uma::Style;
 
 fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
     match (track, condition) {
@@ -16,6 +17,16 @@ fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
 
 fn hp_guts_modifier(guts_stat: u16) -> f64 {
     1.0 + (200.0 / (600.0 * guts_stat as f64).sqrt())
+}
+
+pub fn hp_style_coefficient(style: Style) -> f64 {
+    match style {
+        Style::Oonige => 0.86,
+        Style::Front => 0.95,
+        Style::Pace => 0.89,
+        Style::Late => 1.0,
+        Style::End => 0.995,
+    }
 }
 
 pub fn calculate_hp_consumption_per_second(
