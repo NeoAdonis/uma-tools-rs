@@ -339,7 +339,7 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
     match var {
         // Which corner: 0=none, 1-4=corner number
         SpatialVar::Corner => {
-            if let Some(idx) = runner.current_corner_idx {
+            if let Some(idx) = runner.current_corner() {
                 (idx + 1) as i32 // 1-based index
             } else {
                 0
@@ -374,7 +374,7 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
 
         // Slope: 0=flat, 1=uphill, 2=downhill
         SpatialVar::Slope => {
-            if let Some(idx) = runner.current_slope_idx {
+            if let Some(idx) = runner.current_slope() {
                 state.course.slopes[idx].slope_type() as i32
             } else {
                 0
@@ -383,7 +383,7 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
 
         // Straight front type: 1=facing audience, 2=opposite from audience
         SpatialVar::StraightFrontType => {
-            if let Some(idx) = runner.current_straight_idx {
+            if let Some(idx) = runner.current_straight() {
                 state.course.straights[idx].front_type as i32
             } else {
                 0 // Not in a straight

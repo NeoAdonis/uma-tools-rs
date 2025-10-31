@@ -89,9 +89,6 @@ pub struct Runner {
     pub slope_acceleration: Option<f64>,
     pub phase: Phase,
     pub last_spurt: Option<LastSpurt>,
-    pub current_corner_idx: Option<usize>,
-    pub current_slope_idx: Option<usize>,
-    pub current_straight_idx: Option<usize>,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub corner_manager: CornerManager,
     pub slope_manager: SlopeManager,
@@ -234,9 +231,6 @@ impl Runner {
             is_start_dash: true,
             slope_acceleration: None,
             last_spurt: None,
-            current_corner_idx: None,
-            current_slope_idx: None,
-            current_straight_idx: None,
             rng,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),
@@ -419,10 +413,13 @@ impl Runner {
         }
     }
 
+    pub fn current_corner(&self) -> Option<usize> {
+        self.corner_manager.current_corner()
+    }
+
     pub fn check_corner_start(&mut self, corners: &[Corner]) {
         // Check for corner entry using the corner manager
         if let Some(corner_idx) = self.corner_manager.check_entry(self.position, corners) {
-            self.current_corner_idx = Some(corner_idx);
             // TODO: Trigger corner entry skills
         }
     }
@@ -430,15 +427,17 @@ impl Runner {
     pub fn check_corner_end(&mut self, corners: &[Corner]) {
         // Check for corner exit using the corner manager
         if let Some(corner_idx) = self.corner_manager.check_exit(self.position, corners) {
-            self.current_corner_idx = None;
             // TODO: Trigger corner exit skills
         }
+    }
+
+    pub fn current_straight(&self) -> Option<usize> {
+        self.straight_manager.current_straight()
     }
 
     pub fn check_straight_start(&mut self, straights: &[Straight]) {
         // Check for straight entry using the straight manager
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
-            self.current_straight_idx = Some(straight_idx);
             // TODO: Trigger straight entry skills
         }
     }
@@ -446,9 +445,12 @@ impl Runner {
     pub fn check_straight_end(&mut self, straights: &[Straight]) {
         // Check for straight exit using the straight manager
         if let Some(straight_idx) = self.straight_manager.check_exit(self.position, straights) {
-            self.current_straight_idx = None;
             // TODO: Trigger straight exit skills
         }
+    }
+
+    pub fn current_slope(&self) -> Option<usize> {
+        self.slope_manager.current_slope()
     }
 
     pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng) {
@@ -460,12 +462,10 @@ impl Runner {
             if slopes[slope_idx].is_uphill() {
                 self.start_uphill_acceleration(slopes[slope_idx].slope_percent());
             }
-            self.current_slope_idx = Some(slope_idx);
         } else if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
             // TODO: Trigger slope exit skills
             self.stop_slope_acceleration();
-            self.current_slope_idx = None;
-        } else if let Some(idx) = self.current_slope_idx {
+        } else if let Some(idx) = self.current_slope() {
             // On slope - check for downhill acceleration
             if slopes[idx].is_downhill() {
                 let has_second_passed = false; // TODO: track time on slope
