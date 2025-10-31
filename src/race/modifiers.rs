@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::course::Phase;
 use crate::uma::{Aptitude, Style};
 
@@ -97,4 +99,10 @@ pub fn base_target_speed(
             base + speed_modifier
         }
     }
+}
+
+pub fn roll_section_speed_coefficient<R: Rng + ?Sized>(rng: &mut R, wiz_stat: u16) -> f64 {
+    let max = wiz_stat as f64 * (wiz_stat as f64 * 0.1).log10() / 550000.0;
+    let min = max - 0.0065;
+    rng.random_range(min..=max)
 }

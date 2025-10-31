@@ -7,14 +7,6 @@ use rand::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-fn section_coefficient_range(wiz_stat: u16) -> (f64, f64) {
-    // Max = WizStat / 5500 * log10(WizStat * 0.1) [%]
-    // Min = Max - 0.65 [%]
-    let max = (wiz_stat as f64 / 5500.0) * (wiz_stat as f64 * 0.1).log10();
-    let min = max - 0.65;
-    (min / 100.0, max / 100.0)
-}
-
 // TODO: implement blocking logic
 // When blocked, a uma’s speed is capped between 0.988x(at 0m) to 1.0x(at 2m) of the speed of the uma in front, scaled linearly to the distance in between.
 // ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.eyiunid0e18k

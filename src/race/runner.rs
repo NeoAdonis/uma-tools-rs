@@ -128,6 +128,7 @@ pub struct Runner {
     pub max_hp: f64,
     pub min_speed: f64,
     pub base_target_speed: f64,
+    pub section_speed_modifier: f64,
     pub available_skills: Vec<Skill>,
     pub activated_skills: Vec<SkillActivationRecord>,
     pub activated_skill_ids: HashSet<String>,
@@ -138,6 +139,7 @@ pub struct Runner {
     pub rush_section: Option<u8>,
     pub is_start_dash: bool,
     pub slope_acceleration: Option<f64>,
+    pub section: u8,
     pub phase: Phase,
     pub last_spurt: Option<LastSpurt>,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
@@ -316,10 +318,15 @@ impl<'a> RunnerBuilder<'a> {
         let rush_chance = (0.65 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0);
         let roll: f64 = self.rng.borrow_mut().random();
         let rush_section = if roll < rush_chance {
-            Some(self.rng.borrow_mut().random_range(2..=9))
+            // Uma will rush in a random section between 2 and 9 (1-indexed)
+            Some(self.rng.borrow_mut().random_range(1..=9))
         } else {
             None
         };
+
+        // Calculate section coefficient for base speed adjustment
+        let section_speed_coefficient =
+            roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
 
         // Initialize race state
         Runner {
@@ -339,7 +346,9 @@ impl<'a> RunnerBuilder<'a> {
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             golden_skill_indices: self.golden_skill_indices,
+            section: 0,
             phase: Phase::Early,
+            section_speed_modifier: self.course.base_speed() * section_speed_coefficient,
             hp: max_hp,
             max_hp,
             position: 0.0,
@@ -520,7 +529,7 @@ impl Runner {
     /// Get the effective speed including skill modifiers
     /// This is the actual speed used for position calculations
     pub fn effective_speed(&self) -> f64 {
-        self.speed + self.skill_modifiers.current_speed
+        self.speed + self.skill_modifiers.current_speed + self.section_speed_modifier
     }
 
     pub fn update_position(&mut self, delta_time: f64) {
@@ -529,6 +538,17 @@ impl Runner {
     }
 
     pub fn update_phase(&mut self, course: &Course) {
+        let prev_section = self.section;
+        self.section = course.section_from_position(self.position);
+        if self.section != prev_section {
+            let section_speed_coefficient =
+                roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
+            self.section_speed_modifier = course.base_speed() * section_speed_coefficient;
+            if self.rush_section.is_some_and(|s| s == self.section) {
+                // TODO: implement rush logic
+                //self.is_rushed = true;
+            }
+        }
         self.phase = Phase::from_position(self.position, course);
     }
 

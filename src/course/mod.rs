@@ -155,6 +155,11 @@ impl Course {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
+    /// Get the section index (0-23) from a given position in meters
+    pub fn section_from_position(&self, position: f64) -> u8 {
+        (position / self.section_length()).floor() as u8
+    }
+
     /// Get the track name in the specified language
     ///
     /// # Arguments
