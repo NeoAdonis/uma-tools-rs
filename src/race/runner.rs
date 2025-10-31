@@ -1,12 +1,12 @@
 use crate::condition::evaluator::evaluate_condition;
 use crate::course::geometry::{Corner, Slope, Straight};
-use crate::race::solver::RaceState;
 use crate::course::*;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::parameters::{RaceParameters, TrackCondition};
 use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
+use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::trigger::builder::build_trigger_scheduler;
 use crate::trigger::system::{ActivationCounts, TriggerScheduler};
@@ -565,6 +565,52 @@ impl Runner {
             self.is_pace_down(),
             self.is_downhill_accel(),
         ) * delta_time;
+        self.check_hp_triggers(state);
+    }
+
+    pub fn hp_percent(&self) -> f64 {
+        self.hp / self.max_hp * 100.0
+    }
+
+    pub fn check_hp_triggers(&mut self, state: &RaceState) {
+        while let Some(trigger) = self.trigger_scheduler.hp_triggers.peek() {
+            if self.hp_percent() > trigger.threshold_percent {
+                break; // Threshold not reached yet, this and all subsequent triggers require lower HP
+            }
+
+            let trigger = self.trigger_scheduler.hp_triggers.pop().unwrap();
+            // Get skill logic and conditions
+            let (skill_index, alternative_index, guard_condition, is_onetime) = {
+                let logic = &mut self.trigger_scheduler.skill_logics[trigger.skill_index];
+                if !logic.should_check() {
+                    continue;
+                }
+                (
+                    logic.skill_index,
+                    logic.alternative_index,
+                    logic.guard_condition.clone(),
+                    logic.triggers.iter().any(|t| t.is_onetime()),
+                )
+            };
+            let should_activate = if let Some(guard) = &guard_condition {
+                evaluate_condition(guard, state, self)
+            } else {
+                true
+            };
+
+            if should_activate {
+                self.activate_skill(
+                    skill_index,
+                    alternative_index,
+                    state.elapsed_time,
+                    &state.course,
+                );
+                self.trigger_scheduler.skill_logics[trigger.skill_index].mark_activated();
+            } else if is_onetime {
+                // Onetime trigger that failed guards
+                self.trigger_scheduler.skill_logics[trigger.skill_index].mark_attempted();
+            }
+        }
     }
 
     pub fn update_last_spurt_state(&mut self, course: &Course, condition: TrackCondition) {
