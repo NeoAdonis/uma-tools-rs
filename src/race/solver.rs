@@ -78,34 +78,27 @@ impl RaceSolver {
             runner.check_straight_end(&self.state.course.straights);
         }
 
-        self.state.elapsed_time += delta_time; // Track race time
-
-        // Update
-        self.check_skill_activations();
-        // TODO: implement "Recover HP by skills"
+        self.state.elapsed_time += delta_time;
 
         for runner in &mut self.runners {
+            // Update
+            runner.check_time_triggers(&self.state);
+            // TODO: Check random activation triggers
+            // TODO: Check continuous triggers
+            // TODO: implement "Recover HP by skills"
             runner.update_last_spurt_state(&self.state.course, self.state.params.condition);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();
-            runner.update_phase(&self.state.course);
+            runner.update_phase(&self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
-            runner.update_position(delta_time);
+            runner.update_position(delta_time, &self.state);
             runner.update_hp(delta_time, &self.state);
             runner.update_slope(&self.state.course.slopes, &mut *self.state.rng.borrow_mut());
-            // Update skill durations and remove expired effects
             runner.update_skill_durations(self.state.elapsed_time);
             // Post-Update
             runner.check_corner_start(&self.state.course.corners);
             runner.check_straight_start(&self.state.course.straights);
         }
-    }
-
-    /// Check and activate skills based on triggers
-    fn check_skill_activations(&mut self) {
-        // TODO: Check monotonic triggers (time, distance, HP)
-        // TODO: Check random activation triggers
-        // TODO: Check continuous triggers
     }
 
     pub fn run(&mut self) {

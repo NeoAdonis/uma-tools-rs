@@ -534,24 +534,30 @@ impl Runner {
         self.speed + self.skill_modifiers.current_speed + self.section_speed_modifier
     }
 
-    pub fn update_position(&mut self, delta_time: f64) {
+    pub fn update_position(&mut self, delta_time: f64, state: &RaceState) {
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * delta_time;
+        self.check_distance_triggers(state);
     }
 
-    pub fn update_phase(&mut self, course: &Course) {
+    pub fn update_phase(&mut self, state: &RaceState) {
         let prev_section = self.section;
-        self.section = course.section_from_position(self.position);
+        self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
             let section_speed_coefficient =
                 roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
-            self.section_speed_modifier = course.base_speed() * section_speed_coefficient;
+            self.section_speed_modifier = state.course.base_speed() * section_speed_coefficient;
             if self.rush_section.is_some_and(|s| s == self.section) {
                 // TODO: implement rush logic
                 //self.is_rushed = true;
             }
+            // Phase can only advance at section boundaries
+            let prev_phase = self.phase;
+            self.phase = Phase::from_position(self.position, &state.course);
+            if prev_phase != self.phase {
+                self.check_phase_triggers(state);
+            }
         }
-        self.phase = Phase::from_position(self.position, course);
     }
 
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
@@ -572,6 +578,65 @@ impl Runner {
         self.hp / self.max_hp * 100.0
     }
 
+    fn pull_trigger(&mut self, trigger_index: usize, state: &RaceState) {
+        // Get skill logic and conditions
+        let (skill_index, alternative_index, guard_condition, is_onetime) = {
+            let logic = &mut self.trigger_scheduler.skill_logics[trigger_index];
+            if !logic.should_check() {
+                return;
+            }
+            (
+                logic.skill_index,
+                logic.alternative_index,
+                logic.guard_condition.clone(),
+                logic.triggers.iter().any(|t| t.is_onetime()),
+            )
+        };
+        let should_activate = if let Some(guard) = &guard_condition {
+            evaluate_condition(guard, state, self)
+        } else {
+            true
+        };
+
+        if should_activate {
+            self.activate_skill(
+                skill_index,
+                alternative_index,
+                state.elapsed_time,
+                &state.course,
+            );
+            self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
+        } else if is_onetime {
+            // Onetime trigger that failed guards
+            self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
+        }
+    }
+
+    pub fn check_phase_triggers(&mut self, state: &RaceState) {
+        while let Some(trigger) = self.trigger_scheduler.phase_triggers.peek() {
+            if self.phase != trigger.phase {
+                break; // Wrong phase
+            }
+
+            let trigger = self.trigger_scheduler.phase_triggers.pop().unwrap();
+            for trigger_index in trigger.skill_indices {
+                self.pull_trigger(trigger_index, state);
+            }
+        }
+    }
+
+    pub fn check_distance_triggers(&mut self, state: &RaceState) {
+        while let Some(trigger) = self.trigger_scheduler.distance_triggers.peek() {
+            if self.position < trigger.threshold_meters {
+                break; // Threshold not reached yet, this and all subsequent triggers require further distance
+            }
+
+            let trigger = self.trigger_scheduler.distance_triggers.pop().unwrap();
+            let trigger_index = trigger.skill_index;
+            self.pull_trigger(trigger_index, state);
+        }
+    }
+
     pub fn check_hp_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.hp_triggers.peek() {
             if self.hp_percent() > trigger.threshold_percent {
@@ -579,37 +644,20 @@ impl Runner {
             }
 
             let trigger = self.trigger_scheduler.hp_triggers.pop().unwrap();
-            // Get skill logic and conditions
-            let (skill_index, alternative_index, guard_condition, is_onetime) = {
-                let logic = &mut self.trigger_scheduler.skill_logics[trigger.skill_index];
-                if !logic.should_check() {
-                    continue;
-                }
-                (
-                    logic.skill_index,
-                    logic.alternative_index,
-                    logic.guard_condition.clone(),
-                    logic.triggers.iter().any(|t| t.is_onetime()),
-                )
-            };
-            let should_activate = if let Some(guard) = &guard_condition {
-                evaluate_condition(guard, state, self)
-            } else {
-                true
-            };
+            let trigger_index = trigger.skill_index;
+            self.pull_trigger(trigger_index, state);
+        }
+    }
 
-            if should_activate {
-                self.activate_skill(
-                    skill_index,
-                    alternative_index,
-                    state.elapsed_time,
-                    &state.course,
-                );
-                self.trigger_scheduler.skill_logics[trigger.skill_index].mark_activated();
-            } else if is_onetime {
-                // Onetime trigger that failed guards
-                self.trigger_scheduler.skill_logics[trigger.skill_index].mark_attempted();
+    pub fn check_time_triggers(&mut self, state: &RaceState) {
+        while let Some(trigger) = self.trigger_scheduler.time_triggers.peek() {
+            if state.elapsed_time < trigger.threshold_seconds {
+                break; // Threshold not reached yet, this and all subsequent triggers require more time
             }
+
+            let trigger = self.trigger_scheduler.time_triggers.pop().unwrap();
+            let trigger_index = trigger.skill_index;
+            self.pull_trigger(trigger_index, state);
         }
     }
 
