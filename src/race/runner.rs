@@ -1,4 +1,6 @@
+use crate::condition::evaluator::evaluate_condition;
 use crate::course::geometry::{Corner, Slope, Straight};
+use crate::race::solver::RaceState;
 use crate::course::*;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
@@ -552,11 +554,11 @@ impl Runner {
         self.phase = Phase::from_position(self.position, course);
     }
 
-    pub fn update_hp(&mut self, delta_time: f64, course: &Course, condition: TrackCondition) {
+    pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
-            course,
-            condition,
+            &state.course,
+            state.params.condition,
             self.phase,
             self.adjusted.guts,
             self.is_rushed,

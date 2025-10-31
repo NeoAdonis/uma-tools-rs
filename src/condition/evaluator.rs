@@ -39,7 +39,7 @@
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::race::runner::{Runner, StartType};
-use crate::race::state::RaceState;
+use crate::race::solver::RaceState;
 use crate::uma::*;
 
 /// Evaluate a guard condition against current race state
@@ -680,11 +680,12 @@ mod tests {
     use super::*;
     use crate::course::*;
     use crate::race::parameters::*;
+    use crate::race::solver::RaceSolver;
     use crate::skill::*;
     use crate::uma::Aptitude;
 
     /// Helper to create a minimal test race state
-    fn create_test_race_state() -> RaceState {
+    fn create_test_race_solver() -> RaceSolver {
         let uma = Uma {
             speed: 1200,
             stamina: 1200,
@@ -728,18 +729,18 @@ mod tests {
 
         let skills = vec![];
 
-        let mut race_state = RaceState::new(course, params);
-        race_state.add_runner(uma, Motivation::Good, skills);
+        let mut solver = RaceSolver::new(course, params);
+        solver.add_runner(uma, Motivation::Good, skills);
 
-        race_state
+        solver
     }
 
     #[test]
     fn test_is_used_skill_id_with_activated_skill() {
-        let mut state = create_test_race_state();
+        let mut solver = create_test_race_solver();
 
         // Add skill ID "202051" to activated_skill_ids
-        state.runners[0]
+        solver.runners[0]
             .activated_skill_ids
             .insert("202051".to_string());
 
@@ -751,12 +752,12 @@ mod tests {
         };
 
         // Should return true because skill 202051 is activated
-        assert!(evaluate_comparison(&comp, &state, &state.runners[0]));
+        assert!(evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
     }
 
     #[test]
     fn test_is_used_skill_id_without_activated_skill() {
-        let state = create_test_race_state();
+        let state = create_test_race_solver();
 
         // No skills in activated_skills
 
@@ -768,15 +769,15 @@ mod tests {
         };
 
         // Should return false because skill 202051 is not activated
-        assert!(!evaluate_comparison(&comp, &state, &state.runners[0]));
+        assert!(!evaluate_comparison(&comp, &state.state, &state.runners[0]));
     }
 
     #[test]
     fn test_is_used_skill_id_with_different_skill() {
-        let mut state = create_test_race_state();
+        let mut solver = create_test_race_solver();
 
         // Add skill ID "203781" to activated_skill_ids (different from what we're checking)
-        state.runners[0]
+        solver.runners[0]
             .activated_skill_ids
             .insert("203781".to_string());
 
@@ -788,12 +789,12 @@ mod tests {
         };
 
         // Should return false because skill 202051 is not activated (only 203781 is)
-        assert!(!evaluate_comparison(&comp, &state, &state.runners[0]));
+        assert!(!evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
     }
 
     #[test]
     fn test_is_used_skill_id_not_equal() {
-        let mut state = create_test_race_state();
+        let mut state = create_test_race_solver();
 
         // Add skill ID "202051" to activated_skill_ids
         state.runners[0]
@@ -808,7 +809,7 @@ mod tests {
         };
 
         // Should return false because skill 202051 IS activated
-        assert!(!evaluate_comparison(&comp, &state, &state.runners[0]));
+        assert!(!evaluate_comparison(&comp, &state.state, &state.runners[0]));
     }
 
     #[test]
@@ -863,8 +864,8 @@ mod tests {
 
         let skills = vec![skill];
 
-        let mut state = RaceState::new(course, params);
-        state.add_runner(uma, Motivation::Good, skills);
+        let mut solver = RaceSolver::new(course, params);
+        solver.add_runner(uma, Motivation::Good, skills);
 
         // Create comparison: is_exist_skill_id == 203061
         let comp = Comp {
@@ -874,6 +875,6 @@ mod tests {
         };
 
         // Should return true because skill 203061 is in available_skills
-        assert!(evaluate_comparison(&comp, &state, &state.runners[0]));
+        assert!(evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
     }
 }

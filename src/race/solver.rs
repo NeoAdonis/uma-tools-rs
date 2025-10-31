@@ -24,24 +24,32 @@ use std::rc::Rc;
 // ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.awbjufvej6ud
 
 pub struct RaceState {
-    pub runners: Vec<Runner>,
     pub course: Course,
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub elapsed_time: f64, // Race time in seconds (shared by all umas)
 }
 
-impl RaceState {
+pub struct RaceSolver {
+    pub runners: Vec<Runner>,
+    pub state: RaceState,
+}
+
+impl RaceSolver {
     pub fn new(course: Course, params: RaceParameters) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
 
-        RaceState {
-            runners: vec![],
+        let state = RaceState {
             course,
             params,
             rng,
             elapsed_time: 0.0,
+        };
+
+        RaceSolver {
+            runners: vec![],
+            state,
         }
     }
 
@@ -49,10 +57,10 @@ impl RaceState {
         let runner = Runner::new(
             uma,
             motivation,
-            &self.course,
-            &self.params,
+            &self.state.course,
+            &self.state.params,
             skills,
-            Rc::clone(&self.rng),
+            Rc::clone(&self.state.rng),
         );
         self.runners.push(runner);
     }
@@ -60,36 +68,36 @@ impl RaceState {
     // TODO: complete implementation and report
     #[allow(dead_code)]
     fn displayed_time(&self) -> f64 {
-        self.elapsed_time * 1.18
+        self.state.elapsed_time * 1.18
     }
 
     pub fn step(&mut self, delta_time: f64) {
         // Pre-Update
         for runner in &mut self.runners {
-            runner.check_corner_end(&self.course.corners);
-            runner.check_straight_end(&self.course.straights);
+            runner.check_corner_end(&self.state.course.corners);
+            runner.check_straight_end(&self.state.course.straights);
         }
 
-        self.elapsed_time += delta_time; // Track race time
+        self.state.elapsed_time += delta_time; // Track race time
 
         // Update
         self.check_skill_activations();
         // TODO: implement "Recover HP by skills"
 
         for runner in &mut self.runners {
-            runner.update_last_spurt_state(&self.course, self.params.condition);
-            runner.update_target_speed(self.course.base_speed()); // TODO: review
+            runner.update_last_spurt_state(&self.state.course, self.state.params.condition);
+            runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();
-            runner.update_phase(&self.course);
-            runner.update_speed(delta_time, self.course.base_speed());
+            runner.update_phase(&self.state.course);
+            runner.update_speed(delta_time, self.state.course.base_speed());
             runner.update_position(delta_time);
-            runner.update_hp(delta_time, &self.course, self.params.condition);
-            runner.update_slope(&self.course.slopes, &mut *self.rng.borrow_mut());
+            runner.update_hp(delta_time, &self.state);
+            runner.update_slope(&self.state.course.slopes, &mut *self.state.rng.borrow_mut());
             // Update skill durations and remove expired effects
-            runner.update_skill_durations(self.elapsed_time);
+            runner.update_skill_durations(self.state.elapsed_time);
             // Post-Update
-            runner.check_corner_start(&self.course.corners);
-            runner.check_straight_start(&self.course.straights);
+            runner.check_corner_start(&self.state.course.corners);
+            runner.check_straight_start(&self.state.course.straights);
         }
     }
 

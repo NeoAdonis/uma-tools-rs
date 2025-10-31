@@ -7,7 +7,7 @@ mod units;
 
 use course::*;
 use race::parameters::*;
-use race::state::*;
+use race::solver::*;
 use rand::distr::*;
 use rand::prelude::*;
 use uma::skill::*;
@@ -152,10 +152,10 @@ fn main() {
     }
 
     // Initialize the race state
-    let mut race_state = RaceState::new(course, params);
-    race_state.add_runner(uma, motivation, skills);
+    let mut solver = RaceSolver::new(course, params);
+    solver.add_runner(uma, motivation, skills);
 
-    let runner = &race_state.runners[0];
+    let runner = &solver.runners[0];
 
     println!("\nRace initialized successfully!");
     println!("Initial HP: {:.2}", runner.hp);
@@ -166,5 +166,5 @@ fn main() {
     );
 
     // Simulate
-    race_state.run();
+    solver.run();
 }
