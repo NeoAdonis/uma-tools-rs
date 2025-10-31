@@ -1,4 +1,5 @@
 use crate::condition::evaluator::evaluate_condition;
+use crate::condition::parser::CompOp;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
@@ -578,6 +579,18 @@ impl Runner {
         self.hp / self.max_hp * 100.0
     }
 
+    /// Check if a monotonic trigger should fire based on operator
+    fn should_fire_trigger(current_value: f64, threshold: f64, operator: CompOp) -> bool {
+        match operator {
+            CompOp::GreaterEqual => current_value >= threshold,
+            CompOp::Greater => current_value > threshold,
+            CompOp::LessEqual => current_value <= threshold,
+            CompOp::Less => current_value < threshold,
+            CompOp::Equal => (current_value - threshold).abs() < 0.01,
+            CompOp::NotEqual => (current_value - threshold).abs() >= 0.01,
+        }
+    }
+
     fn pull_trigger(&mut self, trigger_index: usize, state: &RaceState) {
         // Get skill logic and conditions
         let (skill_index, alternative_index, guard_condition, is_onetime) = {
@@ -607,9 +620,11 @@ impl Runner {
             );
             self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
         } else if is_onetime {
-            // Onetime trigger that failed guards
+            // Onetime trigger that failed guards - mark attempted so we don't retry
             self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
         }
+        // Note: Monotonic triggers that fail guards are NOT marked as attempted
+        // This allows window triggers to retry them continuously while in window
     }
 
     pub fn check_phase_triggers(&mut self, state: &RaceState) {
@@ -627,7 +642,8 @@ impl Runner {
 
     pub fn check_distance_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.distance_triggers.peek() {
-            if self.position < trigger.threshold_meters {
+            if !Self::should_fire_trigger(self.position, trigger.threshold_meters, trigger.operator)
+            {
                 break; // Threshold not reached yet, this and all subsequent triggers require further distance
             }
 
@@ -639,7 +655,11 @@ impl Runner {
 
     pub fn check_hp_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.hp_triggers.peek() {
-            if self.hp_percent() > trigger.threshold_percent {
+            if !Self::should_fire_trigger(
+                self.hp_percent(),
+                trigger.threshold_percent,
+                trigger.operator,
+            ) {
                 break; // Threshold not reached yet, this and all subsequent triggers require lower HP
             }
 
@@ -651,13 +671,57 @@ impl Runner {
 
     pub fn check_time_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.time_triggers.peek() {
-            if state.elapsed_time < trigger.threshold_seconds {
+            if !Self::should_fire_trigger(
+                state.elapsed_time,
+                trigger.threshold_seconds,
+                trigger.operator,
+            ) {
                 break; // Threshold not reached yet, this and all subsequent triggers require more time
             }
 
             let trigger = self.trigger_scheduler.time_triggers.pop().unwrap();
             let trigger_index = trigger.skill_index;
             self.pull_trigger(trigger_index, state);
+        }
+    }
+
+    pub fn check_window_triggers(&mut self, state: &RaceState) {
+        use crate::race::skill_activation::WindowVariable;
+
+        // Collect trigger checks to avoid borrowing conflicts
+        let mut triggers_to_pull = Vec::new();
+        let mut triggers_to_mark_attempted = Vec::new();
+
+        for trigger in &self.trigger_scheduler.window_triggers {
+            // Get current value for the window variable
+            let current_value = match trigger.variable {
+                WindowVariable::AccumulateTime => state.elapsed_time,
+                WindowVariable::DistanceRate => self.position, // Already in meters (converted at build time)
+                WindowVariable::HpPercent => self.hp_percent(),
+            };
+
+            // Check if we're within the window
+            if current_value >= trigger.min_threshold && current_value <= trigger.max_threshold {
+                // Within window - try activation
+                triggers_to_pull.push(trigger.skill_index);
+            } else if current_value > trigger.max_threshold {
+                // Exited window without activating - check if we should mark as attempted
+                let logic = &self.trigger_scheduler.skill_logics[trigger.skill_index];
+                if !logic.state.has_activated && !logic.state.onetime_trigger_attempted {
+                    triggers_to_mark_attempted.push(trigger.skill_index);
+                }
+            }
+            // If current_value < min_threshold, we haven't entered the window yet (do nothing)
+        }
+
+        // Pull triggers
+        for trigger_index in triggers_to_pull {
+            self.pull_trigger(trigger_index, state);
+        }
+
+        // Mark attempted
+        for trigger_index in triggers_to_mark_attempted {
+            self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
         }
     }
 
@@ -671,17 +735,41 @@ impl Runner {
         self.corner_manager.current_corner()
     }
 
-    pub fn check_corner_start(&mut self, corners: &[Corner]) {
+    pub fn check_corner_start(&mut self, corners: &[Corner], state: &RaceState) {
         // Check for corner entry using the corner manager
         if let Some(corner_idx) = self.corner_manager.check_entry(self.position, corners) {
-            // TODO: Trigger corner entry skills
+            // Find all corner entry triggers for this corner
+            let skill_indices: Vec<usize> = self
+                .trigger_scheduler
+                .corner_entry_triggers
+                .iter()
+                .filter(|t| t.corner_index == corner_idx)
+                .flat_map(|t| t.skill_indices.iter().copied())
+                .collect();
+
+            // Pull triggers for all skills registered for this corner entry
+            for skill_index in skill_indices {
+                self.pull_trigger(skill_index, state);
+            }
         }
     }
 
-    pub fn check_corner_end(&mut self, corners: &[Corner]) {
+    pub fn check_corner_end(&mut self, corners: &[Corner], state: &RaceState) {
         // Check for corner exit using the corner manager
         if let Some(corner_idx) = self.corner_manager.check_exit(self.position, corners) {
-            // TODO: Trigger corner exit skills
+            // Find all corner exit triggers for this corner
+            let skill_indices: Vec<usize> = self
+                .trigger_scheduler
+                .corner_exit_triggers
+                .iter()
+                .filter(|t| t.corner_index == corner_idx)
+                .flat_map(|t| t.skill_indices.iter().copied())
+                .collect();
+
+            // Pull triggers for all skills registered for this corner exit
+            for skill_index in skill_indices {
+                self.pull_trigger(skill_index, state);
+            }
         }
     }
 
@@ -689,17 +777,31 @@ impl Runner {
         self.straight_manager.current_straight()
     }
 
-    pub fn check_straight_start(&mut self, straights: &[Straight]) {
+    pub fn check_straight_start(&mut self, straights: &[Straight], state: &RaceState) {
         // Check for straight entry using the straight manager
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
-            // TODO: Trigger straight entry skills
+            // Trigger straight entry skills
+            // Note: straight triggers are only for entry, not exit
+            let skill_indices: Vec<usize> = self
+                .trigger_scheduler
+                .straight_triggers
+                .iter()
+                .filter(|t| t.straight_index == straight_idx)
+                .flat_map(|t| t.skill_indices.iter().copied())
+                .collect();
+
+            for skill_index in skill_indices {
+                self.pull_trigger(skill_index, state);
+            }
         }
     }
 
-    pub fn check_straight_end(&mut self, straights: &[Straight]) {
+    pub fn check_straight_end(&mut self, straights: &[Straight], _state: &RaceState) {
         // Check for straight exit using the straight manager
-        if let Some(straight_idx) = self.straight_manager.check_exit(self.position, straights) {
-            // TODO: Trigger straight exit skills
+        // Note: No triggers fire on straight exit currently
+        // This is here for completeness and potential future use
+        if let Some(_straight_idx) = self.straight_manager.check_exit(self.position, straights) {
+            // No triggers fire on exit for straights
         }
     }
 
@@ -707,17 +809,41 @@ impl Runner {
         self.slope_manager.current_slope()
     }
 
-    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng) {
+    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng, state: &RaceState) {
         // Check for slope entry using the slope manager
         if let Some((slope_idx, _slope_type)) =
             self.slope_manager.check_entry(self.position, slopes)
         {
-            // TODO: Trigger slope entry skills
+            // Trigger slope entry skills
+            let skill_indices: Vec<usize> = self
+                .trigger_scheduler
+                .slope_entry_triggers
+                .iter()
+                .filter(|t| t.slope_index == slope_idx)
+                .flat_map(|t| t.skill_indices.iter().copied())
+                .collect();
+
+            for skill_index in skill_indices {
+                self.pull_trigger(skill_index, state);
+            }
+
             if slopes[slope_idx].is_uphill() {
                 self.start_uphill_acceleration(slopes[slope_idx].slope_percent());
             }
         } else if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
-            // TODO: Trigger slope exit skills
+            // Trigger slope exit skills
+            let skill_indices: Vec<usize> = self
+                .trigger_scheduler
+                .slope_exit_triggers
+                .iter()
+                .filter(|t| t.slope_index == slope_idx)
+                .flat_map(|t| t.skill_indices.iter().copied())
+                .collect();
+
+            for skill_index in skill_indices {
+                self.pull_trigger(skill_index, state);
+            }
+
             self.stop_slope_acceleration();
         } else if let Some(idx) = self.current_slope() {
             // On slope - check for downhill acceleration

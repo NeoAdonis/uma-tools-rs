@@ -1,6 +1,6 @@
 use crate::condition::parser::CompOp;
 use crate::course::Phase;
-use crate::course::geometry::{Corner, Slope, SlopeType};
+use crate::course::geometry::SlopeType;
 use crate::race::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -17,6 +17,9 @@ pub struct TriggerScheduler {
     pub distance_triggers: BinaryHeap<DistanceTrigger>,
     pub hp_triggers: BinaryHeap<HpTrigger>,
     pub phase_triggers: BinaryHeap<PhaseTransitionTrigger>,
+
+    // Window triggers - checked every frame while within bounds
+    pub window_triggers: Vec<WindowTrigger>,
 
     // Spatial triggers - tied to course geometry
     pub corner_entry_triggers: Vec<CornerTransitionTrigger>,
@@ -47,6 +50,7 @@ impl TriggerScheduler {
             distance_triggers: BinaryHeap::new(),
             hp_triggers: BinaryHeap::new(),
             phase_triggers: BinaryHeap::new(),
+            window_triggers: Vec::new(),
             corner_entry_triggers: Vec::new(),
             corner_exit_triggers: Vec::new(),
             slope_entry_triggers: Vec::new(),
@@ -220,13 +224,25 @@ impl PartialEq for PhaseTransitionTrigger {
 
 impl Eq for PhaseTransitionTrigger {}
 
+// ========== WINDOW TRIGGERS (Continuous Checking Within Range) ==========
+
+/// Window trigger: continuously checks skill within a value range
+/// Pattern: variable>=min & variable<=max
+/// More efficient than continuous triggers when we know the valid range
+#[derive(Clone, Debug)]
+pub struct WindowTrigger {
+    pub skill_index: usize,
+    pub variable: crate::race::skill_activation::WindowVariable,
+    pub min_threshold: f64,
+    pub max_threshold: f64,
+}
+
 // ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
 
 /// Triggers when entering/exiting a corner
 #[derive(Clone, Debug)]
 pub struct CornerTransitionTrigger {
     pub corner_index: usize,
-    pub corner: Corner, // Reference to actual corner geometry
     pub skill_indices: Vec<usize>,
 }
 
@@ -234,8 +250,6 @@ pub struct CornerTransitionTrigger {
 #[derive(Clone, Debug)]
 pub struct SlopeTransitionTrigger {
     pub slope_index: usize,
-    pub slope: Slope, // Reference to actual slope geometry
-    pub slope_type: SlopeType,
     pub skill_indices: Vec<usize>,
 }
 

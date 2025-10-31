@@ -239,19 +239,151 @@ fn index_trigger(
             });
         }
 
+        TriggerCondition::Window {
+            variable,
+            min_threshold,
+            max_threshold,
+        } => {
+            // Convert distance_rate percentage to meters if needed
+            let (min_value, max_value) = match variable {
+                crate::race::skill_activation::WindowVariable::DistanceRate => {
+                    // Convert percentage to meters
+                    let min_meters = min_threshold / 100.0 * course.distance as f64;
+                    let max_meters = max_threshold / 100.0 * course.distance as f64;
+                    (min_meters, max_meters)
+                }
+                _ => (*min_threshold, *max_threshold),
+            };
+
+            scheduler.window_triggers.push(WindowTrigger {
+                skill_index: logic_idx,
+                variable: *variable,
+                min_threshold: min_value,
+                max_threshold: max_value,
+            });
+        }
+
         TriggerCondition::Continuous => {
             if !scheduler.continuous_triggers.contains(&logic_idx) {
                 scheduler.continuous_triggers.push(logic_idx);
             }
         }
 
-        // Spatial triggers - TODO: Implement properly
-        TriggerCondition::CornerTransition { .. }
-        | TriggerCondition::SlopeTransition { .. }
-        | TriggerCondition::StraightTransition { .. } => {
-            // For now, treat as continuous
-            if !scheduler.continuous_triggers.contains(&logic_idx) {
-                scheduler.continuous_triggers.push(logic_idx);
+        // Corner triggers
+        TriggerCondition::CornerTransition {
+            corner_index,
+            is_entry,
+        } => {
+            // Determine which corners to register for
+            let corner_indices: Vec<usize> = match corner_index {
+                Some(idx) => vec![*idx],                     // Specific corner
+                None => (0..course.corners.len()).collect(), // Any corner (all of them)
+            };
+
+            for corner_idx in corner_indices {
+                let trigger_vec = if *is_entry {
+                    &mut scheduler.corner_entry_triggers
+                } else {
+                    &mut scheduler.corner_exit_triggers
+                };
+
+                // Find or create trigger for this corner
+                if let Some(existing) = trigger_vec
+                    .iter_mut()
+                    .find(|t| t.corner_index == corner_idx)
+                {
+                    // Add skill to existing trigger
+                    existing.skill_indices.push(logic_idx);
+                } else {
+                    // Create new trigger for this corner
+                    trigger_vec.push(CornerTransitionTrigger {
+                        corner_index: corner_idx,
+                        skill_indices: vec![logic_idx],
+                    });
+                }
+            }
+        }
+
+        // Slope triggers
+        TriggerCondition::SlopeTransition {
+            slope_type,
+            is_entry,
+        } => {
+            // Determine which slopes to register for
+            let slope_indices: Vec<usize> = match slope_type {
+                crate::course::geometry::SlopeType::Uphill => course
+                    .slopes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.slope_type() == crate::course::geometry::SlopeType::Uphill)
+                    .map(|(i, _)| i)
+                    .collect(),
+                crate::course::geometry::SlopeType::Downhill => course
+                    .slopes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.slope_type() == crate::course::geometry::SlopeType::Downhill)
+                    .map(|(i, _)| i)
+                    .collect(),
+                crate::course::geometry::SlopeType::Flat => {
+                    vec![] // Flat is not a trigger
+                }
+            };
+
+            for slope_idx in slope_indices {
+                let trigger_vec = if *is_entry {
+                    &mut scheduler.slope_entry_triggers
+                } else {
+                    &mut scheduler.slope_exit_triggers
+                };
+
+                // Find or create trigger for this slope
+                if let Some(existing) = trigger_vec.iter_mut().find(|t| t.slope_index == slope_idx)
+                {
+                    existing.skill_indices.push(logic_idx);
+                } else {
+                    trigger_vec.push(SlopeTransitionTrigger {
+                        slope_index: slope_idx,
+                        skill_indices: vec![logic_idx],
+                    });
+                }
+            }
+        }
+
+        // Straight triggers
+        TriggerCondition::StraightTransition {
+            is_final,
+            is_entry: _, // is_entry is implicit - we'll check on entry in runtime
+        } => {
+            // For straights, we need to create triggers for each straight
+            // For is_final==true, register for the last straight only
+            // For is_final==false, register for all straights
+
+            let straight_indices: Vec<usize> = if *is_final {
+                // Find the last straight (highest index)
+                if course.straights.is_empty() {
+                    vec![]
+                } else {
+                    vec![course.straights.len() - 1]
+                }
+            } else {
+                (0..course.straights.len()).collect()
+            };
+
+            for straight_idx in straight_indices {
+                if let Some(existing) = scheduler
+                    .straight_triggers
+                    .iter_mut()
+                    .find(|t| t.straight_index == straight_idx && t.is_final == *is_final)
+                {
+                    existing.skill_indices.push(logic_idx);
+                } else {
+                    scheduler.straight_triggers.push(StraightTrigger {
+                        straight_index: straight_idx,
+                        is_final: *is_final,
+                        skill_indices: vec![logic_idx],
+                    });
+                }
             }
         }
     }

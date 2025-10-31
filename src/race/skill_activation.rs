@@ -68,11 +68,24 @@ pub struct ActivationState {
 
     /// For one-time triggers: has the trigger fired (even if guards failed)?
     /// Prevents re-checking skills that failed their guards
-    pub trigger_attempted: bool,
+    /// NOTE: This only applies to onetime triggers (random gates, spatial events)
+    /// Monotonic triggers can be retried until activated
+    pub onetime_trigger_attempted: bool,
 
     /// For continuous triggers: last frame this was checked
     /// Prevents duplicate checks in same frame
     pub last_checked_frame: Option<usize>,
+}
+
+/// Monotonic variables that can have window conditions
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowVariable {
+    /// Time elapsed since race start (seconds)
+    AccumulateTime,
+    /// Distance covered as percentage (0-100)
+    DistanceRate,
+    /// HP percentage (0-100)
+    HpPercent,
 }
 
 /// A trigger condition that determines WHEN to check a skill
@@ -103,6 +116,16 @@ pub enum TriggerCondition {
 
     /// HP percentage (0-100)
     HpPercent { threshold: f64, operator: CompOp },
+
+    // ========== WINDOW TRIGGERS ==========
+    /// Window trigger: skill can activate within [min, max] range
+    /// Checked continuously while within window
+    /// Pattern: variable>=min & variable<=max
+    Window {
+        variable: WindowVariable,
+        min_threshold: f64,
+        max_threshold: f64,
+    },
 
     // ========== PHASE TRIGGERS ==========
     /// Phase transition
@@ -200,30 +223,31 @@ impl SkillActivationLogic {
     }
 
     /// Should this skill be checked at all?
-    /// Returns false if already activated or trigger already attempted
+    /// Returns false if already activated or one-time trigger already attempted
     pub fn should_check(&self) -> bool {
         if self.state.has_activated {
             return false; // Already activated
         }
 
         // For one-time triggers, check if we've already attempted
+        // Monotonic triggers can be retried until activation
         let has_onetime = self.triggers.iter().any(|t| t.is_onetime());
-        if has_onetime && self.state.trigger_attempted {
+        if has_onetime && self.state.onetime_trigger_attempted {
             return false; // One-time trigger already fired
         }
 
         true
     }
 
-    /// Mark that we've attempted this trigger (for onetime triggers)
+    /// Mark that we've attempted this trigger (for one-time triggers only)
     pub fn mark_attempted(&mut self) {
-        self.state.trigger_attempted = true;
+        self.state.onetime_trigger_attempted = true;
     }
 
     /// Mark that skill has successfully activated
     pub fn mark_activated(&mut self) {
         self.state.has_activated = true;
-        self.state.trigger_attempted = true;
+        self.state.onetime_trigger_attempted = true;
     }
 }
 
@@ -266,6 +290,63 @@ pub fn split_condition(
         .collect()
 }
 
+/// Try to detect a window pattern: variable>=min & variable<=max
+/// Returns Some((window_trigger, remaining_guard)) if detected, None otherwise
+fn try_detect_window(
+    left: &CompList,
+    right: &CompList,
+) -> Option<(TriggerCondition, Option<Condition>)> {
+    use crate::condition::variables::{DistanceVar, PhaseVar, StatusVar};
+
+    // We're looking for single comparisons on both sides
+    if let (CompList::Single(left_comp), CompList::Single(right_comp)) = (left, right) {
+        // Check if both comparisons use the same variable
+        let left_var = match &left_comp.var {
+            VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
+            VarType::Distance(DistanceVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
+            _ => None,
+        };
+
+        let right_var = match &right_comp.var {
+            VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
+            VarType::Distance(DistanceVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
+            _ => None,
+        };
+
+        // Check if same variable with >= and <= operators
+        if let (Some(var), Some(right_var_check)) = (left_var, right_var)
+            && var == right_var_check
+        {
+            // Check for pattern: left>=X & right<=Y
+            if left_comp.op == CompOp::GreaterEqual && right_comp.op == CompOp::LessEqual {
+                return Some((
+                    TriggerCondition::Window {
+                        variable: var,
+                        min_threshold: left_comp.value as f64,
+                        max_threshold: right_comp.value as f64,
+                    },
+                    None, // No remaining guards
+                ));
+            }
+            // Check for pattern: left<=Y & right>=X (reversed order)
+            if left_comp.op == CompOp::LessEqual && right_comp.op == CompOp::GreaterEqual {
+                return Some((
+                    TriggerCondition::Window {
+                        variable: var,
+                        min_threshold: right_comp.value as f64,
+                        max_threshold: left_comp.value as f64,
+                    },
+                    None, // No remaining guards
+                ));
+            }
+        }
+    }
+
+    None
+}
+
 /// Recursively split a CompList, handling OR branches
 fn split_comp_list(
     comp_list: &CompList,
@@ -280,6 +361,17 @@ fn split_comp_list(
 
         CompList::Binary { left, op, right } => match op {
             BinOp::And => {
+                // Try to detect window pattern first (before splitting further)
+                // Note: try_detect_window only matches direct AND of two comparisons
+                // If there are additional conditions, they'll be handled below
+                if let Some((window_trigger, _)) = try_detect_window(left, right) {
+                    // Window detected! Return it as a single trigger with no guards
+                    // (Additional guards would require more complex pattern like: (A>=X & A<=Y) & B
+                    // which isn't matched by our simple pattern detector)
+                    return vec![(vec![window_trigger], None)];
+                }
+
+                // Not a simple window, proceed with normal AND processing
                 // AND: Combine triggers and guards from both sides
                 let left_splits = split_comp_list(left, random_activation);
                 let right_splits = split_comp_list(right, random_activation);
@@ -594,39 +686,72 @@ fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
 fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
     match &comp.var {
         VarType::Spatial(SpatialVar::Corner) => {
-            // corner!=0 means "any corner"
-            // corner==X means "specific corner X"
-            let corner_index = if comp.value == 0 {
-                None // Any corner
-            } else {
-                Some((comp.value - 1) as usize) // Convert 1-indexed to 0-indexed
-            };
+            match (comp.op, comp.value) {
+                // corner==N [N>0] → Entry to specific corner N
+                (CompOp::Equal, n) if n > 0 => {
+                    Some(TriggerCondition::CornerTransition {
+                        corner_index: Some((n - 1) as usize), // Convert 1-indexed to 0-indexed
+                        is_entry: true,
+                    })
+                }
 
-            // For now, treat as entry trigger
-            // TODO: Handle corner exit based on operator
-            Some(TriggerCondition::CornerTransition {
-                corner_index,
-                is_entry: true,
-            })
+                // corner!=0 → Entry to any corner
+                (CompOp::NotEqual, 0) => {
+                    Some(TriggerCondition::CornerTransition {
+                        corner_index: None, // Any corner
+                        is_entry: true,
+                    })
+                }
+
+                // corner==0 (not a corner) or corner!=N [N>0] (anywhere except corner N) → Not a trigger
+                _ => None,
+            }
         }
 
         VarType::Spatial(SpatialVar::Slope) => {
-            let slope_type = match comp.value {
-                1 => SlopeType::Uphill,
-                2 => SlopeType::Downhill,
-                _ => SlopeType::Flat,
-            };
-            Some(TriggerCondition::SlopeTransition {
-                slope_type,
-                is_entry: true,
-            })
+            match (comp.op, comp.value) {
+                // slope==1 → Entry to uphill
+                (CompOp::Equal, 1) => Some(TriggerCondition::SlopeTransition {
+                    slope_type: SlopeType::Uphill,
+                    is_entry: true,
+                }),
+
+                // slope==2 → Entry to downhill
+                (CompOp::Equal, 2) => Some(TriggerCondition::SlopeTransition {
+                    slope_type: SlopeType::Downhill,
+                    is_entry: true,
+                }),
+
+                // slope==0 (flat) or slope!=X (anywhere but uphill/downhill) → Not a trigger
+                _ => None,
+            }
         }
 
         VarType::Spatial(SpatialVar::IsLastStraight) => {
-            Some(TriggerCondition::StraightTransition {
-                is_final: true,
-                is_entry: true,
-            })
+            // is_last_straight==1 → Entry to final straight
+            if comp.op == CompOp::Equal && comp.value == 1 {
+                Some(TriggerCondition::StraightTransition {
+                    is_final: true,
+                    is_entry: true,
+                })
+            } else {
+                // Other operators treated as continuous guards
+                None
+            }
+        }
+
+        VarType::Spatial(SpatialVar::StraightFrontType) => {
+            // straight_front_type==1 → Entry to audience-side straight
+            // straight_front_type==2 → Entry to opposite-side straight
+            if comp.op == CompOp::Equal && (comp.value == 1 || comp.value == 2) {
+                Some(TriggerCondition::StraightTransition {
+                    is_final: false, // Not specifically the final straight
+                    is_entry: true,
+                })
+            } else {
+                // Not a trigger
+                None
+            }
         }
 
         _ => {
