@@ -155,8 +155,15 @@ fn main() {
     let mut race_state = RaceState::new(course, params);
     race_state.add_runner(uma, motivation, skills);
 
+    let runner = &race_state.runners[0];
+
     println!("\nRace initialized successfully!");
-    println!("Initial HP: {:.2}", race_state.runners[0].hp);
+    println!("Initial HP: {:.2}", runner.hp);
+    println!(
+        "Start delay: {:.3} seconds ({:?})",
+        runner.start_delay,
+        runner.start_type()
+    );
 
     // Simulate
     race_state.run();

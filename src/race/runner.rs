@@ -126,7 +126,6 @@ pub struct Runner {
     pub position: f64,     // in m
     pub hp: f64,
     pub max_hp: f64,
-    pub hp_guts_modifier: f64,
     pub min_speed: f64,
     pub base_target_speed: f64,
     pub available_skills: Vec<Skill>,
@@ -343,7 +342,6 @@ impl<'a> RunnerBuilder<'a> {
             phase: Phase::Early,
             hp: max_hp,
             max_hp,
-            hp_guts_modifier: 1.0 + 200.0 / (600.0 * self.adjusted.guts as f64).sqrt(),
             position: 0.0,
             rush_section,
             is_rushed: false,
