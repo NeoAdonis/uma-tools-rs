@@ -520,7 +520,7 @@ mod tests {
                 // Right side should be corner < 3
                 match *right {
                     CompList::Single(ref comp) => {
-                        assert!(matches!(comp.var, VarType::Course(_)));
+                        assert!(matches!(comp.var, VarType::Spatial(_)));
                         assert_eq!(comp.value, 3);
                     }
                     _ => panic!("Expected Single on right"),
