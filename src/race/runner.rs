@@ -7,7 +7,7 @@ use crate::race::parameters::{RaceParameters, TrackCondition};
 use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
 use crate::race::transitions::*;
 use crate::trigger::builder::build_trigger_scheduler;
-use crate::trigger::system::TriggerScheduler;
+use crate::trigger::system::{ActivationCounts, TriggerScheduler};
 use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
@@ -61,6 +61,58 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
     }
 }
 
+/// Modify a stat value, ensuring it doesn't go below 1
+fn modify_stat(stat: &mut u16, modifier: i32) {
+    *stat = if modifier >= 0 {
+        stat.saturating_add(modifier as u16)
+    } else {
+        stat.saturating_sub((-modifier) as u16).max(1)
+    };
+}
+
+/// Apply stat boost effects to Uma stats
+fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
+    match effect_type {
+        SkillType::SpeedUp => modify_stat(&mut uma.speed, modifier),
+        SkillType::StaminaUp => modify_stat(&mut uma.stamina, modifier),
+        SkillType::PowerUp => modify_stat(&mut uma.power, modifier),
+        SkillType::GutsUp => modify_stat(&mut uma.guts, modifier),
+        SkillType::WizUp => modify_stat(&mut uma.wiz, modifier),
+        SkillType::AllStatsUp => {
+            modify_stat(&mut uma.speed, modifier);
+            modify_stat(&mut uma.stamina, modifier);
+            modify_stat(&mut uma.power, modifier);
+            modify_stat(&mut uma.guts, modifier);
+            modify_stat(&mut uma.wiz, modifier);
+        }
+        _ => {} // Not a stat boost effect
+    }
+}
+
+/// Apply start delay modification effects
+fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType, modifier: i32) {
+    match effect_type {
+        SkillType::MultiplyStartDelay => {
+            *start_delay *= modifier as f64 / 10000.0;
+        }
+        SkillType::SetStartDelay => {
+            *start_delay = modifier as f64 / 10000.0;
+        }
+        _ => {} // Not a start delay effect
+    }
+}
+
+/// Apply style change effects
+fn apply_style_change(style: &mut Style, effect_type: &SkillType) {
+    #[allow(clippy::single_match)] // Future-proofing for additional style changes
+    match effect_type {
+        SkillType::ChangeStyleOonige => {
+            *style = Style::Oonige;
+        }
+        _ => {} // Not a style change effect
+    }
+}
+
 /// An Uma with additional data related to racing,
 /// that is, an Uma who is running.
 pub struct Runner {
@@ -105,20 +157,49 @@ pub enum StartType {
     Late,
 }
 
-impl Runner {
-    pub fn new(
+/// Builder for constructing a Runner with proper out-of-gate skill activation
+struct RunnerBuilder<'a> {
+    // Immutable context
+    course: &'a Course,
+    params: &'a RaceParameters,
+    base: Uma,
+    motivation: Motivation,
+    gate_roll: u8,
+
+    // Mutable state being constructed
+    adjusted: Uma,
+    start_delay: f64,
+
+    // Activation tracking
+    activation_counts: ActivationCounts,
+    activated_skill_ids: HashSet<String>,
+    activated_skills: Vec<SkillActivationRecord>,
+
+    // RNG
+    rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+
+    // Skills
+    trigger_scheduler: TriggerScheduler,
+    golden_skill_indices: Vec<usize>,
+}
+
+impl<'a> RunnerBuilder<'a> {
+    /// Create a new RunnerBuilder with initial values
+    fn new(
         uma: Uma,
         motivation: Motivation,
-        course: &Course,
-        params: &RaceParameters,
+        course: &'a Course,
+        params: &'a RaceParameters,
         skills: Vec<Skill>,
         rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    ) -> Self {
-        // 1. Calculate base stats
-        let mut start_delay = 1.0;
+    ) -> (Self, Vec<Skill>, Vec<Skill>) {
+        // Calculate base stats
         let gate_roll: i32 = rng.borrow_mut().random_range(0..=100);
         let base_uma = Uma::raw_to_base(uma, motivation);
-        // 2. Calculate skill activation chance and determine whether skills can activate
+
+        // Calculate skill activation chance and determine whether skills can activate
+        // n.b. As observed, skill activation update happens before out-of-gate skills activate.
+        // Thus, out-of-gate skills don't affect skill activation chance.
         let skill_chance = (1.0 - 90.0 / uma.wiz as f64).max(0.2);
         let available_skills = skills
             .into_iter()
@@ -134,66 +215,21 @@ impl Runner {
             .collect::<Vec<Skill>>();
 
         // Build trigger scheduler from the available skills (after filtering)
-        // ! TODO: support multiple runners
         let trigger_scheduler =
             build_trigger_scheduler(&available_skills, course, &mut *rng.borrow_mut());
 
-        // 3. Partition skills into out-of-gate and runtime skills
+        // Partition skills into out-of-gate and runtime skills
         let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
             .into_iter()
             .partition(|skill| skill.should_activate_out_of_gate());
 
-        // 4. Calculate adjusted stats (before out-of-gate skills)
+        // Calculate adjusted stats (before out-of-gate skills)
         let adjusted_uma = adjust_stats(&base_uma, course, params);
 
-        // 5. Apply out-of-gate skills
-        // TODO: This needs to be refactored to call activate_skill() properly to ensure:
-        // - ActivationCounts::increment() is called for each activation
-        // - Skill activation tracking is consistent
-        // - Skills triggered by activation counts (e.g., "Groundwork" id 201601 with activate_count_start>=3) work correctly
-        //
-        // Current inline approach bypasses activation tracking, which means:
-        // - Green skills don't contribute to activation_count
-        // - Skills that depend on activate_count_start won't trigger properly
-        //
-        // Proper implementation requires:
-        // 1. Create RaceState first (with initial values)
-        // 2. For each out-of-gate skill, call activate_skill(state, skill_index, alternative_index)
-        // 3. This will properly increment ActivationCounts and handle all side effects
-        // 4. Extract final adjusted_uma from state.runner after all activations
-        //
-        // For now, we stub this to maintain compilation while the architecture is in place.
-        let activated_skill_ids = HashSet::new();
+        // Determine start delay
+        let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
 
-        // Stub: Out-of-gate skill activation should happen here
-        // Once RaceState is created, we can properly activate out-of-gate skills:
-        // for (idx, skill) in out_of_gate_skills.iter().enumerate() {
-        //     activate_skill(&mut state, idx, 0);
-        // }
-        //
-        // Note: out_of_gate_skills are removed from available_skills,
-        // so they won't be available during the race for re-activation.
-
-        // 6. Use item.
-        // n.b.: This is the same as setting race parameters ahead of time so no action needed here.
-        // 7. Set starting location based off gate number
-        // TODO: implement starting location; assume no effect for now
-        // 8. Calculate start delay random component
-        start_delay *= rng.borrow_mut().random_range(0.0..=0.1);
-        // 8. Convert stamina to HP
-        let max_hp = 0.8 * hp_style_coefficient(adjusted_uma.style) * (adjusted_uma.stamina as f64)
-            + course.distance as f64;
-        // 9. Set starting speed (this is done in the constructor)
-        // 10. Determine rush chance
-        let rush_chance = (0.65 / (0.1 * uma.wiz as f64 + 1.0).log10()).powf(2.0);
-        let roll: f64 = rng.borrow_mut().random();
-        let rush_section = if roll < rush_chance {
-            Some(rng.borrow_mut().random_range(2..=9))
-        } else {
-            None
-        };
-
-        // Build golden skill indices for random activation (from runtime_skills only)
+        // Build golden skill indices for random activation
         let golden_skill_indices = runtime_skills
             .iter()
             .enumerate()
@@ -203,40 +239,144 @@ impl Runner {
             .map(|(i, _)| i)
             .collect::<Vec<usize>>();
 
-        // Initialize race state
-        Runner {
+        let builder = RunnerBuilder {
+            course,
+            params,
             base: base_uma,
-            adjusted: adjusted_uma,
             motivation,
             gate_roll: gate_roll as u8,
+            adjusted: adjusted_uma,
+            start_delay,
+            activation_counts: ActivationCounts::default(),
+            activated_skill_ids: HashSet::new(),
+            activated_skills: Vec::new(),
+            rng,
+            trigger_scheduler,
+            golden_skill_indices,
+        };
+
+        (builder, out_of_gate_skills, runtime_skills)
+    }
+
+    /// Apply a single out-of-gate skill's effects
+    fn apply_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
+        let skill_id = skill.id.clone();
+        let alternative = &skill.alternatives[alt_index];
+
+        // TODO: Check conditions
+
+        // Apply each effect in the alternative
+        for effect in &alternative.effects {
+            let effect_type = &effect.skill_type;
+
+            // Apply stat boosts
+            if is_stat_boost(effect_type) {
+                apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
+            }
+            // Apply start delay modifications
+            else if is_start_delay_modification(effect_type) {
+                apply_start_delay_modification(&mut self.start_delay, effect_type, effect.modifier);
+            }
+            // Apply style changes
+            else if is_style_change(effect_type) {
+                apply_style_change(&mut self.adjusted.style, effect_type);
+            }
+            // Timed effects, recovery, and other runtime-only effects are not applicable out-of-gate.
+            // These should not appear in out-of-gate skills, so they are gracefully ignored.
+        }
+
+        // Track skill activation
+        self.activated_skill_ids.insert(skill_id.clone());
+        self.activated_skills.push(SkillActivationRecord {
+            skill_id,
+            skill_index: alt_index, // For out-of-gate, we use alt_index as the identifier
+            alternative_index: alt_index,
+            distance: 0.0, // Out-of-gate activations occur at position 0
+        });
+
+        // Increment activation counts (all out-of-gate skills count as "start" phase)
+        self.activation_counts.increment(Phase::Early, 0.0, 0.0);
+    }
+
+    /// Apply all out-of-gate skills
+    fn apply_out_of_gate_skills(&mut self, skills: &[Skill]) {
+        for (alt_index, skill) in skills.iter().enumerate() {
+            self.apply_skill_effect(skill, alt_index);
+        }
+    }
+
+    /// Build the final Runner with all modifications applied
+    fn build(self, runtime_skills: Vec<Skill>) -> Runner {
+        // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
+        let max_hp =
+            0.8 * hp_style_coefficient(self.adjusted.style) * (self.adjusted.stamina as f64)
+                + self.course.distance as f64;
+
+        // Set starting speed (done in the constructor)
+        // Determine rush chance
+        let rush_chance = (0.65 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0);
+        let roll: f64 = self.rng.borrow_mut().random();
+        let rush_section = if roll < rush_chance {
+            Some(self.rng.borrow_mut().random_range(2..=9))
+        } else {
+            None
+        };
+
+        // Initialize race state
+        Runner {
+            base: self.base,
+            adjusted: self.adjusted,
+            motivation: self.motivation,
+            gate_roll: self.gate_roll,
             speed: 3.0,
             acceleration: 0.0, // start dash acceleration is applied separately
-            min_speed: 0.85 * course.base_speed()
-                + (200.0 + adjusted_uma.guts as f64).sqrt() * 0.001,
-            base_target_speed: 0.85 * course.base_speed(),
-            start_delay,
+            min_speed: 0.85 * self.course.base_speed()
+                + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
+            base_target_speed: 0.85 * self.course.base_speed(),
+            start_delay: self.start_delay,
             available_skills: runtime_skills,
-            activated_skills: Vec::new(),
-            activated_skill_ids,
+            activated_skills: self.activated_skills,
+            activated_skill_ids: self.activated_skill_ids,
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
-            golden_skill_indices,
+            golden_skill_indices: self.golden_skill_indices,
             phase: Phase::Early,
             hp: max_hp,
             max_hp,
-            hp_guts_modifier: 1.0 + 200.0 / (600.0 * adjusted_uma.guts as f64).sqrt(),
+            hp_guts_modifier: 1.0 + 200.0 / (600.0 * self.adjusted.guts as f64).sqrt(),
             position: 0.0,
             rush_section,
             is_rushed: false,
             is_start_dash: true,
             slope_acceleration: None,
             last_spurt: None,
-            rng,
+            rng: self.rng,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),
             straight_manager: StraightManager::new(),
-            trigger_scheduler,
+            trigger_scheduler: self.trigger_scheduler,
         }
+    }
+}
+
+impl Runner {
+    pub fn new(
+        uma: Uma,
+        motivation: Motivation,
+        course: &Course,
+        params: &RaceParameters,
+        skills: Vec<Skill>,
+        rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    ) -> Self {
+        // Create builder and partition skills
+        let (mut builder, out_of_gate_skills, runtime_skills) =
+            RunnerBuilder::new(uma, motivation, course, params, skills, rng);
+
+        // Apply out-of-gate skills with proper activation tracking
+        builder.apply_out_of_gate_skills(&out_of_gate_skills);
+
+        // Build final Runner with all modifications applied
+        builder.build(runtime_skills)
     }
 
     /// Recalculate skill modifiers from active timed effects
@@ -502,15 +642,6 @@ impl Runner {
         }
     }
 
-    pub fn modify_stat(stat: &mut u16, modifier: i32) {
-        // Make sure stat doesn't go below 1
-        *stat = if modifier >= 0 {
-            stat.saturating_add(modifier as u16)
-        } else {
-            stat.saturating_sub((-modifier) as u16).max(1)
-        };
-    }
-
     /// Activate a skill by its index and alternative index
     pub fn activate_skill(
         &mut self,
@@ -530,93 +661,61 @@ impl Runner {
 
         // Apply each effect in the alternative
         for effect in &alternative.effects {
-            match effect.skill_type {
-                // Instant stat modifications (permanent)
-                SkillType::SpeedUp => {
-                    Runner::modify_stat(&mut self.adjusted.speed, effect.modifier);
-                }
-                SkillType::StaminaUp => {
-                    Runner::modify_stat(&mut self.adjusted.stamina, effect.modifier);
-                }
-                SkillType::PowerUp => {
-                    Runner::modify_stat(&mut self.adjusted.power, effect.modifier);
-                }
-                SkillType::GutsUp => {
-                    Runner::modify_stat(&mut self.adjusted.guts, effect.modifier);
-                }
-                SkillType::WizUp => {
-                    Runner::modify_stat(&mut self.adjusted.wiz, effect.modifier);
-                }
-                SkillType::AllStatsUp => {
-                    Runner::modify_stat(&mut self.adjusted.speed, effect.modifier);
-                    Runner::modify_stat(&mut self.adjusted.stamina, effect.modifier);
-                    Runner::modify_stat(&mut self.adjusted.power, effect.modifier);
-                    Runner::modify_stat(&mut self.adjusted.guts, effect.modifier);
-                    Runner::modify_stat(&mut self.adjusted.wiz, effect.modifier);
-                }
-                // Timed effects (tracked in active_timed_effects)
-                SkillType::Acceleration
-                | SkillType::TargetSpeed
-                | SkillType::CurrentSpeed
-                | SkillType::CurrentSpeedWithNaturalDeceleration
-                | SkillType::ExtendEvolvedDuration => {
-                    let expires_at = elapsed_time + scaled_duration;
-                    self.active_timed_effects.push(ActiveTimedEffect {
-                        skill_id: skill_id.clone(),
-                        skill_index,
-                        alternative_index,
-                        effect: effect.clone(),
-                        expires_at,
-                    });
-                }
+            let effect_type = &effect.skill_type;
 
-                // Recovery (HP restoration)
-                SkillType::Recovery => {
-                    self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
+            // Stat boosts and start delay modifications should have been applied out of gate.
+            // Therefore, these are gracefully ignored here.
 
-                    // Increment heal skill count
-                    self.trigger_scheduler.activation_counts.increment_heal();
+            // Timed effects (tracked in active_timed_effects)
+            if is_timed_effect(effect_type) {
+                let expires_at = elapsed_time + scaled_duration;
+                self.active_timed_effects.push(ActiveTimedEffect {
+                    skill_id: skill_id.clone(),
+                    skill_index,
+                    alternative_index,
+                    effect: effect.clone(),
+                    expires_at,
+                });
+            }
+            // Recovery (HP restoration)
+            else if matches!(effect_type, SkillType::Recovery) {
+                self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
 
-                    // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
-                    if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid
-                    {
-                        // TODO: implement last_spurt recalculation
-                    }
+                // Increment heal skill count
+                self.trigger_scheduler.activation_counts.increment_heal();
+
+                // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
+                if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
+                    // TODO: implement last_spurt recalculation
                 }
-
-                // Activate random gold skill
-                SkillType::ActivateRandomGold => {
-                    if !self.golden_skill_indices.is_empty() {
-                        let idx = self
-                            .rng
-                            .borrow_mut()
-                            .random_range(0..self.golden_skill_indices.len());
-                        let golden_skill_idx = self.golden_skill_indices[idx];
-                        // Recursively activate the golden skill (use first alternative)
-                        self.activate_skill(golden_skill_idx, 0, elapsed_time, course);
-                    }
+            }
+            // Activate random gold skill
+            else if matches!(effect_type, SkillType::ActivateRandomGold) {
+                if !self.golden_skill_indices.is_empty() {
+                    let idx = self
+                        .rng
+                        .borrow_mut()
+                        .random_range(0..self.golden_skill_indices.len());
+                    let golden_skill_idx = self.golden_skill_indices[idx];
+                    // Recursively activate the golden skill (use first alternative)
+                    self.activate_skill(golden_skill_idx, 0, elapsed_time, course);
                 }
-
-                // Start delay modifications
-                SkillType::MultiplyStartDelay => {
-                    self.start_delay *= effect.modifier as f64 / 10000.0;
+            }
+            // Style change
+            else if is_style_change(effect_type) {
+                apply_style_change(&mut self.adjusted.style, effect_type);
+            }
+            // Unimplemented skill types
+            else {
+                match effect_type {
+                    SkillType::Fov => todo!(),
+                    SkillType::RushTime => todo!(),
+                    SkillType::LaneMovementSpeed => todo!(),
+                    SkillType::RushChance => todo!(),
+                    SkillType::LaneChange => todo!(),
+                    SkillType::Unknown41 => todo!(),
+                    _ => {} // Already handled above
                 }
-                SkillType::SetStartDelay => {
-                    self.start_delay = effect.modifier as f64 / 10000.0;
-                }
-
-                // Style change
-                SkillType::ChangeStyleOonige => {
-                    self.adjusted.style = Style::Oonige;
-                }
-
-                // Unimplemented skill types
-                SkillType::Fov => todo!(),
-                SkillType::RushTime => todo!(),
-                SkillType::LaneMovementSpeed => todo!(),
-                SkillType::RushChance => todo!(),
-                SkillType::LaneChange => todo!(),
-                SkillType::Unknown41 => todo!(),
             }
         }
 

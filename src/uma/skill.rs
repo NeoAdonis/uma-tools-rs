@@ -204,3 +204,41 @@ impl Skill {
         Ok(skills_map)
     }
 }
+
+/// Check if an effect type is a stat boost (applied permanently)
+pub fn is_stat_boost(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::SpeedUp
+            | SkillType::StaminaUp
+            | SkillType::PowerUp
+            | SkillType::GutsUp
+            | SkillType::WizUp
+            | SkillType::AllStatsUp
+    )
+}
+
+/// Check if an effect type is a start delay modification
+pub fn is_start_delay_modification(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::MultiplyStartDelay | SkillType::SetStartDelay
+    )
+}
+
+/// Check if an effect type is a style change
+pub fn is_style_change(effect_type: &SkillType) -> bool {
+    matches!(effect_type, SkillType::ChangeStyleOonige)
+}
+
+/// Check if an effect type is a timed effect
+pub fn is_timed_effect(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::Acceleration
+            | SkillType::TargetSpeed
+            | SkillType::CurrentSpeed
+            | SkillType::CurrentSpeedWithNaturalDeceleration
+            | SkillType::ExtendEvolvedDuration
+    )
+}
