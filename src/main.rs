@@ -109,7 +109,6 @@ fn main() {
         season: rng.random::<Season>(),
         time: rng.random::<Time>(),
         grade: rng.random::<Grade>(),
-        popularity: 0,
         gates: 18,
         rng_seed: rng.random(),
     };

@@ -52,7 +52,6 @@ pub struct RaceParameters {
     pub season: Season,
     pub time: Time,
     pub grade: Grade,
-    pub popularity: i32,
     pub gates: u8,
     pub rng_seed: u64,
 }

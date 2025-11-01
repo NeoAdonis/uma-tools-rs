@@ -722,7 +722,6 @@ mod tests {
             season: Season::Spring,
             grade: Grade::G1,
             time: Time::Noon,
-            popularity: 1,
             gates: 18,
             rng_seed: 12345,
         };
@@ -752,7 +751,11 @@ mod tests {
         };
 
         // Should return true because skill 202051 is activated
-        assert!(evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
+        assert!(evaluate_comparison(
+            &comp,
+            &solver.state,
+            &solver.runners[0]
+        ));
     }
 
     #[test]
@@ -789,7 +792,11 @@ mod tests {
         };
 
         // Should return false because skill 202051 is not activated (only 203781 is)
-        assert!(!evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
+        assert!(!evaluate_comparison(
+            &comp,
+            &solver.state,
+            &solver.runners[0]
+        ));
     }
 
     #[test]
@@ -850,7 +857,6 @@ mod tests {
             season: Season::Spring,
             grade: Grade::G1,
             time: Time::Noon,
-            popularity: 1,
             gates: 18,
             rng_seed: 12345,
         };
@@ -875,6 +881,10 @@ mod tests {
         };
 
         // Should return true because skill 203061 is in available_skills
-        assert!(evaluate_comparison(&comp, &solver.state, &solver.runners[0]));
+        assert!(evaluate_comparison(
+            &comp,
+            &solver.state,
+            &solver.runners[0]
+        ));
     }
 }

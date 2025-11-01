@@ -98,35 +98,6 @@ impl fmt::Display for Comp {
     }
 }
 
-impl CompList {
-    /// Visit all comparisons in the tree, calling the provided function for each
-    ///
-    /// This is useful for extracting all variables from a condition without
-    /// evaluating the boolean logic.
-    ///
-    /// # Arguments
-    /// * `visitor` - Function to call for each Comp in the tree
-    ///
-    /// # Example
-    /// ```ignore
-    /// condition.comp_list.visit_all_comps(|comp| {
-    ///     println!("Variable: {}, Operator: {}, Value: {}", comp.var, comp.op, comp.value);
-    /// });
-    /// ```
-    pub fn visit_all_comps<F>(&self, visitor: &mut F)
-    where
-        F: FnMut(&Comp),
-    {
-        match self {
-            CompList::Single(comp) => visitor(comp),
-            CompList::Binary { left, right, .. } => {
-                left.visit_all_comps(visitor);
-                right.visit_all_comps(visitor);
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Lexer {
     input: Vec<char>,
@@ -311,11 +282,9 @@ pub struct Parser {
 #[derive(Debug)]
 pub enum ParseError {
     UnexpectedToken(String, usize),
-    UnexpectedEnd,
     ExpectedCompOp,
     ExpectedVariable,
     ExpectedValue,
-    ExpectedBinOp,
 }
 
 impl fmt::Display for ParseError {
@@ -324,11 +293,9 @@ impl fmt::Display for ParseError {
             ParseError::UnexpectedToken(msg, pos) => {
                 write!(f, "Unexpected token '{}' at position {}", msg, pos)
             }
-            ParseError::UnexpectedEnd => write!(f, "Unexpected end of tokens"),
             ParseError::ExpectedCompOp => write!(f, "Expected comparison operator"),
             ParseError::ExpectedVariable => write!(f, "Expected variable"),
             ParseError::ExpectedValue => write!(f, "Expected value"),
-            ParseError::ExpectedBinOp => write!(f, "Expected binary operator"),
         }
     }
 }
