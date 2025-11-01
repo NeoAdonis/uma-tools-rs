@@ -1,10 +1,10 @@
 pub mod skill;
 
-use crate::course::{Track, ThresholdStat};
-use crate::race::parameters::{TrackCondition};
+use crate::course::{ThresholdStat, Track};
+use crate::race::parameters::TrackCondition;
 use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
     // a.k.a. Strategy

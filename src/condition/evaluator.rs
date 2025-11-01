@@ -207,7 +207,9 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Spatial(location_var) => get_location_value(location_var, state, runner),
         VarType::Activation(act_var) => get_activation_value(act_var, runner),
         VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
+        VarType::RunningStyle(style_var) => {
+            get_running_style_value(style_var, state, runner.adjusted.style)
+        }
         VarType::Status(status_var) => get_status_value(status_var, state, runner),
         VarType::Trigger(trigger_var) => get_trigger_value(trigger_var, state),
         VarType::Blocking(blocking_var) => get_blocking_value(blocking_var, state),
@@ -228,7 +230,9 @@ fn get_variable_value_out_of_gate(
         VarType::BaseStat(stat_var) => get_base_stat(&builder.base, stat_var),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
         VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
+        VarType::RunningStyle(style_var) => {
+            get_running_style_value(style_var, state, builder.base.style)
+        }
         VarType::Status(status_var) => get_basic_status_value(status_var, state, builder),
         VarType::Always => 1, // Always returns 1 (true)
         _ => 0,               // Not applicable in out-of-gate context
@@ -544,15 +548,26 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
 }
 
 /// Get running style values
-fn get_running_style_value(var: &RunningStyleVar, _state: &RaceState) -> i32 {
+fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
     match var {
-        // All multi-uma stubs
-        RunningStyleVar::RunningStyleCountNigeOtherself => 0, // STUB: No other Front runners
-        RunningStyleVar::RunningStyleCountOikomiOtherself => 0, // STUB: No other End closers
-        RunningStyleVar::RunningStyleCountSame => 1,          // STUB: Only self with this style
-        RunningStyleVar::RunningStyleCountSameRate => 100,    // STUB: 100% same style (only self)
-        RunningStyleVar::RunningStyleCountSashiOtherself => 0, // STUB: No other Late surgers
-        RunningStyleVar::RunningStyleCountSenkoOtherself => 0, // STUB: No other Pace chasers
+        // TODO: generate simulation values for one-runner simulations
+        RunningStyleVar::RunningStyleCountNigeOtherself => {
+            get_style_count_front_otherself(state, my_style)
+        }
+        RunningStyleVar::RunningStyleCountOikomiOtherself => {
+            get_style_count_otherself(state, Style::End, my_style)
+        }
+        RunningStyleVar::RunningStyleCountSame => get_style_count(state, my_style),
+        RunningStyleVar::RunningStyleCountSameRate => {
+            (get_style_count(state, my_style) as f64 / state.params.gates as f64 * 100.0).floor()
+                as i32
+        }
+        RunningStyleVar::RunningStyleCountSashiOtherself => {
+            get_style_count_otherself(state, Style::Late, my_style)
+        }
+        RunningStyleVar::RunningStyleCountSenkoOtherself => {
+            get_style_count_otherself(state, Style::Pace, my_style)
+        }
         RunningStyleVar::RunningStyleEqualPopularityOne => 1, // STUB: We are most popular
         RunningStyleVar::RunningStyleTemptationCountNige => 0, // STUB: No other umas rushing
         RunningStyleVar::RunningStyleTemptationCountOikomi => 0, // STUB
@@ -563,6 +578,20 @@ fn get_running_style_value(var: &RunningStyleVar, _state: &RaceState) -> i32 {
         RunningStyleVar::RunningStyleTemptationOpponentCountSashi => 0, // STUB
         RunningStyleVar::RunningStyleTemptationOpponentCountSenko => 0, // STUB
     }
+}
+
+fn get_style_count(state: &RaceState, my_style: Style) -> i32 {
+    state.runners_by_style.get(&my_style).cloned().unwrap_or(0) as i32
+}
+
+fn get_style_count_otherself(state: &RaceState, style: Style, my_style: Style) -> i32 {
+    state.runners_by_style.get(&style).cloned().unwrap_or(0) as i32 - (my_style == style) as i32
+}
+
+fn get_style_count_front_otherself(state: &RaceState, my_style: Style) -> i32 {
+    // Oonige is considered a Front variant
+    get_style_count_otherself(state, Style::Front, my_style)
+        + get_style_count_otherself(state, Style::Oonige, my_style)
 }
 
 fn get_basic_status_value(var: &StatusVar, _state: &RaceState, builder: &RunnerBuilder) -> i32 {

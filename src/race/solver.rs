@@ -5,6 +5,7 @@ use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 // TODO: implement blocking logic
@@ -28,6 +29,7 @@ pub struct RaceState {
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub elapsed_time: f64, // Race time in seconds (shared by all umas)
+    pub runners_by_style: HashMap<Style, u8>,
 }
 
 pub struct RaceSolver {
@@ -46,6 +48,7 @@ impl RaceSolver {
             params,
             rng,
             elapsed_time: 0.0,
+            runners_by_style: HashMap::new(),
         };
 
         RaceSolver {
@@ -64,6 +67,11 @@ impl RaceSolver {
             skills,
             Rc::clone(&self.state.rng),
         );
+        *self
+            .state
+            .runners_by_style
+            .entry(builder.base.style)
+            .or_insert(0) += 1;
         self.builders.push(builder);
     }
 
