@@ -106,7 +106,9 @@ pub struct CourseData {
     pub course_set_status: Vec<ThresholdStat>,
     pub finish_time_min: u32,
     pub finish_time_max: u32,
-    pub lane_max: u32,
+    #[serde(skip)]
+    #[cfg_attr(test, allow(dead_code))]
+    pub _lane_max: (), // unused in current implementation
     pub corners: Vec<Corner>,
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
@@ -161,7 +163,7 @@ impl Course {
     }
 
     pub fn finish_time_min(&self) -> f64 {
-        self.finish_time_max as f64 / 10000.0
+        self.finish_time_min as f64 / 10000.0
     }
 
     /// Get the section index (0-23) from a given position in meters
@@ -256,7 +258,7 @@ mod tests {
                 course_set_status: vec![],
                 finish_time_min: 120000,
                 finish_time_max: 150000,
-                lane_max: 18,
+                _lane_max: (),
                 corners: vec![],
                 slopes: vec![],
                 straights: vec![],

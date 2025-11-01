@@ -71,10 +71,6 @@ pub struct ActivationState {
     /// NOTE: This only applies to onetime triggers (random gates, spatial events)
     /// Monotonic triggers can be retried until activated
     pub onetime_trigger_attempted: bool,
-
-    /// For continuous triggers: last frame this was checked
-    /// Prevents duplicate checks in same frame
-    pub last_checked_frame: Option<usize>,
 }
 
 /// Monotonic variables that can have window conditions
@@ -183,8 +179,6 @@ pub struct ActiveTimedEffect {
 #[derive(Debug, Clone)]
 pub struct SkillActivationRecord {
     pub skill_id: String,
-    pub skill_index: usize,
-    pub alternative_index: usize,
     pub distance: f64, // Distance when activated
 }
 

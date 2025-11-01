@@ -471,7 +471,6 @@ mod tests {
                 course_set_status: vec![],
                 finish_time_min: 140000,
                 finish_time_max: 160000,
-                lane_max: 18,
                 corners: vec![
                     Corner {
                         start: 100.0,
@@ -489,6 +488,7 @@ mod tests {
                     front_type: FrontType::Audience,
                 }],
                 race_track_id: 1,
+                _lane_max: (),
                 _course: (),
             },
         )

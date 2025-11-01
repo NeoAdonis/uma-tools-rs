@@ -3,7 +3,7 @@ use crate::course::Phase;
 use crate::course::geometry::SlopeType;
 use crate::race::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap};
 
 /// Main scheduler coordinating all trigger types
 ///
@@ -39,7 +39,6 @@ pub struct TriggerScheduler {
 
     // Activation tracking
     pub activation_counts: ActivationCounts,
-    pub activated_skill_ids: HashSet<u32>,
 }
 
 impl TriggerScheduler {
@@ -60,7 +59,6 @@ impl TriggerScheduler {
             continuous_triggers: Vec::new(),
             random_activations: HashMap::new(),
             activation_counts: ActivationCounts::default(),
-            activated_skill_ids: HashSet::new(),
         }
     }
 }

@@ -139,15 +139,6 @@ impl Skill {
         )
     }
 
-    /// Check if this skill contains any recovery effects
-    pub fn is_recovery(&self) -> bool {
-        self.alternatives.iter().any(|alt| {
-            alt.effects
-                .iter()
-                .any(|ef| ef.skill_type == SkillType::Recovery)
-        })
-    }
-
     /// Check if this skill should activate out of gate (before race begins)
     pub fn should_activate_out_of_gate(&self) -> bool {
         // Green skills (stat boosts) always activate at start

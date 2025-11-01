@@ -198,7 +198,8 @@ impl<'a> RunnerBuilder<'a> {
         rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     ) -> (Self, Vec<Skill>, Vec<Skill>) {
         // Calculate base stats
-        let gate_roll: i32 = rng.borrow_mut().random_range(0..=100);
+        // TODO: check for collisions; maybe use a hashset instead of a vector?
+        let gate_roll: u8 = rng.borrow_mut().random_range(0..=params.gates - 1_u8);
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate
@@ -248,7 +249,7 @@ impl<'a> RunnerBuilder<'a> {
             params,
             base: base_uma,
             motivation,
-            gate_roll: gate_roll as u8,
+            gate_roll,
             adjusted: adjusted_uma,
             start_delay,
             activation_counts: ActivationCounts::default(),
@@ -293,8 +294,6 @@ impl<'a> RunnerBuilder<'a> {
         self.activated_skill_ids.insert(skill_id.clone());
         self.activated_skills.push(SkillActivationRecord {
             skill_id,
-            skill_index: alt_index, // For out-of-gate, we use alt_index as the identifier
-            alternative_index: alt_index,
             distance: 0.0, // Out-of-gate activations occur at position 0
         });
 
@@ -322,7 +321,7 @@ impl<'a> RunnerBuilder<'a> {
         let roll: f64 = self.rng.borrow_mut().random();
         let rush_section = if roll < rush_chance {
             // Uma will rush in a random section between 2 and 9 (1-indexed)
-            Some(self.rng.borrow_mut().random_range(1..=9))
+            Some(self.rng.borrow_mut().random_range(1..=8))
         } else {
             None
         };
@@ -966,8 +965,6 @@ impl Runner {
         self.activated_skill_ids.insert(skill_id.clone());
         self.activated_skills.push(SkillActivationRecord {
             skill_id,
-            skill_index,
-            alternative_index,
             distance: self.position,
         });
 

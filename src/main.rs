@@ -154,23 +154,37 @@ fn main() {
     let mut solver = RaceSolver::new(course, params);
     solver.add_runner(uma, motivation, skills);
 
-    let runner = &solver.runners[0];
+    {
+        let runner = &solver.runners[0];
 
-    println!("\nRace initialized successfully!");
-    println!("Initial HP: {:.2}", runner.hp);
-    println!(
-        "Start delay: {:.3} seconds ({:?})",
-        runner.start_delay,
-        runner.start_type()
-    );
+        println!("\nRace initialized successfully!");
+        println!("Initial HP: {:.2}", runner.hp);
+        println!(
+            "Start delay: {:.3} seconds ({:?})",
+            runner.start_delay,
+            runner.start_type()
+        );
+    }
 
     // Simulate
     solver.run();
 
-    println!("\nRace finished!");
-    println!(
-        "Final elapsed time: {:.2} seconds",
-        solver.state.elapsed_time
-    );
-    println!("Scoreboard time: {:.1} seconds", solver.scoreboard_time());
+    {
+        let runner = &solver.runners[0];
+
+        println!("\nRace finished!");
+        println!(
+            "Final elapsed time: {:.2} seconds",
+            solver.state.elapsed_time
+        );
+        println!("Scoreboard time: {:.1} seconds", solver.scoreboard_time());
+        println!("Final HP: {:.2}", runner.hp);
+        println!("Activated skills:");
+        for skill in &runner.activated_skills {
+            println!(
+                "  Skill ID: {} at {:.2} meters",
+                skill.skill_id, skill.distance
+            );
+        }
+    }
 }
