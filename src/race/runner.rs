@@ -1,5 +1,5 @@
-use crate::condition::evaluator::evaluate_condition;
-use crate::condition::parser::CompOp;
+use crate::condition::evaluator::{evaluate_condition, evaluate_out_of_gate_condition};
+use crate::condition::parser::{CompOp, parse_condition};
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
@@ -162,13 +162,11 @@ pub enum StartType {
 }
 
 /// Builder for constructing a Runner with proper out-of-gate skill activation
-struct RunnerBuilder<'a> {
+pub struct RunnerBuilder {
     // Immutable context
-    course: &'a Course,
-    params: &'a RaceParameters,
-    base: Uma,
-    motivation: Motivation,
-    gate_roll: u8,
+    pub base: Uma,
+    pub motivation: Motivation,
+    pub gate_roll: u8,
 
     // Mutable state being constructed
     adjusted: Uma,
@@ -185,18 +183,20 @@ struct RunnerBuilder<'a> {
     // Skills
     trigger_scheduler: TriggerScheduler,
     golden_skill_indices: Vec<usize>,
+    out_of_gate_skills: Vec<Skill>,
+    runtime_skills: Vec<Skill>,
 }
 
-impl<'a> RunnerBuilder<'a> {
+impl RunnerBuilder {
     /// Create a new RunnerBuilder with initial values
-    fn new(
+    pub fn new(
         uma: Uma,
         motivation: Motivation,
-        course: &'a Course,
-        params: &'a RaceParameters,
+        course: &Course,
+        params: &RaceParameters,
         skills: Vec<Skill>,
         rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    ) -> (Self, Vec<Skill>, Vec<Skill>) {
+    ) -> Self {
         // Calculate base stats
         // TODO: check for collisions; maybe use a hashset instead of a vector?
         let gate_roll: u8 = rng.borrow_mut().random_range(0..=params.gates - 1_u8);
@@ -244,9 +244,7 @@ impl<'a> RunnerBuilder<'a> {
             .map(|(i, _)| i)
             .collect::<Vec<usize>>();
 
-        let builder = RunnerBuilder {
-            course,
-            params,
+        RunnerBuilder {
             base: base_uma,
             motivation,
             gate_roll,
@@ -258,17 +256,15 @@ impl<'a> RunnerBuilder<'a> {
             rng,
             trigger_scheduler,
             golden_skill_indices,
-        };
-
-        (builder, out_of_gate_skills, runtime_skills)
+            out_of_gate_skills,
+            runtime_skills,
+        }
     }
 
     /// Apply a single out-of-gate skill's effects
     fn apply_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
         let skill_id = skill.id.clone();
         let alternative = &skill.alternatives[alt_index];
-
-        // TODO: Check conditions
 
         // Apply each effect in the alternative
         for effect in &alternative.effects {
@@ -302,18 +298,21 @@ impl<'a> RunnerBuilder<'a> {
     }
 
     /// Apply all out-of-gate skills
-    fn apply_out_of_gate_skills(&mut self, skills: &[Skill]) {
+    fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
+        let skills = self.out_of_gate_skills.clone();
         for (alt_index, skill) in skills.iter().enumerate() {
+            let result = parse_condition(&skill.alternatives.first().unwrap().condition);
+            evaluate_out_of_gate_condition(&result.unwrap(), state, self);
             self.apply_skill_effect(skill, alt_index);
         }
     }
 
     /// Build the final Runner with all modifications applied
-    fn build(self, runtime_skills: Vec<Skill>) -> Runner {
+    pub fn build(self, course: &Course) -> Runner {
         // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
         let max_hp =
             0.8 * hp_style_coefficient(self.adjusted.style) * (self.adjusted.stamina as f64)
-                + self.course.distance as f64;
+                + course.distance as f64;
 
         // Set starting speed (done in the constructor)
         // Determine rush chance
@@ -338,11 +337,11 @@ impl<'a> RunnerBuilder<'a> {
             gate_roll: self.gate_roll,
             speed: 3.0,
             acceleration: 0.0, // start dash acceleration is applied separately
-            min_speed: 0.85 * self.course.base_speed()
+            min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
-            base_target_speed: 0.85 * self.course.base_speed(),
+            base_target_speed: 0.85 * course.base_speed(),
             start_delay: self.start_delay,
-            available_skills: runtime_skills,
+            available_skills: self.runtime_skills,
             activated_skills: self.activated_skills,
             activated_skill_ids: self.activated_skill_ids,
             skill_modifiers: SkillModifiers::default(),
@@ -350,7 +349,7 @@ impl<'a> RunnerBuilder<'a> {
             golden_skill_indices: self.golden_skill_indices,
             section: 0,
             phase: Phase::Early,
-            section_speed_modifier: self.course.base_speed() * section_speed_coefficient,
+            section_speed_modifier: course.base_speed() * section_speed_coefficient,
             hp: max_hp,
             max_hp,
             position: 0.0,
@@ -369,23 +368,12 @@ impl<'a> RunnerBuilder<'a> {
 }
 
 impl Runner {
-    pub fn new(
-        uma: Uma,
-        motivation: Motivation,
-        course: &Course,
-        params: &RaceParameters,
-        skills: Vec<Skill>,
-        rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    ) -> Self {
-        // Create builder and partition skills
-        let (mut builder, out_of_gate_skills, runtime_skills) =
-            RunnerBuilder::new(uma, motivation, course, params, skills, rng);
-
+    pub fn new(mut builder: RunnerBuilder, state: &RaceState) -> Self {
         // Apply out-of-gate skills with proper activation tracking
-        builder.apply_out_of_gate_skills(&out_of_gate_skills);
+        builder.apply_out_of_gate_skills(state); // TODO: check
 
         // Build final Runner with all modifications applied
-        builder.build(runtime_skills)
+        builder.build(&state.course)
     }
 
     /// Recalculate skill modifiers from active timed effects

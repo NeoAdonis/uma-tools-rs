@@ -1,6 +1,6 @@
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::Runner;
+use crate::race::runner::{Runner, RunnerBuilder};
 use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
@@ -32,6 +32,7 @@ pub struct RaceState {
 
 pub struct RaceSolver {
     pub runners: Vec<Runner>,
+    pub builders: Vec<RunnerBuilder>,
     pub state: RaceState,
 }
 
@@ -49,12 +50,13 @@ impl RaceSolver {
 
         RaceSolver {
             runners: vec![],
+            builders: vec![],
             state,
         }
     }
 
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
-        let runner = Runner::new(
+        let builder = RunnerBuilder::new(
             uma,
             motivation,
             &self.state.course,
@@ -62,7 +64,7 @@ impl RaceSolver {
             skills,
             Rc::clone(&self.state.rng),
         );
-        self.runners.push(runner);
+        self.builders.push(builder);
     }
 
     /// Get the time as displayed on the scoreboard after a race finishes
@@ -111,6 +113,14 @@ impl RaceSolver {
             // Post-Update
             runner.check_corner_start(&self.state.course.corners, &self.state);
             runner.check_straight_start(&self.state.course.straights, &self.state);
+        }
+    }
+
+    pub fn build_runners(&mut self) {
+        // TODO: set state about runners (e.g., if certain skills exist)
+        for builder in self.builders.drain(..) {
+            let runner = Runner::new(builder, &self.state);
+            self.runners.push(runner);
         }
     }
 

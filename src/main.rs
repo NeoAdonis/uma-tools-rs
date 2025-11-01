@@ -154,6 +154,9 @@ fn main() {
     let mut solver = RaceSolver::new(course, params);
     solver.add_runner(uma, motivation, skills);
 
+    // Initialize runners
+    solver.build_runners();
+
     {
         let runner = &solver.runners[0];
 

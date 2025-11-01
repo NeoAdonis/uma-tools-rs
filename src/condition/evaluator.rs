@@ -38,6 +38,7 @@
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
+use crate::race::runner::RunnerBuilder;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::uma::*;
@@ -83,20 +84,31 @@ use crate::units::*;
 /// Panics if the condition contains trigger variables that should have been
 /// separated during the splitting phase.
 pub fn evaluate_condition(condition: &Condition, state: &RaceState, runner: &Runner) -> bool {
-    evaluate_comp_list(&condition.comp_list, state, runner)
+    evaluate_comp_list(&condition.comp_list, |comp| {
+        evaluate_comparison(comp, state, runner)
+    })
+}
+
+pub fn evaluate_out_of_gate_condition(
+    condition: &Condition,
+    state: &RaceState,
+    builder: &RunnerBuilder,
+) -> bool {
+    evaluate_comp_list(&condition.comp_list, |comp| {
+        evaluate_out_of_gate_comparison(comp, state, builder)
+    })
 }
 
 /// Recursively evaluate condition tree (handles AND/OR logic)
-fn evaluate_comp_list(comp_list: &CompList, state: &RaceState, runner: &Runner) -> bool {
+fn evaluate_comp_list<F>(comp_list: &CompList, eval_fn: F) -> bool
+where
+    F: Fn(&Comp) -> bool + Copy,
+{
     match comp_list {
-        CompList::Single(comp) => evaluate_comparison(comp, state, runner),
+        CompList::Single(comp) => eval_fn(comp),
         CompList::Binary { left, op, right } => match op {
-            BinOp::And => {
-                evaluate_comp_list(left, state, runner) && evaluate_comp_list(right, state, runner)
-            }
-            BinOp::Or => {
-                evaluate_comp_list(left, state, runner) || evaluate_comp_list(right, state, runner)
-            }
+            BinOp::And => evaluate_comp_list(left, eval_fn) && evaluate_comp_list(right, eval_fn),
+            BinOp::Or => evaluate_comp_list(left, eval_fn) || evaluate_comp_list(right, eval_fn),
         },
     }
 }
@@ -151,6 +163,37 @@ fn evaluate_comparison(comp: &Comp, state: &RaceState, runner: &Runner) -> bool 
     }
 }
 
+/// Evaluate a single comparison in out-of-gate context
+fn evaluate_out_of_gate_comparison(
+    comp: &Comp,
+    state: &RaceState,
+    builder: &RunnerBuilder,
+) -> bool {
+    // Special cases: skill ID checks require different logic
+    match &comp.var {
+        VarType::Activation(ActivationVar::IsExistSkillId) => {
+            // ! For this to work, we need access to every runner's available skills BEFORE
+            // ! we build the Runner instances. This requires changes to RaceBuilder.
+            // TODO: check above, return false for now
+            false
+        }
+        _ => {
+            // Normal case: get variable value and compare
+            let current_value = get_variable_value_out_of_gate(&comp.var, state, builder);
+            let threshold = comp.value;
+
+            match comp.op {
+                CompOp::Equal => current_value == threshold,
+                CompOp::NotEqual => current_value != threshold,
+                CompOp::Greater => current_value > threshold,
+                CompOp::GreaterEqual => current_value >= threshold,
+                CompOp::Less => current_value < threshold,
+                CompOp::LessEqual => current_value <= threshold,
+            }
+        }
+    }
+}
+
 /// Get current integer value for any variable type
 fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 {
     match var {
@@ -169,6 +212,24 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state),
         VarType::Always => 1,     // Always returns 1 (true)
         VarType::Unknown(_) => 0, // Default to 0
+    }
+}
+
+/// Get current integer value for any variable type
+fn get_variable_value_out_of_gate(
+    var: &VarType,
+    state: &RaceState,
+    builder: &RunnerBuilder,
+) -> i32 {
+    // TODO: check, maybe refactor common parts with get_variable_value()
+    match var {
+        VarType::BaseStat(stat_var) => get_base_stat(&builder.base, stat_var),
+        VarType::Course(course_var) => get_course_value(course_var, state),
+        VarType::RaceParam(param_var) => get_race_param_value(param_var, state),
+        VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
+        VarType::Status(status_var) => get_basic_status_value(status_var, state, builder),
+        VarType::Always => 1, // Always returns 1 (true)
+        _ => 0,               // Not applicable in out-of-gate context
     }
 }
 
@@ -514,6 +575,24 @@ fn get_running_style_value(var: &RunningStyleVar, _state: &RaceState) -> i32 {
     }
 }
 
+fn get_basic_status_value(var: &StatusVar, _state: &RaceState, builder: &RunnerBuilder) -> i32 {
+    match var {
+        // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
+        StatusVar::Motivation => builder.motivation as i32,
+
+        // Running style: 1=Front, 2=Pace, 3=Late, 4=End
+        StatusVar::RunningStyle => match builder.base.style {
+            Style::Oonige => 1, // Oonige is a Front variant
+            _ => builder.base.style as i32,
+        },
+
+        // Post number (starting gate)
+        StatusVar::PostNumber => builder.gate_roll as i32,
+
+        _ => panic!("Unsupported status variable in out-of-gate context"),
+    }
+}
+
 /// Get status values (HP, last spurt, continuous checks)
 fn get_status_value(var: &StatusVar, _state: &RaceState, runner: &Runner) -> i32 {
     match var {
@@ -731,6 +810,7 @@ mod tests {
 
         let mut solver = RaceSolver::new(course, params);
         solver.add_runner(uma, Motivation::Good, skills);
+        solver.build_runners();
 
         solver
     }
@@ -873,6 +953,7 @@ mod tests {
 
         let mut solver = RaceSolver::new(course, params);
         solver.add_runner(uma, Motivation::Good, skills);
+        solver.build_runners();
 
         // Create comparison: is_exist_skill_id == 203061
         let comp = Comp {
