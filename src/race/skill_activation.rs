@@ -117,6 +117,9 @@ pub enum TriggerCondition {
     /// HP percentage (0-100)
     HpPercent { threshold: f64, operator: CompOp },
 
+    /// Furlong crossed (distance in furlongs)
+    FurlongCrossed { threshold: f64, operator: CompOp },
+
     // ========== WINDOW TRIGGERS ==========
     /// Window trigger: skill can activate within [min, max] range
     /// Checked continuously while within window
@@ -658,6 +661,10 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             threshold: comp.value as f64,
             operator: comp.op,
         },
+        VarType::Distance(DistanceVar::Furlong) => TriggerCondition::FurlongCrossed {
+            threshold: comp.value as f64,
+            operator: comp.op,
+        },
         _ => panic!("Not a monotonic trigger: {:?}", comp.var),
     }
 }
@@ -1027,5 +1034,80 @@ mod tests {
             // Other conditions should remain as guards
             assert!(guards.is_some());
         }
+    }
+
+    #[test]
+    fn test_furlong_trigger_promoted() {
+        // Tests that furlong conditions are promoted to triggers when no explicit triggers exist
+        let condition = parse_condition("furlong>=3&ground_type==2").unwrap();
+        let branches = split_condition(&condition, None);
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have FurlongCrossed trigger
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::FurlongCrossed {
+                threshold: 3.0,
+                operator: CompOp::GreaterEqual
+            }
+        ));
+
+        // ground_type should remain as guard
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_furlong_with_explicit_trigger() {
+        // Tests that furlong stays as guard when paired with explicit trigger (e.g., random)
+        let condition = parse_condition("phase_random==1&furlong>=5").unwrap();
+
+        let activation = RandomActivation {
+            activation_distance: 800.0,
+            phase_restriction: Some(Phase::Mid),
+            corner_restriction: None,
+            slope_restriction: None,
+            activated: false,
+        };
+
+        let branches = split_condition(&condition, Some(&activation));
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have RandomActivation trigger only
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::RandomActivation { .. }
+        ));
+
+        // furlong should remain as guard (not promoted)
+        assert!(guards.is_some());
+    }
+
+    #[test]
+    fn test_furlong_equality() {
+        // Tests furlong==N condition
+        let condition = parse_condition("furlong==3").unwrap();
+        let branches = split_condition(&condition, None);
+
+        assert_eq!(branches.len(), 1);
+        let (triggers, guards) = &branches[0];
+
+        // Should have FurlongCrossed trigger with Equal operator
+        assert_eq!(triggers.len(), 1);
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::FurlongCrossed {
+                threshold: 3.0,
+                operator: CompOp::Equal
+            }
+        ));
+
+        // No guards
+        assert!(guards.is_none());
     }
 }

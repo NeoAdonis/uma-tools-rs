@@ -36,6 +36,7 @@ use crate::race::skill_activation::*;
 use crate::trigger::random::preroll_random_triggers;
 use crate::trigger::system::*;
 use crate::uma::skill::*;
+use crate::units::furlongs_to_meters;
 use rand::Rng;
 
 /// Build a complete TriggerScheduler from a list of skills
@@ -177,6 +178,19 @@ fn index_trigger(
                 threshold_percent: *threshold,
                 skill_index: logic_idx,
                 operator: *operator,
+            });
+        }
+
+        TriggerCondition::FurlongCrossed {
+            threshold,
+            operator,
+        } => {
+            let threshold_meters = furlongs_to_meters(*threshold);
+            scheduler.distance_triggers.push(DistanceTrigger {
+                threshold_meters,
+                skill_index: logic_idx,
+                operator: *operator,
+                trigger_type: DistanceTriggerType::Furlong,
             });
         }
 

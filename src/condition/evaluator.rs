@@ -41,6 +41,7 @@ use crate::condition::variables::*;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::uma::*;
+use crate::units::*;
 
 /// Evaluate a guard condition against current race state
 ///
@@ -672,7 +673,7 @@ fn remain_distance(position: &f64, course_distance: i32) -> i32 {
 
 /// Convert distance in meters to furlongs
 fn distance_to_furlongs(distance_meters: f64) -> i32 {
-    (distance_meters / 201.168).floor() as i32
+    meters_to_furlongs(distance_meters).floor() as i32
 }
 
 #[cfg(test)]
