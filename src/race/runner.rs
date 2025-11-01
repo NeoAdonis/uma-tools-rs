@@ -490,7 +490,9 @@ impl Runner {
     }
 
     pub fn update_target_speed(&mut self, course_base_speed: f64) {
-        self.base_target_speed = if let Some(last_spurt) = &self.last_spurt {
+        self.base_target_speed = if let Some(last_spurt) = &self.last_spurt
+            && self.position >= last_spurt.target_distance
+        {
             last_spurt.max_speed
         } else {
             base_target_speed(

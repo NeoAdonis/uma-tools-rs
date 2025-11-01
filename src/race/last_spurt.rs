@@ -72,7 +72,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
     if runner.hp >= max_hp_required {
         runner.last_spurt = Some(LastSpurt {
             max_speed: max_last_spurt_speed,
-            target_distance: remaining_distance,
+            target_distance: runner.position,
         });
     }
 
@@ -131,7 +131,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
         if rng_roll < cumulative_probability {
             runner.last_spurt = Some(LastSpurt {
                 max_speed: candidate.speed,
-                target_distance: candidate.distance,
+                target_distance: course.distance as f64 - candidate.distance,
             });
         }
     }
@@ -140,14 +140,14 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
     runner.last_spurt = Some(if let Some(last) = candidates.last() {
         LastSpurt {
             max_speed: last.speed,
-            target_distance: last.distance,
+            target_distance: course.distance as f64 - last.distance,
         }
     } else {
         // Fallback: use late-race base speed for full distance
         // TODO: ensure this case is unreachable
         LastSpurt {
             max_speed: late_race_base_target_speed,
-            target_distance: remaining_distance,
+            target_distance: runner.position,
         }
     });
 }
