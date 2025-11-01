@@ -65,10 +65,18 @@ impl RaceSolver {
         self.runners.push(runner);
     }
 
-    // TODO: complete implementation and report
-    #[allow(dead_code)]
-    fn displayed_time(&self) -> f64 {
-        self.state.elapsed_time * 1.18
+    /// Get the time as displayed on the scoreboard after a race finishes
+    pub fn scoreboard_time(&self) -> f64 {
+        // TODO: use time when first runner finishes
+        let converted = self.state.elapsed_time * 1.18;
+        let min = self.state.course.finish_time_min();
+        let max = self.state.course.finish_time_max();
+        let clamped = converted.clamp(min, max);
+        if converted < min || converted > max {
+            clamped + self.state.rng.borrow_mut().random_range(0.0..1.0)
+        } else {
+            converted
+        }
     }
 
     pub fn step(&mut self, delta_time: f64) {

@@ -155,6 +155,15 @@ impl Course {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
+    // in seconds
+    pub fn finish_time_max(&self) -> f64 {
+        self.finish_time_max as f64 / 10000.0
+    }
+
+    pub fn finish_time_min(&self) -> f64 {
+        self.finish_time_max as f64 / 10000.0
+    }
+
     /// Get the section index (0-23) from a given position in meters
     pub fn section_from_position(&self, position: f64) -> u8 {
         (position / self.section_length()).floor() as u8

@@ -166,4 +166,11 @@ fn main() {
 
     // Simulate
     solver.run();
+
+    println!("\nRace finished!");
+    println!(
+        "Final elapsed time: {:.2} seconds",
+        solver.state.elapsed_time
+    );
+    println!("Scoreboard time: {:.1} seconds", solver.scoreboard_time());
 }
