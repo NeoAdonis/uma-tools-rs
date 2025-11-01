@@ -5,7 +5,7 @@ use crate::course::*;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
-use crate::race::parameters::{RaceParameters, TrackCondition};
+use crate::race::parameters::RaceParameters;
 use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
@@ -565,8 +565,7 @@ impl Runner {
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
-            &state.course,
-            state.params.condition,
+            state,
             self.phase,
             self.adjusted.guts,
             self.is_rushed,
@@ -726,9 +725,9 @@ impl Runner {
         }
     }
 
-    pub fn update_last_spurt_state(&mut self, course: &Course, condition: TrackCondition) {
+    pub fn update_last_spurt_state(&mut self, state: &RaceState) {
         if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-            calculate_last_spurt(self, course, condition);
+            calculate_last_spurt(self, state);
         }
     }
 

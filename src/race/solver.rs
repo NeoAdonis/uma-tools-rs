@@ -94,7 +94,7 @@ impl RaceSolver {
             // TODO: Check random activation triggers
             // TODO: Check continuous triggers
             // TODO: implement "Recover HP by skills"
-            runner.update_last_spurt_state(&self.state.course, self.state.params.condition);
+            runner.update_last_spurt_state(&self.state);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();
             runner.update_phase(&self.state);
