@@ -616,11 +616,6 @@ fn split_single_comp(
             };
             (vec![], Some(guard))
         }
-
-        VariableRole::AlwaysTrue => {
-            // Always true - no trigger or guard needed
-            (vec![], None)
-        }
     }
 }
 

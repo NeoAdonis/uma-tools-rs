@@ -7,7 +7,7 @@ pub enum VarType {
     Distance(DistanceVar),         // Distance related
     Phase(PhaseVar),               // Phase/Time related
     Course(CourseVar),             // Course features
-    Spatial(SpatialVar),           // Spatial related
+    Spatial(SpatialVar),           // Runner position relative to course features
     Activation(ActivationVar),     // Skill activation tracking
     RaceParam(RaceParamVar),       // Race parameters
     RunningStyle(RunningStyleVar), // Running style related
@@ -54,7 +54,6 @@ pub enum PositionVar {
 pub enum DistanceVar {
     BashinDiffBehind,
     BashinDiffInfront,
-    CourseDistance,
     DistanceDiffRate,
     DistanceDiffTop,
     DistanceDiffTopFloat,
@@ -88,10 +87,11 @@ pub enum PhaseVar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CourseVar {
     CornerCount,
+    CourseDistance,
     DistanceType,
-    GroundCondition,
     GroundType,
     IsBasisDistance,
+    IsDirtgrade,
     Rotation,
     TrackId,
 }
@@ -134,7 +134,7 @@ pub enum ActivationVar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RaceParamVar {
     Grade,
-    IsDirtgrade,
+    GroundCondition,
     IsExistCharaId,
     Popularity,
     SameSkillHorseCount,
@@ -308,7 +308,6 @@ impl VarType {
             // Distance
             "bashin_diff_behind" => VarType::Distance(DistanceVar::BashinDiffBehind),
             "bashin_diff_infront" => VarType::Distance(DistanceVar::BashinDiffInfront),
-            "course_distance" => VarType::Distance(DistanceVar::CourseDistance),
             "distance_diff_rate" => VarType::Distance(DistanceVar::DistanceDiffRate),
             "distance_diff_top_float" => VarType::Distance(DistanceVar::DistanceDiffTopFloat),
             "distance_diff_top" => VarType::Distance(DistanceVar::DistanceDiffTop),
@@ -342,10 +341,11 @@ impl VarType {
 
             // Course
             "corner_count" => VarType::Course(CourseVar::CornerCount),
+            "course_distance" => VarType::Course(CourseVar::CourseDistance),
             "distance_type" => VarType::Course(CourseVar::DistanceType),
-            "ground_condition" => VarType::Course(CourseVar::GroundCondition),
             "ground_type" => VarType::Course(CourseVar::GroundType),
             "is_basis_distance" => VarType::Course(CourseVar::IsBasisDistance),
+            "is_dirtgrade" => VarType::Course(CourseVar::IsDirtgrade),
             "rotation" => VarType::Course(CourseVar::Rotation),
             "track_id" => VarType::Course(CourseVar::TrackId),
 
@@ -388,7 +388,7 @@ impl VarType {
 
             // Race parameters
             "grade" => VarType::RaceParam(RaceParamVar::Grade),
-            "is_dirtgrade" => VarType::RaceParam(RaceParamVar::IsDirtgrade),
+            "ground_condition" => VarType::RaceParam(RaceParamVar::GroundCondition),
             "is_exist_chara_id" => VarType::RaceParam(RaceParamVar::IsExistCharaId),
             "popularity" => VarType::RaceParam(RaceParamVar::Popularity),
             "same_skill_horse_count" => VarType::RaceParam(RaceParamVar::SameSkillHorseCount),
@@ -533,9 +533,6 @@ pub enum VariableRole {
     /// Dynamic guard - can change during race, must be checked when trigger fires
     /// Examples: order<=3, is_lastspurt==1, blocked_side_continuetime>=2
     DynamicGuard,
-
-    /// Always true - special case
-    AlwaysTrue,
 }
 
 impl VarType {
@@ -609,39 +606,25 @@ impl VarType {
             Phase(PhaseVar::PhaseLaterhalf) => SpatialTrigger,
             Phase(PhaseVar::PhaseFirstquarter) => SpatialTrigger,
 
-            // ALWAYS TRUE
-            VarType::Always => AlwaysTrue,
-
             // STATIC GUARDS - Never change during race
-            // Static race parameters
-            RaceParam(RaceParamVar::Grade) => StaticGuard,
-            RaceParam(RaceParamVar::IsDirtgrade) => StaticGuard,
-            RaceParam(RaceParamVar::IsExistCharaId) => StaticGuard,
-            RaceParam(RaceParamVar::Popularity) => StaticGuard,
-            RaceParam(RaceParamVar::SameSkillHorseCount) => StaticGuard,
-            RaceParam(RaceParamVar::Season) => StaticGuard,
-            RaceParam(RaceParamVar::Time) => StaticGuard,
-            RaceParam(RaceParamVar::Visiblehorse) => StaticGuard,
-            RaceParam(RaceParamVar::Weather) => StaticGuard,
+            // Race parameters
+            RaceParam(_) => StaticGuard,
+
+            // Course properties
+            Course(_) => StaticGuard,
+
+            // Base stats
+            BaseStat(_) => StaticGuard,
+
+            // Special value - it never changes by definition
+            Always => StaticGuard,
 
             // Static status properties
             Status(StatusVar::Motivation) => StaticGuard,
             Status(StatusVar::PostNumber) => StaticGuard,
             Status(StatusVar::RunningStyle) => StaticGuard, // TODO: treat as static for now
 
-            // Course properties
-            Course(CourseVar::DistanceType) => StaticGuard,
-            Course(CourseVar::GroundCondition) => StaticGuard,
-            Course(CourseVar::GroundType) => StaticGuard,
-            Course(CourseVar::IsBasisDistance) => StaticGuard,
-            Course(CourseVar::Rotation) => StaticGuard,
-            Course(CourseVar::TrackId) => StaticGuard,
-            Course(CourseVar::CornerCount) => StaticGuard,
-            Distance(DistanceVar::CourseDistance) => StaticGuard,
-
-            // Base stats
-            BaseStat(_) => StaticGuard,
-
+            // DYNAMIC GUARDS - Can change during race
             // Running style
             RunningStyle(_) => DynamicGuard, // Other running style vars are dynamic (multi-uma)
 

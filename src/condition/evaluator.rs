@@ -38,6 +38,8 @@
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
+use crate::course::Course;
+use crate::race::parameters::RaceParameters;
 use crate::race::runner::RunnerBuilder;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
@@ -201,10 +203,10 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Position(pos_var) => get_position_value(pos_var, state),
         VarType::Distance(dist_var) => get_distance_value(dist_var, state, runner),
         VarType::Phase(phase_var) => get_phase_value(phase_var, state, runner),
-        VarType::Course(course_var) => get_course_value(course_var, state),
+        VarType::Course(course_var) => get_course_value(course_var, &state.course),
         VarType::Spatial(location_var) => get_location_value(location_var, state, runner),
         VarType::Activation(act_var) => get_activation_value(act_var, runner),
-        VarType::RaceParam(param_var) => get_race_param_value(param_var, state),
+        VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
         VarType::Status(status_var) => get_status_value(status_var, state, runner),
         VarType::Trigger(trigger_var) => get_trigger_value(trigger_var, state),
@@ -224,8 +226,8 @@ fn get_variable_value_out_of_gate(
     // TODO: check, maybe refactor common parts with get_variable_value()
     match var {
         VarType::BaseStat(stat_var) => get_base_stat(&builder.base, stat_var),
-        VarType::Course(course_var) => get_course_value(course_var, state),
-        VarType::RaceParam(param_var) => get_race_param_value(param_var, state),
+        VarType::Course(course_var) => get_course_value(course_var, &state.course),
+        VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         VarType::RunningStyle(style_var) => get_running_style_value(style_var, state),
         VarType::Status(status_var) => get_basic_status_value(status_var, state, builder),
         VarType::Always => 1, // Always returns 1 (true)
@@ -247,9 +249,6 @@ fn get_base_stat(uma: &Uma, stat: &StatKind) -> i32 {
 /// Get distance-related values
 fn get_distance_value(var: &DistanceVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
-        // Direct course distance
-        DistanceVar::CourseDistance => state.course.distance,
-
         // Distance covered as percentage (0-100)
         DistanceVar::DistanceRate => distance_rate(&runner.position, state.course.distance),
 
@@ -365,34 +364,31 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState, runner: &Runner) -> i32 {
 }
 
 /// Get course-related values
-fn get_course_value(var: &CourseVar, state: &RaceState) -> i32 {
+fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
     match var {
         // Total corners on course
-        CourseVar::CornerCount => state.course.corners.len() as i32,
+        CourseVar::CornerCount => course.corners.len() as i32,
+
+        // Direct course distance
+        CourseVar::CourseDistance => course.distance,
 
         // Distance type: 1=short, 2=mile, 3=medium, 4=long
-        CourseVar::DistanceType => state.course.distance_type as i32,
-
-        // Track condition: 1=firm, 2=good, 3=soft, 4=heavy
-        CourseVar::GroundCondition => state.params.condition as i32,
+        CourseVar::DistanceType => course.distance_type as i32,
 
         // Ground type: 1=turf, 2=dirt
-        CourseVar::GroundType => state.course.surface as i32,
+        CourseVar::GroundType => course.surface as i32,
 
-        // Replace the inline check with a call to Course::is_basis_distance()
-        CourseVar::IsBasisDistance => {
-            if state.course.is_basis_distance() {
-                1
-            } else {
-                0
-            }
-        }
+        // Is basis distance (multiple of 400m)
+        CourseVar::IsBasisDistance => course.is_basis_distance() as i32,
+
+        // Is exchange race (dirt grade): races at Ooi, Kawasaki, Funabashi, or Morioka
+        CourseVar::IsDirtgrade => course.is_exchange_race() as i32,
 
         // Rotation: 1=clockwise, 2=counterclockwise, 4=straight
-        CourseVar::Rotation => state.course.turn as i32,
+        CourseVar::Rotation => course.turn as i32,
 
         // Track ID
-        CourseVar::TrackId => state.course.race_track_id as i32,
+        CourseVar::TrackId => course.race_track_id as i32,
     }
 }
 
@@ -469,19 +465,13 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
 }
 
 /// Get race parameter values
-fn get_race_param_value(var: &RaceParamVar, state: &RaceState) -> i32 {
+fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     match var {
-        // Race grade: refer to Grade enum for values
-        RaceParamVar::Grade => state.params.grade as i32,
+        // Track condition: 1=firm, 2=good, 3=soft, 4=heavy
+        RaceParamVar::GroundCondition => params.condition as i32,
 
-        // Is exchange race (dirt grade): races at Ooi, Kawasaki, Funabashi, or Morioka
-        RaceParamVar::IsDirtgrade => {
-            if state.course.is_exchange_race() {
-                1
-            } else {
-                0
-            }
-        }
+        // Race grade: refer to Grade enum for values
+        RaceParamVar::Grade => params.grade as i32,
 
         // Popularity rank (multi-uma)
         RaceParamVar::Popularity => 1, // STUB: Always most popular in single-uma mode
@@ -492,16 +482,16 @@ fn get_race_param_value(var: &RaceParamVar, state: &RaceState) -> i32 {
         // conditions that check for spring should also match sakura.
         // When applicable, this is handled directly in the condition
         // definitions (i.e., "season==1@season==5").
-        RaceParamVar::Season => state.params.season as i32,
+        RaceParamVar::Season => params.season as i32,
 
         // Time of day: 0=none/any, 1=morning, 2=noon, 3=evening, 4=night
-        RaceParamVar::Time => state.params.time as i32,
+        RaceParamVar::Time => params.time as i32,
 
         // Number of visible horses (multi-uma)
         RaceParamVar::Visiblehorse => 0, // STUB: No other horses in single-uma mode
 
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy
-        RaceParamVar::Weather => state.params.weather as i32,
+        RaceParamVar::Weather => params.weather as i32,
 
         // Multi-uma stubs
         RaceParamVar::IsExistCharaId => 0, // STUB: No other characters
