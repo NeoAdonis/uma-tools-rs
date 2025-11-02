@@ -2,6 +2,7 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
+    AccumulateTime,                // Elapsed time
     BaseStat(StatKind),            // Base stats
     Order(OrderVar),               // Order (rank) related
     Distance(DistanceVar),         // Distance relative to other runners
@@ -62,7 +63,6 @@ pub enum DistanceVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhaseVar {
-    AccumulateTime,
     Phase,
     PhaseCornerRandom,
     PhaseFirsthalf,
@@ -221,6 +221,7 @@ impl fmt::Display for VarType {
             VarType::Random(r) => write!(f, "{}", r),
             VarType::Blocking(b) => write!(f, "{}", b),
             VarType::Temptation(t) => write!(f, "{}", t),
+            VarType::AccumulateTime => write!(f, "accumulatetime"),
             VarType::Always => write!(f, "always"),
             VarType::Unknown(s) => write!(f, "<unknown:{}>", s),
         }
@@ -313,8 +314,10 @@ impl VarType {
             "distance_diff_top" => VarType::Distance(DistanceVar::DistanceDiffTop),
             "remain_distance_viewer_id" => VarType::Distance(DistanceVar::RemainDistanceViewerId),
 
-            // Phase/Time
-            "accumulatetime" => VarType::Phase(PhaseVar::AccumulateTime),
+            // Time
+            "accumulatetime" => VarType::AccumulateTime,
+
+            // Phase
             "phase" => VarType::Phase(PhaseVar::Phase),
             "phase_corner_random" => VarType::Phase(PhaseVar::PhaseCornerRandom),
             "phase_first_half_straight_random" => {
@@ -569,7 +572,7 @@ impl VarType {
 
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context
             // Time-based
-            Phase(PhaseVar::AccumulateTime) => MonotonicGuard,
+            AccumulateTime => MonotonicGuard,
 
             // Distance-based (increasing)
             Spatial(SpatialVar::DistanceRate) => MonotonicGuard,
@@ -711,7 +714,7 @@ mod tests {
         ));
         assert!(matches!(
             VarType::parse("accumulatetime"),
-            VarType::Phase(PhaseVar::AccumulateTime)
+            VarType::AccumulateTime
         ));
         assert!(matches!(
             VarType::parse("order"),

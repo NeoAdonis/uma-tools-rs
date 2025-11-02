@@ -202,7 +202,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
         VarType::Order(pos_var) => get_rank_value(pos_var, state),
         VarType::Distance(dist_var) => get_distance_value(dist_var, state, runner),
-        VarType::Phase(phase_var) => get_phase_value(phase_var, state, runner),
+        VarType::Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
         VarType::Spatial(location_var) => get_location_value(location_var, &state.course, runner),
         VarType::Activation(act_var) => get_activation_value(act_var, runner),
@@ -214,6 +214,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Random(trigger_var) => get_random_value(trigger_var, state),
         VarType::Blocking(blocking_var) => get_blocking_value(blocking_var, state),
         VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state),
+        VarType::AccumulateTime => state.elapsed_time.floor() as i32,
         VarType::Always => 1,     // Always returns 1 (true)
         VarType::Unknown(_) => 0, // Default to 0
     }
@@ -269,13 +270,15 @@ fn get_distance_value(var: &DistanceVar, state: &RaceState, runner: &Runner) -> 
 }
 
 /// Get phase-related values
-fn get_phase_value(var: &PhaseVar, state: &RaceState, runner: &Runner) -> i32 {
+fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     match var {
-        // Time since race start
-        PhaseVar::AccumulateTime => state.elapsed_time.floor() as i32,
-
         // Current phase: 0=Early, 1=Mid, 2=Late, 3=Last
         PhaseVar::Phase => runner.phase as i32,
+
+        // Phase subdivisions
+        PhaseVar::PhaseFirstquarter => (runner.position < course.quarterway()) as i32,
+        PhaseVar::PhaseFirsthalf => (runner.position < course.halfway()) as i32,
+        PhaseVar::PhaseLaterhalf => (runner.position >= course.halfway()) as i32,
 
         // Random triggers - handled by trigger system, not evaluated here
         PhaseVar::PhaseCornerRandom
@@ -291,11 +294,6 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState, runner: &Runner) -> i32 {
                 var
             )
         }
-
-        // Phase subdivisions
-        PhaseVar::PhaseFirstquarter => (runner.position < state.course.quarterway()) as i32,
-        PhaseVar::PhaseFirsthalf => (runner.position < state.course.halfway()) as i32,
-        PhaseVar::PhaseLaterhalf => (runner.position >= state.course.halfway()) as i32,
     }
 }
 

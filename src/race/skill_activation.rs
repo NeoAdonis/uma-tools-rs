@@ -294,14 +294,14 @@ fn try_detect_window(
     if let (CompList::Single(left_comp), CompList::Single(right_comp)) = (left, right) {
         // Check if both comparisons use the same variable
         let left_var = match &left_comp.var {
-            VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
+            VarType::AccumulateTime => Some(WindowVariable::AccumulateTime),
             VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
             VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
 
         let right_var = match &right_comp.var {
-            VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
+            VarType::AccumulateTime => Some(WindowVariable::AccumulateTime),
             VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
             VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
@@ -629,7 +629,7 @@ fn extract_onetime_trigger(comp: &Comp) -> TriggerCondition {
 /// Extract monotonic trigger from comparison
 fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
     match &comp.var {
-        VarType::Phase(PhaseVar::AccumulateTime) => TriggerCondition::Time {
+        VarType::AccumulateTime => TriggerCondition::Time {
             threshold: comp.value as f64,
             operator: comp.op,
         },
