@@ -104,7 +104,7 @@ fn process_random_comp(
 
     match &comp.var {
         // Pure probability roll
-        Trigger(TriggerVar::RandomLot) => {
+        Random(RandomVar::RandomLot) => {
             // random_lot==X means X% chance of activation
             let roll: f64 = rng.random();
             context.has_random = true;
@@ -292,7 +292,7 @@ fn process_random_comp(
             }
         }
 
-        Phase(PhaseVar::IsFinalcornerRandom) => {
+        Spatial(SpatialVar::IsFinalcornerRandom) => {
             // is_finalcorner_random==1
             // Picks random point on final corner
             if let Some(last_corner) = course.corners.last() {
@@ -399,7 +399,7 @@ fn process_random_comp(
             }
         }
 
-        Distance(DistanceVar::DistanceRateAfterRandom) => {
+        Spatial(SpatialVar::DistanceRateAfterRandom) => {
             // distance_rate_after_random==X where X is percentage
             // Picks random point after X% of the race
             let threshold_distance = (comp.value as f64 / 100.0) * course.distance as f64;

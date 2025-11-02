@@ -469,7 +469,7 @@ mod tests {
                         assert_eq!(inner_op, BinOp::And);
                         match **inner_left {
                             CompList::Single(ref comp) => {
-                                assert!(matches!(comp.var, VarType::Position(_)));
+                                assert!(matches!(comp.var, VarType::Order(_)));
                                 assert_eq!(comp.value, 1);
                             }
                             _ => panic!("Expected Single"),
@@ -667,7 +667,7 @@ mod tests {
         let result = parse_condition("random_lot == 30").unwrap();
         match result.comp_list {
             CompList::Single(comp) => {
-                assert!(matches!(comp.var, VarType::Trigger(_)));
+                assert!(matches!(comp.var, VarType::Random(_)));
             }
             _ => panic!("Expected Single"),
         }

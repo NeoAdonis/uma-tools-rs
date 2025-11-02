@@ -199,19 +199,19 @@ fn evaluate_out_of_gate_comparison(
 /// Get current integer value for any variable type
 fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 {
     match var {
-        VarType::BaseStat(stat_var) => get_base_stat(&runner.base, stat_var),
-        VarType::Position(pos_var) => get_position_value(pos_var, state),
+        VarType::BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
+        VarType::Order(pos_var) => get_rank_value(pos_var, state),
         VarType::Distance(dist_var) => get_distance_value(dist_var, state, runner),
         VarType::Phase(phase_var) => get_phase_value(phase_var, state, runner),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
-        VarType::Spatial(location_var) => get_location_value(location_var, state, runner),
+        VarType::Spatial(location_var) => get_location_value(location_var, &state.course, runner),
         VarType::Activation(act_var) => get_activation_value(act_var, runner),
         VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         VarType::RunningStyle(style_var) => {
             get_running_style_value(style_var, state, runner.adjusted.style)
         }
-        VarType::Status(status_var) => get_status_value(status_var, state, runner),
-        VarType::Trigger(trigger_var) => get_trigger_value(trigger_var, state),
+        VarType::Status(status_var) => get_status_value(status_var, runner),
+        VarType::Random(trigger_var) => get_random_value(trigger_var, state),
         VarType::Blocking(blocking_var) => get_blocking_value(blocking_var, state),
         VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state),
         VarType::Always => 1,     // Always returns 1 (true)
@@ -227,20 +227,20 @@ fn get_variable_value_out_of_gate(
 ) -> i32 {
     // TODO: check, maybe refactor common parts with get_variable_value()
     match var {
-        VarType::BaseStat(stat_var) => get_base_stat(&builder.base, stat_var),
+        VarType::BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
         VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         VarType::RunningStyle(style_var) => {
             get_running_style_value(style_var, state, builder.base.style)
         }
-        VarType::Status(status_var) => get_basic_status_value(status_var, state, builder),
+        VarType::Status(status_var) => get_basic_status_value(status_var, builder),
         VarType::Always => 1, // Always returns 1 (true)
         _ => 0,               // Not applicable in out-of-gate context
     }
 }
 
 /// Get base stat value
-fn get_base_stat(uma: &Uma, stat: &StatKind) -> i32 {
+fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
     match stat {
         StatKind::Speed => uma.speed as i32,
         StatKind::Stamina => uma.stamina as i32,
@@ -253,28 +253,12 @@ fn get_base_stat(uma: &Uma, stat: &StatKind) -> i32 {
 /// Get distance-related values
 fn get_distance_value(var: &DistanceVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
-        // Distance covered as percentage (0-100)
-        DistanceVar::DistanceRate => distance_rate(&runner.position, state.course.distance),
-
-        // Remaining distance in meters
-        DistanceVar::RemainDistance => remain_distance(&runner.position, state.course.distance),
-
-        // Distance in furlongs
-        DistanceVar::Furlong => distance_to_furlongs(runner.position),
-
         // Multi-uma stubs - distance differences
         DistanceVar::BashinDiffBehind => 999, // STUB: No uma behind (large value)
         DistanceVar::BashinDiffInfront => 999, // STUB: No uma ahead (large value)
         DistanceVar::DistanceDiffRate => 0,   // STUB: 0% = first place
         DistanceVar::DistanceDiffTop => 0,    // STUB: 0m behind first (we are first)
         DistanceVar::DistanceDiffTopFloat => 0, // STUB: 0 decimeters behind first
-
-        // Random trigger - handled by trigger system
-        DistanceVar::DistanceRateAfterRandom => {
-            panic!(
-                "BUG: distance_rate_after_random should not be evaluated - it's a trigger variable!"
-            )
-        }
 
         // Remaining distance for any player character
         DistanceVar::RemainDistanceViewerId => {
@@ -293,41 +277,8 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState, runner: &Runner) -> i32 {
         // Current phase: 0=Early, 1=Mid, 2=Late, 3=Last
         PhaseVar::Phase => runner.phase as i32,
 
-        // Is on final corner or beyond
-        PhaseVar::IsFinalcorner => {
-            if state.course.corners.is_empty() {
-                0 // False if no corners
-            } else {
-                // "Beyond" also applies for a straight after final corner
-                let last_corner_idx = state.course.corners.len() - 1;
-                let last_corner = &state.course.corners[last_corner_idx];
-                if runner.position >= last_corner.start {
-                    1
-                } else {
-                    0
-                }
-            }
-        }
-
-        // Is on second half of final corner
-        PhaseVar::IsFinalcornerLaterhalf => {
-            if state.course.corners.is_empty() {
-                0
-            } else {
-                let last_corner_idx = state.course.corners.len() - 1;
-                let last_corner = &state.course.corners[last_corner_idx];
-                let corner_midpoint = last_corner.start + last_corner.length / 2.0;
-                if runner.position >= corner_midpoint {
-                    1
-                } else {
-                    0
-                }
-            }
-        }
-
         // Random triggers - handled by trigger system, not evaluated here
-        PhaseVar::IsFinalcornerRandom
-        | PhaseVar::PhaseCornerRandom
+        PhaseVar::PhaseCornerRandom
         | PhaseVar::PhaseFirsthalfRandom
         | PhaseVar::PhaseFirstHalfStraightRandom
         | PhaseVar::PhaseFirstquarterRandom
@@ -342,28 +293,9 @@ fn get_phase_value(var: &PhaseVar, state: &RaceState, runner: &Runner) -> i32 {
         }
 
         // Phase subdivisions
-        PhaseVar::PhaseFirstquarter => {
-            // TODO: currently under investigation - meaning is assumed
-            if runner.position < state.course.quarterway() {
-                1
-            } else {
-                0
-            }
-        }
-        PhaseVar::PhaseFirsthalf => {
-            if runner.position < state.course.halfway() {
-                1
-            } else {
-                0
-            }
-        }
-        PhaseVar::PhaseLaterhalf => {
-            if runner.position >= state.course.halfway() {
-                1
-            } else {
-                0
-            }
-        }
+        PhaseVar::PhaseFirstquarter => (runner.position < state.course.quarterway()) as i32,
+        PhaseVar::PhaseFirsthalf => (runner.position < state.course.halfway()) as i32,
+        PhaseVar::PhaseLaterhalf => (runner.position >= state.course.halfway()) as i32,
     }
 }
 
@@ -397,7 +329,7 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
 }
 
 /// Get location-related values
-fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i32 {
+fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
     match var {
         // Which corner: 0=none, 1-4=corner number
         SpatialVar::Corner => {
@@ -408,13 +340,45 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
             }
         }
 
+        // Is on final corner or beyond
+        SpatialVar::IsFinalcorner => {
+            if course.corners.is_empty() {
+                0 // False if no corners
+            } else {
+                // "Beyond" also applies for a straight after final corner
+                let last_corner_idx = course.corners.len() - 1;
+                let last_corner = &course.corners[last_corner_idx];
+                if runner.position >= last_corner.start {
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+
+        // Is on second half of final corner
+        SpatialVar::IsFinalcornerLaterhalf => {
+            if course.corners.is_empty() {
+                0
+            } else {
+                let last_corner_idx = course.corners.len() - 1;
+                let last_corner = &course.corners[last_corner_idx];
+                let corner_midpoint = last_corner.start + last_corner.length / 2.0;
+                if runner.position >= corner_midpoint {
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+
         // Is on last straight
         SpatialVar::IsLastStraight => {
-            if state.course.corners.is_empty() {
+            if course.corners.is_empty() {
                 1 // First (and only) straight is last straight
             } else {
                 // Last straight starts after final corner ends
-                let last_corner = state.course.corners.last().unwrap();
+                let last_corner = course.corners.last().unwrap();
                 let last_straight_start = last_corner.start + last_corner.length;
                 if runner.position >= last_straight_start {
                     1
@@ -437,7 +401,7 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
         // Slope: 0=flat, 1=uphill, 2=downhill
         SpatialVar::Slope => {
             if let Some(idx) = runner.current_slope() {
-                state.course.slopes[idx].slope_type() as i32
+                course.slopes[idx].slope_type() as i32
             } else {
                 0
             }
@@ -446,22 +410,33 @@ fn get_location_value(var: &SpatialVar, state: &RaceState, runner: &Runner) -> i
         // Straight front type: 1=facing audience, 2=opposite from audience
         SpatialVar::StraightFrontType => {
             if let Some(idx) = runner.current_straight() {
-                state.course.straights[idx].front_type as i32
+                course.straights[idx].front_type as i32
             } else {
                 0 // Not in a straight
             }
         }
 
+        // Distance covered as percentage (0-100)
+        SpatialVar::DistanceRate => distance_rate(&runner.position, course.distance),
+
+        // Distance in furlongs
+        SpatialVar::Furlong => distance_to_furlongs(runner.position),
+
+        // Remaining distance in meters
+        SpatialVar::RemainDistance => remain_distance(&runner.position, course.distance),
+
         // Random triggers - handled by trigger system
         SpatialVar::AllCornerRandom
         | SpatialVar::CornerRandom
+        | SpatialVar::DistanceRateAfterRandom
         | SpatialVar::DownSlopeRandom
+        | SpatialVar::IsFinalcornerRandom
         | SpatialVar::LastStraightRandom
         | SpatialVar::StraightRandom
         | SpatialVar::UpSlopeRandom
         | SpatialVar::UpSlopeRandomLaterHalf => {
             panic!(
-                "BUG: Random course trigger {:?} should not be evaluated - it's a trigger variable!",
+                "BUG: {:?} should not be evaluated - it's a trigger variable!",
                 var
             )
         }
@@ -594,7 +569,7 @@ fn get_style_count_front_otherself(state: &RaceState, my_style: Style) -> i32 {
         + get_style_count_otherself(state, Style::Oonige, my_style)
 }
 
-fn get_basic_status_value(var: &StatusVar, _state: &RaceState, builder: &RunnerBuilder) -> i32 {
+fn get_basic_status_value(var: &StatusVar, builder: &RunnerBuilder) -> i32 {
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         StatusVar::Motivation => builder.motivation as i32,
@@ -613,7 +588,7 @@ fn get_basic_status_value(var: &StatusVar, _state: &RaceState, builder: &RunnerB
 }
 
 /// Get status values (HP, last spurt, continuous checks)
-fn get_status_value(var: &StatusVar, _state: &RaceState, runner: &Runner) -> i32 {
+fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         StatusVar::Motivation => runner.motivation as i32,
@@ -687,38 +662,38 @@ fn get_status_value(var: &StatusVar, _state: &RaceState, runner: &Runner) -> i32
     }
 }
 
-/// Get position-related values (mostly multi-uma stubs)
-fn get_position_value(var: &PositionVar, _state: &RaceState) -> i32 {
+/// Get rank-related values (mostly multi-uma stubs)
+fn get_rank_value(var: &OrderVar, _state: &RaceState) -> i32 {
     match var {
         // All multi-uma stubs - return sensible single-uma values
-        PositionVar::Order => 1,            // STUB: Always first place
-        PositionVar::OrderRate => 0,        // STUB: 0% = top position
-        PositionVar::NearCount => 0,        // STUB: No other umas nearby
-        PositionVar::NearInfrontCount => 0, // STUB: No umas ahead
+        OrderVar::Order => 1,            // STUB: Always first place
+        OrderVar::OrderRate => 0,        // STUB: 0% = top position
+        OrderVar::NearCount => 0,        // STUB: No other umas nearby
+        OrderVar::NearInfrontCount => 0, // STUB: No umas ahead
 
         // Change in order - handled by trigger system
-        PositionVar::ChangeOrderOnetime => {
+        OrderVar::ChangeOrderOnetime => {
             panic!("BUG: change_order_onetime should not be evaluated - it's a trigger variable!")
         }
 
         // Multi-uma stubs
-        PositionVar::ChangeOrderUpEndAfter => 0, // STUB: Never overtaken
-        PositionVar::ChangeOrderUpFinalcornerAfter => 0, // STUB
-        PositionVar::ChangeOrderUpMiddle => 0,   // STUB
+        OrderVar::ChangeOrderUpEndAfter => 0, // STUB: Never overtaken
+        OrderVar::ChangeOrderUpFinalcornerAfter => 0, // STUB
+        OrderVar::ChangeOrderUpMiddle => 0,   // STUB
 
         // Order rate continue checks
-        PositionVar::OrderRateIn20Continue => 1, // STUB: Always in top 20% (first place)
-        PositionVar::OrderRateIn40Continue => 1, // STUB
-        PositionVar::OrderRateIn50Continue => 1, // STUB
-        PositionVar::OrderRateIn80Continue => 1, // STUB
-        PositionVar::OrderRateOut20Continue => 0, // STUB: Never outside top 20%
-        PositionVar::OrderRateOut40Continue => 0, // STUB
-        PositionVar::OrderRateOut50Continue => 0, // STUB
-        PositionVar::OrderRateOut70Continue => 0, // STUB
+        OrderVar::OrderRateIn20Continue => 1, // STUB: Always in top 20% (first place)
+        OrderVar::OrderRateIn40Continue => 1, // STUB
+        OrderVar::OrderRateIn50Continue => 1, // STUB
+        OrderVar::OrderRateIn80Continue => 1, // STUB
+        OrderVar::OrderRateOut20Continue => 0, // STUB: Never outside top 20%
+        OrderVar::OrderRateOut40Continue => 0, // STUB
+        OrderVar::OrderRateOut50Continue => 0, // STUB
+        OrderVar::OrderRateOut70Continue => 0, // STUB
 
         // Overtake timing
-        PositionVar::OvertakeTargetNoOrderUpTime => 0, // STUB
-        PositionVar::OvertakeTargetTime => 0,          // STUB
+        OrderVar::OvertakeTargetNoOrderUpTime => 0, // STUB
+        OrderVar::OvertakeTargetTime => 0,          // STUB
     }
 }
 
@@ -744,11 +719,11 @@ fn get_temptation_value(var: &TemptationVar, _state: &RaceState) -> i32 {
     }
 }
 
-/// Get trigger values (random lot)
-fn get_trigger_value(var: &TriggerVar, _state: &RaceState) -> i32 {
+/// Get random values
+fn get_random_value(var: &RandomVar, _state: &RaceState) -> i32 {
     match var {
         // Pre-rolled at race start - handled by trigger system
-        TriggerVar::RandomLot => {
+        RandomVar::RandomLot => {
             panic!("BUG: random_lot should not be evaluated - it's a trigger variable!")
         }
     }

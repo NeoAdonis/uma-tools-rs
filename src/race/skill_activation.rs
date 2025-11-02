@@ -290,21 +290,19 @@ fn try_detect_window(
     left: &CompList,
     right: &CompList,
 ) -> Option<(TriggerCondition, Option<Condition>)> {
-    use crate::condition::variables::{DistanceVar, PhaseVar, StatusVar};
-
     // We're looking for single comparisons on both sides
     if let (CompList::Single(left_comp), CompList::Single(right_comp)) = (left, right) {
         // Check if both comparisons use the same variable
         let left_var = match &left_comp.var {
             VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
-            VarType::Distance(DistanceVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
             VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
 
         let right_var = match &right_comp.var {
             VarType::Phase(PhaseVar::AccumulateTime) => Some(WindowVariable::AccumulateTime),
-            VarType::Distance(DistanceVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
             VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
@@ -620,7 +618,7 @@ fn split_single_comp(
 fn extract_onetime_trigger(comp: &Comp) -> TriggerCondition {
     match &comp.var {
         VarType::Spatial(SpatialVar::IsLastStraightOnetime) => TriggerCondition::LastStraightEntry,
-        VarType::Position(PositionVar::ChangeOrderOnetime) => {
+        VarType::Order(OrderVar::ChangeOrderOnetime) => {
             TriggerCondition::PositionChange { delta: comp.value }
         }
         VarType::Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpEmpty,
@@ -635,11 +633,11 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             threshold: comp.value as f64,
             operator: comp.op,
         },
-        VarType::Distance(DistanceVar::DistanceRate) => TriggerCondition::DistanceCovered {
+        VarType::Spatial(SpatialVar::DistanceRate) => TriggerCondition::DistanceCovered {
             threshold: comp.value as f64,
             operator: comp.op,
         },
-        VarType::Distance(DistanceVar::RemainDistance) => TriggerCondition::DistanceRemaining {
+        VarType::Spatial(SpatialVar::RemainDistance) => TriggerCondition::DistanceRemaining {
             threshold: comp.value as f64,
             operator: comp.op,
         },
@@ -647,7 +645,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             threshold: comp.value as f64,
             operator: comp.op,
         },
-        VarType::Distance(DistanceVar::Furlong) => TriggerCondition::FurlongCrossed {
+        VarType::Spatial(SpatialVar::Furlong) => TriggerCondition::FurlongCrossed {
             threshold: comp.value as f64,
             operator: comp.op,
         },

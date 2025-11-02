@@ -3,8 +3,8 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {
     BaseStat(StatKind),            // Base stats
-    Position(PositionVar),         // Position/Order related
-    Distance(DistanceVar),         // Distance related
+    Order(OrderVar),               // Order (rank) related
+    Distance(DistanceVar),         // Distance relative to other runners
     Phase(PhaseVar),               // Phase/Time related
     Course(CourseVar),             // Course features
     Spatial(SpatialVar),           // Runner position relative to course features
@@ -12,7 +12,7 @@ pub enum VarType {
     RaceParam(RaceParamVar),       // Race parameters
     RunningStyle(RunningStyleVar), // Running style related
     Status(StatusVar),             // Status/State flags
-    Trigger(TriggerVar),           // Random/Trigger variables
+    Random(RandomVar),             // Random activation
     Blocking(BlockingVar),         // Blocking/Lane related
     Temptation(TemptationVar),     // Rush/Temptation related
     Always,                        // Special
@@ -29,7 +29,7 @@ pub enum StatKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PositionVar {
+pub enum OrderVar {
     ChangeOrderOnetime,
     ChangeOrderUpEndAfter,
     ChangeOrderUpFinalcornerAfter,
@@ -57,19 +57,12 @@ pub enum DistanceVar {
     DistanceDiffRate,
     DistanceDiffTop,
     DistanceDiffTopFloat,
-    DistanceRate,
-    DistanceRateAfterRandom,
-    Furlong,
-    RemainDistance,
     RemainDistanceViewerId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhaseVar {
     AccumulateTime,
-    IsFinalcorner,
-    IsFinalcornerLaterhalf,
-    IsFinalcornerRandom,
     Phase,
     PhaseCornerRandom,
     PhaseFirsthalf,
@@ -101,11 +94,18 @@ pub enum SpatialVar {
     AllCornerRandom,
     Corner,
     CornerRandom,
+    DistanceRate,
+    DistanceRateAfterRandom,
     DownSlopeRandom,
+    Furlong,
+    IsFinalcorner,
+    IsFinalcornerLaterhalf,
+    IsFinalcornerRandom,
     IsLastStraight,
     IsLastStraightOnetime,
     LaneType,
     LastStraightRandom,
+    RemainDistance,
     Slope,
     StraightFrontType,
     StraightRandom,
@@ -185,7 +185,7 @@ pub enum StatusVar {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TriggerVar {
+pub enum RandomVar {
     RandomLot,
 }
 
@@ -209,7 +209,7 @@ impl fmt::Display for VarType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             VarType::BaseStat(s) => write!(f, "base_{}", s),
-            VarType::Position(p) => write!(f, "{}", p),
+            VarType::Order(o) => write!(f, "{}", o),
             VarType::Distance(d) => write!(f, "{}", d),
             VarType::Phase(p) => write!(f, "{}", p),
             VarType::Spatial(l) => write!(f, "{}", l),
@@ -218,7 +218,7 @@ impl fmt::Display for VarType {
             VarType::RaceParam(r) => write!(f, "{}", r),
             VarType::RunningStyle(r) => write!(f, "{}", r),
             VarType::Status(s) => write!(f, "{}", s),
-            VarType::Trigger(t) => write!(f, "{}", t),
+            VarType::Random(r) => write!(f, "{}", r),
             VarType::Blocking(b) => write!(f, "{}", b),
             VarType::Temptation(t) => write!(f, "{}", t),
             VarType::Always => write!(f, "always"),
@@ -258,7 +258,7 @@ macro_rules! impl_display_snake_case {
     };
 }
 
-impl_display_snake_case!(PositionVar);
+impl_display_snake_case!(OrderVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
 impl_display_snake_case!(SpatialVar);
@@ -267,7 +267,7 @@ impl_display_snake_case!(ActivationVar);
 impl_display_snake_case!(RaceParamVar);
 impl_display_snake_case!(RunningStyleVar);
 impl_display_snake_case!(StatusVar);
-impl_display_snake_case!(TriggerVar);
+impl_display_snake_case!(RandomVar);
 impl_display_snake_case!(BlockingVar);
 impl_display_snake_case!(TemptationVar);
 
@@ -281,47 +281,40 @@ impl VarType {
             "base_guts" => VarType::BaseStat(StatKind::Guts),
             "base_wiz" => VarType::BaseStat(StatKind::Wiz),
 
-            // Position
-            "change_order_onetime" => VarType::Position(PositionVar::ChangeOrderOnetime),
-            "change_order_up_end_after" => VarType::Position(PositionVar::ChangeOrderUpEndAfter),
+            // Order/Rank
+            "change_order_onetime" => VarType::Order(OrderVar::ChangeOrderOnetime),
+            "change_order_up_end_after" => VarType::Order(OrderVar::ChangeOrderUpEndAfter),
             "change_order_up_finalcorner_after" => {
-                VarType::Position(PositionVar::ChangeOrderUpFinalcornerAfter)
+                VarType::Order(OrderVar::ChangeOrderUpFinalcornerAfter)
             }
-            "change_order_up_middle" => VarType::Position(PositionVar::ChangeOrderUpMiddle),
-            "near_count" => VarType::Position(PositionVar::NearCount),
-            "near_infront_count" => VarType::Position(PositionVar::NearInfrontCount),
-            "order" => VarType::Position(PositionVar::Order),
-            "order_rate" => VarType::Position(PositionVar::OrderRate),
-            "order_rate_in20_continue" => VarType::Position(PositionVar::OrderRateIn20Continue),
-            "order_rate_in40_continue" => VarType::Position(PositionVar::OrderRateIn40Continue),
-            "order_rate_in50_continue" => VarType::Position(PositionVar::OrderRateIn50Continue),
-            "order_rate_in80_continue" => VarType::Position(PositionVar::OrderRateIn80Continue),
-            "order_rate_out20_continue" => VarType::Position(PositionVar::OrderRateOut20Continue),
-            "order_rate_out40_continue" => VarType::Position(PositionVar::OrderRateOut40Continue),
-            "order_rate_out50_continue" => VarType::Position(PositionVar::OrderRateOut50Continue),
-            "order_rate_out70_continue" => VarType::Position(PositionVar::OrderRateOut70Continue),
+            "change_order_up_middle" => VarType::Order(OrderVar::ChangeOrderUpMiddle),
+            "near_count" => VarType::Order(OrderVar::NearCount),
+            "near_infront_count" => VarType::Order(OrderVar::NearInfrontCount),
+            "order" => VarType::Order(OrderVar::Order),
+            "order_rate" => VarType::Order(OrderVar::OrderRate),
+            "order_rate_in20_continue" => VarType::Order(OrderVar::OrderRateIn20Continue),
+            "order_rate_in40_continue" => VarType::Order(OrderVar::OrderRateIn40Continue),
+            "order_rate_in50_continue" => VarType::Order(OrderVar::OrderRateIn50Continue),
+            "order_rate_in80_continue" => VarType::Order(OrderVar::OrderRateIn80Continue),
+            "order_rate_out20_continue" => VarType::Order(OrderVar::OrderRateOut20Continue),
+            "order_rate_out40_continue" => VarType::Order(OrderVar::OrderRateOut40Continue),
+            "order_rate_out50_continue" => VarType::Order(OrderVar::OrderRateOut50Continue),
+            "order_rate_out70_continue" => VarType::Order(OrderVar::OrderRateOut70Continue),
             "overtake_target_no_order_up_time" => {
-                VarType::Position(PositionVar::OvertakeTargetNoOrderUpTime)
+                VarType::Order(OrderVar::OvertakeTargetNoOrderUpTime)
             }
-            "overtake_target_time" => VarType::Position(PositionVar::OvertakeTargetTime),
+            "overtake_target_time" => VarType::Order(OrderVar::OvertakeTargetTime),
 
-            // Distance
+            // Distance to other runners
             "bashin_diff_behind" => VarType::Distance(DistanceVar::BashinDiffBehind),
             "bashin_diff_infront" => VarType::Distance(DistanceVar::BashinDiffInfront),
             "distance_diff_rate" => VarType::Distance(DistanceVar::DistanceDiffRate),
             "distance_diff_top_float" => VarType::Distance(DistanceVar::DistanceDiffTopFloat),
             "distance_diff_top" => VarType::Distance(DistanceVar::DistanceDiffTop),
-            "distance_rate" => VarType::Distance(DistanceVar::DistanceRate),
-            "distance_rate_after_random" => VarType::Distance(DistanceVar::DistanceRateAfterRandom),
-            "furlong" => VarType::Distance(DistanceVar::Furlong),
-            "remain_distance" => VarType::Distance(DistanceVar::RemainDistance),
             "remain_distance_viewer_id" => VarType::Distance(DistanceVar::RemainDistanceViewerId),
 
             // Phase/Time
             "accumulatetime" => VarType::Phase(PhaseVar::AccumulateTime),
-            "is_finalcorner" => VarType::Phase(PhaseVar::IsFinalcorner),
-            "is_finalcorner_laterhalf" => VarType::Phase(PhaseVar::IsFinalcornerLaterhalf),
-            "is_finalcorner_random" => VarType::Phase(PhaseVar::IsFinalcornerRandom),
             "phase" => VarType::Phase(PhaseVar::Phase),
             "phase_corner_random" => VarType::Phase(PhaseVar::PhaseCornerRandom),
             "phase_first_half_straight_random" => {
@@ -353,11 +346,18 @@ impl VarType {
             "all_corner_random" => VarType::Spatial(SpatialVar::AllCornerRandom),
             "corner" => VarType::Spatial(SpatialVar::Corner),
             "corner_random" => VarType::Spatial(SpatialVar::CornerRandom),
+            "distance_rate" => VarType::Spatial(SpatialVar::DistanceRate),
+            "distance_rate_after_random" => VarType::Spatial(SpatialVar::DistanceRateAfterRandom),
             "down_slope_random" => VarType::Spatial(SpatialVar::DownSlopeRandom),
+            "furlong" => VarType::Spatial(SpatialVar::Furlong),
+            "is_finalcorner" => VarType::Spatial(SpatialVar::IsFinalcorner),
+            "is_finalcorner_laterhalf" => VarType::Spatial(SpatialVar::IsFinalcornerLaterhalf),
+            "is_finalcorner_random" => VarType::Spatial(SpatialVar::IsFinalcornerRandom),
             "is_last_straight" => VarType::Spatial(SpatialVar::IsLastStraight),
             "is_last_straight_onetime" => VarType::Spatial(SpatialVar::IsLastStraightOnetime),
             "lane_type" => VarType::Spatial(SpatialVar::LaneType),
             "last_straight_random" => VarType::Spatial(SpatialVar::LastStraightRandom),
+            "remain_distance" => VarType::Spatial(SpatialVar::RemainDistance),
             "slope" => VarType::Spatial(SpatialVar::Slope),
             "straight_front_type" => VarType::Spatial(SpatialVar::StraightFrontType),
             "straight_random" => VarType::Spatial(SpatialVar::StraightRandom),
@@ -463,8 +463,8 @@ impl VarType {
             "post_number" => VarType::Status(StatusVar::PostNumber),
             "temptation_count" => VarType::Status(StatusVar::TemptationCount),
 
-            // Triggers
-            "random_lot" => VarType::Trigger(TriggerVar::RandomLot),
+            // Randoms
+            "random_lot" => VarType::Random(RandomVar::RandomLot),
 
             // Blocking
             "blocked_all_continuetime" => VarType::Blocking(BlockingVar::BlockedAllContinuetime),
@@ -543,7 +543,7 @@ impl VarType {
 
         match self {
             // RANDOM GATES - Activate at pre-rolled location, check guards there
-            Trigger(TriggerVar::RandomLot) => RandomGate,
+            Random(RandomVar::RandomLot) => RandomGate,
             Phase(PhaseVar::PhaseRandom) => RandomGate,
             Phase(PhaseVar::PhaseFirsthalfRandom) => RandomGate,
             Phase(PhaseVar::PhaseFirstquarterRandom) => RandomGate,
@@ -552,7 +552,7 @@ impl VarType {
             Phase(PhaseVar::PhaseStraightRandom) => RandomGate,
             Phase(PhaseVar::PhaseFirstHalfStraightRandom) => RandomGate,
             Phase(PhaseVar::PhaseLatterHalfStraightRandom) => RandomGate,
-            Phase(PhaseVar::IsFinalcornerRandom) => RandomGate,
+            Spatial(SpatialVar::IsFinalcornerRandom) => RandomGate,
             Spatial(SpatialVar::CornerRandom) => RandomGate,
             Spatial(SpatialVar::AllCornerRandom) => RandomGate,
             Spatial(SpatialVar::StraightRandom) => RandomGate,
@@ -560,11 +560,11 @@ impl VarType {
             Spatial(SpatialVar::UpSlopeRandom) => RandomGate,
             Spatial(SpatialVar::UpSlopeRandomLaterHalf) => RandomGate,
             Spatial(SpatialVar::DownSlopeRandom) => RandomGate,
-            Distance(DistanceVar::DistanceRateAfterRandom) => RandomGate,
+            Spatial(SpatialVar::DistanceRateAfterRandom) => RandomGate,
 
             // ONETIME EVENTS - State changes that persist
             Spatial(SpatialVar::IsLastStraightOnetime) => OnetimeEvent,
-            Position(PositionVar::ChangeOrderOnetime) => OnetimeEvent,
+            Order(OrderVar::ChangeOrderOnetime) => OnetimeEvent,
             Status(StatusVar::IsHpEmptyOnetime) => OnetimeEvent,
 
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context
@@ -572,11 +572,11 @@ impl VarType {
             Phase(PhaseVar::AccumulateTime) => MonotonicGuard,
 
             // Distance-based (increasing)
-            Distance(DistanceVar::DistanceRate) => MonotonicGuard,
-            Distance(DistanceVar::Furlong) => MonotonicGuard,
+            Spatial(SpatialVar::DistanceRate) => MonotonicGuard,
+            Spatial(SpatialVar::Furlong) => MonotonicGuard,
 
             // Distance-based (decreasing)
-            Distance(DistanceVar::RemainDistance) => MonotonicGuard,
+            Spatial(SpatialVar::RemainDistance) => MonotonicGuard,
             Distance(DistanceVar::RemainDistanceViewerId) => MonotonicGuard,
 
             // HP-based (decreasing)
@@ -591,8 +591,8 @@ impl VarType {
             // SPATIAL TRIGGERS - Fire when entering/exiting course features
             // Corners
             Spatial(SpatialVar::Corner) => SpatialTrigger,
-            Phase(PhaseVar::IsFinalcorner) => SpatialTrigger,
-            Phase(PhaseVar::IsFinalcornerLaterhalf) => SpatialTrigger,
+            Spatial(SpatialVar::IsFinalcorner) => SpatialTrigger,
+            Spatial(SpatialVar::IsFinalcornerLaterhalf) => SpatialTrigger,
 
             // Slopes
             Spatial(SpatialVar::Slope) => SpatialTrigger,
@@ -616,7 +616,7 @@ impl VarType {
             // Base stats
             BaseStat(_) => StaticGuard,
 
-            // Special value - it never changes by definition
+            // Special value - By definition, it never changes
             Always => StaticGuard,
 
             // Static status properties
@@ -657,24 +657,24 @@ impl VarType {
             Activation(ActivationVar::CompeteFightCount) => DynamicGuard,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
 
-            // Position/Order (multi-uma, but act as guards)
-            Position(PositionVar::Order) => DynamicGuard,
-            Position(PositionVar::OrderRate) => DynamicGuard,
-            Position(PositionVar::NearCount) => DynamicGuard,
-            Position(PositionVar::NearInfrontCount) => DynamicGuard,
-            Position(PositionVar::ChangeOrderUpEndAfter) => DynamicGuard,
-            Position(PositionVar::ChangeOrderUpFinalcornerAfter) => DynamicGuard,
-            Position(PositionVar::ChangeOrderUpMiddle) => DynamicGuard,
-            Position(PositionVar::OrderRateIn20Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateIn40Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateIn50Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateIn80Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateOut20Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateOut40Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateOut50Continue) => DynamicGuard,
-            Position(PositionVar::OrderRateOut70Continue) => DynamicGuard,
-            Position(PositionVar::OvertakeTargetTime) => DynamicGuard,
-            Position(PositionVar::OvertakeTargetNoOrderUpTime) => DynamicGuard,
+            // Order/Rank (multi-uma, but act as guards)
+            Order(OrderVar::Order) => DynamicGuard,
+            Order(OrderVar::OrderRate) => DynamicGuard,
+            Order(OrderVar::NearCount) => DynamicGuard,
+            Order(OrderVar::NearInfrontCount) => DynamicGuard,
+            Order(OrderVar::ChangeOrderUpEndAfter) => DynamicGuard,
+            Order(OrderVar::ChangeOrderUpFinalcornerAfter) => DynamicGuard,
+            Order(OrderVar::ChangeOrderUpMiddle) => DynamicGuard,
+            Order(OrderVar::OrderRateIn20Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateIn40Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateIn50Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateIn80Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateOut20Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateOut40Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateOut50Continue) => DynamicGuard,
+            Order(OrderVar::OrderRateOut70Continue) => DynamicGuard,
+            Order(OrderVar::OvertakeTargetTime) => DynamicGuard,
+            Order(OrderVar::OvertakeTargetNoOrderUpTime) => DynamicGuard,
 
             // Distance (multi-uma, but act as guards)
             Distance(DistanceVar::DistanceDiffTop) => DynamicGuard,
@@ -715,11 +715,11 @@ mod tests {
         ));
         assert!(matches!(
             VarType::parse("order"),
-            VarType::Position(PositionVar::Order)
+            VarType::Order(OrderVar::Order)
         ));
         assert!(matches!(
-            VarType::parse("remain_distance"),
-            VarType::Distance(DistanceVar::RemainDistance)
+            VarType::parse("remain_distance_viewer_id"),
+            VarType::Distance(DistanceVar::RemainDistanceViewerId)
         ));
         assert!(matches!(
             VarType::parse("corner_count"),
@@ -731,7 +731,7 @@ mod tests {
         ));
         assert!(matches!(
             VarType::parse("random_lot"),
-            VarType::Trigger(TriggerVar::RandomLot)
+            VarType::Random(RandomVar::RandomLot)
         ));
         assert!(matches!(VarType::parse("always"), VarType::Always));
     }
