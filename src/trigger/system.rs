@@ -1,9 +1,8 @@
 use crate::condition::parser::CompOp;
 use crate::course::Phase;
-use crate::course::geometry::SlopeType;
 use crate::race::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 
 /// Main scheduler coordinating all trigger types
 ///
@@ -34,9 +33,6 @@ pub struct TriggerScheduler {
     // Continuous triggers - checked every step (minimized)
     pub continuous_triggers: Vec<usize>,
 
-    // Random triggers - pre-rolled at race start
-    pub random_activations: HashMap<usize, RandomActivation>,
-
     // Activation tracking
     pub activation_counts: ActivationCounts,
 }
@@ -57,7 +53,6 @@ impl TriggerScheduler {
             straight_triggers: Vec::new(),
             onetime_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
-            random_activations: HashMap::new(),
             activation_counts: ActivationCounts::default(),
         }
     }
@@ -274,17 +269,6 @@ pub enum OnetimeType {
     LastStraightEntry,   // is_last_straight_onetime
     PositionChange(i32), // change_order_onetime (delta)
     HpEmpty,             // is_hp_empty_onetime
-}
-
-// ========== RANDOM TRIGGERS ==========
-
-#[derive(Clone, Debug)]
-pub struct RandomActivation {
-    pub activation_distance: f64,
-    pub phase_restriction: Option<Phase>,
-    pub corner_restriction: Option<usize>,
-    pub slope_restriction: Option<SlopeType>,
-    pub activated: bool,
 }
 
 // ========== ACTIVATION TRACKING ==========

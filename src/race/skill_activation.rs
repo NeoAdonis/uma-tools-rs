@@ -32,7 +32,6 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::Phase;
 use crate::course::geometry::SlopeType;
-use crate::trigger::system::RandomActivation;
 use crate::uma::skill::SkillEffect;
 
 /// Complete activation logic for a skill
@@ -87,19 +86,6 @@ pub enum WindowVariable {
 /// A trigger condition that determines WHEN to check a skill
 #[derive(Clone, Debug)]
 pub enum TriggerCondition {
-    // ========== RANDOM GATES ==========
-    /// Random activation at specific distance
-    /// Fires ONCE at this exact point, checks guards there
-    RandomActivation {
-        activation_distance: f64,
-        /// If Some, only activate if still in this phase
-        phase_restriction: Option<Phase>,
-        /// If Some, only activate if still on this corner
-        corner_restriction: Option<usize>,
-        /// If Some, only activate if still on this slope type
-        slope_restriction: Option<SlopeType>,
-    },
-
     // ========== MONOTONIC TRIGGERS ==========
     /// Time elapsed since race start
     Time { threshold: f64, operator: CompOp },
@@ -184,8 +170,7 @@ impl TriggerCondition {
     pub fn is_onetime(&self) -> bool {
         matches!(
             self,
-            TriggerCondition::RandomActivation { .. }
-                | TriggerCondition::LastStraightEntry
+            TriggerCondition::LastStraightEntry
                 | TriggerCondition::PositionChange { .. }
                 | TriggerCondition::HpEmpty
         )
@@ -273,9 +258,9 @@ impl SkillActivationLogic {
 /// - Guards: `hp_per>=20 & ground_type==2`
 pub fn split_condition(
     condition: &Condition,
-    random_activation: Option<&RandomActivation>,
+    random_activation: Vec<f64>,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
-    let branches = split_comp_list(&condition.comp_list, random_activation);
+    let branches = split_comp_list(&condition.comp_list, &random_activation);
 
     // Apply promotion logic to each branch at the top level
     branches
@@ -342,7 +327,7 @@ fn try_detect_window(
 /// Recursively split a CompList, handling OR branches
 fn split_comp_list(
     comp_list: &CompList,
-    random_activation: Option<&RandomActivation>,
+    random_activation: &Vec<f64>,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
     match comp_list {
         CompList::Single(comp) => {
@@ -553,24 +538,32 @@ fn rebuild_guard_condition(guards: Vec<Comp>) -> Condition {
 /// in split_comp_list after analyzing all conditions together.
 fn split_single_comp(
     comp: &Comp,
-    random_activation: Option<&RandomActivation>,
+    random_activation: &[f64],
 ) -> (Vec<TriggerCondition>, Option<Condition>) {
     let role = comp.var.variable_role();
 
     match role {
         VariableRole::RandomGate => {
             // Extract random activation trigger
-            if let Some(activation) = random_activation {
-                let trigger = TriggerCondition::RandomActivation {
-                    activation_distance: activation.activation_distance,
-                    phase_restriction: activation.phase_restriction,
-                    corner_restriction: activation.corner_restriction,
-                    slope_restriction: activation.slope_restriction,
+            if let VarType::Random(_) = &comp.var {
+                // If we are here, it means that the activation roll succeeded
+                // → create a trigger that always fires
+                let guard = Condition {
+                    comp_list: CompList::Single(Comp {
+                        var: VarType::Always,
+                        op: CompOp::Equal,
+                        value: 1,
+                    }),
                 };
-                (vec![trigger], None)
+                (vec![], Some(guard))
             } else {
-                // No random activation available - treat as continuous
-                (vec![TriggerCondition::Continuous], None)
+                // Create trigger based on random activation distance
+                let trigger = TriggerCondition::DistanceCovered {
+                    threshold: random_activation[0],
+                    operator: comp.op,
+                };
+                // TODO: remove the used activation distance
+                (vec![trigger], None)
             }
         }
 
@@ -755,13 +748,12 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::condition::parser::parse_condition;
 
     #[test]
     fn test_split_simple_guard_only() {
         // Condition with only static guards (no triggers, no monotonic guards)
         let condition = parse_condition("ground_type==2&motivation>=4").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         // Should have 1 branch
         assert_eq!(branches.len(), 1);
@@ -780,7 +772,7 @@ mod tests {
     fn test_split_hp_trigger_with_guards() {
         // Condition: hp_per<=50 & ground_type==2
         let condition = parse_condition("hp_per<=50&ground_type==2").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         // Should have 1 branch
         assert_eq!(branches.len(), 1);
@@ -807,15 +799,9 @@ mod tests {
         let condition = parse_condition("phase_random==1&hp_per>=20").unwrap();
 
         // Simulate random activation
-        let activation = RandomActivation {
-            activation_distance: 800.0,
-            phase_restriction: Some(Phase::Mid),
-            corner_restriction: None,
-            slope_restriction: None,
-            activated: false,
-        };
+        let activation = vec![800.0];
 
-        let branches = split_condition(&condition, Some(&activation));
+        let branches = split_condition(&condition, activation);
 
         // Should have 1 branch
         assert_eq!(branches.len(), 1);
@@ -826,7 +812,7 @@ mod tests {
         assert_eq!(triggers.len(), 1);
         assert!(matches!(
             triggers[0],
-            TriggerCondition::RandomActivation { .. }
+            TriggerCondition::DistanceCovered { .. }
         ));
 
         // Should have hp_per guard (NOT phase_random)
@@ -837,7 +823,7 @@ mod tests {
     fn test_split_onetime_event() {
         // Condition: is_last_straight_onetime==1
         let condition = parse_condition("is_last_straight_onetime==1").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         // Should have 1 branch
         assert_eq!(branches.len(), 1);
@@ -859,15 +845,9 @@ mod tests {
         let condition =
             parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
 
-        let activation = RandomActivation {
-            activation_distance: 800.0,
-            phase_restriction: Some(Phase::Mid),
-            corner_restriction: None,
-            slope_restriction: None,
-            activated: false,
-        };
+        let activation = vec![800.0];
 
-        let branches = split_condition(&condition, Some(&activation));
+        let branches = split_condition(&condition, activation);
 
         // Should have 2 branches (one for each OR alternative)
         assert_eq!(branches.len(), 2);
@@ -877,7 +857,7 @@ mod tests {
         assert!(
             triggers1
                 .iter()
-                .any(|t| matches!(t, TriggerCondition::RandomActivation { .. }))
+                .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
         );
         assert!(guards1.is_some());
 
@@ -899,24 +879,18 @@ mod tests {
         // Tests Rule 1: MonotonicGuard (hp_per) stays as guard when paired with explicit trigger (phase_random)
         let condition = parse_condition("phase_random==3&hp_per>=2&is_lastspurt==1").unwrap();
 
-        let activation = RandomActivation {
-            activation_distance: 1500.0,
-            phase_restriction: Some(Phase::Late),
-            corner_restriction: None,
-            slope_restriction: None,
-            activated: false,
-        };
+        let activation = vec![1500.0];
 
-        let branches = split_condition(&condition, Some(&activation));
+        let branches = split_condition(&condition, activation);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
 
-        // Should have RandomActivation trigger
+        // Should have DistanceCovered trigger
         assert_eq!(triggers.len(), 1);
         assert!(matches!(
             triggers[0],
-            TriggerCondition::RandomActivation { .. }
+            TriggerCondition::DistanceCovered { .. }
         ));
 
         // hp_per and is_lastspurt should remain as guards
@@ -928,7 +902,7 @@ mod tests {
         // Based on skill ID 100141 (Victoria por plancha ☆): "is_last_straight==1&hp_per>=30&order<=2"
         // Tests Rule 1: MonotonicGuard (hp_per) stays as guard with spatial trigger (is_last_straight)
         let condition = parse_condition("is_last_straight==1&hp_per>=30&order<=2").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
@@ -949,7 +923,7 @@ mod tests {
         // Based skill ID 100402111 (ドキッ☆じゃじゃウマ娘！): "running_style==1&slope==1&accumulatetime>=10"
         // Tests Rule 2: MonotonicGuard (accumulatetime) promoted to trigger when no explicit triggers
         let condition = parse_condition("running_style==1&slope==1&accumulatetime>=10").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
@@ -972,7 +946,7 @@ mod tests {
         // Based on skill ID 210141 (レースの真髄・心): "motivation>=4"
         // Tests Rule 3: Only static guards -> Continuous trigger fallback
         let condition = parse_condition("motivation>=4").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
@@ -996,7 +970,7 @@ mod tests {
              distance_rate<=50&order_rate>=40&order_rate<=80&behind_near_lane_time>=3&accumulatetime>=10"
         ).unwrap();
 
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         // Should have 2 branches (OR condition)
         assert_eq!(branches.len(), 2);
@@ -1024,7 +998,7 @@ mod tests {
     fn test_furlong_trigger_promoted() {
         // Tests that furlong conditions are promoted to triggers when no explicit triggers exist
         let condition = parse_condition("furlong>=3&ground_type==2").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
@@ -1048,24 +1022,18 @@ mod tests {
         // Tests that furlong stays as guard when paired with explicit trigger (e.g., random)
         let condition = parse_condition("phase_random==1&furlong>=5").unwrap();
 
-        let activation = RandomActivation {
-            activation_distance: 800.0,
-            phase_restriction: Some(Phase::Mid),
-            corner_restriction: None,
-            slope_restriction: None,
-            activated: false,
-        };
+        let activation = vec![800.0];
 
-        let branches = split_condition(&condition, Some(&activation));
+        let branches = split_condition(&condition, activation);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];
 
-        // Should have RandomActivation trigger only
+        // Should have DistanceCovered trigger only
         assert_eq!(triggers.len(), 1);
         assert!(matches!(
             triggers[0],
-            TriggerCondition::RandomActivation { .. }
+            TriggerCondition::DistanceCovered { .. }
         ));
 
         // furlong should remain as guard (not promoted)
@@ -1076,7 +1044,7 @@ mod tests {
     fn test_furlong_equality() {
         // Tests furlong==N condition
         let condition = parse_condition("furlong==3").unwrap();
-        let branches = split_condition(&condition, None);
+        let branches = split_condition(&condition, vec![]);
 
         assert_eq!(branches.len(), 1);
         let (triggers, guards) = &branches[0];

@@ -1,105 +1,63 @@
+use std::vec;
+
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::Course;
 use crate::course::Phase as CoursePhase;
-use crate::course::geometry::SlopeType;
-use crate::skill::Skill;
-use crate::trigger::system::RandomActivation;
 use rand::prelude::*;
-use std::collections::HashMap;
 
-/// Pre-roll all random triggers before race starts
-/// Returns a map from skill_index to RandomActivation
-pub fn preroll_random_triggers(
-    skills: &[Skill],
-    course: &Course,
-    rng: &mut impl Rng,
-) -> HashMap<usize, RandomActivation> {
-    let mut activations = HashMap::new();
-
-    for (skill_idx, skill) in skills.iter().enumerate() {
-        for alternative in &skill.alternatives {
-            if let Ok(condition) = parse_condition(&alternative.condition)
-                && let Some(activation) = roll_condition(&condition, course, rng)
-            {
-                activations.insert(skill_idx, activation);
-                break; // Only one alternative per skill activates
-            }
-        }
-    }
-
-    activations
-}
-
-/// Roll a condition to determine if and where it activates
-fn roll_condition(
+/// Evaluate all random variables in a condition
+pub fn roll_condition(
     condition: &Condition,
     course: &Course,
     rng: &mut impl Rng,
-) -> Option<RandomActivation> {
-    let mut context = RollContext {
-        has_random: false,
-        activation_distance: 0.0,
-        phase_restriction: None,
-        corner_restriction: None,
-        slope_restriction: None,
-        failed: false,
-    };
-
-    // Walk the condition tree and process random variables
-    visit_comps(&condition.comp_list, &mut context, course, rng);
-
-    if context.failed {
-        return None; // Random roll failed, skill never activates
-    }
-
-    if context.has_random {
-        Some(RandomActivation {
-            activation_distance: context.activation_distance,
-            phase_restriction: context.phase_restriction,
-            corner_restriction: context.corner_restriction,
-            slope_restriction: context.slope_restriction,
-            activated: false,
-        })
-    } else {
-        None // No random variables in this condition
-    }
+) -> Result<Vec<f64>, ()> {
+    visit_comps(&condition.comp_list, course, rng)
 }
 
-struct RollContext {
-    has_random: bool,
-    activation_distance: f64,
-    phase_restriction: Option<CoursePhase>,
-    corner_restriction: Option<usize>,
-    slope_restriction: Option<SlopeType>,
-    failed: bool,
-}
-
-/// Visit all comparisons in a CompList and process random variables
-fn visit_comps(
-    comp_list: &CompList,
-    context: &mut RollContext,
-    course: &Course,
-    rng: &mut impl Rng,
-) {
+/// Visit all comparisons in a list and process random variables
+///
+/// Returns Ok(activation_distances) indicating where the skill should activate,
+/// or Err(()) if a random lot roll failed or a condition within the list is invalid
+fn visit_comps(comp_list: &CompList, course: &Course, rng: &mut impl Rng) -> Result<Vec<f64>, ()> {
     match comp_list {
-        CompList::Single(comp) => {
-            process_random_comp(comp, context, course, rng);
-        }
-        CompList::Binary { left, right, .. } => {
-            visit_comps(left, context, course, rng);
-            visit_comps(right, context, course, rng);
+        CompList::Single(comp) => process_random_comp(comp, course, rng),
+        CompList::Binary { left, op, right } => {
+            match op {
+                BinOp::And => {
+                    // All comparisons must succeed
+                    let mut left_vals = visit_comps(left, course, rng)?;
+                    let right_vals = visit_comps(right, course, rng)?;
+                    left_vals.extend(right_vals);
+                    Ok(left_vals)
+                }
+                BinOp::Or => {
+                    // Will fail only if both comparisons fail
+                    match visit_comps(left, course, rng) {
+                        Ok(mut left_vals) => match visit_comps(right, course, rng) {
+                            Ok(right_vals) => {
+                                left_vals.extend(right_vals);
+                                Ok(left_vals)
+                            }
+                            Err(()) => Ok(left_vals),
+                        },
+                        Err(()) => visit_comps(right, course, rng),
+                    }
+                }
+            }
         }
     }
 }
 
 /// Process a single comparison that might contain a random variable
-fn process_random_comp(
+///
+/// Returns Ok(activation_distances) indicating where the skill should activate,
+/// or Err(()) if a random lot roll failed or a condition is invalid
+pub fn process_random_comp(
     comp: &Comp,
-    context: &mut RollContext,
     course: &Course,
     rng: &mut impl Rng,
-) {
+) -> Result<Vec<f64>, ()> {
     use VarType::*;
 
     match &comp.var {
@@ -107,12 +65,11 @@ fn process_random_comp(
         Random(RandomVar::RandomLot) => {
             // random_lot==X means X% chance of activation
             let roll: f64 = rng.random();
-            context.has_random = true;
-
-            if roll * 100.0 >= comp.value as f64 {
-                context.failed = true;
+            if roll * 100.0 < comp.value as f64 {
+                Ok(vec![0.0]) // Success, activation distance is 0 (immediate)
+            } else {
+                Err(()) // Failed roll
             }
-            // If successful, activation_distance remains 0.0 (activates immediately when other conditions met)
         }
 
         // Random point during a phase
@@ -123,13 +80,12 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (start, end) = phase.boundaries(course);
-            context.activation_distance = rng.random_range(start..end);
-            context.phase_restriction = Some(phase);
-            context.has_random = true;
+            let activation_distance = rng.random_range(start..end);
+            Ok(vec![activation_distance])
         }
 
         Phase(PhaseVar::PhaseFirsthalfRandom) => {
@@ -140,14 +96,13 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (start, end) = phase.boundaries(course);
             let midpoint = (start + end) / 2.0;
-            context.activation_distance = rng.random_range(start..midpoint);
-            context.phase_restriction = Some(phase);
-            context.has_random = true;
+            let activation_distance = rng.random_range(start..midpoint);
+            Ok(vec![activation_distance])
         }
 
         Phase(PhaseVar::PhaseFirstquarterRandom) => {
@@ -158,14 +113,13 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (start, end) = phase.boundaries(course);
             let quarter_point = start + (end - start) * 0.25;
-            context.activation_distance = rng.random_range(start..quarter_point);
-            context.phase_restriction = Some(phase);
-            context.has_random = true;
+            let activation_distance = rng.random_range(start..quarter_point);
+            Ok(vec![activation_distance])
         }
 
         Phase(PhaseVar::PhaseLaterhalfRandom) => {
@@ -176,14 +130,13 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (start, end) = phase.boundaries(course);
-            let midpoint = (start + end) / 2.0;
-            context.activation_distance = rng.random_range(midpoint..end);
-            context.phase_restriction = Some(phase);
-            context.has_random = true;
+            let midpoint = start + (end - start) * 0.25;
+            let activation_distance = rng.random_range(midpoint..end);
+            Ok(vec![activation_distance])
         }
 
         Phase(PhaseVar::PhaseCornerRandom) => {
@@ -194,7 +147,7 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (phase_start, phase_end) = phase.boundaries(course);
@@ -210,10 +163,11 @@ fn process_random_comp(
                 })
                 .collect();
 
-            if let Some(distance) = random_point_in_intervals(&corner_intervals, rng) {
-                context.activation_distance = distance;
-                context.phase_restriction = Some(phase);
-                context.has_random = true;
+            if let Some(activation_distance) = random_point_in_intervals(&corner_intervals, rng) {
+                Ok(vec![activation_distance])
+            } else {
+                // No corners in this phase, fail the roll
+                Err(())
             }
         }
 
@@ -225,7 +179,7 @@ fn process_random_comp(
                 1 => CoursePhase::Mid,
                 2 => CoursePhase::Late,
                 3 => CoursePhase::Last,
-                _ => return,
+                _ => return Err(()),
             };
 
             let (phase_start, phase_end) = phase.boundaries(course);
@@ -239,10 +193,11 @@ fn process_random_comp(
                 })
                 .collect();
 
-            if let Some(distance) = random_point_in_intervals(&straight_intervals, rng) {
-                context.activation_distance = distance;
-                context.phase_restriction = Some(phase);
-                context.has_random = true;
+            if let Some(activation_distance) = random_point_in_intervals(&straight_intervals, rng) {
+                Ok(vec![activation_distance])
+            } else {
+                // No straights in this phase, fail the roll
+                Err(())
             }
         }
 
@@ -251,21 +206,22 @@ fn process_random_comp(
             let section_len = course.section_length();
             let halfway = section_len * 12.0;
 
-            if !course.straights.is_empty() {
-                // Filter straights that are in first half
-                let first_half_straights: Vec<_> = course
-                    .straights
-                    .iter()
-                    .filter(|s| s.start < halfway)
-                    .collect();
+            // Filter straights that are in first half
+            let first_half_straights: Vec<_> = course
+                .straights
+                .iter()
+                .filter(|s| s.start < halfway)
+                .collect();
 
-                if !first_half_straights.is_empty() {
-                    let straight =
-                        first_half_straights[rng.random_range(0..first_half_straights.len())];
-                    let end = straight.end.min(halfway);
-                    context.activation_distance = rng.random_range(straight.start..end);
-                    context.has_random = true;
-                }
+            if !first_half_straights.is_empty() {
+                let straight =
+                    first_half_straights[rng.random_range(0..first_half_straights.len())];
+                let end = straight.end.min(halfway);
+                let activation_distance = rng.random_range(straight.start..end);
+                Ok(vec![activation_distance])
+            } else {
+                // No straights in this phase, fail the roll
+                Err(())
             }
         }
 
@@ -274,21 +230,22 @@ fn process_random_comp(
             let section_len = course.section_length();
             let halfway = section_len * 12.0;
 
-            if !course.straights.is_empty() {
-                // Filter straights that are in second half
-                let second_half_straights: Vec<_> = course
-                    .straights
-                    .iter()
-                    .filter(|s| s.end > halfway)
-                    .collect();
+            // Filter straights that are in second half
+            let second_half_straights: Vec<_> = course
+                .straights
+                .iter()
+                .filter(|s| s.end > halfway)
+                .collect();
 
-                if !second_half_straights.is_empty() {
-                    let straight =
-                        second_half_straights[rng.random_range(0..second_half_straights.len())];
-                    let start = straight.start.max(halfway);
-                    context.activation_distance = rng.random_range(start..straight.end);
-                    context.has_random = true;
-                }
+            if !second_half_straights.is_empty() {
+                let straight =
+                    second_half_straights[rng.random_range(0..second_half_straights.len())];
+                let start = straight.start.max(halfway);
+                let activation_distance = rng.random_range(start..straight.end);
+                Ok(vec![activation_distance])
+            } else {
+                // No straights in this phase, fail the roll
+                Err(())
             }
         }
 
@@ -297,9 +254,11 @@ fn process_random_comp(
             // Picks random point on final corner
             if let Some(last_corner) = course.corners.last() {
                 let offset: f64 = rng.random();
-                context.activation_distance = last_corner.start + offset * last_corner.length;
-                context.corner_restriction = Some(course.corners.len() - 1);
-                context.has_random = true;
+                let activation_distance = last_corner.start + offset * last_corner.length;
+                Ok(vec![activation_distance])
+            } else {
+                // No corners on course, fail the roll
+                Err(())
             }
         }
 
@@ -309,9 +268,11 @@ fn process_random_comp(
             if corner_idx < course.corners.len() {
                 let corner = &course.corners[corner_idx];
                 let offset: f64 = rng.random();
-                context.activation_distance = corner.start + offset * corner.length;
-                context.corner_restriction = Some(corner_idx);
-                context.has_random = true;
+                let activation_distance = corner.start + offset * corner.length;
+                Ok(vec![activation_distance])
+            } else {
+                // Invalid corner index, fail the roll
+                Err(())
             }
         }
 
@@ -323,9 +284,11 @@ fn process_random_comp(
                 let corner_idx = rng.random_range(0..course.corners.len());
                 let corner = &course.corners[corner_idx];
                 let offset: f64 = rng.random();
-                context.activation_distance = corner.start + offset * corner.length;
-                context.corner_restriction = Some(corner_idx);
-                context.has_random = true;
+                let activation_distance = corner.start + offset * corner.length;
+                Ok(vec![activation_distance])
+            } else {
+                // No corners on course, fail the roll
+                Err(())
             }
         }
 
@@ -335,8 +298,12 @@ fn process_random_comp(
             if !course.straights.is_empty() {
                 let straight_idx = rng.random_range(0..course.straights.len());
                 let straight = &course.straights[straight_idx];
-                context.activation_distance = rng.random_range(straight.start..straight.end);
-                context.has_random = true;
+                let activation_distance = rng.random_range(straight.start..straight.end);
+                Ok(vec![activation_distance])
+            } else {
+                // No straights on course, fail the roll
+                // (This should be rare/unlikely)
+                Err(())
             }
         }
 
@@ -344,9 +311,12 @@ fn process_random_comp(
             // last_straight_random==1
             // Picks random point on final straight
             if let Some(last_straight) = course.straights.last() {
-                context.activation_distance =
-                    rng.random_range(last_straight.start..last_straight.end);
-                context.has_random = true;
+                let activation_distance = rng.random_range(last_straight.start..last_straight.end);
+                Ok(vec![activation_distance])
+            } else {
+                // No straights on course, fail the roll
+                // (This should be rare/unlikely)
+                Err(())
             }
         }
 
@@ -358,9 +328,11 @@ fn process_random_comp(
             if !uphills.is_empty() {
                 let slope = uphills[rng.random_range(0..uphills.len())];
                 let offset: f64 = rng.random();
-                context.activation_distance = slope.start + offset * slope.length;
-                context.slope_restriction = Some(SlopeType::Uphill);
-                context.has_random = true;
+                let activation_distance = slope.start + offset * slope.length;
+                Ok(vec![activation_distance])
+            } else {
+                // No uphills on course, fail the roll
+                Err(())
             }
         }
 
@@ -379,9 +351,11 @@ fn process_random_comp(
             if !late_uphills.is_empty() {
                 let slope = late_uphills[rng.random_range(0..late_uphills.len())];
                 let offset: f64 = rng.random();
-                context.activation_distance = slope.start + offset * slope.length;
-                context.slope_restriction = Some(SlopeType::Uphill);
-                context.has_random = true;
+                let activation_distance = slope.start + offset * slope.length;
+                Ok(vec![activation_distance])
+            } else {
+                // No uphills after halfway on course, fail the roll
+                Err(())
             }
         }
 
@@ -393,9 +367,11 @@ fn process_random_comp(
             if !downhills.is_empty() {
                 let slope = downhills[rng.random_range(0..downhills.len())];
                 let offset: f64 = rng.random();
-                context.activation_distance = slope.start + offset * slope.length;
-                context.slope_restriction = Some(SlopeType::Downhill);
-                context.has_random = true;
+                let activation_distance = slope.start + offset * slope.length;
+                Ok(vec![activation_distance])
+            } else {
+                // No downhills on course, fail the roll
+                Err(())
             }
         }
 
@@ -404,18 +380,19 @@ fn process_random_comp(
             // Picks random point after X% of the race
             let threshold_distance = (comp.value as f64 / 100.0) * course.distance as f64;
             let end_distance = course.distance as f64;
-            context.activation_distance = rng.random_range(threshold_distance..end_distance);
-            context.has_random = true;
+            let activation_distance = rng.random_range(threshold_distance..end_distance);
+            Ok(vec![activation_distance])
         }
 
         _ => {
             // Not a random variable, skip
+            Ok(vec![])
         }
     }
 }
 
 /// Calculate intersection of two intervals [a_start, a_end] and [b_start, b_end]
-/// Returns Some((start, end)) if there's an intersection, None otherwise
+/// Returns Some((start, end)) if there's an intersection, Err(()) otherwise
 fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Option<(f64, f64)> {
     let intersection_start = a_start.max(b_start);
     let intersection_end = a_end.min(b_end);
@@ -502,7 +479,7 @@ mod tests {
         let mut rng = rand::rng();
         let result = roll_condition(&condition, &course, &mut rng);
 
-        assert!(result.is_some());
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -513,14 +490,13 @@ mod tests {
         let mut rng = rand::rng();
         let result = roll_condition(&condition, &course, &mut rng);
 
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let activation = result.unwrap();
-        assert_eq!(activation.phase_restriction, Some(Phase::Mid));
 
         // Check activation distance is within Mid phase boundaries
         let section = course.section_length();
-        assert!(activation.activation_distance >= section * 4.0);
-        assert!(activation.activation_distance < section * 16.0);
+        assert!(activation[0] >= section * 4.0);
+        assert!(activation[0] < section * 16.0);
     }
 
     #[test]
@@ -531,13 +507,35 @@ mod tests {
         let mut rng = rand::rng();
         let result = roll_condition(&condition, &course, &mut rng);
 
-        assert!(result.is_some());
+        assert!(result.is_ok());
         let activation = result.unwrap();
-        assert_eq!(activation.corner_restriction, Some(0));
 
         // Check activation distance is within first corner
-        assert!(activation.activation_distance >= 100.0);
-        assert!(activation.activation_distance <= 300.0);
+        assert!(activation[0] >= 100.0);
+        assert!(activation[0] <= 300.0);
+    }
+
+    #[test]
+    fn test_corner_random_multiple() {
+        let course = create_test_course();
+        let condition =
+            parse_condition("corner_random==1@corner_random==2@corner_random==3@corner_random==4")
+                .unwrap(); // First corner
+
+        let mut rng = rand::rng();
+        let result = roll_condition(&condition, &course, &mut rng);
+
+        // Even though corner 3 and 4 don't exist, the others should still roll successfully
+        assert!(result.is_ok());
+        let activation = result.unwrap();
+
+        // Check activation distance is within first corner
+        assert!(activation[0] >= 100.0);
+        assert!(activation[0] <= 300.0);
+
+        // Check activation distance is within second corner
+        assert!(activation[1] >= 500.0);
+        assert!(activation[1] <= 650.0);
     }
 
     #[test]
@@ -555,10 +553,10 @@ mod tests {
         // Run multiple times to ensure it's in valid range
         for _ in 0..20 {
             let result = roll_condition(&condition, &course, &mut rng);
-            assert!(result.is_some());
+            assert!(result.is_ok());
 
             let activation = result.unwrap();
-            let dist = activation.activation_distance;
+            let dist = activation[0];
 
             // Should be in Mid phase (400-1600)
             assert!(
@@ -573,9 +571,6 @@ mod tests {
                 "Distance {} not in corner2 segment [500, 650]",
                 dist
             );
-
-            // Verify phase restriction is set
-            assert_eq!(activation.phase_restriction, Some(Phase::Mid));
         }
     }
 
@@ -591,10 +586,10 @@ mod tests {
 
         for _ in 0..20 {
             let result = roll_condition(&condition, &course, &mut rng);
-            assert!(result.is_some());
+            assert!(result.is_ok());
 
             let activation = result.unwrap();
-            let dist = activation.activation_distance;
+            let dist = activation[0];
 
             // Should be in Early phase (0-400)
             assert!(
@@ -609,9 +604,6 @@ mod tests {
                 "Distance {} not in straight segment [0, 100]",
                 dist
             );
-
-            // Verify phase restriction is set
-            assert_eq!(activation.phase_restriction, Some(Phase::Early));
         }
     }
 }

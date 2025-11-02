@@ -33,7 +33,7 @@
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
 use crate::race::skill_activation::*;
-use crate::trigger::random::preroll_random_triggers;
+use crate::trigger::random::roll_condition;
 use crate::trigger::system::*;
 use crate::uma::skill::*;
 use crate::units::furlongs_to_meters;
@@ -53,27 +53,19 @@ pub fn build_trigger_scheduler(
 ) -> TriggerScheduler {
     let mut scheduler = TriggerScheduler::new();
 
-    // Pre-roll all random triggers (still needed for random activation distances)
-    scheduler.random_activations = preroll_random_triggers(skills, course, rng);
-
     // Process each skill and create SkillActivationLogic
     for (skill_idx, skill) in skills.iter().enumerate() {
-        // Check if this skill has a random activation (clone to avoid borrow issues)
-        let random_activation = scheduler.random_activations.get(&skill_idx).cloned();
-
-        // Skip if random activation failed (skill never activates)
-        if let Some(ref activation) = random_activation
-            && !activation.activated
-        {
-            continue;
-        }
-
         // Process each alternative condition
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
             // Parse condition
             let condition = match parse_condition(&alternative.condition) {
                 Ok(cond) => cond,
                 Err(_) => continue, // Skip unparseable conditions
+            };
+
+            let random_activations = match roll_condition(&condition, course, rng) {
+                Ok(activations) => activations,
+                Err(_) => continue, // Random roll failed, skill never activates
             };
 
             // Parse precondition (if any)
@@ -85,7 +77,7 @@ pub fn build_trigger_scheduler(
 
             // Split condition into triggers and guards
             // This returns MULTIPLE branches if there are OR conditions
-            let branches = split_condition(&condition, random_activation.as_ref());
+            let branches = split_condition(&condition, random_activations);
 
             // Create SkillActivationLogic for each branch
             for (triggers, guard_condition) in branches {
@@ -221,12 +213,6 @@ fn index_trigger(
             }
 
             scheduler.phase_triggers.extend(triggers);
-        }
-
-        TriggerCondition::RandomActivation { .. } => {
-            // Random triggers are handled specially - they're stored in random_activations
-            // We'll check them when we reach the activation distance
-            // For now, we don't need to index them separately
         }
 
         TriggerCondition::LastStraightEntry => {
