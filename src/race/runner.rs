@@ -870,6 +870,68 @@ impl Runner {
         }
     }
 
+    pub fn apply_skill_effect(
+        &mut self,
+        effect: &SkillEffect,
+        elapsed_time: f64,
+        scaled_duration: f64,
+        course: &Course,
+    ) {
+        let effect_type = &effect.skill_type;
+
+        // Stat boosts and start delay modifications should have been applied out of gate.
+        // Therefore, these are gracefully ignored here.
+
+        // Timed effects (tracked in active_timed_effects)
+        if is_timed_effect(effect_type) {
+            let expires_at = elapsed_time + scaled_duration;
+            self.active_timed_effects.push(ActiveTimedEffect {
+                effect: effect.clone(),
+                expires_at,
+            });
+        }
+        // Recovery (HP restoration)
+        else if matches!(effect_type, SkillType::Recovery) {
+            self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
+
+            // Increment heal skill count
+            self.trigger_scheduler.activation_counts.increment_heal();
+
+            // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
+            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
+                // TODO: implement last_spurt recalculation
+            }
+        }
+        // Activate random gold skill
+        else if matches!(effect_type, SkillType::ActivateRandomGold) {
+            if !self.golden_skill_indices.is_empty() {
+                let idx = self
+                    .rng
+                    .borrow_mut()
+                    .random_range(0..self.golden_skill_indices.len());
+                let golden_skill_idx = self.golden_skill_indices[idx];
+                // Recursively activate the golden skill (use first alternative)
+                self.activate_skill(golden_skill_idx, 0, elapsed_time, course);
+            }
+        }
+        // Style change
+        else if is_style_change(effect_type) {
+            apply_style_change(&mut self.adjusted.style, effect_type);
+        }
+        // Unimplemented skill types
+        else {
+            match effect_type {
+                SkillType::Fov => todo!(),
+                SkillType::RushTime => todo!(),
+                SkillType::LaneMovementSpeed => todo!(),
+                SkillType::RushChance => todo!(),
+                SkillType::LaneChange => todo!(),
+                SkillType::ActivateSymphaty => todo!(),
+                _ => {} // Already handled above
+            }
+        }
+    }
+
     /// Activate a skill by its index and alternative index
     pub fn activate_skill(
         &mut self,
@@ -889,61 +951,11 @@ impl Runner {
 
         // Apply each effect in the alternative
         for effect in &alternative.effects {
-            let effect_type = &effect.skill_type;
-
-            // Stat boosts and start delay modifications should have been applied out of gate.
-            // Therefore, these are gracefully ignored here.
-
-            // Timed effects (tracked in active_timed_effects)
-            if is_timed_effect(effect_type) {
-                let expires_at = elapsed_time + scaled_duration;
-                self.active_timed_effects.push(ActiveTimedEffect {
-                    skill_id: skill_id.clone(),
-                    skill_index,
-                    alternative_index,
-                    effect: effect.clone(),
-                    expires_at,
-                });
-            }
-            // Recovery (HP restoration)
-            else if matches!(effect_type, SkillType::Recovery) {
-                self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
-
-                // Increment heal skill count
-                self.trigger_scheduler.activation_counts.increment_heal();
-
-                // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
-                if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
-                    // TODO: implement last_spurt recalculation
+            match effect.target {
+                SkillTarget::Oneself => {
+                    self.apply_skill_effect(effect, elapsed_time, scaled_duration, course)
                 }
-            }
-            // Activate random gold skill
-            else if matches!(effect_type, SkillType::ActivateRandomGold) {
-                if !self.golden_skill_indices.is_empty() {
-                    let idx = self
-                        .rng
-                        .borrow_mut()
-                        .random_range(0..self.golden_skill_indices.len());
-                    let golden_skill_idx = self.golden_skill_indices[idx];
-                    // Recursively activate the golden skill (use first alternative)
-                    self.activate_skill(golden_skill_idx, 0, elapsed_time, course);
-                }
-            }
-            // Style change
-            else if is_style_change(effect_type) {
-                apply_style_change(&mut self.adjusted.style, effect_type);
-            }
-            // Unimplemented skill types
-            else {
-                match effect_type {
-                    SkillType::Fov => todo!(),
-                    SkillType::RushTime => todo!(),
-                    SkillType::LaneMovementSpeed => todo!(),
-                    SkillType::RushChance => todo!(),
-                    SkillType::LaneChange => todo!(),
-                    SkillType::Unknown41 => todo!(),
-                    _ => {} // Already handled above
-                }
+                _ => continue, // TODO: Handle other targets
             }
         }
 

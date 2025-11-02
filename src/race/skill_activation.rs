@@ -168,9 +168,6 @@ pub enum TriggerCondition {
 /// A timed skill effect that is currently active
 #[derive(Debug, Clone)]
 pub struct ActiveTimedEffect {
-    pub skill_id: String,
-    pub skill_index: usize,
-    pub alternative_index: usize,
     pub effect: SkillEffect,
     pub expires_at: f64, // Race time (seconds) when effect expires
 }
