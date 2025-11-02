@@ -281,7 +281,7 @@ pub struct ActivationCounts {
     pub later_half: usize, // After half course (section 12-24)
     pub end_after: usize,  // Phase::Late + Phase::Last (sections 16-24)
     pub heal: usize,
-    pub all_team: usize, // TODO: Multi-uma stub
+    pub _all_team: usize, // TODO: Multi-uma stub
 }
 
 impl ActivationCounts {
@@ -311,8 +311,9 @@ impl ActivationCounts {
     }
 
     /// Increment team skill count (multi-uma stub)
-    pub fn increment_team(&mut self) {
-        self.all_team += 1;
+    pub fn _increment_team(&mut self) {
+        // TODO: update when multi-uma is implemented
+        self._all_team += 1;
     }
 }
 
