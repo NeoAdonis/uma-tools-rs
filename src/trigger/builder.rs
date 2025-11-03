@@ -109,6 +109,15 @@ pub fn build_trigger_scheduler(
         }
     }
 
+    // Initialize array to track precondition satisfaction
+    // Skills without preconditions are always "unlocked" (true)
+    // Skills with preconditions start "locked" (false) until precondition is satisfied
+    scheduler.precondition_satisfied = scheduler
+        .skill_logics
+        .iter()
+        .map(|logic| logic.precondition.is_none())
+        .collect();
+
     scheduler
 }
 

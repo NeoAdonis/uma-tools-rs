@@ -584,7 +584,42 @@ impl Runner {
         }
     }
 
+    /// Check all preconditions to detect satisfaction at any point during the race
+    /// This must be called every frame to implement proper "one-time unlock" semantics
+    /// where preconditions can be satisfied at any time, not just when triggers fire
+    pub fn check_all_preconditions(&mut self, state: &RaceState) {
+        // Iterate through all skills and check their preconditions
+        let skill_count = self.trigger_scheduler.skill_logics.len();
+        for trigger_index in 0..skill_count {
+            self.pull_trigger_for_precondition(trigger_index, state);
+        }
+    }
+
+    /// Check if precondition is satisfied and mark as unlocked if true
+    fn pull_trigger_for_precondition(&mut self, trigger_index: usize, state: &RaceState) {
+        // Skip if precondition already satisfied
+        if self.trigger_scheduler.precondition_satisfied[trigger_index] {
+            return;
+        }
+
+        // Evaluate precondition
+        let precondition = {
+            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+            logic.precondition.clone()
+        };
+        if let Some(precond) = precondition
+            && evaluate_condition(&precond, state, self)
+        {
+            self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
+        }
+    }
+
     fn pull_trigger(&mut self, trigger_index: usize, state: &RaceState) {
+        // Check if precondition is satisfied; skip if not
+        if !self.trigger_scheduler.precondition_satisfied[trigger_index] {
+            return;
+        }
+
         // Get skill logic and conditions
         let (skill_index, alternative_index, guard_condition, is_onetime) = {
             let logic = &mut self.trigger_scheduler.skill_logics[trigger_index];
@@ -622,9 +657,7 @@ impl Runner {
 
     pub fn check_continuous_triggers(&mut self, state: &RaceState) {
         // Clone indices to avoid borrow conflicts
-        let continuous_indices: Vec<usize> = self
-            .trigger_scheduler
-            .continuous_triggers.to_vec();
+        let continuous_indices: Vec<usize> = self.trigger_scheduler.continuous_triggers.to_vec();
 
         for trigger_index in continuous_indices {
             self.pull_trigger(trigger_index, state);

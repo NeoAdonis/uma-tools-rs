@@ -11,6 +11,9 @@ use std::collections::BinaryHeap;
 pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
 
+    // Precondition tracking - one-time unlocks for skills with preconditions
+    pub precondition_satisfied: Vec<bool>,
+
     // Monotonic triggers - use priority queues for O(log n) activation
     pub time_triggers: BinaryHeap<TimeTrigger>,
     pub distance_triggers: BinaryHeap<DistanceTrigger>,
@@ -41,6 +44,7 @@ impl TriggerScheduler {
     pub fn new() -> Self {
         TriggerScheduler {
             skill_logics: Vec::new(),
+            precondition_satisfied: Vec::new(),
             time_triggers: BinaryHeap::new(),
             distance_triggers: BinaryHeap::new(),
             hp_triggers: BinaryHeap::new(),
