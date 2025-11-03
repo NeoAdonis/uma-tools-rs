@@ -625,7 +625,12 @@ impl VarType {
             // Static status properties
             Status(StatusVar::Motivation) => StaticGuard,
             Status(StatusVar::PostNumber) => StaticGuard,
-            Status(StatusVar::RunningStyle) => StaticGuard, // TODO: treat as static for now
+
+            // Running style
+            // n.b. While running style can technically change, it can only do so
+            // from Front-runner to Oonige. Since both styles are considered
+            // the same for skill purposes, we can treat this variable as static
+            Status(StatusVar::RunningStyle) => StaticGuard,
 
             // DYNAMIC GUARDS - Can change during race
             // Running style

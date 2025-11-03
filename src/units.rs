@@ -27,8 +27,7 @@ pub fn meters_to_bashin(meters: f64) -> f64 {
 }
 
 /// Furlong to meters conversion
-/// TODO: Verify exact furlong conversion
-pub const FURLONG_TO_METERS: f64 = 201.168;
+pub const FURLONG_TO_METERS: f64 = 201.168; // ? The standard definition of furlong is presumably used
 
 /// Convert furlongs to meters
 ///
