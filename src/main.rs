@@ -162,6 +162,12 @@ fn main() {
 
         println!("\nRace initialized successfully!");
         println!("Initial HP: {:.2}", runner.hp);
+        println!("Rush chance: {:.2}%", runner.rush_chance);
+        if let Some(section) = runner.rush_section {
+            println!("> Will rush in section {}", section);
+        } else {
+            println!("> Will not rush");
+        }
         println!(
             "Start delay: {:.3} seconds ({:?})",
             runner.start_delay,

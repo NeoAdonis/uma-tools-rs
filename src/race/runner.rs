@@ -107,13 +107,61 @@ fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType
 
 /// Apply style change effects
 fn apply_style_change(style: &mut Style, effect_type: &SkillType) {
-    #[allow(clippy::single_match)] // Future-proofing for additional style changes
+    #[allow(clippy::single_match)] // Account for possible future additions
     match effect_type {
         SkillType::ChangeStyleOonige => {
             *style = Style::Oonige;
         }
         _ => {} // Not a style change effect
     }
+}
+
+/// Check if an effect type is a stat boost (applied permanently)
+#[inline]
+pub fn is_stat_boost(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::SpeedUp
+            | SkillType::StaminaUp
+            | SkillType::PowerUp
+            | SkillType::GutsUp
+            | SkillType::WizUp
+            | SkillType::AllStatsUp
+    )
+}
+
+/// Check if an effect type is a start delay modification
+#[inline]
+pub fn is_start_delay_modification(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::MultiplyStartDelay | SkillType::SetStartDelay
+    )
+}
+
+/// Check if an effect type is a style change
+#[inline]
+pub fn is_style_change(effect_type: &SkillType) -> bool {
+    matches!(effect_type, SkillType::ChangeStyleOonige)
+}
+
+/// Check if an effect type is a timed effect
+#[inline]
+pub fn is_timed_effect(effect_type: &SkillType) -> bool {
+    matches!(
+        effect_type,
+        SkillType::Acceleration
+            | SkillType::TargetSpeed
+            | SkillType::CurrentSpeed
+            | SkillType::CurrentSpeedWithNaturalDeceleration
+            | SkillType::ExtendEvolvedDuration
+    )
+}
+
+/// Check if an effect type is a rush chance effect
+#[inline]
+pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
+    matches!(effect_type, SkillType::RushChanceUp)
 }
 
 /// An Uma with additional data related to racing,
@@ -138,6 +186,7 @@ pub struct Runner {
     pub skill_modifiers: SkillModifiers,
     pub active_timed_effects: Vec<ActiveTimedEffect>,
     pub golden_skill_indices: Vec<usize>,
+    pub rush_chance: f64,
     pub is_rushed: bool, // TODO: implement
     pub rush_section: Option<u8>,
     pub is_start_dash: bool,
@@ -171,6 +220,7 @@ pub struct RunnerBuilder {
     // Mutable state being constructed
     adjusted: Uma,
     start_delay: f64,
+    rush_chance_modifier: f64,
 
     // Activation tracking
     activation_counts: ActivationCounts,
@@ -258,11 +308,12 @@ impl RunnerBuilder {
             golden_skill_indices,
             out_of_gate_skills,
             runtime_skills,
+            rush_chance_modifier: 0.0,
         }
     }
 
     /// Apply a single out-of-gate skill's effects
-    fn apply_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
+    fn apply_out_of_gate_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
         let skill_id = skill.id.clone();
         let alternative = &skill.alternatives[alt_index];
 
@@ -281,6 +332,10 @@ impl RunnerBuilder {
             // Apply style changes
             else if is_style_change(effect_type) {
                 apply_style_change(&mut self.adjusted.style, effect_type);
+            }
+            // Apply rush chance modifications
+            else if is_rush_chance_effect(effect_type) {
+                self.rush_chance_modifier += effect.modifier as f64 / 10000.0;
             }
             // Timed effects, recovery, and other runtime-only effects are not applicable out-of-gate.
             // These should not appear in out-of-gate skills, so they are gracefully ignored.
@@ -303,7 +358,7 @@ impl RunnerBuilder {
         for (alt_index, skill) in skills.iter().enumerate() {
             let result = parse_condition(&skill.alternatives.first().unwrap().condition);
             evaluate_out_of_gate_condition(&result.unwrap(), state, self);
-            self.apply_skill_effect(skill, alt_index);
+            self.apply_out_of_gate_skill_effect(skill, alt_index);
         }
     }
 
@@ -316,8 +371,9 @@ impl RunnerBuilder {
 
         // Set starting speed (done in the constructor)
         // Determine rush chance
-        let rush_chance = (0.65 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0);
-        let roll: f64 = self.rng.borrow_mut().random();
+        let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
+            + self.rush_chance_modifier;
+        let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
         let rush_section = if roll < rush_chance {
             // Uma will rush in a random section between 2 and 9 (1-indexed)
             Some(self.rng.borrow_mut().random_range(1..=8))
@@ -353,6 +409,7 @@ impl RunnerBuilder {
             hp: max_hp,
             max_hp,
             position: 0.0,
+            rush_chance,
             rush_section,
             is_rushed: false,
             is_start_dash: true,
@@ -978,7 +1035,6 @@ impl Runner {
                 SkillType::Fov => todo!(),
                 SkillType::RushTime => todo!(),
                 SkillType::LaneMovementSpeed => todo!(),
-                SkillType::RushChance => todo!(),
                 SkillType::LaneChange => todo!(),
                 SkillType::ActivateSympathy => todo!(),
                 _ => {} // Already handled above
