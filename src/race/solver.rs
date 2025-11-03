@@ -9,19 +9,6 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::vec;
 
-// TODO: implement blocking logic
-// When blocked, a uma’s speed is capped between 0.988x(at 0m) to 1.0x(at 2m) of the speed of the uma in front, scaled linearly to the distance in between.
-// ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.eyiunid0e18k
-
-// TODO: implement lane change logic
-// ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.ohdxzwro17n5
-
-// TODO: implement start delay logic
-// ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.iq42ksqbg2p
-
-// TODO: implement position keep logic
-// ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.tulele26d1pm
-
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
@@ -121,7 +108,8 @@ impl RaceSolver<Runner> {
         }
     }
 
-    pub fn step(&mut self, delta_time: f64) {
+    /// Perform a single simulation step.
+    fn step(&mut self, delta_time: f64) {
         // Pre-Update
         for runner in &mut self.runners {
             runner.check_corner_end(&self.state.course.corners, &self.state);
@@ -132,6 +120,9 @@ impl RaceSolver<Runner> {
 
         for runner in &mut self.runners {
             // Update
+            if runner.start_delay > self.state.elapsed_time {
+                continue;
+            }
             runner.update_rush_state(&mut self.state);
             runner.check_all_preconditions(&self.state); // Check all preconditions every frame
             runner.check_time_triggers(&self.state);

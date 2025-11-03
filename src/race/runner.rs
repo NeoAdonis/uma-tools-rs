@@ -610,7 +610,15 @@ impl Runner {
         self.speed + self.skill_modifiers.current_speed + self.section_speed_modifier
     }
 
+    /// Update the runner's position based on effective current speed.
     pub fn update_position(&mut self, delta_time: f64, state: &RaceState) {
+        // Adjust delta time if the start of the frame is right before start delay
+        // (By calling this function, we are guaranteed that the runner should have started on this frame)
+        let delta_time = if (state.elapsed_time - delta_time) < self.start_delay {
+            delta_time - self.start_delay
+        } else {
+            delta_time
+        };
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * delta_time;
         if self.position >= state.course.distance as f64 {
