@@ -206,6 +206,7 @@ pub struct Runner {
     pub slope_manager: SlopeManager,
     pub straight_manager: StraightManager,
     pub trigger_scheduler: TriggerScheduler,
+    pub finish_time: Option<f64>,
 }
 
 // n.b. While no trigger checks for a good start,
@@ -433,6 +434,7 @@ impl RunnerBuilder {
             slope_manager: SlopeManager::new(),
             straight_manager: StraightManager::new(),
             trigger_scheduler: self.trigger_scheduler,
+            finish_time: None,
         }
     }
 }
@@ -488,6 +490,10 @@ impl Runner {
     // Check if the runner has rushed at some point
     pub fn has_rushed(&self) -> bool {
         self.rush_state.as_ref().is_some_and(|s| s.start_time > 0.0)
+    }
+
+    pub fn has_finished(&self) -> bool {
+        self.finish_time.is_some()
     }
 
     pub fn accelerate(&mut self) {
@@ -607,6 +613,9 @@ impl Runner {
     pub fn update_position(&mut self, delta_time: f64, state: &RaceState) {
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * delta_time;
+        if self.position >= state.course.distance as f64 {
+            self.finish_time = Some(state.elapsed_time);
+        }
         self.check_distance_triggers(state);
     }
 

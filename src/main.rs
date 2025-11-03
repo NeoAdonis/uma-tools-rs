@@ -155,7 +155,7 @@ fn main() {
     solver.add_runner(uma, motivation, skills);
 
     // Initialize runners
-    solver.build_runners();
+    let mut solver = solver.build_runners();
 
     {
         let runner = &solver.runners[0];
@@ -186,7 +186,10 @@ fn main() {
             "Final elapsed time: {:.2} seconds",
             solver.state.elapsed_time
         );
-        println!("Scoreboard time: {:.1} seconds", solver.scoreboard_time());
+        println!(
+            "Scoreboard time: {:.1} seconds",
+            solver.scoreboard_time().unwrap_or_default()
+        );
         println!("Final HP: {:.2}", runner.hp);
         println!("Activated skills:");
         for skill in &runner.activated_skills {

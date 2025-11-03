@@ -7,6 +7,7 @@ use rand::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::vec;
 
 // TODO: implement blocking logic
 // When blocked, a uma’s speed is capped between 0.988x(at 0m) to 1.0x(at 2m) of the speed of the uma in front, scaled linearly to the distance in between.
@@ -25,18 +26,22 @@ pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    pub elapsed_time: f64, // Race time in seconds (shared by all umas)
+    pub elapsed_time: f64,        // Race time in seconds (shared by all umas)
+    pub finish_time: Option<f64>, // Time when first Uma finished
     pub runners_by_style: HashMap<Style, u8>,
     pub existing_skills: HashSet<String>,
 }
 
-pub struct RaceSolver {
-    pub runners: Vec<Runner>,
+pub struct NoRunner;
+
+pub struct RaceSolver<T> {
+    pub runners: Vec<T>,
     pub builders: Vec<RunnerBuilder>,
     pub state: RaceState,
 }
 
-impl RaceSolver {
+/// Methods available before runners have been built
+impl RaceSolver<NoRunner> {
     pub fn new(course: Course, params: RaceParameters) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
@@ -46,6 +51,7 @@ impl RaceSolver {
             params,
             rng,
             elapsed_time: 0.0,
+            finish_time: None,
             runners_by_style: HashMap::new(),
             existing_skills: HashSet::new(),
         };
@@ -84,17 +90,32 @@ impl RaceSolver {
         self.builders.push(builder);
     }
 
+    pub fn build_runners(self) -> RaceSolver<Runner> {
+        let mut runners: Vec<Runner> = Vec::new();
+        for builder in self.builders {
+            let runner = Runner::new(builder, &self.state);
+            runners.push(runner);
+        }
+        RaceSolver {
+            runners,
+            builders: vec![],
+            state: self.state,
+        }
+    }
+}
+
+/// Methods available after runners have been built
+impl RaceSolver<Runner> {
     /// Get the time as displayed on the scoreboard after a race finishes
-    pub fn scoreboard_time(&self) -> f64 {
-        // TODO: use time when first runner finishes
-        let converted = self.state.elapsed_time * 1.18;
+    pub fn scoreboard_time(&self) -> Option<f64> {
+        let converted = self.state.finish_time? * 1.18;
         let min = self.state.course.finish_time_min();
         let max = self.state.course.finish_time_max();
         let clamped = converted.clamp(min, max);
         if converted < min || converted > max {
-            clamped + self.state.rng.borrow_mut().random_range(0.0..1.0)
+            Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
         } else {
-            converted
+            Some(converted)
         }
     }
 
@@ -119,6 +140,10 @@ impl RaceSolver {
             runner.update_phase(&self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
             runner.update_position(delta_time, &self.state);
+            if runner.has_finished() && self.state.finish_time.is_none() {
+                self.state.finish_time = Some(self.state.elapsed_time);
+                // TODO: calculate how many lenghts ahead the runner is from the next runner
+            }
             runner.update_hp(delta_time, &self.state);
             runner.check_window_triggers(&self.state); // Check window conditions (distance, time, HP)
             runner.update_slope(
@@ -130,14 +155,6 @@ impl RaceSolver {
             // Post-Update
             runner.check_corner_start(&self.state.course.corners, &self.state);
             runner.check_straight_start(&self.state.course.straights, &self.state);
-        }
-    }
-
-    pub fn build_runners(&mut self) {
-        // TODO: set state about runners (e.g., if certain skills exist)
-        for builder in self.builders.drain(..) {
-            let runner = Runner::new(builder, &self.state);
-            self.runners.push(runner);
         }
     }
 

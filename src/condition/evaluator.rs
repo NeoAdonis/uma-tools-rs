@@ -735,7 +735,7 @@ mod tests {
     use crate::uma::Aptitude;
 
     /// Helper to create a minimal test race state
-    fn create_test_race_solver() -> RaceSolver {
+    fn create_test_race_solver() -> RaceSolver<Runner> {
         let uma = Uma {
             speed: 1200,
             stamina: 1200,
@@ -780,9 +780,7 @@ mod tests {
 
         let mut solver = RaceSolver::new(course, params);
         solver.add_runner(uma, Motivation::Good, skills);
-        solver.build_runners();
-
-        solver
+        solver.build_runners()
     }
 
     #[test]
@@ -923,7 +921,7 @@ mod tests {
 
         let mut solver = RaceSolver::new(course, params);
         solver.add_runner(uma, Motivation::Good, skills);
-        solver.build_runners();
+        let solver = solver.build_runners();
 
         // Create comparison: is_exist_skill_id == 203061
         let comp = Comp {
