@@ -926,7 +926,7 @@ impl Runner {
                 SkillType::LaneMovementSpeed => todo!(),
                 SkillType::RushChance => todo!(),
                 SkillType::LaneChange => todo!(),
-                SkillType::ActivateSymphaty => todo!(),
+                SkillType::ActivateSympathy => todo!(),
                 _ => {} // Already handled above
             }
         }

@@ -25,7 +25,7 @@ pub enum SkillType {
     AllStatsUp = 32,
     LaneChange = 35,
     ActivateRandomGold = 37,
-    ActivateSymphaty = 41,
+    ActivateSympathy = 41,
     ExtendEvolvedDuration = 42,
 }
 
