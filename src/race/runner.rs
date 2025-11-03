@@ -591,12 +591,12 @@ impl Runner {
         // Iterate through all skills and check their preconditions
         let skill_count = self.trigger_scheduler.skill_logics.len();
         for trigger_index in 0..skill_count {
-            self.pull_trigger_for_precondition(trigger_index, state);
+            self.check_precondition(trigger_index, state);
         }
     }
 
     /// Check if precondition is satisfied and mark as unlocked if true
-    fn pull_trigger_for_precondition(&mut self, trigger_index: usize, state: &RaceState) {
+    fn check_precondition(&mut self, trigger_index: usize, state: &RaceState) {
         // Skip if precondition already satisfied
         if self.trigger_scheduler.precondition_satisfied[trigger_index] {
             return;
@@ -614,7 +614,8 @@ impl Runner {
         }
     }
 
-    fn pull_trigger(&mut self, trigger_index: usize, state: &RaceState) {
+    /// Given a trigger index, attempt to activate the associated skill
+    fn try_activate_skill(&mut self, trigger_index: usize, state: &RaceState) {
         // Check if precondition is satisfied; skip if not
         if !self.trigger_scheduler.precondition_satisfied[trigger_index] {
             return;
@@ -660,7 +661,7 @@ impl Runner {
         let continuous_indices: Vec<usize> = self.trigger_scheduler.continuous_triggers.to_vec();
 
         for trigger_index in continuous_indices {
-            self.pull_trigger(trigger_index, state);
+            self.try_activate_skill(trigger_index, state);
         }
     }
 
@@ -672,7 +673,7 @@ impl Runner {
 
             let trigger = self.trigger_scheduler.phase_triggers.pop().unwrap();
             for trigger_index in trigger.skill_indices {
-                self.pull_trigger(trigger_index, state);
+                self.try_activate_skill(trigger_index, state);
             }
         }
     }
@@ -686,7 +687,7 @@ impl Runner {
 
             let trigger = self.trigger_scheduler.distance_triggers.pop().unwrap();
             let trigger_index = trigger.skill_index;
-            self.pull_trigger(trigger_index, state);
+            self.try_activate_skill(trigger_index, state);
         }
     }
 
@@ -706,7 +707,7 @@ impl Runner {
 
             let trigger = self.trigger_scheduler.hp_triggers.pop().unwrap();
             let trigger_index = trigger.skill_index;
-            self.pull_trigger(trigger_index, state);
+            self.try_activate_skill(trigger_index, state);
         }
     }
 
@@ -722,7 +723,7 @@ impl Runner {
 
             let trigger = self.trigger_scheduler.time_triggers.pop().unwrap();
             let trigger_index = trigger.skill_index;
-            self.pull_trigger(trigger_index, state);
+            self.try_activate_skill(trigger_index, state);
         }
     }
 
@@ -757,7 +758,7 @@ impl Runner {
 
         // Pull triggers
         for trigger_index in triggers_to_pull {
-            self.pull_trigger(trigger_index, state);
+            self.try_activate_skill(trigger_index, state);
         }
 
         // Mark attempted
@@ -790,7 +791,7 @@ impl Runner {
 
             // Pull triggers for all skills registered for this corner entry
             for skill_index in skill_indices {
-                self.pull_trigger(skill_index, state);
+                self.try_activate_skill(skill_index, state);
             }
         }
     }
@@ -809,7 +810,7 @@ impl Runner {
 
             // Pull triggers for all skills registered for this corner exit
             for skill_index in skill_indices {
-                self.pull_trigger(skill_index, state);
+                self.try_activate_skill(skill_index, state);
             }
         }
     }
@@ -832,7 +833,7 @@ impl Runner {
                 .collect();
 
             for skill_index in skill_indices {
-                self.pull_trigger(skill_index, state);
+                self.try_activate_skill(skill_index, state);
             }
         }
     }
@@ -865,7 +866,7 @@ impl Runner {
                 .collect();
 
             for skill_index in skill_indices {
-                self.pull_trigger(skill_index, state);
+                self.try_activate_skill(skill_index, state);
             }
 
             if slopes[slope_idx].is_uphill() {
@@ -882,7 +883,7 @@ impl Runner {
                 .collect();
 
             for skill_index in skill_indices {
-                self.pull_trigger(skill_index, state);
+                self.try_activate_skill(skill_index, state);
             }
 
             self.stop_slope_acceleration();
