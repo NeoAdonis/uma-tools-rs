@@ -14,7 +14,7 @@ pub enum SkillType {
     Fov = 8,
     Recovery = 9,
     MultiplyStartDelay = 10,
-    RushTime = 13,
+    RushTimeUp = 13,
     SetStartDelay = 14,
     CurrentSpeed = 21,
     CurrentSpeedWithNaturalDeceleration = 22,

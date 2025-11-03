@@ -100,6 +100,7 @@ impl RaceSolver {
 
         for runner in &mut self.runners {
             // Update
+            runner.update_rush_state(&self.state);
             runner.check_all_preconditions(&self.state); // Check all preconditions every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);

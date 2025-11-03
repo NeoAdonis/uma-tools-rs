@@ -646,17 +646,8 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
         StatusVar::IsOvertake => 0, // STUB: Multi-uma
         StatusVar::IsSurrounded => 0, // STUB: Multi-uma
-        StatusVar::IsTemptation => {
-            if runner.is_rushed {
-                1
-            } else {
-                0
-            }
-        }
-        StatusVar::TemptationCount => {
-            // TODO: track number of times we've rushed
-            0
-        }
+        StatusVar::IsTemptation => runner.is_rushed() as i32,
+        StatusVar::TemptationCount => runner.has_rushed() as i32, // You can only rush once
     }
 }
 

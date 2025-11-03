@@ -163,8 +163,8 @@ fn main() {
         println!("\nRace initialized successfully!");
         println!("Initial HP: {:.2}", runner.hp);
         println!("Rush chance: {:.2}%", runner.rush_chance);
-        if let Some(section) = runner.rush_section {
-            println!("> Will rush in section {}", section);
+        if let Some(rush_state) = &runner.rush_state {
+            println!("> Will rush in section {}", rush_state.section);
         } else {
             println!("> Will not rush");
         }

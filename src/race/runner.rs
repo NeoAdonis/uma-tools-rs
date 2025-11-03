@@ -164,6 +164,14 @@ pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
     matches!(effect_type, SkillType::RushChanceUp)
 }
 
+pub struct RushState {
+    pub section: u8,
+    pub start_time: f64,
+    pub end_time: f64,
+    pub max_duration: f64,
+    pub is_rushed: bool,
+}
+
 /// An Uma with additional data related to racing,
 /// that is, an Uma who is running.
 pub struct Runner {
@@ -187,8 +195,7 @@ pub struct Runner {
     pub active_timed_effects: Vec<ActiveTimedEffect>,
     pub golden_skill_indices: Vec<usize>,
     pub rush_chance: f64,
-    pub is_rushed: bool, // TODO: implement
-    pub rush_section: Option<u8>,
+    pub rush_state: Option<RushState>,
     pub is_start_dash: bool,
     pub slope_acceleration: Option<f64>,
     pub section: u8,
@@ -374,9 +381,16 @@ impl RunnerBuilder {
         let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier;
         let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
-        let rush_section = if roll < rush_chance {
+        let rush_state = if roll < rush_chance {
             // Uma will rush in a random section between 2 and 9 (1-indexed)
-            Some(self.rng.borrow_mut().random_range(1..=8))
+            let section = self.rng.borrow_mut().random_range(1..=8);
+            Some(RushState {
+                section,
+                start_time: 0.0,
+                end_time: f64::MAX,
+                max_duration: 12.0,
+                is_rushed: false,
+            })
         } else {
             None
         };
@@ -410,8 +424,7 @@ impl RunnerBuilder {
             max_hp,
             position: 0.0,
             rush_chance,
-            rush_section,
-            is_rushed: false,
+            rush_state,
             is_start_dash: true,
             slope_acceleration: None,
             last_spurt: None,
@@ -465,6 +478,16 @@ impl Runner {
             d if d > 0.08 => StartType::Late,
             _ => StartType::Normal,
         }
+    }
+
+    /// Check if the runner is currently in a rushed state
+    pub fn is_rushed(&self) -> bool {
+        self.rush_state.as_ref().is_some_and(|s| s.is_rushed)
+    }
+
+    // Check if the runner has rushed at some point
+    pub fn has_rushed(&self) -> bool {
+        self.rush_state.as_ref().is_some_and(|s| s.start_time > 0.0)
     }
 
     pub fn accelerate(&mut self) {
@@ -587,6 +610,29 @@ impl Runner {
         self.check_distance_triggers(state);
     }
 
+    pub fn update_rush_state(&mut self, state: &RaceState) {
+        if let Some(rush_state) = &mut self.rush_state
+            && rush_state.is_rushed
+        {
+            if state.elapsed_time >= rush_state.start_time + rush_state.max_duration {
+                // End rush after max duration
+                rush_state.is_rushed = false;
+                rush_state.end_time = state.elapsed_time; // Ensure end time is current
+                return;
+            }
+            if state.elapsed_time >= rush_state.end_time {
+                // 55% chance of snapping out
+                let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
+                if roll < 55.0 {
+                    rush_state.is_rushed = false;
+                } else {
+                    // Extend rush by 3 seconds
+                    rush_state.end_time = state.elapsed_time + 3.0;
+                }
+            }
+        }
+    }
+
     pub fn update_phase(&mut self, state: &RaceState) {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
@@ -594,9 +640,15 @@ impl Runner {
             let section_speed_coefficient =
                 roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
             self.section_speed_modifier = state.course.base_speed() * section_speed_coefficient;
-            if self.rush_section.is_some_and(|s| s == self.section) {
-                // TODO: implement rush logic
-                //self.is_rushed = true;
+            if let Some(rush_state) = &mut self.rush_state
+                && rush_state.section == self.section
+                && !rush_state.is_rushed
+                && rush_state.end_time < state.elapsed_time
+            {
+                rush_state.is_rushed = true;
+                rush_state.start_time = state.elapsed_time;
+                rush_state.end_time = state.elapsed_time + 3.0;
+                // TODO: implement position strat change
             }
             // Phase can only advance at section boundaries
             let prev_phase = self.phase;
@@ -614,7 +666,7 @@ impl Runner {
             state,
             self.phase,
             self.adjusted.guts,
-            self.is_rushed,
+            self.is_rushed(),
             self.is_pace_down(),
             self.is_downhill_accel(),
         ) * delta_time;
@@ -1029,11 +1081,18 @@ impl Runner {
         else if is_style_change(effect_type) {
             apply_style_change(&mut self.adjusted.style, effect_type);
         }
+        // Rush time extension
+        else if matches!(effect_type, SkillType::RushTimeUp) {
+            // Extend only if the Uma is bound to rush at all
+            // ? Does this apply as well if already rushing? Assume it does for now
+            if let Some(rush_state) = &mut self.rush_state {
+                rush_state.max_duration += effect.modifier as f64 / 10000.0;
+            }
+        }
         // Unimplemented skill types
         else {
             match effect_type {
                 SkillType::Fov => todo!(),
-                SkillType::RushTime => todo!(),
                 SkillType::LaneMovementSpeed => todo!(),
                 SkillType::LaneChange => todo!(),
                 SkillType::ActivateSympathy => todo!(),
