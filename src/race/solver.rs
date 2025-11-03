@@ -101,9 +101,7 @@ impl RaceSolver {
         for runner in &mut self.runners {
             // Update
             runner.check_time_triggers(&self.state);
-            // TODO: Check random activation triggers
-            // TODO: Check continuous triggers
-            // TODO: implement "Recover HP by skills"
+            runner.check_continuous_triggers(&self.state);
             runner.update_last_spurt_state(&self.state);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();

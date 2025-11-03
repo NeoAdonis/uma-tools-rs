@@ -551,6 +551,7 @@ impl Runner {
     }
 
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
+        let was_empty = self.hp <= 0.0;
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
             state,
@@ -560,6 +561,10 @@ impl Runner {
             self.is_pace_down(),
             self.is_downhill_accel(),
         ) * delta_time;
+        // Fire HpEmpty triggers if HP just became empty
+        if !was_empty && self.hp <= 0.0 {
+            self.check_hp_empty_triggers(state);
+        }
         self.check_hp_triggers(state);
     }
 
@@ -615,6 +620,17 @@ impl Runner {
         // This allows window triggers to retry them continuously while in window
     }
 
+    pub fn check_continuous_triggers(&mut self, state: &RaceState) {
+        // Clone indices to avoid borrow conflicts
+        let continuous_indices: Vec<usize> = self
+            .trigger_scheduler
+            .continuous_triggers.to_vec();
+
+        for trigger_index in continuous_indices {
+            self.pull_trigger(trigger_index, state);
+        }
+    }
+
     pub fn check_phase_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.phase_triggers.peek() {
             if self.phase != trigger.phase {
@@ -639,6 +655,10 @@ impl Runner {
             let trigger_index = trigger.skill_index;
             self.pull_trigger(trigger_index, state);
         }
+    }
+
+    pub fn check_hp_empty_triggers(&mut self, _state: &RaceState) {
+        // TODO: implement
     }
 
     pub fn check_hp_triggers(&mut self, state: &RaceState) {
