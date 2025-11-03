@@ -5,7 +5,7 @@ use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 // TODO: implement blocking logic
@@ -21,15 +21,13 @@ use std::rc::Rc;
 // TODO: implement position keep logic
 // ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.tulele26d1pm
 
-// TODO: implement rush logic
-// ref. https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit?tab=t.0#heading=h.awbjufvej6ud
-
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub elapsed_time: f64, // Race time in seconds (shared by all umas)
     pub runners_by_style: HashMap<Style, u8>,
+    pub existing_skills: HashSet<String>,
 }
 
 pub struct RaceSolver {
@@ -49,6 +47,7 @@ impl RaceSolver {
             rng,
             elapsed_time: 0.0,
             runners_by_style: HashMap::new(),
+            existing_skills: HashSet::new(),
         };
 
         RaceSolver {
@@ -59,6 +58,12 @@ impl RaceSolver {
     }
 
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
+        // Get existing skills before moving them into builder
+        for skill in &skills {
+            self.state.existing_skills.insert(skill.id.clone());
+        }
+
+        // Create builder
         let builder = RunnerBuilder::new(
             uma,
             motivation,
@@ -67,11 +72,15 @@ impl RaceSolver {
             skills,
             Rc::clone(&self.state.rng),
         );
+
+        // Update runnners-by-style count before moving builder
         *self
             .state
             .runners_by_style
             .entry(builder.base.style)
             .or_insert(0) += 1;
+
+        // Add to builders list
         self.builders.push(builder);
     }
 

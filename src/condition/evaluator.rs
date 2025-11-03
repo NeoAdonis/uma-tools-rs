@@ -135,18 +135,8 @@ fn evaluate_comparison(comp: &Comp, state: &RaceState, runner: &Runner) -> bool 
             }
         }
         VarType::Activation(ActivationVar::IsExistSkillId) => {
-            // Check if skill with ID == comp.value is available
-            let skill_id_str = comp.value.to_string();
-            let skill_exists = runner
-                .available_skills
-                .iter()
-                .any(|skill| skill.id == skill_id_str);
-
-            match comp.op {
-                CompOp::Equal => skill_exists,
-                CompOp::NotEqual => !skill_exists,
-                _ => false,
-            }
+            // Check if at least one runner has skill with ID == comp.value
+            state.existing_skills.contains(&comp.value.to_string())
         }
         _ => {
             // Normal case: get variable value and compare
@@ -171,13 +161,11 @@ fn evaluate_out_of_gate_comparison(
     state: &RaceState,
     builder: &RunnerBuilder,
 ) -> bool {
-    // Special cases: skill ID checks require different logic
     match &comp.var {
         VarType::Activation(ActivationVar::IsExistSkillId) => {
-            // ! For this to work, we need access to every runner's available skills BEFORE
-            // ! we build the Runner instances. This requires changes to RaceBuilder.
-            // TODO: check above, return false for now
-            false
+            // Special case: skill ID checks require different logic
+            // Check if at least one runner has skill with ID == comp.value
+            state.existing_skills.contains(&comp.value.to_string())
         }
         _ => {
             // Normal case: get variable value and compare
@@ -220,13 +208,12 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
     }
 }
 
-/// Get current integer value for any variable type
+/// Get current integer value for any variable type in out-of-gate context
 fn get_variable_value_out_of_gate(
     var: &VarType,
     state: &RaceState,
     builder: &RunnerBuilder,
 ) -> i32 {
-    // TODO: check, maybe refactor common parts with get_variable_value()
     match var {
         VarType::BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
