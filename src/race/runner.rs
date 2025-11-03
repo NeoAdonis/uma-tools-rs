@@ -619,21 +619,50 @@ impl Runner {
         self.check_distance_triggers(state);
     }
 
-    pub fn update_rush_state(&mut self, state: &RaceState) {
+    fn start_rush(&mut self, state: &mut RaceState) {
+        if let Some(rush_state) = &mut self.rush_state
+            && !rush_state.is_rushed
+        {
+            rush_state.is_rushed = true;
+            rush_state.start_time = state.elapsed_time;
+            // Rushed for at least 3 seconds
+            rush_state.end_time = state.elapsed_time + 3.0;
+            state
+                .rushed_by_style
+                .entry(self.base.style)
+                .and_modify(|e| *e += 1)
+                .or_insert(1);
+            // TODO: implement position strat change
+        }
+    }
+
+    fn end_rush(&mut self, state: &mut RaceState) {
+        if let Some(rush_state) = &mut self.rush_state
+            && rush_state.is_rushed
+        {
+            rush_state.is_rushed = false;
+            rush_state.end_time = state.elapsed_time; // Ensure end time is current
+            state
+                .rushed_by_style
+                .entry(self.base.style)
+                .and_modify(|e| *e -= 1);
+        }
+    }
+
+    pub fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
         {
             if state.elapsed_time >= rush_state.start_time + rush_state.max_duration {
                 // End rush after max duration
-                rush_state.is_rushed = false;
-                rush_state.end_time = state.elapsed_time; // Ensure end time is current
+                self.end_rush(state);
                 return;
             }
             if state.elapsed_time >= rush_state.end_time {
                 // 55% chance of snapping out
                 let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
                 if roll < 55.0 {
-                    rush_state.is_rushed = false;
+                    self.end_rush(state);
                 } else {
                     // Extend rush by 3 seconds
                     rush_state.end_time = state.elapsed_time + 3.0;
@@ -642,7 +671,7 @@ impl Runner {
         }
     }
 
-    pub fn update_phase(&mut self, state: &RaceState) {
+    pub fn update_phase(&mut self, state: &mut RaceState) {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
@@ -654,10 +683,7 @@ impl Runner {
                 && !rush_state.is_rushed
                 && rush_state.end_time < state.elapsed_time
             {
-                rush_state.is_rushed = true;
-                rush_state.start_time = state.elapsed_time;
-                rush_state.end_time = state.elapsed_time + 3.0;
-                // TODO: implement position strat change
+                self.start_rush(state);
             }
             // Phase can only advance at section boundaries
             let prev_phase = self.phase;

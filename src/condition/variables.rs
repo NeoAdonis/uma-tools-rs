@@ -153,14 +153,6 @@ pub enum RunningStyleVar {
     RunningStyleCountSashiOtherself,
     RunningStyleCountSenkoOtherself,
     RunningStyleEqualPopularityOne,
-    RunningStyleTemptationCountNige,
-    RunningStyleTemptationCountOikomi,
-    RunningStyleTemptationCountSashi,
-    RunningStyleTemptationCountSenko,
-    RunningStyleTemptationOpponentCountNige,
-    RunningStyleTemptationOpponentCountOikomi,
-    RunningStyleTemptationOpponentCountSashi,
-    RunningStyleTemptationOpponentCountSenko,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +191,14 @@ pub enum BlockingVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TemptationVar {
+    RunningStyleTemptationCountNige,
+    RunningStyleTemptationCountOikomi,
+    RunningStyleTemptationCountSashi,
+    RunningStyleTemptationCountSenko,
+    RunningStyleTemptationOpponentCountNige,
+    RunningStyleTemptationOpponentCountOikomi,
+    RunningStyleTemptationOpponentCountSashi,
+    RunningStyleTemptationOpponentCountSenko,
     TemptationCountBehind,
     TemptationCountInfront,
     TemptationOpponentCountBehind,
@@ -422,30 +422,6 @@ impl VarType {
             "running_style_equal_popularity_one" => {
                 VarType::RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
             }
-            "running_style_temptation_count_nige" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationCountNige)
-            }
-            "running_style_temptation_count_oikomi" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationCountOikomi)
-            }
-            "running_style_temptation_count_sashi" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationCountSashi)
-            }
-            "running_style_temptation_count_senko" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationCountSenko)
-            }
-            "running_style_temptation_opponent_count_nige" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountNige)
-            }
-            "running_style_temptation_opponent_count_oikomi" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountOikomi)
-            }
-            "running_style_temptation_opponent_count_sashi" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSashi)
-            }
-            "running_style_temptation_opponent_count_senko" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleTemptationOpponentCountSenko)
-            }
 
             // Status
             "running_style" => VarType::Status(StatusVar::RunningStyle),
@@ -478,6 +454,30 @@ impl VarType {
             "blocked_side_continuetime" => VarType::Blocking(BlockingVar::BlockedSideContinuetime),
 
             // Rush/Temptation
+            "running_style_temptation_count_nige" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationCountNige)
+            }
+            "running_style_temptation_count_oikomi" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationCountOikomi)
+            }
+            "running_style_temptation_count_sashi" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationCountSashi)
+            }
+            "running_style_temptation_count_senko" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationCountSenko)
+            }
+            "running_style_temptation_opponent_count_nige" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountNige)
+            }
+            "running_style_temptation_opponent_count_oikomi" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountOikomi)
+            }
+            "running_style_temptation_opponent_count_sashi" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountSashi)
+            }
+            "running_style_temptation_opponent_count_senko" => {
+                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountSenko)
+            }
             "temptation_count_behind" => VarType::Temptation(TemptationVar::TemptationCountBehind),
             "temptation_count_infront" => {
                 VarType::Temptation(TemptationVar::TemptationCountInfront)

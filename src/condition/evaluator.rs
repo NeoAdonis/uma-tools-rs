@@ -201,7 +201,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         VarType::Status(status_var) => get_status_value(status_var, runner),
         VarType::Random(trigger_var) => get_random_value(trigger_var, state),
         VarType::Blocking(blocking_var) => get_blocking_value(blocking_var, state),
-        VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state),
+        VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
         VarType::AccumulateTime => state.elapsed_time.floor() as i32,
         VarType::Always => 1,     // Always returns 1 (true)
         VarType::Unknown(_) => 0, // Default to 0
@@ -529,14 +529,6 @@ fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: S
             get_style_count_otherself(state, Style::Pace, my_style)
         }
         RunningStyleVar::RunningStyleEqualPopularityOne => 1, // STUB: We are most popular
-        RunningStyleVar::RunningStyleTemptationCountNige => 0, // STUB: No other umas rushing
-        RunningStyleVar::RunningStyleTemptationCountOikomi => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationCountSashi => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationCountSenko => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationOpponentCountNige => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationOpponentCountOikomi => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationOpponentCountSashi => 0, // STUB
-        RunningStyleVar::RunningStyleTemptationOpponentCountSenko => 0, // STUB
     }
 }
 
@@ -552,6 +544,27 @@ fn get_style_count_front_otherself(state: &RaceState, my_style: Style) -> i32 {
     // Oonige is considered a Front variant
     get_style_count_otherself(state, Style::Front, my_style)
         + get_style_count_otherself(state, Style::Oonige, my_style)
+}
+
+fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
+    state.rushed_by_style.get(&style).cloned().unwrap_or(0) as i32
+}
+
+fn get_style_temptation_count_front(state: &RaceState) -> i32 {
+    // Oonige is considered a Front variant
+    get_style_temptation_count(state, Style::Front)
+        + get_style_temptation_count(state, Style::Oonige)
+}
+
+fn get_style_temptation_count_opponent(state: &RaceState, style: Style, runner: &Runner) -> i32 {
+    // TODO: Opponents != Otherself; find actual opponent count
+    get_style_temptation_count(state, style) - (runner.is_rushed() as i32)
+}
+
+fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner) -> i32 {
+    get_style_temptation_count(state, Style::Front)
+        + get_style_temptation_count(state, Style::Oonige)
+        - (runner.is_rushed() as i32)
 }
 
 fn get_basic_status_value(var: &StatusVar, builder: &RunnerBuilder) -> i32 {
@@ -685,13 +698,35 @@ fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
 }
 
 /// Get temptation/rush values of other umas (all multi-uma stubs)
-fn get_temptation_value(var: &TemptationVar, _state: &RaceState) -> i32 {
+fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
         // All other umas temptation - multi-uma stubs
         TemptationVar::TemptationCountBehind => 0, // STUB: No umas behind
         TemptationVar::TemptationCountInfront => 0, // STUB: No umas ahead
         TemptationVar::TemptationOpponentCountBehind => 0, // STUB
         TemptationVar::TemptationOpponentCountInfront => 0, // STUB
+        TemptationVar::RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
+        TemptationVar::RunningStyleTemptationCountOikomi => {
+            get_style_temptation_count(state, Style::End)
+        }
+        TemptationVar::RunningStyleTemptationCountSashi => {
+            get_style_temptation_count(state, Style::Late)
+        }
+        TemptationVar::RunningStyleTemptationCountSenko => {
+            get_style_temptation_count(state, Style::Pace)
+        }
+        TemptationVar::RunningStyleTemptationOpponentCountNige => {
+            get_style_temptation_opponent_count_front(state, runner)
+        }
+        TemptationVar::RunningStyleTemptationOpponentCountOikomi => {
+            get_style_temptation_count_opponent(state, Style::End, runner)
+        }
+        TemptationVar::RunningStyleTemptationOpponentCountSashi => {
+            get_style_temptation_count_opponent(state, Style::Late, runner)
+        }
+        TemptationVar::RunningStyleTemptationOpponentCountSenko => {
+            get_style_temptation_count_opponent(state, Style::Pace, runner)
+        }
     }
 }
 

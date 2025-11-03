@@ -28,7 +28,8 @@ pub struct RaceState {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     pub elapsed_time: f64,        // Race time in seconds (shared by all umas)
     pub finish_time: Option<f64>, // Time when first Uma finished
-    pub runners_by_style: HashMap<Style, u8>,
+    pub runners_by_style: HashMap<Style, u8>, // Count of runners by style
+    pub rushed_by_style: HashMap<Style, u8>, // Count of runners currently rushed by style
     pub existing_skills: HashSet<String>,
 }
 
@@ -53,6 +54,7 @@ impl RaceSolver<NoRunner> {
             elapsed_time: 0.0,
             finish_time: None,
             runners_by_style: HashMap::new(),
+            rushed_by_style: HashMap::new(),
             existing_skills: HashSet::new(),
         };
 
@@ -130,14 +132,14 @@ impl RaceSolver<Runner> {
 
         for runner in &mut self.runners {
             // Update
-            runner.update_rush_state(&self.state);
+            runner.update_rush_state(&mut self.state);
             runner.check_all_preconditions(&self.state); // Check all preconditions every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
             runner.update_last_spurt_state(&self.state);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();
-            runner.update_phase(&self.state);
+            runner.update_phase(&mut self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
