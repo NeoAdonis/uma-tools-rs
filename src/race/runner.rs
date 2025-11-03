@@ -185,6 +185,7 @@ pub struct Runner {
     pub position: f64,     // in m
     pub hp: f64,
     pub max_hp: f64,
+    pub has_emptied_hp: bool,
     pub min_speed: f64,
     pub base_target_speed: f64,
     pub section_speed_modifier: f64,
@@ -423,6 +424,7 @@ impl RunnerBuilder {
             section_speed_modifier: course.base_speed() * section_speed_coefficient,
             hp: max_hp,
             max_hp,
+            has_emptied_hp: false,
             position: 0.0,
             rush_chance,
             rush_state,
@@ -703,7 +705,6 @@ impl Runner {
     }
 
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
-        let was_empty = self.hp <= 0.0;
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
             state,
@@ -713,9 +714,8 @@ impl Runner {
             self.is_pace_down(),
             self.is_downhill_accel(),
         ) * delta_time;
-        // Fire HpEmpty triggers if HP just became empty
-        if !was_empty && self.hp <= 0.0 {
-            self.check_hp_empty_triggers(state);
+        if self.hp <= 0.0 {
+            self.has_emptied_hp = true;
         }
         self.check_hp_triggers(state);
     }
@@ -841,10 +841,6 @@ impl Runner {
             let trigger_index = trigger.skill_index;
             self.try_activate_skill(trigger_index, state);
         }
-    }
-
-    pub fn check_hp_empty_triggers(&mut self, _state: &RaceState) {
-        // TODO: implement
     }
 
     pub fn check_hp_triggers(&mut self, state: &RaceState) {

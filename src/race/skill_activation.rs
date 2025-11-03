@@ -131,19 +131,13 @@ pub enum TriggerCondition {
 
     /// Entering or exiting a straight
     StraightTransition {
-        is_final: bool, // true = only final straight
+        is_last: bool, // true = only last straight
         is_entry: bool,
+        is_onetime: bool, // true = one-time event
     },
-
-    // ========== ONETIME EVENTS ==========
-    /// Entering last straight (fires once)
-    LastStraightEntry,
 
     /// Position change in race
     PositionChange { delta: i32 }, // Negative = overtake, positive = overtaken
-
-    /// HP depleted
-    HpEmpty,
 
     // ========== CONTINUOUS ==========
     /// Must be checked every frame
@@ -168,17 +162,11 @@ pub struct SkillActivationRecord {
 impl TriggerCondition {
     /// Is this a one-time trigger that can only fire once?
     pub fn is_onetime(&self) -> bool {
-        matches!(
-            self,
-            TriggerCondition::LastStraightEntry
-                | TriggerCondition::PositionChange { .. }
-                | TriggerCondition::HpEmpty
-        )
-    }
-
-    /// Can this trigger fire multiple times?
-    pub fn is_repeatable(&self) -> bool {
-        !self.is_onetime()
+        if let TriggerCondition::StraightTransition { is_onetime, .. } = self {
+            *is_onetime
+        } else {
+            false
+        }
     }
 }
 
@@ -567,11 +555,6 @@ fn split_single_comp(
             }
         }
 
-        VariableRole::OnetimeEvent => {
-            let trigger = extract_onetime_trigger(comp);
-            (vec![trigger], None)
-        }
-
         VariableRole::MonotonicGuard => {
             // MonotonicGuard: can be trigger OR guard depending on context
             // Default to guard here; promotion happens at higher level
@@ -607,18 +590,6 @@ fn split_single_comp(
     }
 }
 
-/// Extract onetime event trigger from comparison
-fn extract_onetime_trigger(comp: &Comp) -> TriggerCondition {
-    match &comp.var {
-        VarType::Spatial(SpatialVar::IsLastStraightOnetime) => TriggerCondition::LastStraightEntry,
-        VarType::Order(OrderVar::ChangeOrderOnetime) => {
-            TriggerCondition::PositionChange { delta: comp.value }
-        }
-        VarType::Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpEmpty,
-        _ => panic!("Not an onetime event: {:?}", comp.var),
-    }
-}
-
 /// Extract monotonic trigger from comparison
 fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
     match &comp.var {
@@ -637,6 +608,10 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
         VarType::Status(StatusVar::HpPer) => TriggerCondition::HpPercent {
             threshold: comp.value as f64,
             operator: comp.op,
+        },
+        VarType::Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpPercent {
+            threshold: 0.0,
+            operator: CompOp::LessEqual,
         },
         VarType::Spatial(SpatialVar::Furlong) => TriggerCondition::FurlongCrossed {
             threshold: comp.value as f64,
@@ -668,80 +643,92 @@ fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
 
 /// Extract spatial trigger from comparison
 fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
-    match &comp.var {
-        VarType::Spatial(SpatialVar::Corner) => {
-            match (comp.op, comp.value) {
-                // corner==N [N>0] → Entry to specific corner N
-                (CompOp::Equal, n) if n > 0 => {
-                    Some(TriggerCondition::CornerTransition {
-                        corner_index: Some((n - 1) as usize), // Convert 1-indexed to 0-indexed
-                        is_entry: true,
-                    })
+    if let VarType::Spatial(var_type) = &comp.var {
+        match var_type {
+            SpatialVar::Corner => {
+                match (comp.op, comp.value) {
+                    // corner==N [N>0] → Entry to specific corner N
+                    (CompOp::Equal, n) if n > 0 => {
+                        Some(TriggerCondition::CornerTransition {
+                            corner_index: Some((n - 1) as usize), // Convert 1-indexed to 0-indexed
+                            is_entry: true,
+                        })
+                    }
+
+                    // corner!=0 → Entry to any corner
+                    (CompOp::NotEqual, 0) => {
+                        Some(TriggerCondition::CornerTransition {
+                            corner_index: None, // Any corner
+                            is_entry: true,
+                        })
+                    }
+
+                    // corner==0 (not a corner) or corner!=N [N>0] (anywhere except corner N) → Not a trigger
+                    _ => None,
                 }
-
-                // corner!=0 → Entry to any corner
-                (CompOp::NotEqual, 0) => {
-                    Some(TriggerCondition::CornerTransition {
-                        corner_index: None, // Any corner
+            }
+            SpatialVar::Slope => {
+                match (comp.op, comp.value) {
+                    // slope==1 → Entry to uphill
+                    (CompOp::Equal, 1) => Some(TriggerCondition::SlopeTransition {
+                        slope_type: SlopeType::Uphill,
                         is_entry: true,
-                    })
+                    }),
+
+                    // slope==2 → Entry to downhill
+                    (CompOp::Equal, 2) => Some(TriggerCondition::SlopeTransition {
+                        slope_type: SlopeType::Downhill,
+                        is_entry: true,
+                    }),
+
+                    // slope==0 (flat) or slope!=X (anywhere but uphill/downhill) → Not a trigger
+                    _ => None,
                 }
-
-                // corner==0 (not a corner) or corner!=N [N>0] (anywhere except corner N) → Not a trigger
-                _ => None,
             }
-        }
-
-        VarType::Spatial(SpatialVar::Slope) => {
-            match (comp.op, comp.value) {
-                // slope==1 → Entry to uphill
-                (CompOp::Equal, 1) => Some(TriggerCondition::SlopeTransition {
-                    slope_type: SlopeType::Uphill,
-                    is_entry: true,
-                }),
-
-                // slope==2 → Entry to downhill
-                (CompOp::Equal, 2) => Some(TriggerCondition::SlopeTransition {
-                    slope_type: SlopeType::Downhill,
-                    is_entry: true,
-                }),
-
-                // slope==0 (flat) or slope!=X (anywhere but uphill/downhill) → Not a trigger
-                _ => None,
+            SpatialVar::IsLastStraight => {
+                // is_last_straight==1 → Entry to final straight
+                if comp.op == CompOp::Equal && comp.value == 1 {
+                    Some(TriggerCondition::StraightTransition {
+                        is_last: true,
+                        is_entry: true,
+                        is_onetime: false,
+                    })
+                } else {
+                    // Other operators treated as continuous guards
+                    None
+                }
             }
-        }
-
-        VarType::Spatial(SpatialVar::IsLastStraight) => {
-            // is_last_straight==1 → Entry to final straight
-            if comp.op == CompOp::Equal && comp.value == 1 {
-                Some(TriggerCondition::StraightTransition {
-                    is_final: true,
-                    is_entry: true,
-                })
-            } else {
-                // Other operators treated as continuous guards
-                None
+            SpatialVar::IsLastStraightOnetime => {
+                // is_last_straight_onetime==1 → Entry to final straight
+                if comp.op == CompOp::Equal && comp.value == 1 {
+                    Some(TriggerCondition::StraightTransition {
+                        is_last: true,
+                        is_entry: true,
+                        is_onetime: true,
+                    })
+                } else {
+                    // Other operators treated as continuous guards
+                    None
+                }
             }
-        }
-
-        VarType::Spatial(SpatialVar::StraightFrontType) => {
-            // straight_front_type==1 → Entry to audience-side straight
-            // straight_front_type==2 → Entry to opposite-side straight
-            if comp.op == CompOp::Equal && (comp.value == 1 || comp.value == 2) {
-                Some(TriggerCondition::StraightTransition {
-                    is_final: false, // Not specifically the final straight
-                    is_entry: true,
-                })
-            } else {
-                // Not a trigger
-                None
+            SpatialVar::StraightFrontType => {
+                // straight_front_type==1 → Entry to audience-side straight
+                // straight_front_type==2 → Entry to opposite-side straight
+                if comp.op == CompOp::Equal && (comp.value == 1 || comp.value == 2) {
+                    Some(TriggerCondition::StraightTransition {
+                        is_last: false, // Not specifically the final straight
+                        is_entry: true,
+                        is_onetime: false,
+                    })
+                } else {
+                    // Not a trigger
+                    None
+                }
             }
+            _ => None,
         }
-
-        _ => {
-            // Other spatial triggers - for now, mark as continuous
-            Some(TriggerCondition::Continuous)
-        }
+    } else {
+        None
     }
 }
 
@@ -785,7 +772,7 @@ mod tests {
             triggers[0],
             TriggerCondition::HpPercent {
                 threshold: 50.0,
-                operator: CompOp::LessEqual
+                operator: CompOp::LessEqual,
             }
         ));
 
@@ -832,7 +819,14 @@ mod tests {
 
         // Should extract onetime trigger
         assert_eq!(triggers.len(), 1);
-        assert!(matches!(triggers[0], TriggerCondition::LastStraightEntry));
+        assert!(matches!(
+            triggers[0],
+            TriggerCondition::StraightTransition {
+                is_last: true,
+                is_onetime: true,
+                is_entry: true
+            }
+        ));
 
         // No guards
         assert!(guards.is_none());

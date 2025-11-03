@@ -511,10 +511,6 @@ pub enum VariableRole {
     /// Examples: phase_random==1, is_finalcorner_random==1, corner_random==2
     RandomGate,
 
-    /// Onetime event marker - state change that persists
-    /// Examples: is_last_straight_onetime==1, change_order_onetime<0, is_hp_empty_onetime==1
-    OnetimeEvent,
-
     /// Monotonic guard - can act as trigger OR guard depending on context
     /// When paired with explicit triggers (RandomGate/Spatial/Phase): acts as GUARD
     /// When alone (no explicit triggers): acts as TRIGGER
@@ -565,11 +561,6 @@ impl VarType {
             Spatial(SpatialVar::DownSlopeRandom) => RandomGate,
             Spatial(SpatialVar::DistanceRateAfterRandom) => RandomGate,
 
-            // ONETIME EVENTS - State changes that persist
-            Spatial(SpatialVar::IsLastStraightOnetime) => OnetimeEvent,
-            Order(OrderVar::ChangeOrderOnetime) => OnetimeEvent,
-            Status(StatusVar::IsHpEmptyOnetime) => OnetimeEvent,
-
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context
             // Time-based
             AccumulateTime => MonotonicGuard,
@@ -584,6 +575,9 @@ impl VarType {
 
             // HP-based (decreasing)
             Status(StatusVar::HpPer) => MonotonicGuard,
+
+            // HP-based one-time event (increasing; from 0 to 1)
+            Status(StatusVar::IsHpEmptyOnetime) => MonotonicGuard,
 
             // Temptation count (increasing)
             Status(StatusVar::TemptationCount) => MonotonicGuard,
@@ -602,6 +596,7 @@ impl VarType {
 
             // Straights
             Spatial(SpatialVar::IsLastStraight) => SpatialTrigger,
+            Spatial(SpatialVar::IsLastStraightOnetime) => SpatialTrigger,
             Spatial(SpatialVar::StraightFrontType) => SpatialTrigger,
 
             // Phase subdivisions (spatial within phase)
@@ -670,6 +665,7 @@ impl VarType {
             Order(OrderVar::OrderRate) => DynamicGuard,
             Order(OrderVar::NearCount) => DynamicGuard,
             Order(OrderVar::NearInfrontCount) => DynamicGuard,
+            Order(OrderVar::ChangeOrderOnetime) => DynamicGuard,
             Order(OrderVar::ChangeOrderUpEndAfter) => DynamicGuard,
             Order(OrderVar::ChangeOrderUpFinalcornerAfter) => DynamicGuard,
             Order(OrderVar::ChangeOrderUpMiddle) => DynamicGuard,

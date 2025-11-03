@@ -174,6 +174,7 @@ fn index_trigger(
         TriggerCondition::HpPercent {
             threshold,
             operator,
+            ..
         } => {
             scheduler.hp_triggers.push(HpTrigger {
                 threshold_percent: *threshold,
@@ -224,28 +225,8 @@ fn index_trigger(
             scheduler.phase_triggers.extend(triggers);
         }
 
-        TriggerCondition::LastStraightEntry => {
-            scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: logic_idx,
-                trigger_type: OnetimeType::LastStraightEntry,
-                activated: false,
-            });
-        }
-
         TriggerCondition::PositionChange { delta } => {
-            scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: logic_idx,
-                trigger_type: OnetimeType::PositionChange(*delta),
-                activated: false,
-            });
-        }
-
-        TriggerCondition::HpEmpty => {
-            scheduler.onetime_triggers.push(OnetimeTrigger {
-                skill_index: logic_idx,
-                trigger_type: OnetimeType::HpEmpty,
-                activated: false,
-            });
+            // TODO: implement position change triggers
         }
 
         TriggerCondition::Window {
@@ -361,14 +342,15 @@ fn index_trigger(
 
         // Straight triggers
         TriggerCondition::StraightTransition {
-            is_final,
-            is_entry: _, // is_entry is implicit - we'll check on entry in runtime
+            is_last,
+            is_entry: _,   // implicit - we'll check on entry at runtime
+            is_onetime: _, // handled at runtime too
         } => {
             // For straights, we need to create triggers for each straight
             // For is_final==true, register for the last straight only
             // For is_final==false, register for all straights
 
-            let straight_indices: Vec<usize> = if *is_final {
+            let straight_indices: Vec<usize> = if *is_last {
                 // Find the last straight (highest index)
                 if course.straights.is_empty() {
                     vec![]
@@ -383,13 +365,13 @@ fn index_trigger(
                 if let Some(existing) = scheduler
                     .straight_triggers
                     .iter_mut()
-                    .find(|t| t.straight_index == straight_idx && t.is_final == *is_final)
+                    .find(|t| t.straight_index == straight_idx && t.is_last == *is_last)
                 {
                     existing.skill_indices.push(logic_idx);
                 } else {
                     scheduler.straight_triggers.push(StraightTrigger {
                         straight_index: straight_idx,
-                        is_final: *is_final,
+                        is_last: *is_last,
                         skill_indices: vec![logic_idx],
                     });
                 }

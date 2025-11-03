@@ -30,9 +30,6 @@ pub struct TriggerScheduler {
     pub slope_exit_triggers: Vec<SlopeTransitionTrigger>,
     pub straight_triggers: Vec<StraightTrigger>,
 
-    // One-time triggers - fire once then mark as exhausted
-    pub onetime_triggers: Vec<OnetimeTrigger>,
-
     // Continuous triggers - checked every step (minimized)
     pub continuous_triggers: Vec<usize>,
 
@@ -55,7 +52,6 @@ impl TriggerScheduler {
             slope_entry_triggers: Vec::new(),
             slope_exit_triggers: Vec::new(),
             straight_triggers: Vec::new(),
-            onetime_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
             activation_counts: ActivationCounts::default(),
         }
@@ -254,25 +250,8 @@ pub struct SlopeTransitionTrigger {
 #[derive(Clone, Debug)]
 pub struct StraightTrigger {
     pub straight_index: usize,
-    pub is_final: bool,
+    pub is_last: bool,
     pub skill_indices: Vec<usize>,
-}
-
-// ========== ONE-TIME TRIGGERS ==========
-
-/// One-time triggers that fire once and mark as activated
-#[derive(Clone, Debug)]
-pub struct OnetimeTrigger {
-    pub skill_index: usize, // Index into TriggerScheduler.skill_logics
-    pub trigger_type: OnetimeType,
-    pub activated: bool,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum OnetimeType {
-    LastStraightEntry,   // is_last_straight_onetime
-    PositionChange(i32), // change_order_onetime (delta)
-    HpEmpty,             // is_hp_empty_onetime
 }
 
 // ========== ACTIVATION TRACKING ==========

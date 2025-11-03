@@ -603,6 +603,9 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         // HP as percentage (0-100)
         StatusVar::HpPer => hp_per(runner),
 
+        // HP is (or has been at some point) empty
+        StatusVar::IsHpEmptyOnetime => runner.has_emptied_hp as i32,
+
         // Is in last spurt mode (not the phase)
         StatusVar::IsLastspurt => {
             if runner.last_spurt.is_some() {
@@ -636,11 +639,6 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         StatusVar::BehindNearLaneTime => 0,     // STUB
         StatusVar::BehindNearLaneTimeSet1 => 0, // STUB
         StatusVar::InfrontNearLaneTime => 0,    // STUB
-
-        // One-time trigger - handled by trigger system
-        StatusVar::IsHpEmptyOnetime => {
-            panic!("BUG: is_hp_empty_onetime should not be evaluated - it's a trigger variable!")
-        }
 
         // Continuous checks
         StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
