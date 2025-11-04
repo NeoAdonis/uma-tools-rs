@@ -46,7 +46,7 @@ use crate::race::solver::RaceState;
 use crate::uma::*;
 use crate::units::*;
 
-/// Evaluate a guard condition against current race state
+/// Evaluate a guard condition against current race state using the provided evaluator.
 ///
 /// **IMPORTANT**: This should ONLY be called with guard conditions after trigger-guard
 /// separation. Trigger variables (random gates, monotonic triggers, onetime events) will
@@ -85,19 +85,17 @@ use crate::units::*;
 ///
 /// Panics if the condition contains trigger variables that should have been
 /// separated during the splitting phase.
-pub fn evaluate_condition(condition: &Condition, state: &RaceState, runner: &Runner) -> bool {
-    evaluate_comp_list(&condition.comp_list, |comp| {
-        evaluate_comparison(comp, state, runner)
-    })
-}
-
-pub fn evaluate_out_of_gate_condition(
+pub fn evaluate_condition<E>(
     condition: &Condition,
-    state: &RaceState,
-    builder: &RunnerBuilder,
-) -> bool {
+    evaluator: &E,
+    state: &E::State,
+    context: &E::Context,
+) -> bool
+where
+    E: CompEvaluator,
+{
     evaluate_comp_list(&condition.comp_list, |comp| {
-        evaluate_out_of_gate_comparison(comp, state, builder)
+        evaluator.evaluate(comp, state, context)
     })
 }
 
@@ -115,70 +113,108 @@ where
     }
 }
 
-/// Evaluate a single comparison
+/// Trait for evaluating a single comparison.
 ///
-/// Gets the current value of the variable and applies the comparison operator.
+/// # Usage
 ///
-/// Special handling for variables that require checking against skill IDs.
-fn evaluate_comparison(comp: &Comp, state: &RaceState, runner: &Runner) -> bool {
-    // Special cases: skill ID checks require different logic
-    match &comp.var {
-        VarType::Activation(ActivationVar::IsUsedSkillId) => {
-            // Check if skill with ID == comp.value has been activated
-            let skill_id_str = comp.value.to_string();
-            let skill_exists = runner.activated_skill_ids.contains(&skill_id_str);
+/// Implement this trait for different evaluation contexts.
+/// `State` and `Context` associated types define the data sources used.
+/// `State` should represent the overall race state, while `Context` represents the
+/// runner data to use.
+///
+/// The main use case is to get values from a provided race state and runner, then
+/// perform the comparison directly.
+/// You could also create your own race state with some of the values replaced by
+/// estimations or other expectations as needed. For instance, you could simulate
+/// best-case or worst-case scenarios by overriding certain variable values rather
+/// than having to craft a specific set of runner data to match those scenarios.
+///
+/// # Examples
+///
+/// - `EvaluatorFull`: Uses actual race state and runner data as defined by `RaceState`
+///   and `Runner`.
+/// - `EvaluatorOutOfGate`: Uses only data available before a race starts as defined by
+///   `RaceState` and `RunnerBuilder`.
+pub trait CompEvaluator {
+    type State;
+    type Context;
 
-            match comp.op {
-                CompOp::Equal => skill_exists,
-                CompOp::NotEqual => !skill_exists,
-                _ => false, // Other operators don't make sense for skill ID checks
+    /// Evaluate a single comparison.
+    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool;
+}
+
+/// Reference evaluator using actual race state and runner data.
+pub struct EvaluatorFull;
+impl CompEvaluator for EvaluatorFull {
+    type State = RaceState;
+    type Context = Runner;
+
+    /// Evaluate a single comparison using actual race state and runner data.
+    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool {
+        let runner = context;
+        // Special cases: skill ID checks require different logic
+        match &comp.var {
+            VarType::Activation(ActivationVar::IsUsedSkillId) => {
+                // Check if skill with ID == comp.value has been activated
+                let skill_id_str = comp.value.to_string();
+                let skill_exists = runner.activated_skill_ids.contains(&skill_id_str);
+
+                match comp.op {
+                    CompOp::Equal => skill_exists,
+                    CompOp::NotEqual => !skill_exists,
+                    _ => false, // Other operators don't make sense for skill ID checks
+                }
             }
-        }
-        VarType::Activation(ActivationVar::IsExistSkillId) => {
-            // Check if at least one runner has skill with ID == comp.value
-            state.existing_skills.contains(&comp.value.to_string())
-        }
-        _ => {
-            // Normal case: get variable value and compare
-            let current_value = get_variable_value(&comp.var, state, runner);
-            let threshold = comp.value;
+            VarType::Activation(ActivationVar::IsExistSkillId) => {
+                // Check if at least one runner has skill with ID == comp.value
+                state.existing_skills.contains(&comp.value.to_string())
+            }
+            _ => {
+                // Normal case: get variable value and compare
+                let current_value = get_variable_value(&comp.var, state, runner);
+                let threshold = comp.value;
 
-            match comp.op {
-                CompOp::Equal => current_value == threshold,
-                CompOp::NotEqual => current_value != threshold,
-                CompOp::Greater => current_value > threshold,
-                CompOp::GreaterEqual => current_value >= threshold,
-                CompOp::Less => current_value < threshold,
-                CompOp::LessEqual => current_value <= threshold,
+                match comp.op {
+                    CompOp::Equal => current_value == threshold,
+                    CompOp::NotEqual => current_value != threshold,
+                    CompOp::Greater => current_value > threshold,
+                    CompOp::GreaterEqual => current_value >= threshold,
+                    CompOp::Less => current_value < threshold,
+                    CompOp::LessEqual => current_value <= threshold,
+                }
             }
         }
     }
 }
 
-/// Evaluate a single comparison in out-of-gate context
-fn evaluate_out_of_gate_comparison(
-    comp: &Comp,
-    state: &RaceState,
-    builder: &RunnerBuilder,
-) -> bool {
-    match &comp.var {
-        VarType::Activation(ActivationVar::IsExistSkillId) => {
-            // Special case: skill ID checks require different logic
-            // Check if at least one runner has skill with ID == comp.value
-            state.existing_skills.contains(&comp.value.to_string())
-        }
-        _ => {
-            // Normal case: get variable value and compare
-            let current_value = get_variable_value_out_of_gate(&comp.var, state, builder);
-            let threshold = comp.value;
+/// Evaluator for out-of-gate context (before race starts).
+pub struct EvaluatorOutOfGate;
+impl CompEvaluator for EvaluatorOutOfGate {
+    type State = RaceState;
+    type Context = RunnerBuilder;
 
-            match comp.op {
-                CompOp::Equal => current_value == threshold,
-                CompOp::NotEqual => current_value != threshold,
-                CompOp::Greater => current_value > threshold,
-                CompOp::GreaterEqual => current_value >= threshold,
-                CompOp::Less => current_value < threshold,
-                CompOp::LessEqual => current_value <= threshold,
+    /// Evaluate a single comparison in out-of-gate context, using only data available before a race starts.
+    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool {
+        let builder = context;
+        match &comp.var {
+            VarType::Activation(ActivationVar::IsExistSkillId) => {
+                // Special case: skill ID checks require different logic
+                // Check if at least one runner has skill with ID == comp.value
+                state.existing_skills.contains(&comp.value.to_string())
+            }
+            _ => {
+                // Normal case: get variable value and compare
+                let current_value = get_variable_value_out_of_gate(&comp.var, state, builder);
+                let threshold = comp.value;
+
+                match comp.op {
+                    CompOp::Equal => current_value == threshold,
+                    CompOp::NotEqual => current_value != threshold,
+                    CompOp::Greater => current_value > threshold,
+                    CompOp::GreaterEqual => current_value >= threshold,
+                    CompOp::Less => current_value < threshold,
+                    CompOp::LessEqual => current_value <= threshold,
+                }
             }
         }
     }
@@ -833,11 +869,7 @@ mod tests {
         };
 
         // Should return true because skill 202051 is activated
-        assert!(evaluate_comparison(
-            &comp,
-            &solver.state,
-            &solver.runners[0]
-        ));
+        assert!(EvaluatorFull.evaluate(&comp, &solver.state, &solver.runners[0]));
     }
 
     #[test]
@@ -854,7 +886,7 @@ mod tests {
         };
 
         // Should return false because skill 202051 is not activated
-        assert!(!evaluate_comparison(&comp, &state.state, &state.runners[0]));
+        assert!(!EvaluatorFull.evaluate(&comp, &state.state, &state.runners[0]));
     }
 
     #[test]
@@ -874,11 +906,7 @@ mod tests {
         };
 
         // Should return false because skill 202051 is not activated (only 203781 is)
-        assert!(!evaluate_comparison(
-            &comp,
-            &solver.state,
-            &solver.runners[0]
-        ));
+        assert!(!EvaluatorFull.evaluate(&comp, &solver.state, &solver.runners[0]));
     }
 
     #[test]
@@ -898,7 +926,7 @@ mod tests {
         };
 
         // Should return false because skill 202051 IS activated
-        assert!(!evaluate_comparison(&comp, &state.state, &state.runners[0]));
+        assert!(!EvaluatorFull.evaluate(&comp, &state.state, &state.runners[0]));
     }
 
     #[test]
@@ -964,10 +992,6 @@ mod tests {
         };
 
         // Should return true because skill 203061 is in available_skills
-        assert!(evaluate_comparison(
-            &comp,
-            &solver.state,
-            &solver.runners[0]
-        ));
+        assert!(EvaluatorFull.evaluate(&comp, &solver.state, &solver.runners[0]));
     }
 }

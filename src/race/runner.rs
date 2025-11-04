@@ -1,4 +1,4 @@
-use crate::condition::evaluator::{evaluate_condition, evaluate_out_of_gate_condition};
+use crate::condition::evaluator::{EvaluatorFull, EvaluatorOutOfGate, evaluate_condition};
 use crate::condition::parser::{CompOp, parse_condition};
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
@@ -366,7 +366,7 @@ impl RunnerBuilder {
         let skills = self.out_of_gate_skills.clone();
         for (alt_index, skill) in skills.iter().enumerate() {
             let result = parse_condition(&skill.alternatives.first().unwrap().condition);
-            evaluate_out_of_gate_condition(&result.unwrap(), state, self);
+            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, state, self);
             self.apply_out_of_gate_skill_effect(skill, alt_index);
         }
     }
@@ -760,7 +760,7 @@ impl Runner {
             logic.precondition.clone()
         };
         if let Some(precond) = precondition
-            && evaluate_condition(&precond, state, self)
+            && evaluate_condition(&precond, &EvaluatorFull, state, self)
         {
             self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
         }
@@ -787,7 +787,7 @@ impl Runner {
             )
         };
         let should_activate = if let Some(guard) = &guard_condition {
-            evaluate_condition(guard, state, self)
+            evaluate_condition(guard, &EvaluatorFull, state, self)
         } else {
             true
         };
