@@ -3,8 +3,13 @@ include!("track_names.rs");
 pub mod geometry;
 
 use crate::course::geometry::*;
+use crate::units::course_widths_to_meters;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
+
+// Track IDs for special handling
+const TRACK_ID_OOI: u16 = 10101;
+const TRACK_ID_LONGCHAMP: u16 = 10201;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Phase {
@@ -82,6 +87,15 @@ pub enum ThresholdStat {
     Wiz = 5,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum LaneType {
+    Inner,
+    Middle,
+    Outer,
+    Outside,
+}
+
 #[derive(Clone, Debug)]
 pub struct Course {
     pub id: u16,
@@ -106,9 +120,7 @@ pub struct CourseData {
     pub course_set_status: Vec<ThresholdStat>,
     pub finish_time_min: u32,
     pub finish_time_max: u32,
-    #[serde(skip)]
-    #[cfg_attr(test, allow(dead_code))]
-    pub _lane_max: (), // unused in current implementation
+    pub lane_max: u16,
     pub corners: Vec<Corner>,
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
@@ -169,6 +181,37 @@ impl Course {
     /// Get the section index (0-23) from a given position in meters
     pub fn section_from_position(&self, position: f64) -> u8 {
         (position / self.section_length()).floor() as u8
+    }
+
+    pub fn starting_lane(&self, gate_roll: u8) -> f64 {
+        let adjustor = match self.id {
+            TRACK_ID_OOI => 0.0,
+            TRACK_ID_LONGCHAMP => {
+                if gate_roll >= 13 {
+                    1.86
+                } else {
+                    0.0
+                }
+            }
+            _ => {
+                if gate_roll >= 10 {
+                    0.6
+                } else {
+                    0.0
+                }
+            }
+        };
+        gate_roll as f64 * self.lane_width() + adjustor
+    }
+
+    /// Get the total course width in meters
+    pub fn width(&self) -> f64 {
+        course_widths_to_meters(self.lane_max as f64 / 10000.0)
+    }
+
+    /// Get the width of a single lane in meters
+    pub fn lane_width(&self) -> f64 {
+        self.width() / 18.0
     }
 
     /// Get the track name in the specified language
@@ -258,7 +301,7 @@ mod tests {
                 course_set_status: vec![],
                 finish_time_min: 120000,
                 finish_time_max: 150000,
-                _lane_max: (),
+                lane_max: 10000,
                 corners: vec![],
                 slopes: vec![],
                 straights: vec![],

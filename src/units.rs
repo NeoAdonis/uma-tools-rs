@@ -1,5 +1,23 @@
 //! Unit conversion utilities for race measurements
 
+/// Course width to meters conversion.
+/// 1 course width = 11.25 meters.
+///
+/// Used as unit to measure course width relatively.
+/// For example, a turf course in Tokyo is 1.5 courses wide, which is 16.875 meters.
+pub const COURSE_WIDTH_TO_METERS: f64 = 11.25;
+
+/// Convert course widths to meters
+///
+/// # Arguments
+/// * `widths` - Distance in course widths
+///
+/// # Returns
+/// Distance in meters
+pub fn course_widths_to_meters(widths: f64) -> f64 {
+    widths * COURSE_WIDTH_TO_METERS
+}
+
 /// Bashin (バ身, horse-length) to meters conversion
 /// 1 bashin = 2.5 meters
 pub const BASHIN_TO_METERS: f64 = 2.5;

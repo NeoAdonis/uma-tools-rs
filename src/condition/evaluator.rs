@@ -417,7 +417,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Current lane: 0=inner, 1=middle, 2=outer, 3=outside
-        SpatialVar::LaneType => 0, // STUB: Lane tracking not yet implemented
+        SpatialVar::LaneType => runner.lane_type(course) as i32,
 
         // Slope: 0=flat, 1=uphill, 2=downhill
         SpatialVar::Slope => {
@@ -825,7 +825,7 @@ mod tests {
             course_set_status: vec![],
             finish_time_min: 120000,
             finish_time_max: 150000,
-            _lane_max: (),
+            lane_max: 10000,
             corners: vec![],
             slopes: vec![],
             straights: vec![],
@@ -951,7 +951,7 @@ mod tests {
             course_set_status: vec![],
             finish_time_min: 120000,
             finish_time_max: 150000,
-            _lane_max: (),
+            lane_max: 10000,
             corners: vec![],
             slopes: vec![],
             straights: vec![],

@@ -188,6 +188,7 @@ pub struct Runner {
     pub has_emptied_hp: bool,
     pub min_speed: f64,
     pub base_target_speed: f64,
+    pub target_lane: f64,
     pub section_speed_modifier: f64,
     pub available_skills: Vec<Skill>,
     pub activated_skills: Vec<SkillActivationRecord>,
@@ -412,6 +413,7 @@ impl RunnerBuilder {
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             base_target_speed: 0.85 * course.base_speed(),
+            target_lane: course.starting_lane(self.gate_roll),
             start_delay: self.start_delay,
             available_skills: self.runtime_skills,
             activated_skills: self.activated_skills,
@@ -1058,6 +1060,20 @@ impl Runner {
         }
     }
 
+    pub fn lane_type(&self, course: &Course) -> LaneType {
+        // TODO: track current lane then use that instead of target lane
+        let percent = self.target_lane / course.width();
+        if percent <= 0.2 {
+            LaneType::Inner
+        } else if percent <= 0.4 {
+            LaneType::Middle
+        } else if percent <= 0.6 {
+            LaneType::Outer
+        } else {
+            LaneType::Outside
+        }
+    }
+
     /// Update skill durations and remove expired effects
     pub fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
@@ -1128,14 +1144,31 @@ impl Runner {
                 rush_state.max_duration += effect.modifier as f64 / 10000.0;
             }
         }
-        // Unimplemented skill types
-        else {
-            match effect_type {
-                SkillType::Fov => todo!(),
-                SkillType::LaneMovementSpeed => todo!(),
-                SkillType::LaneChange => todo!(),
-                SkillType::ActivateSympathy => todo!(),
-                _ => {} // Already handled above
+        // FOV change
+        else if matches!(effect_type, SkillType::Fov) {
+            // TODO: implement FOV change
+        }
+        // Lane movement speed change
+        else if matches!(effect_type, SkillType::LaneMovementSpeed) {
+            // TODO: implement lane movement speed change
+        }
+        // Lane change
+        else if matches!(effect_type, SkillType::LaneChange) {
+            // Change target lane to (modifier/100)% of course width
+            // TODO: review
+            let lane_change_percent = effect.modifier as f64 / 10000.0;
+            self.target_lane = course.width() * lane_change_percent;
+        }
+        // "Sympathy" skill activation
+        else if matches!(effect_type, SkillType::ActivateSympathy) {
+            // Force activation of skill with ID "201631" if available
+            if let Some((skill_index, _)) = self
+                .available_skills
+                .iter()
+                .enumerate()
+                .find(|(_, skill)| skill.id == "201631")
+            {
+                self.activate_skill(skill_index, 0, elapsed_time, course);
             }
         }
     }

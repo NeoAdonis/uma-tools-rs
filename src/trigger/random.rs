@@ -465,7 +465,7 @@ mod tests {
                     front_type: FrontType::Audience,
                 }],
                 race_track_id: 1,
-                _lane_max: (),
+                lane_max: 10000,
                 _course: (),
             },
         )
