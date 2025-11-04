@@ -22,7 +22,7 @@ fn hp_guts_modifier(guts_stat: u16) -> f64 {
 
 pub fn hp_style_coefficient(style: Style) -> f64 {
     match style {
-        Style::Oonige => 0.86,
+        Style::Runaway => 0.86,
         Style::Front => 0.95,
         Style::Pace => 0.89,
         Style::Late => 1.0,

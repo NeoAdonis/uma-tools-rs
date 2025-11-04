@@ -623,7 +623,7 @@ impl VarType {
 
             // Running style
             // n.b. While running style can technically change, it can only do so
-            // from Front-runner to Oonige. Since both styles are considered
+            // from Front Runner to Runaway. Since both styles are considered
             // the same for skill purposes, we can treat this variable as static
             Status(StatusVar::RunningStyle) => StaticGuard,
 

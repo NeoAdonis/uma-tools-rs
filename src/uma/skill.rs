@@ -10,7 +10,7 @@ pub enum SkillType {
     PowerUp = 3,
     GutsUp = 4,
     WizUp = 5,
-    ChangeStyleOonige = 6,
+    ChangeStyleRunaway = 6,
     Fov = 8,
     Recovery = 9,
     MultiplyStartDelay = 10,

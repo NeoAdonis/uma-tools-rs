@@ -10,16 +10,16 @@ pub fn acceleration_strategy_phase_coefficient(style: Style, phase: Phase) -> f6
         (Style::Pace, Phase::Early) => 0.985,
         (Style::Late, Phase::Early) => 0.975,
         (Style::End, Phase::Early) => 0.945,
-        (Style::Oonige, Phase::Early) => 1.17,
+        (Style::Runaway, Phase::Early) => 1.17,
         // Mid-race
         (Style::Front | Style::Pace | Style::Late | Style::End, Phase::Mid) => 1.0,
-        (Style::Oonige, Phase::Mid) => 0.94,
+        (Style::Runaway, Phase::Mid) => 0.94,
         // Late-race and Last spurt
         (Style::Front, Phase::Late | Phase::Last) => 0.996,
         (Style::Pace, Phase::Late | Phase::Last) => 0.996,
         (Style::Late, Phase::Late | Phase::Last) => 1.0,
         (Style::End, Phase::Late | Phase::Last) => 0.997,
-        (Style::Oonige, Phase::Late | Phase::Last) => 0.956,
+        (Style::Runaway, Phase::Late | Phase::Last) => 0.956,
     }
 }
 
@@ -52,19 +52,19 @@ pub fn strategy_phase_coefficient(style: Style, phase: Phase) -> f64 {
         (Style::Pace, Phase::Early) => 0.978,
         (Style::Late, Phase::Early) => 0.938,
         (Style::End, Phase::Early) => 0.931,
-        (Style::Oonige, Phase::Early) => 1.063,
+        (Style::Runaway, Phase::Early) => 1.063,
         // Mid-race
         (Style::Front, Phase::Mid) => 0.98,
         (Style::Pace, Phase::Mid) => 0.991,
         (Style::Late, Phase::Mid) => 0.998,
         (Style::End, Phase::Mid) => 1.0,
-        (Style::Oonige, Phase::Mid) => 0.962,
+        (Style::Runaway, Phase::Mid) => 0.962,
         // Late-race and Last spurt
         (Style::Front, Phase::Late | Phase::Last) => 0.962,
         (Style::Pace, Phase::Late | Phase::Last) => 0.975,
         (Style::Late, Phase::Late | Phase::Last) => 0.994,
         (Style::End, Phase::Late | Phase::Last) => 1.0,
-        (Style::Oonige, Phase::Late | Phase::Last) => 0.95,
+        (Style::Runaway, Phase::Late | Phase::Last) => 0.95,
     }
 }
 

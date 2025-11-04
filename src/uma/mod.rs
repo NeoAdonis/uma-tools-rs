@@ -17,7 +17,7 @@ pub enum Style {
     #[serde(rename = "Oikomi")]
     End, // End closer, 追込
     #[serde(rename = "Oonige")]
-    Oonige, // 大逃げ
+    Runaway, // 大逃げ
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]

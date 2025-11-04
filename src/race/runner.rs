@@ -109,8 +109,8 @@ fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType
 fn apply_style_change(style: &mut Style, effect_type: &SkillType) {
     #[allow(clippy::single_match)] // Account for possible future additions
     match effect_type {
-        SkillType::ChangeStyleOonige => {
-            *style = Style::Oonige;
+        SkillType::ChangeStyleRunaway => {
+            *style = Style::Runaway;
         }
         _ => {} // Not a style change effect
     }
@@ -142,7 +142,7 @@ pub fn is_start_delay_modification(effect_type: &SkillType) -> bool {
 /// Check if an effect type is a style change
 #[inline]
 pub fn is_style_change(effect_type: &SkillType) -> bool {
-    matches!(effect_type, SkillType::ChangeStyleOonige)
+    matches!(effect_type, SkillType::ChangeStyleRunaway)
 }
 
 /// Check if an effect type is a timed effect

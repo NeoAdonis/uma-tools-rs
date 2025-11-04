@@ -577,9 +577,9 @@ fn get_style_count_otherself(state: &RaceState, style: Style, my_style: Style) -
 }
 
 fn get_style_count_front_otherself(state: &RaceState, my_style: Style) -> i32 {
-    // Oonige is considered a Front variant
+    // Runaway is considered a Front variant
     get_style_count_otherself(state, Style::Front, my_style)
-        + get_style_count_otherself(state, Style::Oonige, my_style)
+        + get_style_count_otherself(state, Style::Runaway, my_style)
 }
 
 fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
@@ -587,9 +587,9 @@ fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
 }
 
 fn get_style_temptation_count_front(state: &RaceState) -> i32 {
-    // Oonige is considered a Front variant
+    // Runaway is considered a Front variant
     get_style_temptation_count(state, Style::Front)
-        + get_style_temptation_count(state, Style::Oonige)
+        + get_style_temptation_count(state, Style::Runaway)
 }
 
 fn get_style_temptation_count_opponent(state: &RaceState, style: Style, runner: &Runner) -> i32 {
@@ -599,7 +599,7 @@ fn get_style_temptation_count_opponent(state: &RaceState, style: Style, runner: 
 
 fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner) -> i32 {
     get_style_temptation_count(state, Style::Front)
-        + get_style_temptation_count(state, Style::Oonige)
+        + get_style_temptation_count(state, Style::Runaway)
         - (runner.is_rushed() as i32)
 }
 
@@ -610,7 +610,7 @@ fn get_basic_status_value(var: &StatusVar, builder: &RunnerBuilder) -> i32 {
 
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End
         StatusVar::RunningStyle => match builder.base.style {
-            Style::Oonige => 1, // Oonige is a Front variant
+            Style::Runaway => 1, // Runaway is a Front variant
             _ => builder.base.style as i32,
         },
 
@@ -629,7 +629,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End
         StatusVar::RunningStyle => match runner.adjusted.style {
-            Style::Oonige => 1, // Oonige is a Front variant
+            Style::Runaway => 1, // Runaway is a Front variant
             _ => runner.adjusted.style as i32,
         },
 
