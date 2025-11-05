@@ -591,32 +591,115 @@ fn split_single_comp(
 }
 
 /// Extract monotonic trigger from comparison
+///
+/// Detects operator direction mismatches and converts them to window triggers:
+/// - Increasing monotonic variables (distance_rate, accumulatetime) with <= → Window [0, threshold]
+/// - Decreasing monotonic variables (hp_per, remain_distance) with >= → Window [threshold, MAX]
 fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
+    // Helper to determine if this is a reversed operator that needs window conversion
+    let needs_window_conversion = |is_increasing: bool, op: CompOp| -> bool {
+        match (is_increasing, op) {
+            // Increasing variable with <= or < → needs window [0, threshold]
+            (true, CompOp::LessEqual | CompOp::Less) => true,
+            // Decreasing variable with >= or > → needs window [threshold, MAX]
+            (false, CompOp::GreaterEqual | CompOp::Greater) => true,
+            _ => false,
+        }
+    };
+
     match &comp.var {
-        VarType::AccumulateTime => TriggerCondition::Time {
-            threshold: comp.value as f64,
-            operator: comp.op,
-        },
-        VarType::Spatial(SpatialVar::DistanceRate) => TriggerCondition::DistanceCovered {
-            threshold: comp.value as f64,
-            operator: comp.op,
-        },
-        VarType::Spatial(SpatialVar::RemainDistance) => TriggerCondition::DistanceRemaining {
-            threshold: comp.value as f64,
-            operator: comp.op,
-        },
-        VarType::Status(StatusVar::HpPer) => TriggerCondition::HpPercent {
-            threshold: comp.value as f64,
-            operator: comp.op,
-        },
+        VarType::AccumulateTime => {
+            // AccumulateTime is monotonically increasing
+            if needs_window_conversion(true, comp.op) {
+                TriggerCondition::Window {
+                    variable: WindowVariable::AccumulateTime,
+                    min_threshold: 0.0,
+                    max_threshold: comp.value as f64,
+                }
+            } else {
+                TriggerCondition::Time {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            }
+        }
+
+        VarType::Spatial(SpatialVar::DistanceRate) => {
+            // DistanceRate is monotonically increasing
+            if needs_window_conversion(true, comp.op) {
+                TriggerCondition::Window {
+                    variable: WindowVariable::DistanceRate,
+                    min_threshold: 0.0,
+                    max_threshold: comp.value as f64,
+                }
+            } else {
+                TriggerCondition::DistanceCovered {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            }
+        }
+
+        VarType::Spatial(SpatialVar::RemainDistance) => {
+            // RemainDistance is monotonically decreasing
+            // Note: <= is normal direction for decreasing, >= is reversed
+            if needs_window_conversion(false, comp.op) {
+                // This case is rare: remain_distance>=X means "while still far from finish"
+                // Window from threshold to infinity (represented as course length)
+                // Convert to distance rate for window
+                TriggerCondition::Window {
+                    variable: WindowVariable::DistanceRate,
+                    min_threshold: 0.0,
+                    max_threshold: 100.0 - (comp.value as f64),
+                }
+            } else {
+                TriggerCondition::DistanceRemaining {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            }
+        }
+
+        VarType::Status(StatusVar::HpPer) => {
+            // Even though HpPer can recover, for the most part it constantly decreases
+            // Treat as decreasing for window conversion purposes
+            if needs_window_conversion(false, comp.op) {
+                TriggerCondition::Window {
+                    variable: WindowVariable::HpPercent,
+                    min_threshold: comp.value as f64,
+                    max_threshold: 100.0,
+                }
+            } else {
+                TriggerCondition::HpPercent {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            }
+        }
+
         VarType::Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpPercent {
             threshold: 0.0,
             operator: CompOp::LessEqual,
         },
-        VarType::Spatial(SpatialVar::Furlong) => TriggerCondition::FurlongCrossed {
-            threshold: comp.value as f64,
-            operator: comp.op,
-        },
+
+        VarType::Spatial(SpatialVar::Furlong) => {
+            // Furlong is monotonically increasing
+            if needs_window_conversion(true, comp.op) {
+                // furlong<=N means "activate while in first N furlongs"
+                // We don't have a furlong window type, so fall back to continuous
+                // (This is rare enough that it doesn't warrant a new window type)
+                TriggerCondition::FurlongCrossed {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            } else {
+                TriggerCondition::FurlongCrossed {
+                    threshold: comp.value as f64,
+                    operator: comp.op,
+                }
+            }
+        }
+
         _ => panic!("Not a monotonic trigger: {:?}", comp.var),
     }
 }
@@ -733,327 +816,4 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_split_simple_guard_only() {
-        // Condition with only static guards (no triggers, no monotonic guards)
-        let condition = parse_condition("ground_type==2&motivation>=4").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        // Should have 1 branch
-        assert_eq!(branches.len(), 1);
-
-        let (triggers, guards) = &branches[0];
-
-        // Should have continuous trigger (fallback when no explicit triggers or monotonic guards)
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-        // Should preserve both guards
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_split_hp_trigger_with_guards() {
-        // Condition: hp_per<=50 & ground_type==2
-        let condition = parse_condition("hp_per<=50&ground_type==2").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        // Should have 1 branch
-        assert_eq!(branches.len(), 1);
-
-        let (triggers, guards) = &branches[0];
-
-        // Should extract HP trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::HpPercent {
-                threshold: 50.0,
-                operator: CompOp::LessEqual,
-            }
-        ));
-
-        // Should have ground_type guard
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_split_random_gate_with_guards() {
-        // Condition: phase_random==1 & hp_per>=20
-        let condition = parse_condition("phase_random==1&hp_per>=20").unwrap();
-
-        // Simulate random activation
-        let activation = vec![800.0];
-
-        let branches = split_condition(&condition, activation);
-
-        // Should have 1 branch
-        assert_eq!(branches.len(), 1);
-
-        let (triggers, guards) = &branches[0];
-
-        // Should have random gate trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::DistanceCovered { .. }
-        ));
-
-        // Should have hp_per guard (NOT phase_random)
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_split_onetime_event() {
-        // Condition: is_last_straight_onetime==1
-        let condition = parse_condition("is_last_straight_onetime==1").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        // Should have 1 branch
-        assert_eq!(branches.len(), 1);
-
-        let (triggers, guards) = &branches[0];
-
-        // Should extract onetime trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::StraightTransition {
-                is_last: true,
-                is_onetime: true,
-                is_entry: true
-            }
-        ));
-
-        // No guards
-        assert!(guards.is_none());
-    }
-
-    #[test]
-    fn test_split_or_condition() {
-        // Condition: (phase_random==1 & hp_per>=20) @ (corner==2 & ground_type==1)
-        // This should create 2 separate branches
-        let condition =
-            parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
-
-        let activation = vec![800.0];
-
-        let branches = split_condition(&condition, activation);
-
-        // Should have 2 branches (one for each OR alternative)
-        assert_eq!(branches.len(), 2);
-
-        // Branch 1: random trigger + hp guard
-        let (triggers1, guards1) = &branches[0];
-        assert!(
-            triggers1
-                .iter()
-                .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
-        );
-        assert!(guards1.is_some());
-
-        // Branch 2: corner trigger + ground_type guard
-        let (triggers2, guards2) = &branches[1];
-        assert!(
-            triggers2
-                .iter()
-                .any(|t| matches!(t, TriggerCondition::CornerTransition { .. }))
-        );
-        assert!(guards2.is_some());
-    }
-
-    // Real skill tests based on actual skill_data.json entries
-
-    #[test]
-    fn test_real_skill_210101_phase_random_with_hp_guard() {
-        // Based on skill ID 210101 (レースの真髄・体): "phase_random==3&hp_per>=2&is_lastspurt==1"
-        // Tests Rule 1: MonotonicGuard (hp_per) stays as guard when paired with explicit trigger (phase_random)
-        let condition = parse_condition("phase_random==3&hp_per>=2&is_lastspurt==1").unwrap();
-
-        let activation = vec![1500.0];
-
-        let branches = split_condition(&condition, activation);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have DistanceCovered trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::DistanceCovered { .. }
-        ));
-
-        // hp_per and is_lastspurt should remain as guards
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_real_skill_100141_hp_with_spatial_trigger() {
-        // Based on skill ID 100141 (Victoria por plancha ☆): "is_last_straight==1&hp_per>=30&order<=2"
-        // Tests Rule 1: MonotonicGuard (hp_per) stays as guard with spatial trigger (is_last_straight)
-        let condition = parse_condition("is_last_straight==1&hp_per>=30&order<=2").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have StraightTransition trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::StraightTransition { .. }
-        ));
-
-        // hp_per and order should remain as guards
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_real_skill_100402111_accumulatetime_promoted() {
-        // Based skill ID 100402111 (ドキッ☆じゃじゃウマ娘！): "running_style==1&slope==1&accumulatetime>=10"
-        // Tests Rule 2: MonotonicGuard (accumulatetime) promoted to trigger when no explicit triggers
-        let condition = parse_condition("running_style==1&slope==1&accumulatetime>=10").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Note: slope==1 creates a SlopeTransition trigger (spatial trigger),
-        // so accumulatetime stays as guard per Rule 1
-        // Updated test to match actual behavior
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::SlopeTransition { .. }
-        ));
-
-        // accumulatetime and running_style should remain as guards
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_real_skill_210141_static_guards_only() {
-        // Based on skill ID 210141 (レースの真髄・心): "motivation>=4"
-        // Tests Rule 3: Only static guards -> Continuous trigger fallback
-        let condition = parse_condition("motivation>=4").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have Continuous trigger (fallback)
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-        // motivation should remain as guard
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_real_skill_101021_or_with_accumulatetime() {
-        // Based on skill ID 101021 (ヴィヴァーチェ・ヴォラーレ); first alternative):
-        // "distance_rate<=50&order_rate>=40&order_rate<=80&infront_near_lane_time>=3&accumulatetime>=10@
-        //  distance_rate<=50&order_rate>=40&order_rate<=80&behind_near_lane_time>=3&accumulatetime>=10"
-        // Tests Rule 2 with OR: Both branches should promote MonotonicGuards to triggers
-        let condition = parse_condition(
-            "distance_rate<=50&order_rate>=40&order_rate<=80&infront_near_lane_time>=3&accumulatetime>=10@\
-             distance_rate<=50&order_rate>=40&order_rate<=80&behind_near_lane_time>=3&accumulatetime>=10"
-        ).unwrap();
-
-        let branches = split_condition(&condition, vec![]);
-
-        // Should have 2 branches (OR condition)
-        assert_eq!(branches.len(), 2);
-
-        // Both branches should have both distance_rate and accumulatetime promoted to triggers
-        for (triggers, guards) in &branches {
-            assert_eq!(triggers.len(), 2);
-            // Should have both DistanceCovered and Time triggers
-            assert!(
-                triggers
-                    .iter()
-                    .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
-            );
-            assert!(
-                triggers
-                    .iter()
-                    .any(|t| matches!(t, TriggerCondition::Time { .. }))
-            );
-            // Other conditions should remain as guards
-            assert!(guards.is_some());
-        }
-    }
-
-    #[test]
-    fn test_furlong_trigger_promoted() {
-        // Tests that furlong conditions are promoted to triggers when no explicit triggers exist
-        let condition = parse_condition("furlong>=3&ground_type==2").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have FurlongCrossed trigger
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::FurlongCrossed {
-                threshold: 3.0,
-                operator: CompOp::GreaterEqual
-            }
-        ));
-
-        // ground_type should remain as guard
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_furlong_with_explicit_trigger() {
-        // Tests that furlong stays as guard when paired with explicit trigger (e.g., random)
-        let condition = parse_condition("phase_random==1&furlong>=5").unwrap();
-
-        let activation = vec![800.0];
-
-        let branches = split_condition(&condition, activation);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have DistanceCovered trigger only
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::DistanceCovered { .. }
-        ));
-
-        // furlong should remain as guard (not promoted)
-        assert!(guards.is_some());
-    }
-
-    #[test]
-    fn test_furlong_equality() {
-        // Tests furlong==N condition
-        let condition = parse_condition("furlong==3").unwrap();
-        let branches = split_condition(&condition, vec![]);
-
-        assert_eq!(branches.len(), 1);
-        let (triggers, guards) = &branches[0];
-
-        // Should have FurlongCrossed trigger with Equal operator
-        assert_eq!(triggers.len(), 1);
-        assert!(matches!(
-            triggers[0],
-            TriggerCondition::FurlongCrossed {
-                threshold: 3.0,
-                operator: CompOp::Equal
-            }
-        ));
-
-        // No guards
-        assert!(guards.is_none());
-    }
-}
+mod tests; // Tests are in skill_activation/tests.rs
