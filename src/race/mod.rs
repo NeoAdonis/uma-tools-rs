@@ -3,6 +3,7 @@ pub mod last_spurt;
 pub mod modifiers;
 pub mod parameters;
 pub mod runner;
+pub mod runner_builder;
 pub mod skill_activation;
 pub mod solver;
 pub mod transitions;

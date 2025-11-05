@@ -1,14 +1,17 @@
-use crate::course::Course;
-use crate::race::parameters::RaceParameters;
-use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner, RunnerBuilder};
-use crate::uma::skill::*;
-use crate::uma::*;
-use rand::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
+
+use rand::prelude::*;
+
+use crate::course::Course;
+use crate::race::parameters::RaceParameters;
+use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
+use crate::race::runner_builder::RunnerBuilder;
+use crate::uma::skill::*;
+use crate::uma::*;
 
 pub struct RaceState {
     pub course: Course,
