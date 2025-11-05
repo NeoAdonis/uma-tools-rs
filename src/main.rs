@@ -1,84 +1,10 @@
-mod condition;
-mod course;
-mod race;
-mod trigger;
-mod uma;
-mod units;
+use uma_tools::course::*;
+use uma_tools::race::parameters::*;
+use uma_tools::race::solver::*;
+use uma_tools::uma::skill::*;
+use uma_tools::uma::*;
 
-use course::*;
-use race::parameters::*;
-use race::solver::*;
-use rand::distr::*;
 use rand::prelude::*;
-use uma::skill::*;
-use uma::*;
-
-// TODO: remove
-impl Distribution<Motivation> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Motivation {
-        match rng.random_range(0..5) {
-            0 => Motivation::Awful,
-            1 => Motivation::Bad,
-            2 => Motivation::Normal,
-            3 => Motivation::Good,
-            _ => Motivation::Great,
-        }
-    }
-}
-impl Distribution<TrackCondition> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TrackCondition {
-        match rng.random_range(0..4) {
-            0 => TrackCondition::Firm,
-            1 => TrackCondition::Good,
-            2 => TrackCondition::Soft,
-            _ => TrackCondition::Heavy,
-        }
-    }
-}
-impl Distribution<Weather> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Weather {
-        match rng.random_range(0..4) {
-            0 => Weather::Sunny,
-            1 => Weather::Cloudy,
-            2 => Weather::Rainy,
-            _ => Weather::Snowy,
-        }
-    }
-}
-impl Distribution<Grade> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Grade {
-        match rng.random_range(0..7) {
-            0 => Grade::G1,
-            1 => Grade::G2,
-            2 => Grade::G3,
-            3 => Grade::OP,
-            4 => Grade::PreOP,
-            5 => Grade::Maiden,
-            _ => Grade::Debut,
-        }
-    }
-}
-impl Distribution<Time> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Time {
-        match rng.random_range(0..4) {
-            0 => Time::Morning,
-            1 => Time::Noon,
-            2 => Time::Evening,
-            _ => Time::Night,
-        }
-    }
-}
-impl Distribution<Season> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Season {
-        match rng.random_range(0..5) {
-            0 => Season::Spring,
-            1 => Season::Summer,
-            2 => Season::Autumn,
-            3 => Season::Winter,
-            _ => Season::Sakura,
-        }
-    }
-}
 
 fn main() {
     // TODO: load from file

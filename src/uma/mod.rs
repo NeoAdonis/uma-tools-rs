@@ -188,3 +188,19 @@ impl Uma {
         }
     }
 }
+
+// Random distribution implementation for Motivation
+use rand::distr::{Distribution, StandardUniform};
+use rand::prelude::*;
+
+impl Distribution<Motivation> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Motivation {
+        match rng.random_range(0..5) {
+            0 => Motivation::Awful,
+            1 => Motivation::Bad,
+            2 => Motivation::Normal,
+            3 => Motivation::Good,
+            _ => Motivation::Great,
+        }
+    }
+}

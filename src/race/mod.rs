@@ -6,3 +6,6 @@ pub mod runner;
 pub mod skill_activation;
 pub mod solver;
 pub mod transitions;
+
+#[cfg(test)]
+mod tests;

@@ -3,6 +3,14 @@ name = "uma-tools-rs"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "uma_tools"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uma-tools-rs"
+path = "src/main.rs"
+
 [dependencies]
 rand = "0.9"
 rand_pcg = "0.9"
