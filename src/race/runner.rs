@@ -172,6 +172,18 @@ pub struct RushState {
     pub is_rushed: bool,
 }
 
+/// Modifier applied during spot struggle and its expiration time
+pub struct StruggleState {
+    modifier: f64,
+    expires_at: f64,
+}
+
+/// Modifiers applied during dueling
+pub struct DuelingState {
+    target_speed_modifier: f64,
+    acceleration_modifier: f64,
+}
+
 /// An Uma with additional data related to racing,
 /// that is, an Uma who is running.
 pub struct Runner {
@@ -199,6 +211,8 @@ pub struct Runner {
     pub rush_chance: f64,
     pub rush_state: Option<RushState>,
     pub is_start_dash: bool,
+    pub spot_struggle: Option<StruggleState>,
+    pub dueling: Option<DuelingState>,
     pub slope_acceleration: Option<f64>,
     pub section: u8,
     pub phase: Phase,
@@ -439,6 +453,8 @@ impl RunnerBuilder {
             straight_manager: StraightManager::new(),
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
+            spot_struggle: None,
+            dueling: None,
         }
     }
 }
@@ -515,8 +531,15 @@ impl Runner {
 
         let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
-        self.acceleration =
-            base_acceleration + self.skill_modifiers.acceleration + start_dash_modifier;
+        let dueling_modifier = self
+            .dueling
+            .as_ref()
+            .map_or(0.0, |d| d.acceleration_modifier);
+
+        self.acceleration = base_acceleration
+            + self.skill_modifiers.acceleration
+            + start_dash_modifier
+            + dueling_modifier;
     }
 
     pub fn decelerate(&mut self) {
@@ -537,6 +560,10 @@ impl Runner {
         self.base_target_speed
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
+            + self
+                .dueling
+                .as_ref()
+                .map_or(0.0, |d| d.target_speed_modifier)
     }
 
     pub fn is_uphill(&self) -> bool {
@@ -573,13 +600,14 @@ impl Runner {
         {
             last_spurt.max_speed
         } else {
+            let struggle_mod = self.spot_struggle.as_ref().map_or(0.0, |s| s.modifier);
             base_target_speed(
                 course_base_speed,
                 self.adjusted.style,
                 self.phase,
                 self.adjusted.speed,
                 self.adjusted.distance_aptitude,
-            )
+            ) + struggle_mod
         };
     }
 
@@ -706,18 +734,42 @@ impl Runner {
         }
     }
 
+    /// Update HP based on current speed, phase, and modifiers
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
+        let mut coefficient = if let Some(struggle) = &self.spot_struggle
+            && state.elapsed_time < struggle.expires_at
+        {
+            if self.adjusted.style == Style::Runaway {
+                if self.is_rushed() { 7.7 } else { 3.5 }
+            } else if self.adjusted.style == Style::Front {
+                if self.is_rushed() { 3.6 } else { 1.4 }
+            } else {
+                panic!("BUG: spot struggle should only apply to Runaway and Front styles");
+            }
+        } else if self.is_rushed() {
+            1.5
+        } else {
+            1.0
+        };
+        if self.is_pace_down() {
+            coefficient *= 0.6;
+        }
+        if self.is_downhill_accel() {
+            coefficient *= 0.4;
+        }
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
             state,
             self.phase,
             self.adjusted.guts,
-            self.is_rushed(),
-            self.is_pace_down(),
-            self.is_downhill_accel(),
+            coefficient,
         ) * delta_time;
         if self.hp <= 0.0 {
             self.has_emptied_hp = true;
+        }
+        // Exit dueling state if HP is below 5%
+        if self.hp_percent() < 5.0 {
+            self.dueling = None;
         }
         self.check_hp_triggers(state);
     }
@@ -915,6 +967,36 @@ impl Runner {
         for trigger_index in triggers_to_mark_attempted {
             self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
         }
+    }
+
+    /// a.k.a. Lead Competition, 位置取り争い
+    pub fn start_spot_struggle(&mut self, elapsed_time: f64) {
+        let modifier = (500.0 * self.adjusted.guts as f64).powf(0.6) * 0.0001;
+        let duration = (700.0 * self.adjusted.guts as f64).sqrt() * 0.012;
+        self.spot_struggle = Some(StruggleState {
+            modifier,
+            expires_at: elapsed_time + duration,
+        });
+    }
+
+    /// a.k.a. Compete Fight, 追い比べ
+    pub fn start_dueling(&mut self) {
+        let target_speed_modifier = (200.0 * self.adjusted.guts as f64).powf(0.708) * 0.0001;
+        let acceleration_modifier = (160.0 * self.adjusted.guts as f64).powf(0.59) * 0.0001;
+        self.dueling = Some(DuelingState {
+            target_speed_modifier,
+            acceleration_modifier,
+        });
+    }
+
+    /// Check if the runner is currently in a spot struggle (位置取り争い)
+    pub fn is_spot_struggling(&self) -> bool {
+        self.spot_struggle.is_some()
+    }
+
+    /// Check if the runner is currently dueling (追い比べ)
+    pub fn is_dueling(&self) -> bool {
+        self.dueling.is_some()
     }
 
     pub fn update_last_spurt_state(&mut self, state: &RaceState) {

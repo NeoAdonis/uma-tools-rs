@@ -1,6 +1,6 @@
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::{Runner, RunnerBuilder};
+use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner, RunnerBuilder};
 use crate::uma::skill::*;
 use crate::uma::*;
 use rand::prelude::*;
@@ -148,6 +148,10 @@ impl RaceSolver<Runner> {
             // Post-Update
             runner.check_corner_start(&self.state.course.corners, &self.state);
             runner.check_straight_start(&self.state.course.straights, &self.state);
+        }
+
+        if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
+            // TODO: Implement spot struggle and dueling checks.
         }
     }
 

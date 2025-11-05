@@ -30,29 +30,29 @@ pub fn hp_style_coefficient(style: Style) -> f64 {
     }
 }
 
+/// Calculate HP consumption per second.
+///
+/// # Arguments
+///
+/// - `current_speed` - Current speed of the runner in m/s
+/// - `state` - Reference to the race state
+/// - `phase` - Current phase of the race
+/// - `guts_stat` - Guts stat of the runner
+/// - `status_modifier` - Multiplicative modifier based on current status (e.g.,
+///   rushed, pace-down, downhill). Should be 1.0 if no modifiers apply.
+///
+/// # Returns
+///
+/// HP consumption per second.
 pub fn calculate_hp_consumption_per_second(
     current_speed: f64,
     state: &RaceState,
     phase: Phase,
     guts_stat: u16,
-    is_rushed: bool,
-    is_pace_down: bool,
-    is_downhill_accel: bool,
+    status_modifier: f64,
 ) -> f64 {
     let speed_diff = current_speed - state.course.base_speed() + 12.0;
     let base_consumption = 20.0 * speed_diff.powi(2) / 144.0;
-
-    let mut status_modifier = 1.0;
-    if is_rushed {
-        status_modifier *= 1.6;
-    }
-    if is_pace_down {
-        status_modifier *= 0.6;
-    }
-    if is_downhill_accel {
-        status_modifier *= 0.4;
-    }
-
     let ground_modifier = hp_ground_modifier(state.course.surface, state.params.condition);
 
     let consumption = base_consumption * status_modifier * ground_modifier;
@@ -83,9 +83,7 @@ pub fn estimate_hp_consumption(
         state,
         Phase::Last, // Last spurt phase for guts modifier
         guts_stat,
-        false, // is_rushed
-        false, // is_pace_down
-        false, // is_downhill_accel
+        1.0, // No special status modifier
     );
 
     hp_per_second * time
