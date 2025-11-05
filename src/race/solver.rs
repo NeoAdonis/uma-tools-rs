@@ -6,6 +6,7 @@ use crate::uma::*;
 use rand::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
 
@@ -23,9 +24,10 @@ pub struct RaceState {
 pub struct NoRunner;
 
 pub struct RaceSolver<T> {
-    pub runners: Vec<T>,
+    pub runners: Vec<Runner>,
     pub builders: Vec<RunnerBuilder>,
     pub state: RaceState,
+    pub _marker: PhantomData<T>,
 }
 
 /// Methods available before runners have been built
@@ -49,6 +51,7 @@ impl RaceSolver<NoRunner> {
             runners: vec![],
             builders: vec![],
             state,
+            _marker: PhantomData,
         }
     }
 
@@ -89,6 +92,7 @@ impl RaceSolver<NoRunner> {
             runners,
             builders: vec![],
             state: self.state,
+            _marker: PhantomData,
         }
     }
 }
