@@ -196,7 +196,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::PhaseChange { phase, operator: _ } => {
+        TriggerCondition::PhaseChange { phase } => {
             // Calculate boundary distance for this phase
             let boundary_distance = match phase {
                 Phase::Early => 0.0,

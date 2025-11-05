@@ -311,19 +311,14 @@ fn test_skill_100901_distance_rate_less_than() {
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
 
-    // Currently: only CornerTransition trigger (distance_rate stays as guard)
+    // AFTER FIX: order_rate is a DynamicGuard!
+    // So this becomes Continuous trigger (checked every frame)
+    // This is correct because order_rate can change during the race
     assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::CornerTransition { .. }
-    ));
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
-    // distance_rate<=50, order_rate<=50, ground_type==1 remain as guards
+    // All conditions become guards
     assert!(guards.is_some());
-
-    // TODO: This is still potentially buggy if the corner is at >50% distance!
-    // The proper fix requires making window triggers mandatory for reversed operators,
-    // regardless of whether there's an explicit trigger.
 }
 
 #[test]
@@ -394,4 +389,130 @@ fn test_window_detection_still_works() {
 
     // No remaining guards
     assert!(guards.is_none());
+}
+
+// ============================================================================
+// PHASE OPERATOR BUG (Similar to monotonic variable bug)
+// ============================================================================
+
+#[test]
+fn test_phase_less_than_equal_bug() {
+    // Skill 200441: "phase<=1&accumulatetime>=5&blocked_front_continuetime>=1"
+    //
+    // SEMANTIC ISSUE: phase<=1 means "while in Early OR Mid phase"
+    // But currently it creates PhaseChange { phase: Mid } which only fires at Mid entry
+    //
+    // This is wrong because:
+    // 1. If all guards pass at t=5s during Early phase, skill should activate
+    // 2. But PhaseChange(Mid) hasn't fired yet
+    // 3. Skill won't activate until Mid phase begins
+    //
+    // EXPECTED FIX: phase<=1 should become a GUARD, not a TRIGGER
+    // - The trigger should be accumulatetime>=5 (Time trigger)
+    // - The guards should be: phase<=1 & blocked_front_continuetime>=1
+    // - At runtime: when Time(5s) fires, check if phase is <=Mid
+
+    let condition = parse_condition("phase<=1&accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // AFTER FIXES:
+    // 1. phase<=1 is now a guard (not a trigger) ✓
+    // 2. blocked_front_continuetime is a DynamicGuard
+    // 3. Therefore: Convert to Continuous trigger!
+    //
+    // This is correct because blocked_front_continuetime can change during the race.
+    // We must check continuously, not just at t=5s.
+
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+    // All conditions should be guards (checked every frame)
+    assert!(guards.is_some());
+
+    // Success! Now the skill will activate when:
+    // - phase is <=Mid AND
+    // - accumulatetime is >=5s AND
+    // - blocked_front_continuetime is >=1
+    // Checked continuously every frame
+}
+
+#[test]
+fn test_phase_equality_still_creates_trigger() {
+    // Ensure phase==2 still creates a PhaseChange trigger (not a guard)
+    let condition = parse_condition("phase==2&accumulatetime>=5").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should have PhaseChange trigger (phase==2 is equality, so it's a trigger)
+    // accumulatetime should remain as guard (Rule 1: MonotonicGuard stays as guard with explicit trigger)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::PhaseChange { phase: _ }
+    ));
+
+    // accumulatetime should be a guard
+    assert!(guards.is_some());
+}
+
+// ============================================================================
+// DYNAMIC GUARD + MONOTONIC TRIGGER BUG
+// ============================================================================
+
+#[test]
+fn test_dynamic_guard_forces_continuous() {
+    // Skill with DynamicGuard should use Continuous trigger, not monotonic
+    // Example: accumulatetime>=5 & blocked_front_continuetime>=1
+    //
+    // Problem: If we use Time(5s) trigger, it fires once and is removed from heap.
+    // If blocked_front_continuetime=0 at t=5s, guard fails and skill is lost.
+    // Even if blocked_front_continuetime becomes 1 at t=6s, trigger is gone!
+    //
+    // Solution: Convert to Continuous trigger when DynamicGuards present
+
+    let condition = parse_condition("accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should use Continuous trigger (not Time) because blocked_front_continuetime is DynamicGuard
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+    // All conditions should be guards
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_static_guards_allow_monotonic_trigger() {
+    // Skill with only StaticGuards can safely use monotonic triggers
+    // Example: accumulatetime>=5 & ground_type==2
+    //
+    // This is safe because ground_type never changes during race.
+    // If guard fails at t=5s, it will never pass.
+
+    let condition = parse_condition("accumulatetime>=5&ground_type==2").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should promote accumulatetime to Time trigger (no DynamicGuards)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Time {
+            threshold: 5.0,
+            operator: CompOp::GreaterEqual
+        }
+    ));
+
+    // ground_type should be a guard
+    assert!(guards.is_some());
 }

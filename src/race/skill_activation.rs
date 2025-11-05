@@ -113,8 +113,9 @@ pub enum TriggerCondition {
     },
 
     // ========== PHASE TRIGGERS ==========
-    /// Phase transition
-    PhaseChange { phase: Phase, operator: CompOp },
+    /// Phase transition - fires once when entering the specified phase
+    /// Note: phase>=2 and phase==2 both fire when Late phase begins
+    PhaseChange { phase: Phase },
 
     // ========== SPATIAL TRIGGERS ==========
     /// Entering or exiting a corner
@@ -394,9 +395,10 @@ fn split_comp_list(
 /// Apply MonotonicGuard promotion rules
 ///
 /// Rules:
-/// 1. If there are explicit triggers (RandomGate/Spatial/Phase), MonotonicGuards stay as guards
-/// 2. If no explicit triggers exist, promote MonotonicGuards to triggers
-/// 3. If only guards remain after promotion, add Continuous trigger
+/// 1. If there are DynamicGuards, add Continuous trigger to ensure constant checking
+/// 2. If there are explicit triggers (RandomGate/Spatial/Phase), MonotonicGuards stay as guards
+/// 3. If no explicit triggers exist, promote MonotonicGuards to triggers
+/// 4. If only guards remain after promotion, add Continuous trigger
 fn apply_monotonic_promotion(
     mut triggers: Vec<TriggerCondition>,
     guard_condition: Option<Condition>,
@@ -406,11 +408,17 @@ fn apply_monotonic_promotion(
         .iter()
         .any(|t| !matches!(t, TriggerCondition::Continuous));
 
-    if has_explicit_trigger {
-        // Rule 1: Explicit triggers exist → MonotonicGuards stay as guards
+    // Check if guards contain any DynamicGuard variables
+    let has_dynamic_guard = contains_dynamic_guard(&guard_condition);
+
+    if has_dynamic_guard {
+        // Rule 1. Dynamic guards exist → must be checked continuously; add Continuous trigger
+        (vec![TriggerCondition::Continuous], guard_condition)
+    } else if has_explicit_trigger {
+        // Rule 2: Explicit triggers exist → MonotonicGuards stay as guards
         (triggers, guard_condition)
     } else {
-        // Rule 2: No explicit triggers → try to promote MonotonicGuards
+        // Rule 3: No explicit triggers → try to promote MonotonicGuards
         if let Some(guard) = guard_condition {
             let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guard);
 
@@ -419,7 +427,7 @@ fn apply_monotonic_promotion(
                 triggers.extend(promoted_triggers);
                 (triggers, remaining_guards)
             } else {
-                // Rule 3: No MonotonicGuards to promote → Continuous trigger
+                // Rule 4: No MonotonicGuards to promote → Continuous trigger
                 if triggers.is_empty() {
                     triggers.push(TriggerCondition::Continuous);
                 }
@@ -519,6 +527,25 @@ fn rebuild_guard_condition(guards: Vec<Comp>) -> Condition {
     Condition { comp_list }
 }
 
+/// Check if a condition contains any DynamicGuard variables
+fn contains_dynamic_guard(condition: &Option<Condition>) -> bool {
+    if let Some(cond) = condition {
+        check_comp_list_for_dynamic_guard(&cond.comp_list)
+    } else {
+        false
+    }
+}
+
+/// Recursively check if a CompList contains DynamicGuard variables
+fn check_comp_list_for_dynamic_guard(comp_list: &CompList) -> bool {
+    match comp_list {
+        CompList::Single(comp) => comp.var.variable_role() == VariableRole::DynamicGuard,
+        CompList::Binary { left, right, .. } => {
+            check_comp_list_for_dynamic_guard(left) || check_comp_list_for_dynamic_guard(right)
+        }
+    }
+}
+
 /// Split a single comparison into trigger and guard
 ///
 /// Note: This function does NOT make promotion decisions for MonotonicGuard.
@@ -565,10 +592,22 @@ fn split_single_comp(
         }
 
         VariableRole::PhaseTrigger => {
-            if let Some(trigger) = extract_phase_trigger(comp) {
-                (vec![trigger], None)
+            // Phase with comparison operators (<=, >=, <, >) should be guards, not triggers
+            // Only phase==N creates a trigger (fires at phase entry)
+            // phase<=1 means "while in Early or Mid" (check at trigger time)
+            if comp.op == CompOp::Equal {
+                // phase==N → PhaseTrigger (fire at phase entry)
+                if let Some(trigger) = extract_phase_trigger(comp) {
+                    (vec![trigger], None)
+                } else {
+                    (vec![TriggerCondition::Continuous], None)
+                }
             } else {
-                (vec![TriggerCondition::Continuous], None)
+                // phase<=N, phase>=N, etc. → DynamicGuard (check at trigger time)
+                let guard = Condition {
+                    comp_list: CompList::Single(comp.clone()),
+                };
+                (vec![], Some(guard))
             }
         }
 
@@ -705,6 +744,16 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
 }
 
 /// Extract phase trigger from comparison
+///
+/// Phase triggers fire once when entering the specified phase.
+/// The comparison operator is ignored - both `phase==2` and `phase>=2`
+/// fire when Late phase begins (at the phase boundary).
+///
+/// This is semantically correct because:
+/// - Phases are discrete states, not continuous values
+/// - Skills activate on state transitions (Early→Mid→Late→Last)
+/// - `phase>=2` conceptually means "when in Late or Last phase"
+/// - The trigger fires at Late entry; the skill remains active during Late+Last
 fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
     match &comp.var {
         VarType::Phase(PhaseVar::Phase) => {
@@ -715,10 +764,7 @@ fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
                 3 => Phase::Last,
                 _ => return None,
             };
-            Some(TriggerCondition::PhaseChange {
-                phase,
-                operator: comp.op,
-            })
+            Some(TriggerCondition::PhaseChange { phase })
         }
         _ => None,
     }
