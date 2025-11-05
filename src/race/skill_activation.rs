@@ -402,7 +402,7 @@ fn split_comp_list(
 ///
 /// Rules:
 /// 1. If there are DynamicGuards, add Continuous trigger to ensure constant checking
-/// 2. If there are explicit triggers (RandomGate/Spatial/Phase), MonotonicGuards stay as guards
+/// 2. If there are explicit triggers (Random/Spatial/Phase), MonotonicGuards stay as guards
 /// 3. If no explicit triggers exist, promote MonotonicGuards to triggers
 /// 4. If only guards remain after promotion, add Continuous trigger
 fn apply_monotonic_promotion(
@@ -564,7 +564,7 @@ fn split_single_comp(
     let role = comp.var.variable_role();
 
     match role {
-        VariableRole::RandomGate => {
+        VariableRole::RandomTrigger => {
             // Extract random activation trigger
             if let VarType::Random(_) = &comp.var {
                 // If we are here, it means that the activation roll succeeded

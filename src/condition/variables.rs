@@ -502,38 +502,55 @@ impl VarType {
     }
 }
 
-/// Classification for trigger-guard separation
+/// Classification for trigger-guard separation.
+///
 /// Determines whether a variable acts as a trigger (determines WHEN to check)
-/// or a guard (must be true AT activation time)
+/// or a guard (must be true AT activation time).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableRole {
-    /// Random spatial gate - activates at pre-rolled location, checks guards there
+    /// A trigger that fires at a random location. The activation point should be
+    /// pre-determined before race start.
+    ///
     /// Examples: phase_random==1, is_finalcorner_random==1, corner_random==2
-    RandomGate,
+    RandomTrigger,
 
-    /// Monotonic guard - can act as trigger OR guard depending on context
-    /// When paired with explicit triggers (RandomGate/Spatial/Phase): acts as GUARD
-    /// When alone (no explicit triggers): acts as TRIGGER
+    /// A variable whose value can only increase OR decrease, but not both.
+    /// In most cases, it should be treated as a guard, but it can act as a trigger
+    /// depending on context.
+    ///
+    /// - When paired with explicit triggers (Random/Spatial/Phase): acts as a GUARD.
+    /// - When alone (no explicit triggers): if the condition starts as false and can
+    ///   turn true later (e.g. accumulatetime>=5), it acts as a TRIGGER; if it's the
+    ///   opposite (e.g. distance_rate<=50), it acts as CONTINUOUS, meaning that the
+    ///   underlying condition must be continuously checked.
+    ///
     /// Examples: hp_per<=50, accumulatetime>=5, distance_rate>=50
     MonotonicGuard,
 
-    /// Phase transition trigger - fires when entering new phase
+    /// Phase transition trigger - fires when entering new phase.
+    ///
     /// Example: phase>=2
     PhaseTrigger,
 
-    /// Spatial trigger - fires when entering/exiting course features
+    /// Spatial trigger - fires when entering/exiting course features.
+    ///
     /// Examples: corner!=0, slope==1, is_last_straight==1
     SpatialTrigger,
 
-    /// Activation trigger - fires when skill is activated
+    /// Activation trigger - fires when a skill is activated.
+    ///
     /// Examples: is_activate_any_skill==1, is_heal_skill_activated==1
     ActivationTrigger,
 
-    /// Static guard - never changes during race, evaluated once at race start
-    /// Examples: ground_type==2, distance_type==4, running_style==1, motivation>=4
+    /// A variable whose value never changes during race. Therefore,
+    /// it can be evaluated just once at race start.
+    ///
+    /// Examples: ground_type==2, running_style==1, motivation>=4
     StaticGuard,
 
-    /// Dynamic guard - can change during race, must be checked when trigger fires
+    /// A variable whose value can change during race.
+    /// Must be checked when a trigger fires.
+    ///
     /// Examples: order<=3, is_lastspurt==1, blocked_side_continuetime>=2
     DynamicGuard,
 }
@@ -546,24 +563,24 @@ impl VarType {
 
         match self {
             // RANDOM GATES - Activate at pre-rolled location, check guards there
-            Random(RandomVar::RandomLot) => RandomGate,
-            Phase(PhaseVar::PhaseRandom) => RandomGate,
-            Phase(PhaseVar::PhaseFirsthalfRandom) => RandomGate,
-            Phase(PhaseVar::PhaseFirstquarterRandom) => RandomGate,
-            Phase(PhaseVar::PhaseLaterhalfRandom) => RandomGate,
-            Phase(PhaseVar::PhaseCornerRandom) => RandomGate,
-            Phase(PhaseVar::PhaseStraightRandom) => RandomGate,
-            Phase(PhaseVar::PhaseFirstHalfStraightRandom) => RandomGate,
-            Phase(PhaseVar::PhaseLatterHalfStraightRandom) => RandomGate,
-            Spatial(SpatialVar::IsFinalcornerRandom) => RandomGate,
-            Spatial(SpatialVar::CornerRandom) => RandomGate,
-            Spatial(SpatialVar::AllCornerRandom) => RandomGate,
-            Spatial(SpatialVar::StraightRandom) => RandomGate,
-            Spatial(SpatialVar::LastStraightRandom) => RandomGate,
-            Spatial(SpatialVar::UpSlopeRandom) => RandomGate,
-            Spatial(SpatialVar::UpSlopeRandomLaterHalf) => RandomGate,
-            Spatial(SpatialVar::DownSlopeRandom) => RandomGate,
-            Spatial(SpatialVar::DistanceRateAfterRandom) => RandomGate,
+            Random(RandomVar::RandomLot) => RandomTrigger,
+            Phase(PhaseVar::PhaseRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseFirsthalfRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseFirstquarterRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseLaterhalfRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseCornerRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseStraightRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseFirstHalfStraightRandom) => RandomTrigger,
+            Phase(PhaseVar::PhaseLatterHalfStraightRandom) => RandomTrigger,
+            Spatial(SpatialVar::IsFinalcornerRandom) => RandomTrigger,
+            Spatial(SpatialVar::CornerRandom) => RandomTrigger,
+            Spatial(SpatialVar::AllCornerRandom) => RandomTrigger,
+            Spatial(SpatialVar::StraightRandom) => RandomTrigger,
+            Spatial(SpatialVar::LastStraightRandom) => RandomTrigger,
+            Spatial(SpatialVar::UpSlopeRandom) => RandomTrigger,
+            Spatial(SpatialVar::UpSlopeRandomLaterHalf) => RandomTrigger,
+            Spatial(SpatialVar::DownSlopeRandom) => RandomTrigger,
+            Spatial(SpatialVar::DistanceRateAfterRandom) => RandomTrigger,
 
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context
             // Time-based
@@ -649,22 +666,22 @@ impl VarType {
             Status(StatusVar::InfrontNearLaneTime) => DynamicGuard,
 
             // Activation counts (can act as guards checked at trigger time)
-            Activation(ActivationVar::ActivateCountAll) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountStart) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountMiddle) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountLaterHalf) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountEndAfter) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountHeal) => DynamicGuard,
-            Activation(ActivationVar::ActivateCountAllTeam) => DynamicGuard,
-            Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
-            Activation(ActivationVar::IsUsedSkillId) => DynamicGuard,
-            Activation(ActivationVar::IsExistSkillId) => DynamicGuard,
-            Activation(ActivationVar::CompeteFightCount) => DynamicGuard,
-            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
+            Activation(ActivationVar::ActivateCountAll) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountAllTeam) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountEndAfter) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountHeal) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountLaterHalf) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountMiddle) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountStart) => MonotonicGuard,
+            Activation(ActivationVar::CompeteFightCount) => MonotonicGuard,
+            Activation(ActivationVar::IsExistSkillId) => MonotonicGuard,
+            Activation(ActivationVar::IsUsedSkillId) => MonotonicGuard,
 
             // Activation triggers
             Activation(ActivationVar::IsActivateAnySkill) => ActivationTrigger,
             Activation(ActivationVar::IsActivateHealSkill) => ActivationTrigger,
+            Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
+            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
 
             // Order/Rank (multi-uma, but act as guards)
             Order(OrderVar::Order) => DynamicGuard,
