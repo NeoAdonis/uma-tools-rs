@@ -128,9 +128,6 @@ pub struct CourseData {
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
     pub race_track_id: u16,
-    #[serde(skip)]
-    #[cfg_attr(test, allow(dead_code))]
-    pub(crate) _course: (), // unused in current implementation
 }
 
 impl Course {
@@ -287,4 +284,3 @@ impl Course {
         Ok(Course { id, data })
     }
 }
-

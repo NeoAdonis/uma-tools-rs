@@ -35,7 +35,6 @@ fn create_test_race_solver() -> RaceSolver<Runner> {
         slopes: vec![],
         straights: vec![],
         race_track_id: 10006,
-        _course: (),
     };
 
     let course = Course::new_test(10006, course_data);
@@ -161,7 +160,6 @@ fn test_is_exist_skill_id_in_available_skills() {
         slopes: vec![],
         straights: vec![],
         race_track_id: 10006,
-        _course: (),
     };
 
     let course = Course::new_test(10006, course_data);

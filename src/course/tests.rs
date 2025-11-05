@@ -17,7 +17,6 @@ fn test_is_exchange_race() {
             slopes: vec![],
             straights: vec![],
             race_track_id: track_id,
-            _course: (),
         };
         Course::new_test(track_id, data)
     };

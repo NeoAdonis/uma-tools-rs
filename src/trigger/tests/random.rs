@@ -32,7 +32,6 @@ fn create_test_course() -> Course {
             }],
             race_track_id: 1,
             lane_max: 10000,
-            _course: (),
         },
     )
 }
