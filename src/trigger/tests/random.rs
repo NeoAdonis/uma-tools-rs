@@ -44,7 +44,7 @@ fn test_random_lot_success() {
     let mut rng = rand::rng();
     let result = roll_condition(&condition, &course, &mut rng);
 
-    assert!(result.is_ok());
+    assert!(result.is_some());
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn test_phase_random() {
     let mut rng = rand::rng();
     let result = roll_condition(&condition, &course, &mut rng);
 
-    assert!(result.is_ok());
+    assert!(result.is_some());
     let activation = result.unwrap();
 
     // Check activation distance is within Mid phase boundaries
@@ -72,7 +72,7 @@ fn test_corner_random() {
     let mut rng = rand::rng();
     let result = roll_condition(&condition, &course, &mut rng);
 
-    assert!(result.is_ok());
+    assert!(result.is_some());
     let activation = result.unwrap();
 
     // Check activation distance is within first corner
@@ -91,7 +91,7 @@ fn test_corner_random_multiple() {
     let result = roll_condition(&condition, &course, &mut rng);
 
     // Even though corner 3 and 4 don't exist, the others should still roll successfully
-    assert!(result.is_ok());
+    assert!(result.is_some());
     let activation = result.unwrap();
 
     // Check activation distance is within first corner
@@ -118,7 +118,7 @@ fn test_phase_corner_random() {
     // Run multiple times to ensure it's in valid range
     for _ in 0..20 {
         let result = roll_condition(&condition, &course, &mut rng);
-        assert!(result.is_ok());
+        assert!(result.is_some());
 
         let activation = result.unwrap();
         let dist = activation[0];
@@ -151,7 +151,7 @@ fn test_phase_straight_random() {
 
     for _ in 0..20 {
         let result = roll_condition(&condition, &course, &mut rng);
-        assert!(result.is_ok());
+        assert!(result.is_some());
 
         let activation = result.unwrap();
         let dist = activation[0];

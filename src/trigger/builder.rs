@@ -64,8 +64,8 @@ pub fn build_trigger_scheduler(
             };
 
             let random_activations = match roll_condition(&condition, course, rng) {
-                Ok(activations) => activations,
-                Err(_) => continue, // Random roll failed, skill never activates
+                Some(activations) => activations,
+                None => continue, // Random roll failed, skill never activates
             };
 
             // Parse precondition (if any)
