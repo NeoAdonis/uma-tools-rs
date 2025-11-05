@@ -537,9 +537,7 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
         }
 
         // Multi-uma showdown stubs
-        ActivationVar::CompeteFightCount => {
-            unimplemented!("compete_fight_count: showdown behavior not yet implemented")
-        }
+        ActivationVar::CompeteFightCount => runner.duel_count as i32,
     }
 }
 

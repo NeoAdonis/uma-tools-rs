@@ -213,6 +213,7 @@ pub struct Runner {
     pub is_start_dash: bool,
     pub spot_struggle: Option<StruggleState>,
     pub dueling: Option<DuelingState>,
+    pub duel_count: u8,
     pub slope_acceleration: Option<f64>,
     pub section: u8,
     pub phase: Phase,
@@ -455,6 +456,7 @@ impl RunnerBuilder {
             finish_time: None,
             spot_struggle: None,
             dueling: None,
+            duel_count: 0,
         }
     }
 }
@@ -989,6 +991,7 @@ impl Runner {
             target_speed_modifier,
             acceleration_modifier,
         });
+        self.duel_count += 1;
     }
 
     /// Check if the runner is currently in a spot struggle (位置取り争い)
