@@ -1,10 +1,10 @@
 use rand::Rng;
 
-use crate::course::Phase;
+use crate::course::{Course, Phase};
 use crate::race::hp::estimate_hp_consumption;
 use crate::race::modifiers::*;
+use crate::race::parameters::TrackCondition;
 use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
-use crate::race::solver::RaceState;
 use crate::uma::{Aptitude, Style};
 
 pub struct LastSpurt {
@@ -37,25 +37,25 @@ fn last_spurt_speed_max(
     base_component + speed_component + guts_component
 }
 
-pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) {
+pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: TrackCondition) {
     // TODO: review function
 
     let max_last_spurt_speed = last_spurt_speed_max(
-        state.course.base_speed(),
+        course.base_speed(),
         runner.adjusted.style,
         runner.adjusted.speed,
         runner.adjusted.guts,
         runner.adjusted.distance_aptitude,
     );
     let late_race_base_target_speed = base_target_speed(
-        state.course.base_speed(),
+        course.base_speed(),
         runner.adjusted.style,
         Phase::Late,
         runner.adjusted.speed,
         runner.adjusted.distance_aptitude,
     );
 
-    let remaining_distance = state.course.distance as f64 - runner.position;
+    let remaining_distance = course.distance as f64 - runner.position;
 
     // Estimate stamina usage up to 60m before goal line
     let calculation_distance = remaining_distance - 60.0;
@@ -63,7 +63,8 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) {
     // If HP is sufficient for max speed, use it immediately
     let max_hp_required = estimate_hp_consumption(
         max_last_spurt_speed,
-        state,
+        course,
+        condition,
         calculation_distance,
         runner.adjusted.guts,
     );
@@ -84,7 +85,8 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) {
         // This is where HP runs out or reaches the end
         let hp_required = estimate_hp_consumption(
             test_speed,
-            state,
+            course,
+            condition,
             calculation_distance,
             runner.adjusted.guts,
         );
@@ -129,7 +131,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) {
         if rng_roll < cumulative_probability {
             runner.last_spurt = Some(LastSpurt {
                 max_speed: candidate.speed,
-                target_distance: state.course.distance as f64 - candidate.distance,
+                target_distance: course.distance as f64 - candidate.distance,
             });
         }
     }
@@ -138,7 +140,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) {
     runner.last_spurt = Some(if let Some(last) = candidates.last() {
         LastSpurt {
             max_speed: last.speed,
-            target_distance: state.course.distance as f64 - last.distance,
+            target_distance: course.distance as f64 - last.distance,
         }
     } else {
         // Fallback: use late-race base speed for full distance

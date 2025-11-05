@@ -5,7 +5,7 @@ use crate::course::*;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
-use crate::race::parameters::RaceParameters;
+use crate::race::parameters::{RaceParameters, TrackCondition};
 use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
@@ -759,7 +759,8 @@ impl Runner {
         }
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
-            state,
+            &state.course,
+            state.params.condition,
             self.phase,
             self.adjusted.guts,
             coefficient,
@@ -852,6 +853,7 @@ impl Runner {
                 alternative_index,
                 state.elapsed_time,
                 &state.course,
+                state.params.condition,
             );
             self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
         } else if is_onetime {
@@ -999,9 +1001,9 @@ impl Runner {
         self.dueling.is_some()
     }
 
-    pub fn update_last_spurt_state(&mut self, state: &RaceState) {
+    pub fn update_last_spurt_state(&mut self, course: &Course, condition: TrackCondition) {
         if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-            calculate_last_spurt(self, state);
+            calculate_last_spurt(self, course, condition);
         }
     }
 
@@ -1176,6 +1178,7 @@ impl Runner {
         elapsed_time: f64,
         scaled_duration: f64,
         course: &Course,
+        condition: TrackCondition,
     ) {
         let effect_type = &effect.skill_type;
 
@@ -1199,7 +1202,7 @@ impl Runner {
 
             // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
             if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
-                // TODO: implement last_spurt recalculation
+                calculate_last_spurt(self, course, condition);
             }
         }
         // Activate random gold skill
@@ -1211,7 +1214,7 @@ impl Runner {
                     .random_range(0..self.golden_skill_indices.len());
                 let golden_skill_idx = self.golden_skill_indices[idx];
                 // Recursively activate the golden skill (use first alternative)
-                self.activate_skill(golden_skill_idx, 0, elapsed_time, course);
+                self.activate_skill(golden_skill_idx, 0, elapsed_time, course, condition);
             }
         }
         // Style change
@@ -1250,7 +1253,7 @@ impl Runner {
                 .enumerate()
                 .find(|(_, skill)| skill.id == "201631")
             {
-                self.activate_skill(skill_index, 0, elapsed_time, course);
+                self.activate_skill(skill_index, 0, elapsed_time, course, condition);
             }
         }
     }
@@ -1262,6 +1265,7 @@ impl Runner {
         alternative_index: usize,
         elapsed_time: f64,
         course: &Course,
+        condition: TrackCondition,
     ) {
         // Clone the skill data we need to avoid borrow checker issues
         let skill_id = self.available_skills[skill_index].id.clone();
@@ -1275,9 +1279,13 @@ impl Runner {
         // Apply each effect in the alternative
         for effect in &alternative.effects {
             match effect.target {
-                SkillTarget::Oneself => {
-                    self.apply_skill_effect(effect, elapsed_time, scaled_duration, course)
-                }
+                SkillTarget::Oneself => self.apply_skill_effect(
+                    effect,
+                    elapsed_time,
+                    scaled_duration,
+                    course,
+                    condition,
+                ),
                 _ => continue, // TODO: Handle other targets
             }
         }

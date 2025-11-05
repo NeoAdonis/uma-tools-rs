@@ -127,7 +127,7 @@ impl RaceSolver<Runner> {
             runner.check_all_preconditions(&self.state); // Check all preconditions every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
-            runner.update_last_spurt_state(&self.state);
+            runner.update_last_spurt_state(&self.state.course, self.state.params.condition);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
             runner.update_acceleration();
             runner.update_phase(&mut self.state);
