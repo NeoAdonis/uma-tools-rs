@@ -225,10 +225,6 @@ fn index_trigger(
             scheduler.phase_triggers.extend(triggers);
         }
 
-        TriggerCondition::PositionChange { delta } => {
-            // TODO: implement position change triggers
-        }
-
         TriggerCondition::Window {
             variable,
             min_threshold,

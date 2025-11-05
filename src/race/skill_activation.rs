@@ -137,9 +137,6 @@ pub enum TriggerCondition {
         is_onetime: bool, // true = one-time event
     },
 
-    /// Position change in race
-    PositionChange { delta: i32 }, // Negative = overtake, positive = overtaken
-
     // ========== CONTINUOUS ==========
     /// Must be checked every frame
     /// Used for conditions that can't be efficiently triggered
