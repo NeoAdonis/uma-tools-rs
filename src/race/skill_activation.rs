@@ -860,6 +860,3 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
         None
     }
 }
-
-#[cfg(test)]
-mod tests; // Tests are in skill_activation/tests.rs

@@ -1,6 +1,7 @@
 //! Comprehensive tests for skill activation trigger-guard separation system
 
-use super::*;
+use super::super::skill_activation::*;
+use crate::parser::{CompOp, parse_condition};
 
 // ============================================================================
 // BASIC SPLITTING TESTS
@@ -107,8 +108,7 @@ fn test_split_onetime_event() {
 fn test_split_or_condition() {
     // Condition: (phase_random==1 & hp_per>=20) @ (corner!=0 & ground_type==1)
     // This should create 2 separate branches
-    let condition =
-        parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
+    let condition = parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
 
     let activation = vec![800.0];
 
@@ -305,7 +305,8 @@ fn test_skill_100901_distance_rate_less_than() {
     // when it's reversed direction, even if there's an explicit trigger.
     // This requires a deeper fix in the promotion logic.
 
-    let condition = parse_condition("distance_rate<=50&corner!=0&order_rate<=50&ground_type==1").unwrap();
+    let condition =
+        parse_condition("distance_rate<=50&corner!=0&order_rate<=50&ground_type==1").unwrap();
     let branches = split_condition(&condition, vec![]);
 
     assert_eq!(branches.len(), 1);
@@ -412,7 +413,8 @@ fn test_phase_less_than_equal_bug() {
     // - The guards should be: phase<=1 & blocked_front_continuetime>=1
     // - At runtime: when Time(5s) fires, check if phase is <=Mid
 
-    let condition = parse_condition("phase<=1&accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
+    let condition =
+        parse_condition("phase<=1&accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
     let branches = split_condition(&condition, vec![]);
 
     assert_eq!(branches.len(), 1);
