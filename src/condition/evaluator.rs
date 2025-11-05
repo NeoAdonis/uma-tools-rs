@@ -521,8 +521,8 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
         ActivationVar::ActivateCountAllTeam => 0, // STUB: No team in single-uma mode
 
         // Continuous checks
-        ActivationVar::IsActivateAnySkill => 0, // STUB: Needs per-frame tracking
-        ActivationVar::IsActivateHealSkill => 0, // STUB: Needs per-frame tracking
+        ActivationVar::IsActivateAnySkill => runner.skill_activated_flag as i32,
+        ActivationVar::IsActivateHealSkill => runner.heal_activated_flag as i32,
         ActivationVar::IsActivateOtherSkillDetail => 0, // STUB: Needs tracking
 
         ActivationVar::IsOtherCharacterActivateAdvantageSkill => 0, // STUB

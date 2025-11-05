@@ -255,6 +255,19 @@ fn index_trigger(
             }
         }
 
+        // Activation-dependent triggers
+        TriggerCondition::AnySkillActivation => {
+            if !scheduler.any_activation_triggers.contains(&logic_idx) {
+                scheduler.any_activation_triggers.push(logic_idx);
+            }
+        }
+
+        TriggerCondition::HealSkillActivation => {
+            if !scheduler.heal_activation_triggers.contains(&logic_idx) {
+                scheduler.heal_activation_triggers.push(logic_idx);
+            }
+        }
+
         // Corner triggers
         TriggerCondition::CornerTransition {
             corner_index,

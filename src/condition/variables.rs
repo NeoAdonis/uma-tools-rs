@@ -525,6 +525,10 @@ pub enum VariableRole {
     /// Examples: corner!=0, slope==1, is_last_straight==1
     SpatialTrigger,
 
+    /// Activation trigger - fires when skill is activated
+    /// Examples: is_activate_any_skill==1, is_heal_skill_activated==1
+    ActivationTrigger,
+
     /// Static guard - never changes during race, evaluated once at race start
     /// Examples: ground_type==2, distance_type==4, running_style==1, motivation>=4
     StaticGuard,
@@ -652,13 +656,15 @@ impl VarType {
             Activation(ActivationVar::ActivateCountEndAfter) => DynamicGuard,
             Activation(ActivationVar::ActivateCountHeal) => DynamicGuard,
             Activation(ActivationVar::ActivateCountAllTeam) => DynamicGuard,
-            Activation(ActivationVar::IsActivateAnySkill) => DynamicGuard,
-            Activation(ActivationVar::IsActivateHealSkill) => DynamicGuard,
             Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
             Activation(ActivationVar::IsUsedSkillId) => DynamicGuard,
             Activation(ActivationVar::IsExistSkillId) => DynamicGuard,
             Activation(ActivationVar::CompeteFightCount) => DynamicGuard,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
+
+            // Activation triggers
+            Activation(ActivationVar::IsActivateAnySkill) => ActivationTrigger,
+            Activation(ActivationVar::IsActivateHealSkill) => ActivationTrigger,
 
             // Order/Rank (multi-uma, but act as guards)
             Order(OrderVar::Order) => DynamicGuard,

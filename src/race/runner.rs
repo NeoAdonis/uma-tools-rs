@@ -224,6 +224,8 @@ pub struct Runner {
     pub straight_manager: StraightManager,
     pub trigger_scheduler: TriggerScheduler,
     pub finish_time: Option<f64>,
+    pub skill_activated_flag: bool,
+    pub heal_activated_flag: bool,
 }
 
 // n.b. While no trigger checks for a good start,
@@ -457,6 +459,8 @@ impl RunnerBuilder {
             spot_struggle: None,
             dueling: None,
             duel_count: 0,
+            skill_activated_flag: false,
+            heal_activated_flag: false,
         }
     }
 }
@@ -875,6 +879,36 @@ impl Runner {
         }
     }
 
+    /// Reset activation flags at the start of each frame
+    pub fn reset_activation_flags(&mut self) {
+        self.skill_activated_flag = false;
+        self.heal_activated_flag = false;
+    }
+
+    /// Check activation-dependent triggers
+    /// This should be called at the end of each frame after all other triggers have been checked
+    pub fn check_activation_dependent_triggers(&mut self, state: &RaceState) {
+        // Pass 1: Check is_activate_any_skill triggers
+        if self.skill_activated_flag {
+            let any_activation_indices: Vec<usize> =
+                self.trigger_scheduler.any_activation_triggers.to_vec();
+
+            for trigger_index in any_activation_indices {
+                self.try_activate_skill(trigger_index, state);
+            }
+        }
+
+        // Pass 2: Check is_activate_heal_skill triggers
+        if self.heal_activated_flag {
+            let heal_activation_indices: Vec<usize> =
+                self.trigger_scheduler.heal_activation_triggers.to_vec();
+
+            for trigger_index in heal_activation_indices {
+                self.try_activate_skill(trigger_index, state);
+            }
+        }
+    }
+
     pub fn check_phase_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.phase_triggers.peek() {
             if self.phase != trigger.phase {
@@ -1261,6 +1295,19 @@ impl Runner {
         }
     }
 
+    /// Check if a skill at the given index is a heal skill
+    /// A skill is considered a heal skill if any of its alternatives contain a Recovery effect
+    fn is_heal_skill_by_index(&self, skill_index: usize) -> bool {
+        use crate::uma::skill::SkillType;
+
+        let skill = &self.available_skills[skill_index];
+        skill.alternatives.iter().any(|alt| {
+            alt.effects
+                .iter()
+                .any(|eff| matches!(eff.skill_type, SkillType::Recovery))
+        })
+    }
+
     /// Activate a skill by its index and alternative index
     pub fn activate_skill(
         &mut self,
@@ -1310,5 +1357,11 @@ impl Runner {
             self.position,
             section_length,
         );
+
+        // Set activation flags for activation-dependent triggers
+        self.skill_activated_flag = true;
+        if self.is_heal_skill_by_index(skill_index) {
+            self.heal_activated_flag = true;
+        }
     }
 }

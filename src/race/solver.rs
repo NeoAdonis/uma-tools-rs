@@ -123,6 +123,7 @@ impl RaceSolver<Runner> {
             if runner.start_delay > self.state.elapsed_time {
                 continue;
             }
+            runner.reset_activation_flags();
             runner.update_rush_state(&mut self.state);
             runner.check_all_preconditions(&self.state); // Check all preconditions every frame
             runner.check_time_triggers(&self.state);
@@ -144,6 +145,7 @@ impl RaceSolver<Runner> {
                 &mut *self.state.rng.borrow_mut(),
                 &self.state,
             );
+            runner.check_activation_dependent_triggers(&self.state);
             runner.update_skill_durations(self.state.elapsed_time);
             // Post-Update
             runner.check_corner_start(&self.state.course.corners, &self.state);

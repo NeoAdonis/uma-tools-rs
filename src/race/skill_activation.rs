@@ -141,6 +141,15 @@ pub enum TriggerCondition {
     /// Must be checked every frame
     /// Used for conditions that can't be efficiently triggered
     Continuous,
+
+    // ========== ACTIVATION-DEPENDENT TRIGGERS ==========
+    /// Fires when any skill activates
+    /// Used for is_activate_any_skill==1 conditions
+    AnySkillActivation,
+
+    /// Fires when a heal skill activates
+    /// Used for is_activate_heal_skill==1 conditions
+    HealSkillActivation,
 }
 
 /// A timed skill effect that is currently active
@@ -614,6 +623,27 @@ fn split_single_comp(
             } else {
                 (vec![TriggerCondition::Continuous], None)
             }
+        }
+
+        VariableRole::ActivationTrigger => {
+            if comp.op == CompOp::Equal
+                && comp.value == 1
+                && let VarType::Activation(activation_var) = &comp.var
+            {
+                match activation_var {
+                    ActivationVar::IsActivateAnySkill => {
+                        return (vec![TriggerCondition::AnySkillActivation], None);
+                    }
+                    ActivationVar::IsActivateHealSkill => {
+                        return (vec![TriggerCondition::HealSkillActivation], None);
+                    }
+                    _ => {} // Other activation variables stay as guards
+                }
+            }
+            let guard = Condition {
+                comp_list: CompList::Single(comp.clone()),
+            };
+            (vec![], Some(guard))
         }
 
         VariableRole::StaticGuard | VariableRole::DynamicGuard => {
