@@ -159,9 +159,7 @@ impl RaceSolver<Runner> {
 
     pub fn run(&mut self) {
         let dt = 1.0 / 15.0; // 15 FPS
-        // TODO: replace `for` with `while`
-        //while self.runner.position < self.course.distance as f64 {
-        for _ in 0..1 {
+        while self.state.finish_time.is_none() {
             self.step(dt);
         }
     }
