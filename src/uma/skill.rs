@@ -171,6 +171,66 @@ impl Skill {
         false
     }
 
+    /// Determine whether a skill effect is positive or negative.
+    fn is_effect_positive(effect: &SkillEffect) -> bool {
+        match effect.skill_type {
+            // Purely positive effects
+            SkillType::ActivateRandomGold
+            | SkillType::ActivateSympathy
+            | SkillType::ChangeStyleRunaway => true,
+            // When a start delay is set, it's always to a bad start
+            SkillType::SetStartDelay => false,
+            // Multiplier of less than or equal to 1.0 is a reduction in delay
+            SkillType::MultiplyStartDelay => effect.modifier <= 10000,
+            // Less chance or shorter rush time is good
+            SkillType::RushChanceUp | SkillType::RushTimeUp => effect.modifier <= 0,
+            // Positive modifier is good for other effects
+            _ => effect.modifier >= 0,
+        }
+    }
+
+    /// Check if a skill affects you positively (buff).
+    ///
+    /// N.B. Because a skill can have both positive and negative effects,
+    /// a skill can be both a buff and a nerf.
+    pub fn is_buff(self: &Skill) -> bool {
+        for alternative in &self.alternatives {
+            for effect in &alternative.effects {
+                if effect.target == SkillTarget::Oneself && Skill::is_effect_positive(effect) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a skill affects you negatively (nerf).
+    ///
+    /// N.B. Because a skill can have both positive and negative effects,
+    /// a skill can be both a buff and a nerf.
+    pub fn is_nerf(self: &Skill) -> bool {
+        for alternative in &self.alternatives {
+            for effect in &alternative.effects {
+                if effect.target == SkillTarget::Oneself && !Skill::is_effect_positive(effect) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a skill affects others negatively (debuff).
+    pub fn is_debuff(self: &Skill) -> bool {
+        for alternative in &self.alternatives {
+            for effect in &alternative.effects {
+                if effect.target != SkillTarget::Oneself && !Skill::is_effect_positive(effect) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Check if this skill is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
