@@ -410,6 +410,10 @@ impl Runner {
     }
 
     /// Get current HP percentage.
+    /// 
+    /// HP determines if the runner can sustain her target speed, decelerating
+    /// if it reaches 0.
+    /// It's also used to get the distance at which her last spurt can start.
     pub fn hp_percent(&self) -> f64 {
         self.hp / self.max_hp * 100.0
     }
@@ -456,6 +460,9 @@ impl Runner {
     }
 
     /// Enter rush (temptation, 掛かり) state.
+    ///
+    /// The runner will move ahead of the position dictated by their style,
+    /// losing HP at an increased rate.
     fn start_rush(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && !rush_state.is_rushed
@@ -521,6 +528,12 @@ impl Runner {
     }
 
     /// Start a spot struggle (Lead competition, 位置取り争い).
+    ///
+    /// When there are 2 or more front runners early in the race,
+    /// a spot struggle may begin.
+    ///
+    /// During a spot struggle, runners gain a speed boost based on their guts
+    /// stat, but also consume HP at a higher rate.
     pub fn start_spot_struggle(&mut self, elapsed_time: f64) {
         let modifier = (500.0 * self.adjusted.guts as f64).powf(0.6) * 0.0001;
         let duration = (700.0 * self.adjusted.guts as f64).sqrt() * 0.012;
@@ -536,6 +549,12 @@ impl Runner {
     }
 
     /// Start a duel (Compete Fight, 追い比べ).
+    ///
+    /// On the final straight, a duel may occur between multiple runners that are
+    /// close together.
+    ///
+    /// During a duel, runners gain target speed and acceleration boosts based on
+    /// their guts stat.
     pub fn start_dueling(&mut self) {
         let target_speed_modifier = (200.0 * self.adjusted.guts as f64).powf(0.708) * 0.0001;
         let acceleration_modifier = (160.0 * self.adjusted.guts as f64).powf(0.59) * 0.0001;
@@ -919,6 +938,12 @@ impl Runner {
         // This allows window triggers to retry them continuously while in window
     }
 
+    /// Apply a single skill effect to the runner.
+    /// 
+    /// Effects can be categorized as follows:
+    /// - Timed effects (speed, acceleration...): modify a stat for a certain duration
+    ///   that is constantly tracked.
+    /// - Recovery: instant effect that recovers HP.
     pub fn apply_skill_effect(
         &mut self,
         effect: &SkillEffect,
