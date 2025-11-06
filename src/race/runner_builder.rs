@@ -18,7 +18,7 @@ use crate::*;
 /// Adjust base stats according to course and race parameters.
 fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
     let course_modifier = course_speed_modifier(uma, &course.course_set_status);
-    // n.b. In single mode, all uma gain 400 on stats after adjustment.
+    // N.B. In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
     Uma {
         speed: calculate_adjusted_speed(uma.speed, parameters.condition, course_modifier),
@@ -125,7 +125,7 @@ impl RunnerBuilder {
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate
-        // n.b. As observed, skill activation update happens before out-of-gate skills activate.
+        // N.B. As observed, skill activation update happens before out-of-gate skills activate.
         // Thus, out-of-gate skills don't affect skill activation chance.
         let skill_chance = (1.0 - 90.0 / uma.wiz as f64).max(0.2);
         let available_skills = skills

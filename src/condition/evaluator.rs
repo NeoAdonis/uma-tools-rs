@@ -478,7 +478,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 
         // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=sakura
         //
-        // n.b. Cherry blossom season is semantically part of spring;
+        // N.B. Cherry blossom season is semantically part of spring;
         // conditions that check for spring should also match sakura.
         // When applicable, this is handled directly in the condition
         // definitions (i.e., "season==1@season==5").

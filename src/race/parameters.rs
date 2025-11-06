@@ -34,7 +34,7 @@ pub enum Time {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Grade {
-    // n.b. Besides G1 races, important races (e.g. URA Finals, ChamMe, etc.)
+    // N.B. Besides G1 races, important races (e.g. URA Finals, ChamMe, etc.)
     // generally fall under this category as well.
     G1 = 100,
     G2 = 200,

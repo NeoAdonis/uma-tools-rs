@@ -284,7 +284,7 @@ impl Runner {
     }
 
     /// Start downhill acceleration based on slope percent.
-    /// n.b. going downhill does not guarantee acceleration.
+    /// N.B. Going downhill does not guarantee acceleration.
     fn start_downhill_acceleration(&mut self, slope: f64) {
         if slope > 0.0 {
             panic!("Not a downhill slope");
