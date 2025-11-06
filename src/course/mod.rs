@@ -14,18 +14,24 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 const TRACK_ID_OOI: u16 = 10101;
 const TRACK_ID_LONGCHAMP: u16 = 10201;
 
+/// Represents the phase of a race based on the position on the course.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Phase {
+    /// Early race (sections 0-3).
     Early,
+    /// Mid race (sections 4-15).
     Mid,
+    /// Late race (sections 16-19).
     Late,
-    Last, // Last spurt
+    /// Last spurt (not to be confused with the last spurt mechanic) (sections 20-23).
+    Last,
 }
 
 impl Phase {
-    /// Get the boundaries (start, end) in meters for this phase on a given course
+    /// Get the boundaries (start, end) in meters for this phase on a given course.
     ///
     /// Phases are divided into 24 sections:
+    ///
     /// - Early: sections 0-3 (0.0 to section_length * 4.0)
     /// - Mid: sections 4-15 (section_length * 4.0 to section_length * 16.0)
     /// - Late: sections 16-19 (section_length * 16.0 to section_length * 20.0)
@@ -55,31 +61,45 @@ impl Phase {
     }
 }
 
+/// Track surface type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Track {
-    Turf = 1, // 芝
-    Dirt = 2, // ダート
+    /// 芝
+    Turf = 1,
+    /// ダート
+    Dirt = 2,
 }
 
+/// Course turn direction.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Direction {
-    Left = 1,  // Clockwise
-    Right = 2, // Counterclockwise
-    Unused = 3,
-    Straight = 4, // No curves
+    /// Clockwise (右回り).
+    Left = 1,
+    /// Counterclockwise (左回り).
+    Right = 2,
+    /// No turns.
+    Straight = 4,
 }
 
+/// Course distance type.
+/// N.B. Even though distance type can be inferred from distance, it is explicitly
+/// stored in the data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DistanceType {
-    Short = 1,  // less than 1600m
-    Mile = 2,   // less than 2000m
-    Medium = 3, // less than 2400m
+    /// Less than 1600m.
+    Short = 1,
+    /// 1600m to 2000m.
+    Mile = 2,
+    /// 2000m to 2400m.
+    Medium = 3,
+    /// 2400m or longer.
     Long = 4,
 }
 
+/// Stats used for course set status checks.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum ThresholdStat {
@@ -90,6 +110,7 @@ pub enum ThresholdStat {
     Wiz = 5,
 }
 
+/// Lane type an Uma is running in. Used mainly by skill conditions.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LaneType {
@@ -99,6 +120,7 @@ pub enum LaneType {
     Outside,
 }
 
+/// Structure representing a race course.
 #[derive(Clone, Debug)]
 pub struct Course {
     pub id: u16,
@@ -113,6 +135,7 @@ impl std::ops::Deref for Course {
     }
 }
 
+/// Course data structure as deserialized from JSON.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseData {
@@ -121,64 +144,60 @@ pub struct CourseData {
     pub surface: Track,
     pub turn: Direction,
     pub course_set_status: Vec<ThresholdStat>,
-    pub finish_time_min: u32,
-    pub finish_time_max: u32,
-    pub lane_max: u32,
     pub corners: Vec<Corner>,
     pub slopes: Vec<Slope>,
     pub straights: Vec<Straight>,
     pub race_track_id: u16,
+    pub(crate) finish_time_min: u32,
+    pub(crate) finish_time_max: u32,
+    pub(crate) lane_max: u32,
 }
 
 impl Course {
-    /// Create a new Course for testing purposes
+    /// Create a new Course for testing purposes.
     #[cfg(test)]
     pub fn new_test(id: u16, data: CourseData) -> Self {
         Course { id, data }
     }
 
-    // return distance type from distance
-    // fn distance_type(&self) -> DistanceType {
-    //     match self.distance {
-    //         d if d < 1600 => DistanceType::Short,
-    //         d if d < 2000 => DistanceType::Mile,
-    //         d if d < 2400 => DistanceType::Medium,
-    //         _ => DistanceType::Long,
-    //     }
-    // }
-
-    // in meters
+    /// Get the length of a single section in meters.
+    /// There are 24 sections in a course.
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / 24.0
     }
 
+    /// Get quarterway point in meters.
     pub fn quarterway(&self) -> f64 {
         self.distance as f64 / 4.0
     }
 
+    /// Get halfway point in meters.
     pub fn halfway(&self) -> f64 {
         self.distance as f64 / 2.0
     }
 
+    /// Check if the course distance is a basis distance (multiple of 400m).
     pub fn is_basis_distance(&self) -> bool {
         self.distance % 400 == 0
     }
 
-    // in m/s
+    /// Get the base speed for this course in m/s.
+    /// In essence, the longer the distance, the lower the speed an Uma should run at.
     pub fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
-    // in seconds
+    /// Get the maximum finish time that can be displayed on the scoreboard in seconds.
     pub fn finish_time_max(&self) -> f64 {
         self.finish_time_max as f64 / 10000.0
     }
 
+    /// Get the minimum finish time that can be displayed on the scoreboard in seconds.
     pub fn finish_time_min(&self) -> f64 {
         self.finish_time_min as f64 / 10000.0
     }
 
-    /// Get the section index (0-23) from a given position in meters
+    /// Get the section index (0-23) from a given position in meters.
     pub fn section_from_position(&self, position: f64) -> u8 {
         (position / self.section_length()).floor() as u8
     }
@@ -204,12 +223,12 @@ impl Course {
         gate_roll as f64 * self.lane_width() + adjustor
     }
 
-    /// Get the total course width in meters
+    /// Get the total course width in meters.
     pub fn width(&self) -> f64 {
         course_widths_to_meters(self.lane_max as f64 / 10000.0)
     }
 
-    /// Get the width of a single lane in meters
+    /// Get the width of a single lane in meters.
     pub fn lane_width(&self) -> f64 {
         self.width() / 18.0
     }
