@@ -137,12 +137,12 @@ fn test_split_or_condition() {
 }
 
 // ============================================================================
-// OPERATOR DIRECTION TESTS (THE FIX)
+// OPERATOR DIRECTION TESTS
 // ============================================================================
 
 #[test]
 fn test_distance_rate_less_than_becomes_window() {
-    // Bug fix: distance_rate<=50 should become Window [0, 50], not DistanceCovered trigger
+    // distance_rate<=50 should become Window [0, 50], not DistanceCovered trigger
     // distance_rate is monotonically increasing, so <= is reversed direction
     let condition = parse_condition("distance_rate<=50&ground_type==2").unwrap();
     let branches = split_condition(&condition, vec![]);
@@ -190,7 +190,7 @@ fn test_distance_rate_greater_than_stays_trigger() {
 
 #[test]
 fn test_accumulatetime_less_than_becomes_window() {
-    // Bug fix: accumulatetime<=10 should become Window [0, 10], not Time trigger
+    // accumulatetime<=10 should become Window [0, 10], not Time trigger
     // accumulatetime is monotonically increasing, so <= is reversed direction
     let condition = parse_condition("accumulatetime<=10&ground_type==2").unwrap();
     let branches = split_condition(&condition, vec![]);
@@ -238,8 +238,8 @@ fn test_accumulatetime_greater_than_stays_trigger() {
 
 #[test]
 fn test_hp_per_greater_than_becomes_window() {
-    // Bug fix: hp_per>=50 should become Window [50, 100] for decreasing variable
-    // hp_per is decreasing (damage), so >= is reversed direction
+    // hp_per>=50 should become Window [50, 100] for decreasing variable
+    // hp_per is decreasing, so >= is reversed direction
     let condition = parse_condition("hp_per>=50&ground_type==2").unwrap();
     let branches = split_condition(&condition, vec![]);
 
@@ -285,25 +285,19 @@ fn test_hp_per_less_than_stays_trigger() {
 }
 
 // ============================================================================
-// BROKEN SKILLS FROM ANALYSIS (now fixed)
+// EDGE CASES
 // ============================================================================
 
 #[test]
 fn test_skill_100901_distance_rate_less_than() {
     // Skill 100901: "distance_rate<=50&corner!=0&order_rate<=50&ground_type==1"
-    // With corner!=0 (explicit trigger), distance_rate<=50 stays as guard (Rule 1)
-    // But this is actually where the bug manifests!
-    // distance_rate<=50 as a guard will be checked when corner trigger fires,
-    // but at that point we might be at 60% distance, making the guard fail.
     //
-    // The FIX: When a monotonic guard with reversed operator is promoted,
-    // it should become a Window trigger instead of a threshold trigger.
-    // However, per MonotonicGuard promotion rules, it won't be promoted
-    // when there's already an explicit trigger (corner).
-    //
-    // The real solution: distance_rate<=50 should ALWAYS become a window
-    // when it's reversed direction, even if there's an explicit trigger.
-    // This requires a deeper fix in the promotion logic.
+    // Expected behavior:
+    // - corner!=0 creates CornerTransition trigger (explicit trigger)
+    // - Explicit trigger takes precedence, even with DynamicGuards present
+    // - distance_rate<=50 stays as guard (will be checked at corner entry)
+    // - order_rate<=50 stays as guard (DynamicGuard, checked at corner entry)
+    // - ground_type==1 stays as guard (StaticGuard)
 
     let condition =
         parse_condition("distance_rate<=50&corner!=0&order_rate<=50&ground_type==1").unwrap();
@@ -312,13 +306,14 @@ fn test_skill_100901_distance_rate_less_than() {
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
 
-    // AFTER FIX: order_rate is a DynamicGuard!
-    // So this becomes Continuous trigger (checked every frame)
-    // This is correct because order_rate can change during the race
+    // Should have CornerTransition trigger (explicit trigger takes precedence)
     assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::CornerTransition { .. }
+    ));
 
-    // All conditions become guards
+    // All conditions become guards (checked at corner entry)
     assert!(guards.is_some());
 }
 
@@ -516,5 +511,186 @@ fn test_static_guards_allow_monotonic_trigger() {
     ));
 
     // ground_type should be a guard
+    assert!(guards.is_some());
+}
+
+// ============================================================================
+// ACTIVATE_COUNT_* VARIABLE TESTS
+// ============================================================================
+// These tests verify that activate_count_* variables (MonotonicGuard role)
+// are correctly handled in trigger-guard separation:
+// - When explicit triggers exist: activate_count_* stays as guard
+// - When no explicit triggers: activate_count_* promotes to Continuous trigger
+
+#[test]
+fn test_activate_count_with_window_trigger() {
+    // Real Skill ID: 101051
+    // Condition: distance_rate>=50&distance_rate<=55&order_rate>=40&order_rate<=80&distance_type==3&activate_count_all>=7
+    //
+    // Expected behavior:
+    // - Window pattern detected on distance_rate → creates Window trigger
+    // - Window trigger is explicit, so it takes precedence over DynamicGuard continuous requirement
+    // - activate_count_all stays as guard (MonotonicGuard)
+    // - order_rate stays as guard (DynamicGuard)
+    // - All other conditions checked when window trigger fires
+
+    let condition = parse_condition(
+        "distance_rate>=50&distance_rate<=55&order_rate>=40&order_rate<=80&distance_type==3&activate_count_all>=7",
+    )
+    .unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should have Window trigger (explicit trigger takes precedence)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::DistanceRate,
+            min_threshold: 50.0,
+            max_threshold: 55.0,
+        }
+    ));
+
+    // All other conditions should be guards (including activate_count_all, order_rate)
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_activate_count_with_monotonic_promoted() {
+    // Real Skill ID: 110041
+    // Condition: distance_rate>=50&activate_count_heal>=1&order<=3
+    //
+    // Expected behavior:
+    // - No explicit triggers initially
+    // - order is DynamicGuard → forces Continuous trigger (Rule 2)
+    // - distance_rate stays as guard (can't be promoted when DynamicGuard present)
+    // - activate_count_heal stays as guard (MonotonicGuard)
+    // - All conditions checked continuously
+
+    let condition = parse_condition("distance_rate>=50&activate_count_heal>=1&order<=3").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should use Continuous trigger (DynamicGuard present: order, no explicit triggers)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+    // activate_count_heal, distance_rate, and order should remain as guards
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_activate_count_with_phase_trigger() {
+    // Real Skill ID: 110011
+    // Condition: phase==1&order>=2&order_rate<=80&activate_count_middle>=2
+    //
+    // Expected behavior:
+    // - phase==1 creates PhaseChange trigger (explicit trigger)
+    // - PhaseChange trigger is explicit, so it takes precedence (Rule 1)
+    // - order and order_rate are DynamicGuards but don't force Continuous (explicit trigger exists)
+    // - activate_count_middle stays as guard (MonotonicGuard)
+    // - All other conditions checked when phase trigger fires
+
+    let condition =
+        parse_condition("phase==1&order>=2&order_rate<=80&activate_count_middle>=2").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should have PhaseChange trigger (explicit trigger takes precedence)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::PhaseChange { .. }));
+
+    // activate_count_middle and other conditions should be guards
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_activate_count_with_spatial_trigger() {
+    // Real Skill ID: 111051 (simplified to one branch)
+    // Condition: is_last_straight==1&phase>=2&order>=2&activate_count_middle==7
+    //
+    // Expected behavior:
+    // - is_last_straight==1 creates StraightTransition trigger (explicit trigger)
+    // - StraightTransition trigger is explicit, so it takes precedence (Rule 1)
+    // - order is DynamicGuard but doesn't force Continuous (explicit trigger exists)
+    // - phase>=2 stays as guard (comparison operator)
+    // - activate_count_middle stays as guard (MonotonicGuard)
+    // - All other conditions checked when straight trigger fires
+
+    let condition =
+        parse_condition("is_last_straight==1&phase>=2&order>=2&activate_count_middle==7").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should have StraightTransition trigger (explicit trigger takes precedence)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::StraightTransition {
+            is_last: true,
+            is_entry: true,
+            is_onetime: false,
+        }
+    ));
+
+    // All other conditions (including activate_count_middle) should be guards
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_activate_count_alone_continuous() {
+    // Real Skill ID: 102101211
+    // Condition: activate_count_middle>=3
+    //
+    // Expected behavior:
+    // - No explicit triggers available
+    // - activate_count_middle is MonotonicGuard but can't be promoted to threshold trigger
+    // - Use Continuous trigger (check every frame)
+
+    let condition = parse_condition("activate_count_middle>=3").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should use Continuous trigger (no explicit triggers, activate_count can't be promoted)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+    // activate_count_middle should be a guard
+    assert!(guards.is_some());
+}
+
+#[test]
+fn test_activate_count_with_static_guard_continuous() {
+    // Real Skill ID: 109001211
+    // Condition: distance_type==2&activate_count_start>=1
+    //
+    // Expected behavior:
+    // - No explicit triggers available
+    // - distance_type==2 is StaticGuard (can't be promoted)
+    // - activate_count_start is MonotonicGuard but can't be promoted to threshold trigger
+    // - Use Continuous trigger (check every frame)
+
+    let condition = parse_condition("distance_type==2&activate_count_start>=1").unwrap();
+    let branches = split_condition(&condition, vec![]);
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+
+    // Should use Continuous trigger (no promotable triggers available)
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+
+    // Both conditions should be guards
     assert!(guards.is_some());
 }

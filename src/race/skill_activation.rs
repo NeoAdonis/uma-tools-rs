@@ -401,9 +401,9 @@ fn split_comp_list(
 /// Apply MonotonicGuard promotion rules
 ///
 /// Rules:
-/// 1. If there are DynamicGuards, add Continuous trigger to ensure constant checking
-/// 2. If there are explicit triggers (Random/Spatial/Phase), MonotonicGuards stay as guards
-/// 3. If no explicit triggers exist, promote MonotonicGuards to triggers
+/// 1. If there are explicit triggers (Random/Spatial/Phase/Window), keep them regardless of guards
+/// 2. If no explicit triggers AND there are DynamicGuards, use Continuous trigger
+/// 3. If no explicit triggers AND no DynamicGuards, try to promote MonotonicGuards to triggers
 /// 4. If only guards remain after promotion, add Continuous trigger
 fn apply_monotonic_promotion(
     mut triggers: Vec<TriggerCondition>,
@@ -417,14 +417,16 @@ fn apply_monotonic_promotion(
     // Check if guards contain any DynamicGuard variables
     let has_dynamic_guard = contains_dynamic_guard(&guard_condition);
 
-    if has_dynamic_guard {
-        // Rule 1. Dynamic guards exist → must be checked continuously; add Continuous trigger
-        (vec![TriggerCondition::Continuous], guard_condition)
-    } else if has_explicit_trigger {
-        // Rule 2: Explicit triggers exist → MonotonicGuards stay as guards
+    if has_explicit_trigger {
+        // Rule 1: Explicit triggers exist → keep them, guards stay as guards
+        // This includes Window, Random, Spatial, Phase triggers
+        // DynamicGuards don't force Continuous when we already have explicit triggers
         (triggers, guard_condition)
+    } else if has_dynamic_guard {
+        // Rule 2: No explicit triggers + DynamicGuards → use Continuous trigger
+        (vec![TriggerCondition::Continuous], guard_condition)
     } else {
-        // Rule 3: No explicit triggers → try to promote MonotonicGuards
+        // Rule 3: No explicit triggers, no DynamicGuards → try to promote MonotonicGuards
         if let Some(guard) = guard_condition {
             let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guard);
 
@@ -490,7 +492,15 @@ fn collect_and_classify_comps(
             let role = comp.var.variable_role();
             if matches!(role, VariableRole::MonotonicGuard) {
                 // Promote to trigger
-                promoted_triggers.push(extract_monotonic_trigger(comp));
+                let trigger = extract_monotonic_trigger(comp);
+                promoted_triggers.push(trigger.clone());
+
+                // For activate_count_* variables (and other activation counters),
+                // keep the comparison as a guard because they promote to Continuous
+                // triggers that must check the guard condition every frame
+                if matches!(comp.var, VarType::Activation(_)) {
+                    remaining_guards.push(comp.clone());
+                }
             } else {
                 // Keep as guard
                 remaining_guards.push(comp.clone());
@@ -764,6 +774,11 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
                     operator: comp.op,
                 }
             }
+        }
+
+        VarType::Activation(_) => {
+            // Treat as continuous trigger
+            TriggerCondition::Continuous {}
         }
 
         _ => panic!("Not a monotonic trigger: {:?}", comp.var),
