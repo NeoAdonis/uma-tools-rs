@@ -1,58 +1,93 @@
+//! Race parameters that define the conditions of a race.
+
+/// Track condition enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TrackCondition {
-    Firm = -1, // 良
-    Good,      // 稍重
-    Soft,      // 重
-    Heavy,     // 不良
+    /// 良
+    Firm = -1,
+    /// 稍重
+    Good,
+    /// 重
+    Soft,
+    /// 不良
+    Heavy,
 }
 
+/// Weather enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Weather {
-    Sunny = 1, // 晴
-    Cloudy,    // 曇
-    Rainy,     // 雨
-    Snowy,     // 雪
+    /// 晴
+    Sunny = 1,
+    /// 曇
+    Cloudy,
+    /// 雨
+    Rainy,
+    /// 雪
+    Snowy,
 }
 
+/// Season enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Season {
-    Spring = 1, // 春
-    Summer,     // 夏
-    Autumn,     // 秋
-    Winter,     // 冬
-    Sakura,     // 桜, Cherry Blossom Season; a subset of Spring
+    /// 春
+    Spring = 1,
+    /// 夏
+    Summer,
+    /// 秋
+    Autumn,
+    /// 冬
+    Winter,
+    /// 桜 - Cherry Blossom Season. As a subset of Spring, any conditions
+    /// that apply to Spring also apply to Cherry Blossom Season.
+    Sakura,
 }
 
+/// Time of day enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Time {
     None,
-    Morning, // 午前
-    Noon,    // 正午
-    Evening, // 夕方
-    Night,   // 夜
+    /// 午前
+    Morning,
+    /// 正午
+    Noon,
+    /// 夕方
+    Evening,
+    /// 夜
+    Night,
 }
 
+/// Race grade enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Grade {
-    // N.B. Besides G1 races, important races (e.g. URA Finals, ChamMe, etc.)
-    // generally fall under this category as well.
+    /// G1 races. Other important races (e.g. URA Finals, Champions Meeting, etc.)
+    /// generally fall under this category as well.
     G1 = 100,
+    /// G2 races.
     G2 = 200,
     G3 = 300,
+    /// OP races.
     OP = 400,
+    /// Pre-OP races.
     PreOP = 700,
+    /// Maiden races; the only races that runners can enter before
+    /// winning their first race.
     Maiden = 800,
+    /// Make Debut races.
     Debut = 900,
+    /// Daily races.
     Daily = 999,
 }
 
+/// Struct representing the parameters of a race.
 pub struct RaceParameters {
     pub condition: TrackCondition,
     pub weather: Weather,
     pub season: Season,
     pub time: Time,
     pub grade: Grade,
+    /// Number of gates (participants) in the race.
     pub gates: u8,
+    /// Seed for pseudo-random number generation. Ensures reproducibility.
     pub rng_seed: u64,
 }
 
