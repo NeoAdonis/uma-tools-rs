@@ -102,12 +102,6 @@ pub fn is_timed_effect(effect_type: &SkillType) -> bool {
     )
 }
 
-/// Check if an effect type is a rush chance effect
-#[inline]
-pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
-    matches!(effect_type, SkillType::RushChanceUp)
-}
-
 /// State related to rushing (temptation, 掛かり)
 pub struct RushState {
     pub section: u8,

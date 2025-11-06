@@ -74,6 +74,12 @@ fn modify_stat(stat: &mut u16, modifier: i32) {
     };
 }
 
+/// Check if an effect type is a rush chance effect
+#[inline]
+pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
+    matches!(effect_type, SkillType::RushChanceUp)
+}
+
 /// Builder for constructing a Runner with proper out-of-gate skill activation
 pub struct RunnerBuilder {
     // Immutable context
