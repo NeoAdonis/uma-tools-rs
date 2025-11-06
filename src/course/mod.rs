@@ -214,38 +214,38 @@ impl Course {
         self.width() / 18.0
     }
 
-    /// Get the track name in the specified language
+    /// Get the track name in the specified language.
     ///
     /// # Arguments
-    /// * `language` - Desired language
+    ///
+    /// - `language` - Desired language.
     ///
     /// # Returns
-    /// * `Some(&'static str)` - The track name if available in the specified language
-    /// * `None` - If the track name is not available in the specified language
+    ///
+    /// - `Some(&'static str)` - The track name if available in the specified language.
+    /// - `None` - If the track name is not available in the specified language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         get_track_name(self.race_track_id, language)
     }
 
-    /// Check if this is an exchange race (dirt grade)
-    ///
-    /// Exchange races take place at: Ooi (10101), Kawasaki (10103), Funabashi (10104), or Morioka (10105)
-    ///
-    /// # Returns
-    /// * `true` - If this is an exchange race
-    /// * `false` - Otherwise
+    /// Check if this is an exchange race (dirt grade).
+    /// Exchange races take place at Ooi (10101), Kawasaki (10103), Funabashi (10104),
+    /// or Morioka (10105).
     pub fn is_exchange_race(&self) -> bool {
         matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
     }
 
-    /// Load a specific course by ID from a JSON file
+    /// Load a specific course by ID from a JSON file.
     ///
     /// # Arguments
-    /// * `json_path` - Path to the JSON file containing course data
-    /// * `course_id` - The course ID to look up (e.g., "10101")
+    ///
+    /// - `json_path` - Path to the JSON file containing course data.
+    /// - `course_id` - The course ID to look up (e.g., "10101").
     ///
     /// # Returns
-    /// * `Ok(Course)` - The course data with the ID field populated
-    /// * `Err` - If the file can't be read, JSON is invalid, or course ID not found
+    ///
+    /// - `Ok(Course)` - The course data with the ID field populated.
+    /// - `Err` - If the file can't be read, JSON is invalid, or course ID not found.
     pub fn from_json_file(
         json_path: &str,
         course_id: &str,
@@ -255,15 +255,17 @@ impl Course {
         Self::from_json_str(&json_content, course_id)
     }
 
-    /// Load a specific course by ID from a JSON string
+    /// Load a specific course by ID from a JSON string.
     ///
     /// # Arguments
-    /// * `json_str` - JSON string containing course data
-    /// * `course_id` - The course ID to look up (e.g., "10101")
+    ///
+    /// - `json_str` - JSON string containing course data.
+    /// - `course_id` - The course ID to look up (e.g., "10101").
     ///
     /// # Returns
-    /// * `Ok(Course)` - The course data with the ID field populated
-    /// * `Err` - If the JSON is invalid or course ID not found
+    ///
+    /// - `Ok(Course)` - The course data with the ID field populated.
+    /// - `Err` - If the JSON is invalid or course ID not found.
     pub fn from_json_str(
         json_str: &str,
         course_id: &str,

@@ -171,14 +171,16 @@ impl Skill {
         false
     }
 
-    /// Load all skills from a JSON file into a HashMap
+    /// Load all skills from a JSON file into a HashMap.
     ///
     /// # Arguments
-    /// * `json_path` - Path to the JSON file containing skill data
+    ///
+    /// - `json_path` - Path to the JSON file containing skill data.
     ///
     /// # Returns
-    /// * `Ok(HashMap<String, Skill>)` - A map of skill IDs to Skill objects
-    /// * `Err` - If the file can't be read or JSON is invalid
+    ///
+    /// - `Ok(HashMap<String, Skill>)` - A map of skill IDs to Skill objects.
+    /// - `Err` - If the file can't be read or JSON is invalid.
     pub fn load_skills_from_file(
         json_path: &str,
     ) -> Result<HashMap<String, Skill>, Box<dyn std::error::Error>> {
