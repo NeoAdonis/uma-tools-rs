@@ -635,7 +635,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         StatusVar::PostNumber => runner.gate_roll as i32,
 
         // HP as percentage (0-100)
-        StatusVar::HpPer => hp_per(runner),
+        StatusVar::HpPer => runner.hp_percent().floor() as i32,
 
         // HP is (or has been at some point) empty
         StatusVar::IsHpEmptyOnetime => runner.has_emptied_hp as i32,
@@ -770,11 +770,6 @@ fn get_random_value(var: &RandomVar, _state: &RaceState) -> i32 {
             panic!("BUG: random_lot should not be evaluated - it's a trigger variable!")
         }
     }
-}
-
-/// Convert HP to percentage (0-100) using floor for consistent rounding
-fn hp_per(runner: &Runner) -> i32 {
-    (runner.hp / runner.max_hp * 100.0).floor() as i32
 }
 
 /// Convert position to distance rate percentage (0-100)
