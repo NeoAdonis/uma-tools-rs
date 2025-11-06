@@ -2,59 +2,103 @@ use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use std::collections::HashMap;
 
+/// Represents the type of skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillType {
+    /// Modify speed stat.
     SpeedUp = 1,
+    /// Modify stamina stat.
     StaminaUp = 2,
+    /// Modify power stat.
     PowerUp = 3,
+    /// Modify guts stat.
     GutsUp = 4,
+    /// Modify wisdom stat.
     WizUp = 5,
+    /// Change running style to Runaway.
     ChangeStyleRunaway = 6,
+    /// Modify field of view.
     Fov = 8,
+    /// Recover (heal) some HP.
     Recovery = 9,
+    /// Multiply start delay.
     MultiplyStartDelay = 10,
+    /// Modify how long a runner can stay rushed.
     RushTimeUp = 13,
+    /// Set start delay to a fixed value.
     SetStartDelay = 14,
+    /// Modify current speed directly.
     CurrentSpeed = 21,
+    /// Modify current speed with natural deceleration.
     CurrentSpeedWithNaturalDeceleration = 22,
+    /// Modify target speed.
     TargetSpeed = 27,
+    /// Modify lane movement speed.
     LaneMovementSpeed = 28,
+    /// Modify chance of becoming rushed.
     RushChanceUp = 29,
+    /// Modify acceleration.
     Acceleration = 31,
+    /// Modify all stats at once.
     AllStatsUp = 32,
+    /// Change target lane.
     LaneChange = 35,
+    /// Activate a random gold skill.
     ActivateRandomGold = 37,
+    /// Activate "Sympathy" skill.
     ActivateSympathy = 41,
+    /// Extend evolved skill duration.
     ExtendEvolvedDuration = 42,
 }
 
+/// Represents the rarity of a skill.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillRarity {
+    /// Common skill.
     White = 1,
+    /// Non-unique gold skill; stronger than white skills.
     Gold = 2,
-    Unique = 3,         // 1/2 stars unique
-    UniqueUpgraded = 4, // 3+ stars unique upgraded from 1/2 stars unique
-    UniqueNatural = 5,  // 3+ stars unique with no 1/2 star equivalent
+    /// Skill unique to a specific Uma (1/2 stars).
+    Unique = 3,
+    /// Skill unique to a specific Uma (3+ stars) after upgrade from 1/2 star unique.
+    UniqueUpgraded = 4,
+    /// Skill unique to a specific Uma (3+ stars) with no 1/2 star equivalent.
+    UniqueNatural = 5,
+    /// Skills evolved from gold skills.
     Evolution = 6,
 }
 
+/// Represents the target of a skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillTarget {
+    /// Skill affects oneself.
     Oneself = 1,
+    /// Skill affects all runners.
     All = 2,
+    /// Skill affects only runners inside field of view.
     InFov = 4,
+    /// Skill affects only the next 4 runners ahead.
     AheadOfPosition = 7,
+    /// Skill affects only the next 2 runners ahead.
     AheadOfSelf = 9,
+    /// Skill affects only the previous 2 runners behind.
     BehindSelf = 10,
+    /// Skill affects all team allies.
     AllAllies = 11,
+    /// Skill affects all opponents with a specific running style.
     EnemyStrategy = 18,
+    /// Skill affects runners ahead that are rushed.
     RushedAhead = 19,
+    /// Skill affects runners behind that are rushed.
     RushedBehind = 20,
+    /// Skill affects runners with a specific running style that are rushed.
     RushedStrategy = 21,
+    /// (Unknown)
     UmaId = 22,
+    /// Skill affects runners that have used recovery skills.
     UsedRecovery = 23,
 }
 
@@ -66,6 +110,7 @@ pub enum Perspective {
     Any = 3,
 }
 
+/// Represents a single effect of a skill.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillEffect {
@@ -75,6 +120,7 @@ pub struct SkillEffect {
     pub modifier: i32,
 }
 
+/// Represents an alternative version of a skill, with its own conditions and effects.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
@@ -84,6 +130,7 @@ pub struct SkillAlternative {
     pub precondition: String,
 }
 
+/// Represents a skill with its ID and data.
 #[derive(Clone, Debug)]
 pub struct Skill {
     pub id: String,
@@ -98,6 +145,7 @@ impl std::ops::Deref for Skill {
     }
 }
 
+/// Represents the data of a skill.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillData {
@@ -111,7 +159,7 @@ impl Skill {
         Skill { id, data }
     }
 
-    /// Check if this skill is a "green" skill (stat boosting)
+    /// Check if this skill is a "green" (stat boosting) skill.
     pub fn is_green(self: &Skill) -> bool {
         for alternative in &self.alternatives {
             for effect in &alternative.effects {
@@ -131,7 +179,7 @@ impl Skill {
         false
     }
 
-    /// Check if this skill is a unique skill (i.e. only available to an specific Uma)
+    /// Check if this skill is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
             self.rarity,
@@ -139,7 +187,7 @@ impl Skill {
         )
     }
 
-    /// Check if this skill should activate out of gate (before race begins)
+    /// Check if this skill should activate out of gate (before race begins).
     pub fn should_activate_out_of_gate(&self) -> bool {
         // Green skills (stat boosts) always activate at start
         if self.is_green() {
