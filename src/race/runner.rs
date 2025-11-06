@@ -368,10 +368,14 @@ impl Runner {
         } else {
             delta_time
         };
+        let prev_position = self.position;
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * delta_time;
         if self.position >= state.course.distance as f64 {
-            self.finish_time = Some(state.elapsed_time);
+            // Calculate exact finish time
+            let remaining_distance = state.course.distance as f64 - prev_position;
+            let time_to_finish = remaining_distance / self.effective_speed();
+            self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
         self.check_distance_triggers(state);
     }
