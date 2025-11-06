@@ -766,42 +766,12 @@ impl Runner {
         self.corner_manager.current_corner()
     }
 
-    pub fn check_corner_start(&mut self, corners: &[Corner], state: &RaceState) {
-        // Check for corner entry using the corner manager
-        if let Some(corner_idx) = self.corner_manager.check_entry(self.position, corners) {
-            // Find all corner entry triggers for this corner
-            let skill_indices: Vec<usize> = self
-                .trigger_scheduler
-                .corner_entry_triggers
-                .iter()
-                .filter(|t| t.corner_index == corner_idx)
-                .flat_map(|t| t.skill_indices.iter().copied())
-                .collect();
-
-            // Pull triggers for all skills registered for this corner entry
-            for skill_index in skill_indices {
-                self.try_activate_skill(skill_index, state);
-            }
-        }
+    pub fn check_corner_start(&mut self, corners: &[Corner]) {
+        self.corner_manager.check_entry(self.position, corners);
     }
 
-    pub fn check_corner_end(&mut self, corners: &[Corner], state: &RaceState) {
-        // Check for corner exit using the corner manager
-        if let Some(corner_idx) = self.corner_manager.check_exit(self.position, corners) {
-            // Find all corner exit triggers for this corner
-            let skill_indices: Vec<usize> = self
-                .trigger_scheduler
-                .corner_exit_triggers
-                .iter()
-                .filter(|t| t.corner_index == corner_idx)
-                .flat_map(|t| t.skill_indices.iter().copied())
-                .collect();
-
-            // Pull triggers for all skills registered for this corner exit
-            for skill_index in skill_indices {
-                self.try_activate_skill(skill_index, state);
-            }
-        }
+    pub fn check_corner_end(&mut self, corners: &[Corner]) {
+        self.corner_manager.check_exit(self.position, corners);
     }
 
     pub fn current_straight(&self) -> Option<usize> {
@@ -809,7 +779,6 @@ impl Runner {
     }
 
     pub fn check_straight_start(&mut self, straights: &[Straight], state: &RaceState) {
-        // Check for straight entry using the straight manager
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
             // Trigger straight entry skills
             // Note: straight triggers are only for entry, not exit
@@ -827,54 +796,23 @@ impl Runner {
         }
     }
 
-    pub fn check_straight_end(&mut self, straights: &[Straight], _state: &RaceState) {
-        // Check for straight exit using the straight manager
-        // Note: No triggers fire on straight exit currently
-        // This is here for completeness and potential future use
-        if let Some(_straight_idx) = self.straight_manager.check_exit(self.position, straights) {
-            // No triggers fire on exit for straights
-        }
+    pub fn check_straight_end(&mut self, straights: &[Straight]) {
+        // Check for straight exit only; no triggers are fired by this event
+        self.straight_manager.check_exit(self.position, straights);
     }
 
     pub fn current_slope(&self) -> Option<usize> {
         self.slope_manager.current_slope()
     }
 
-    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng, state: &RaceState) {
-        // Check for slope entry using the slope manager
+    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng) {
         if let Some((slope_idx, _slope_type)) =
             self.slope_manager.check_entry(self.position, slopes)
         {
-            // Trigger slope entry skills
-            let skill_indices: Vec<usize> = self
-                .trigger_scheduler
-                .slope_entry_triggers
-                .iter()
-                .filter(|t| t.slope_index == slope_idx)
-                .flat_map(|t| t.skill_indices.iter().copied())
-                .collect();
-
-            for skill_index in skill_indices {
-                self.try_activate_skill(skill_index, state);
-            }
-
             if slopes[slope_idx].is_uphill() {
                 self.start_uphill_acceleration(slopes[slope_idx].slope_percent());
             }
-        } else if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
-            // Trigger slope exit skills
-            let skill_indices: Vec<usize> = self
-                .trigger_scheduler
-                .slope_exit_triggers
-                .iter()
-                .filter(|t| t.slope_index == slope_idx)
-                .flat_map(|t| t.skill_indices.iter().copied())
-                .collect();
-
-            for skill_index in skill_indices {
-                self.try_activate_skill(skill_index, state);
-            }
-
+        } else if let Some(_slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
             self.stop_slope_acceleration();
         } else if let Some(idx) = self.current_slope() {
             // On slope - check for downhill acceleration

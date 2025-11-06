@@ -30,7 +30,6 @@
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
-use crate::course::geometry::SlopeType;
 use crate::course::*;
 use crate::uma::skill::SkillEffect;
 
@@ -121,18 +120,6 @@ pub enum TriggerCondition {
     PhaseChange { phase: Phase },
 
     // ========== SPATIAL TRIGGERS ==========
-    /// Entering or exiting a corner
-    CornerTransition {
-        corner_index: Option<usize>, // None = any corner
-        is_entry: bool,              // true = enter, false = exit
-    },
-
-    /// Entering or exiting a slope
-    SlopeTransition {
-        slope_type: SlopeType, // Uphill, Downhill, or Any
-        is_entry: bool,
-    },
-
     /// Entering or exiting a straight
     StraightTransition {
         is_last: bool, // true = only last straight
@@ -850,16 +837,14 @@ fn extract_spatial_trigger(comp: &Comp, course: &Course) -> Option<TriggerCondit
             SpatialVar::IsFinalcorner => {
                 // is_finalcorner==1 → Window[final_corner.start, final_corner.end]
                 if comp.op == CompOp::Equal && comp.value == 1 {
-                    if let Some(corner) = course.corners.last() {
-                        Some(TriggerCondition::Window {
+                    course
+                        .corners
+                        .last()
+                        .map(|corner| TriggerCondition::Window {
                             variable: WindowVariable::SpatialPosition,
                             min_threshold: corner.start,
                             max_threshold: corner.start + corner.length,
                         })
-                    } else {
-                        // No corners in course
-                        None
-                    }
                 } else {
                     // is_finalcorner==0 or other operators → Guard
                     None
@@ -896,16 +881,14 @@ fn extract_spatial_trigger(comp: &Comp, course: &Course) -> Option<TriggerCondit
             SpatialVar::IsLastStraight => {
                 // is_last_straight==1 → Window[last_straight.start, last_straight.end]
                 if comp.op == CompOp::Equal && comp.value == 1 {
-                    if let Some(straight) = course.straights.last() {
-                        Some(TriggerCondition::Window {
+                    course
+                        .straights
+                        .last()
+                        .map(|straight| TriggerCondition::Window {
                             variable: WindowVariable::SpatialPosition,
                             min_threshold: straight.start,
                             max_threshold: straight.end,
                         })
-                    } else {
-                        // No straights in course
-                        None
-                    }
                 } else {
                     // Other operators → Guard
                     None

@@ -119,8 +119,8 @@ impl RaceSolver<Runner> {
     fn step(&mut self, delta_time: f64) {
         // Pre-Update
         for runner in &mut self.runners {
-            runner.check_corner_end(&self.state.course.corners, &self.state);
-            runner.check_straight_end(&self.state.course.straights, &self.state);
+            runner.check_corner_end(&self.state.course.corners);
+            runner.check_straight_end(&self.state.course.straights);
         }
 
         self.state.elapsed_time += delta_time;
@@ -146,16 +146,12 @@ impl RaceSolver<Runner> {
                 // TODO: calculate how many lenghts ahead the runner is from the next runner
             }
             runner.update_hp(delta_time, &self.state);
-            runner.check_window_triggers(&self.state); // Check window conditions (distance, time, HP)
-            runner.update_slope(
-                &self.state.course.slopes,
-                &mut *self.state.rng.borrow_mut(),
-                &self.state,
-            );
+            runner.update_slope(&self.state.course.slopes, &mut *self.state.rng.borrow_mut());
+            runner.check_window_triggers(&self.state); // Distance, time, HP windows
             runner.check_activation_dependent_triggers(&self.state);
             runner.update_skill_durations(self.state.elapsed_time);
             // Post-Update
-            runner.check_corner_start(&self.state.course.corners, &self.state);
+            runner.check_corner_start(&self.state.course.corners);
             runner.check_straight_start(&self.state.course.straights, &self.state);
         }
 

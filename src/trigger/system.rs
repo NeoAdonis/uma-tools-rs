@@ -24,10 +24,8 @@ pub struct TriggerScheduler {
     pub window_triggers: Vec<WindowTrigger>,
 
     // Spatial triggers - tied to course geometry
-    pub corner_entry_triggers: Vec<CornerTransitionTrigger>,
-    pub corner_exit_triggers: Vec<CornerTransitionTrigger>,
-    pub slope_entry_triggers: Vec<SlopeTransitionTrigger>,
-    pub slope_exit_triggers: Vec<SlopeTransitionTrigger>,
+    // Note: Corners and slopes use Window triggers (SpatialPosition)
+    // Only straights are here for is_last_straight_onetime support
     pub straight_triggers: Vec<StraightTrigger>,
 
     // Continuous triggers - checked every step (minimized)
@@ -51,10 +49,6 @@ impl TriggerScheduler {
             hp_triggers: BinaryHeap::new(),
             phase_triggers: BinaryHeap::new(),
             window_triggers: Vec::new(),
-            corner_entry_triggers: Vec::new(),
-            corner_exit_triggers: Vec::new(),
-            slope_entry_triggers: Vec::new(),
-            slope_exit_triggers: Vec::new(),
             straight_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
             any_activation_triggers: Vec::new(),
@@ -238,21 +232,9 @@ pub struct WindowTrigger {
 
 // ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
 
-/// Triggers when entering/exiting a corner
-#[derive(Clone, Debug)]
-pub struct CornerTransitionTrigger {
-    pub corner_index: usize,
-    pub skill_indices: Vec<usize>,
-}
-
-/// Triggers when entering/exiting a slope
-#[derive(Clone, Debug)]
-pub struct SlopeTransitionTrigger {
-    pub slope_index: usize,
-    pub skill_indices: Vec<usize>,
-}
-
 /// Triggers when on specific straights
+/// Note: Only used for is_last_straight_onetime (one-time event trigger)
+/// Other spatial features (corners, slopes, regular straights) use Window triggers
 #[derive(Clone, Debug)]
 pub struct StraightTrigger {
     pub straight_index: usize,
