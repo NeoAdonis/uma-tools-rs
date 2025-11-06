@@ -612,8 +612,8 @@ fn get_basic_status_value(var: &StatusVar, builder: &RunnerBuilder) -> i32 {
             _ => builder.base.style as i32,
         },
 
-        // Post number (starting gate)
-        StatusVar::PostNumber => builder.gate_roll as i32,
+        // Gate bracket: 1=inner-most, 8=outer-most
+        StatusVar::PostNumber => (builder.gate_block + 1) as i32,
 
         _ => panic!("Unsupported status variable in out-of-gate context"),
     }

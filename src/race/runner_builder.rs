@@ -86,6 +86,7 @@ pub struct RunnerBuilder {
     pub base: Uma,
     pub motivation: Motivation,
     pub gate_roll: u8,
+    pub gate_block: u8,
 
     // Mutable state being constructed
     adjusted: Uma,
@@ -120,6 +121,7 @@ impl RunnerBuilder {
         // Calculate base stats
         // TODO: check for collisions; maybe use a hashset instead of a vector?
         let gate_roll: u8 = rng.borrow_mut().random_range(0..=params.gates - 1_u8);
+        let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate
@@ -168,6 +170,7 @@ impl RunnerBuilder {
             base: base_uma,
             motivation,
             gate_roll,
+            gate_block,
             adjusted: adjusted_uma,
             start_delay,
             activation_counts: ActivationCounts::default(),
@@ -222,6 +225,47 @@ impl RunnerBuilder {
         self.activation_counts.increment(Phase::Early, 0.0, 0.0);
     }
 
+    /// Determine gate bracket from gate roll and total gates.
+    ///
+    /// There are 8 brackets. In races with eight (or fewer) participants, the gates
+    /// will correspond one-to-one to a gate bracket (i.e., gate 1 to bracket 1,
+    /// gate 2 to bracket 2, etc.).
+    ///
+    /// In races with more than 8 participants, gates will be added in reverse,
+    /// starting from the last bracket. So, in a race with 9 participants, the extra
+    /// gate will go to bracket 8 (paticipants in gate numbers 8 and 9 will share
+    /// bracket 8); with 10 participants, to brackets 8 and 7 (participants in gates
+    /// 7 and 8 will share bracket 7, gates 8 and 9 will share bracket 8), etc. If
+    /// there are more than 16 participants, the process starts from bracket 8 again.
+    ///
+    /// N.B. In this explanation, all numbers are 1-indexed for clarity, but the
+    /// function uses 0-based indexing.
+    fn get_gate_bracket(gate_roll: u8, max_gates: u8) -> u8 {
+        if max_gates <= 8 {
+            return gate_roll;
+        }
+
+        let extra = max_gates - 8;
+        let base_extra = extra / 8; // Extra gates all brackets get
+        let remainder = extra % 8; // Additional gates for last brackets
+
+        // Gates per bracket
+        let gates_per_small = 1 + base_extra;
+        let gates_per_large = gates_per_small + 1;
+
+        // Number of brackets with fewer gates
+        let num_small = 8 - remainder;
+        let total_in_small = num_small * gates_per_small;
+
+        if gate_roll < total_in_small {
+            // In a "smaller" bracket
+            gate_roll / gates_per_small
+        } else {
+            // In a "larger" bracket (with extra gate)
+            num_small + (gate_roll - total_in_small) / gates_per_large
+        }
+    }
+
     /// Apply all out-of-gate skills
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
@@ -271,6 +315,7 @@ impl RunnerBuilder {
             adjusted: self.adjusted,
             motivation: self.motivation,
             gate_roll: self.gate_roll,
+            gate_block: self.gate_block,
             speed: 3.0,
             acceleration: 0.0, // start dash acceleration is applied separately
             min_speed: 0.85 * course.base_speed()

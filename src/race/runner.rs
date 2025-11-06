@@ -131,6 +131,7 @@ pub struct Runner {
     pub motivation: Motivation,
     pub start_delay: f64, // in seconds
     pub gate_roll: u8,
+    pub gate_block: u8,
     pub speed: f64,        // in m/s
     pub acceleration: f64, // in m/s^2
     pub position: f64,     // in m
