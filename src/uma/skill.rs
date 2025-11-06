@@ -102,14 +102,6 @@ pub enum SkillTarget {
     UsedRecovery = 23,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
-#[repr(u8)]
-pub enum Perspective {
-    Oneself = 1,
-    Other = 2,
-    Any = 3,
-}
-
 /// Represents a single effect of a skill.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,7 +146,7 @@ pub struct SkillData {
 }
 
 impl Skill {
-    /// Create a new Skill from ID and SkillData
+    /// Create a new Skill from ID and SkillData.
     pub fn new(id: String, data: SkillData) -> Self {
         Skill { id, data }
     }
@@ -191,11 +183,6 @@ impl Skill {
     pub fn should_activate_out_of_gate(&self) -> bool {
         // Green skills (stat boosts) always activate at start
         if self.is_green() {
-            return true;
-        }
-
-        // Unique skills always activate at start
-        if self.is_unique() {
             return true;
         }
 
