@@ -55,7 +55,7 @@ fn test_uma_stat_calculations() {
     let base_uma = Uma::raw_to_base(raw_uma, Motivation::Normal);
 
     // Normal motivation should not change stats significantly
-    // (motivation coefficient is 1.0 for Normal)
+    // (motivation multiplier is 1.0 for Normal)
     assert!(base_uma.speed > 0);
     assert!(base_uma.stamina > 0);
 
@@ -69,12 +69,12 @@ fn test_uma_stat_calculations() {
 }
 
 #[test]
-fn test_aptitude_coefficients() {
-    // Test that aptitude coefficients are ordered correctly
-    let s_coef = wiz_style_coefficient(Aptitude::S);
-    let a_coef = wiz_style_coefficient(Aptitude::A);
-    let b_coef = wiz_style_coefficient(Aptitude::B);
-    let c_coef = wiz_style_coefficient(Aptitude::C);
+fn test_aptitude_multipliers() {
+    // Test that aptitude multipliers are ordered correctly
+    let s_coef = wiz_style_multiplier(Aptitude::S);
+    let a_coef = wiz_style_multiplier(Aptitude::A);
+    let b_coef = wiz_style_multiplier(Aptitude::B);
+    let c_coef = wiz_style_multiplier(Aptitude::C);
 
     assert!(s_coef > a_coef);
     assert!(a_coef > b_coef);

@@ -32,10 +32,10 @@ fn last_spurt_speed_max(
     guts_stat: u16,
     distance_aptitude: Aptitude,
 ) -> f64 {
-    let base_target_late = base_speed * strategy_phase_coefficient(style, Phase::Late);
+    let base_target_late = base_speed * strategy_phase_multiplier(style, Phase::Late);
     let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
     let speed_component = (500.0 * speed_stat as f64).sqrt()
-        * distance_proficiency_modifier(distance_aptitude)
+        * distance_proficiency_multiplier(distance_aptitude)
         * 0.002;
     let guts_component = match GAME_BEHAVIOR {
         GameBehavior::Original => 0.0,

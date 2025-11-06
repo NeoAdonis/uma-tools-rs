@@ -19,7 +19,8 @@ fn hp_guts_modifier(guts_stat: u16) -> f64 {
     1.0 + (200.0 / (600.0 * guts_stat as f64).sqrt())
 }
 
-pub fn hp_style_coefficient(style: Style) -> f64 {
+/// Calculate HP style multiplier based on running style.
+pub fn hp_style_multiplier(style: Style) -> f64 {
     match style {
         Style::Runaway => 0.86,
         Style::Front => 0.95,

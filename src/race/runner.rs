@@ -235,14 +235,14 @@ impl Runner {
         };
 
         let power_component = (500.0 * self.adjusted.power as f64).sqrt();
-        let strategy_coef =
-            acceleration_strategy_phase_coefficient(self.adjusted.style, self.phase);
-        let ground_modifier = ground_type_proficiency_modifier(self.adjusted.track_aptitude);
-        let distance_modifier =
-            acceleration_distance_proficiency_modifier(self.adjusted.distance_aptitude);
+        let strategy_multiplier =
+            acceleration_strategy_phase_multiplier(self.adjusted.style, self.phase);
+        let ground_multiplier = ground_type_proficiency_multiplier(self.adjusted.track_aptitude);
+        let distance_multiplier =
+            acceleration_distance_proficiency_multiplier(self.adjusted.distance_aptitude);
 
         let base_acceleration =
-            base_accel * power_component * strategy_coef * ground_modifier * distance_modifier;
+            base_accel * power_component * strategy_multiplier * ground_multiplier * distance_multiplier;
 
         let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
@@ -387,9 +387,9 @@ impl Runner {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
-            let section_speed_coefficient =
-                roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
-            self.section_speed_modifier = state.course.base_speed() * section_speed_coefficient;
+            let section_speed_modifier =
+                roll_section_speed_modifier(&mut self.rng.borrow_mut(), self.adjusted.wiz, state.course.base_speed());
+            self.section_speed_modifier = section_speed_modifier;
             if let Some(rush_state) = &mut self.rush_state
                 && rush_state.section == self.section
                 && !rush_state.is_rushed
@@ -420,7 +420,7 @@ impl Runner {
 
     /// Update HP based on current speed, phase, and modifiers.
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
-        let mut coefficient = if let Some(struggle) = &self.spot_struggle
+        let mut multiplier = if let Some(struggle) = &self.spot_struggle
             && state.elapsed_time < struggle.expires_at
         {
             if self.adjusted.style == Style::Runaway {
@@ -436,10 +436,10 @@ impl Runner {
             1.0
         };
         if self.is_pace_down() {
-            coefficient *= 0.6;
+            multiplier *= 0.6;
         }
         if self.is_accelerating_downhill() {
-            coefficient *= 0.4;
+            multiplier *= 0.4;
         }
         self.hp -= calculate_hp_consumption_per_second(
             self.speed,
@@ -447,7 +447,7 @@ impl Runner {
             state.params.condition,
             self.phase,
             self.adjusted.guts,
-            coefficient,
+            multiplier,
         ) * delta_time;
         if self.hp <= 0.0 {
             self.has_emptied_hp = true;

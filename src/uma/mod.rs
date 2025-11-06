@@ -169,7 +169,7 @@ pub fn track_power_modifier(track: Track, condition: TrackCondition) -> u16 {
 }
 
 /// Calculate wiz style multiplier based on aptitude.
-pub fn wiz_style_coefficient(aptitude: Aptitude) -> f64 {
+pub fn wiz_style_multiplier(aptitude: Aptitude) -> f64 {
     match aptitude {
         Aptitude::S => 1.1,
         Aptitude::A => 1.0,
@@ -184,12 +184,12 @@ pub fn wiz_style_coefficient(aptitude: Aptitude) -> f64 {
 
 /// Calculate base stat and apply motivation multiplier.
 /// Any stat above 1200 has its excess halved before applying multiplier.
-pub fn calculate_base_stat(stat: u16, coefficient: f64) -> u16 {
+pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
     let mut computed = stat;
     if computed > 1200 {
         computed = 1200 + (computed - 1200) / 2;
     }
-    ((computed).max(1) as f64 * coefficient) as u16
+    ((computed).max(1) as f64 * multiplier) as u16
 }
 
 /// Calculate adjusted speed after applying course and track modifiers.
@@ -211,7 +211,7 @@ pub fn calculate_adjusted_power(base_power: u16, track: Track, condition: TrackC
 
 /// Calculate adjusted wiz after applying style aptitude modifier.
 pub fn calculate_adjusted_wiz(base_wiz: u16, track_aptitude: Aptitude) -> u16 {
-    let aptitude_mod = wiz_style_coefficient(track_aptitude);
+    let aptitude_mod = wiz_style_multiplier(track_aptitude);
     ((base_wiz as f64 * aptitude_mod) as u16).max(1)
 }
 
@@ -266,13 +266,13 @@ impl Uma {
     pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before motivation
         // multiplier based on team rank. This is out of scope for this simulator.
-        let motivation_coefficient = 1.0 + (motivation as i8 as f64) * 0.02;
+        let motivation_multiplier = 1.0 + (motivation as i8 as f64) * 0.02;
         Uma {
-            speed: calculate_base_stat(raw.speed, motivation_coefficient),
-            stamina: calculate_base_stat(raw.stamina, motivation_coefficient),
-            power: calculate_base_stat(raw.power, motivation_coefficient),
-            guts: calculate_base_stat(raw.guts, motivation_coefficient),
-            wiz: calculate_base_stat(raw.wiz, motivation_coefficient),
+            speed: calculate_base_stat(raw.speed, motivation_multiplier),
+            stamina: calculate_base_stat(raw.stamina, motivation_multiplier),
+            power: calculate_base_stat(raw.power, motivation_multiplier),
+            guts: calculate_base_stat(raw.guts, motivation_multiplier),
+            wiz: calculate_base_stat(raw.wiz, motivation_multiplier),
             style: raw.style,
             distance_aptitude: raw.distance_aptitude,
             track_aptitude: raw.track_aptitude,

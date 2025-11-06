@@ -6,8 +6,8 @@ use rand::Rng;
 
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
-use crate::race::hp::hp_style_coefficient;
-use crate::race::modifiers::roll_section_speed_coefficient;
+use crate::race::hp::hp_style_multiplier;
+use crate::race::modifiers::roll_section_speed_modifier;
 use crate::race::runner::*;
 use crate::race::skill_activation::SkillActivationRecord;
 use crate::race::transitions::*;
@@ -236,7 +236,7 @@ impl RunnerBuilder {
     pub fn build(self, course: &Course) -> Runner {
         // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
         let max_hp =
-            0.8 * hp_style_coefficient(self.adjusted.style) * (self.adjusted.stamina as f64)
+            0.8 * hp_style_multiplier(self.adjusted.style) * (self.adjusted.stamina as f64)
                 + course.distance as f64;
 
         // Set starting speed (done in the constructor)
@@ -258,9 +258,12 @@ impl RunnerBuilder {
             None
         };
 
-        // Calculate section coefficient for base speed adjustment
-        let section_speed_coefficient =
-            roll_section_speed_coefficient(&mut self.rng.borrow_mut(), self.adjusted.wiz);
+        // Calculate section modifier for base speed adjustment
+        let section_speed_modifier = roll_section_speed_modifier(
+            &mut self.rng.borrow_mut(),
+            self.adjusted.wiz,
+            course.base_speed(),
+        );
 
         // Initialize race state
         Runner {
@@ -283,7 +286,7 @@ impl RunnerBuilder {
             golden_skill_indices: self.golden_skill_indices,
             section: 0,
             phase: Phase::Early,
-            section_speed_modifier: course.base_speed() * section_speed_coefficient,
+            section_speed_modifier,
             hp: max_hp,
             max_hp,
             has_emptied_hp: false,
