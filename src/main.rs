@@ -7,24 +7,13 @@ use uma_tools::uma::*;
 use rand::prelude::*;
 
 fn main() {
-    // TODO: load from file
-    let json_data = r#"{
-        "speed": 1500,
-        "stamina": 800,
-        "power": 1200,
-        "guts": 700,
-        "wisdom": 1200,
-        "strategy": "Oikomi",
-        "distanceAptitude": "S",
-        "surfaceAptitude": "A",
-        "strategyAptitude": "A",
-        "skills": [200642]
-    }"#;
+    // TODO: load path from args
+    let json_path = "uma_data.json";
 
     // TODO: do not use RNG
     let mut rng = rand::rng();
 
-    let uma_data = serde_json::from_str::<UmaData>(json_data).expect("Failed to parse JSON");
+    let uma_data = UmaData::from_json_file(json_path).expect("Failed to parse JSON");
     let uma = uma_data.uma;
     let skill_ids = uma_data.skills;
 
