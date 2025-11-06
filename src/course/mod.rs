@@ -76,9 +76,9 @@ pub enum Track {
 #[repr(u8)]
 pub enum Direction {
     /// Clockwise (右回り).
-    Left = 1,
+    Right = 1,
     /// Counterclockwise (左回り).
-    Right = 2,
+    Left = 2,
     /// No turns.
     Straight = 4,
 }
