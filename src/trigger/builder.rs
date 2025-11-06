@@ -77,7 +77,7 @@ pub fn build_trigger_scheduler(
 
             // Split condition into triggers and guards
             // This returns MULTIPLE branches if there are OR conditions
-            let branches = split_condition(&condition, random_activations);
+            let branches = split_condition(&condition, random_activations, course);
 
             // Create SkillActivationLogic for each branch
             for (triggers, guard_condition) in branches {

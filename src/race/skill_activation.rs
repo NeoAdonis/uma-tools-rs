@@ -30,8 +30,8 @@
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
-use crate::course::Phase;
 use crate::course::geometry::SlopeType;
+use crate::course::*;
 use crate::uma::skill::SkillEffect;
 
 /// Complete activation logic for a skill
@@ -72,15 +72,18 @@ pub struct ActivationState {
     pub onetime_trigger_attempted: bool,
 }
 
-/// Monotonic variables that can have window conditions
+/// Monotonic variables that can have window conditions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowVariable {
-    /// Time elapsed since race start (seconds)
+    /// Time elapsed since race start (seconds).
     AccumulateTime,
-    /// Distance covered as percentage (0-100)
+    /// Distance covered as percentage (0-100).
     DistanceRate,
-    /// HP percentage (0-100)
+    /// HP percentage (0-100).
     HpPercent,
+    /// Spatial position (meters from start).
+    /// Used for corners, slopes, straights.
+    SpatialPosition,
 }
 
 /// A trigger condition that determines WHEN to check a skill
@@ -254,8 +257,9 @@ impl SkillActivationLogic {
 pub fn split_condition(
     condition: &Condition,
     random_activation: Vec<f64>,
+    course: &Course,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
-    let branches = split_comp_list(&condition.comp_list, &random_activation);
+    let branches = split_comp_list(&condition.comp_list, &random_activation, course);
 
     // Apply promotion logic to each branch at the top level
     branches
@@ -323,12 +327,13 @@ fn try_detect_window(
 fn split_comp_list(
     comp_list: &CompList,
     random_activation: &Vec<f64>,
+    course: &Course,
 ) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
     match comp_list {
         CompList::Single(comp) => {
             // Base case: single comparison
             // DON'T apply promotion here - it will be done after combining
-            vec![split_single_comp(comp, random_activation)]
+            vec![split_single_comp(comp, random_activation, course)]
         }
 
         CompList::Binary { left, op, right } => match op {
@@ -345,8 +350,8 @@ fn split_comp_list(
 
                 // Not a simple window, proceed with normal AND processing
                 // AND: Combine triggers and guards from both sides
-                let left_splits = split_comp_list(left, random_activation);
-                let right_splits = split_comp_list(right, random_activation);
+                let left_splits = split_comp_list(left, random_activation, course);
+                let right_splits = split_comp_list(right, random_activation, course);
 
                 // For AND, we should have exactly one split on each side
                 // (unless there are nested ORs, which we'll handle recursively)
@@ -387,10 +392,10 @@ fn split_comp_list(
                 let mut results = Vec::new();
 
                 // Add all branches from left side
-                results.extend(split_comp_list(left, random_activation));
+                results.extend(split_comp_list(left, random_activation, course));
 
                 // Add all branches from right side
-                results.extend(split_comp_list(right, random_activation));
+                results.extend(split_comp_list(right, random_activation, course));
 
                 results
             }
@@ -570,6 +575,7 @@ fn check_comp_list_for_dynamic_guard(comp_list: &CompList) -> bool {
 fn split_single_comp(
     comp: &Comp,
     random_activation: &[f64],
+    course: &Course,
 ) -> (Vec<TriggerCondition>, Option<Condition>) {
     let role = comp.var.variable_role();
 
@@ -628,7 +634,7 @@ fn split_single_comp(
         }
 
         VariableRole::SpatialTrigger => {
-            if let Some(trigger) = extract_spatial_trigger(comp) {
+            if let Some(trigger) = extract_spatial_trigger(comp, course) {
                 (vec![trigger], None)
             } else {
                 (vec![TriggerCondition::Continuous], None)
@@ -812,65 +818,102 @@ fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
     }
 }
 
-/// Extract spatial trigger from comparison
-fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
+/// Convert spatial conditions to Window triggers based on course geometry.
+fn extract_spatial_trigger(comp: &Comp, course: &Course) -> Option<TriggerCondition> {
     if let VarType::Spatial(var_type) = &comp.var {
         match var_type {
             SpatialVar::Corner => {
                 match (comp.op, comp.value) {
-                    // corner==N [N>0] → Entry to specific corner N
+                    // corner==N [N>0] → Window[corner_N.start, corner_N.end]
                     (CompOp::Equal, n) if n > 0 => {
-                        Some(TriggerCondition::CornerTransition {
-                            corner_index: Some((n - 1) as usize), // Convert 1-indexed to 0-indexed
-                            is_entry: true,
-                        })
+                        let corner_idx = (n - 1) as usize; // Convert from 1-based index
+                        if corner_idx < course.corners.len() {
+                            let corner = &course.corners[corner_idx];
+                            Some(TriggerCondition::Window {
+                                variable: WindowVariable::SpatialPosition,
+                                min_threshold: corner.start,
+                                max_threshold: corner.start + corner.length,
+                            })
+                        } else {
+                            // Invalid corner index - fall back to continuous
+                            Some(TriggerCondition::Continuous)
+                        }
                     }
 
-                    // corner!=0 → Entry to any corner
-                    (CompOp::NotEqual, 0) => {
-                        Some(TriggerCondition::CornerTransition {
-                            corner_index: None, // Any corner
-                            is_entry: true,
-                        })
-                    }
+                    // corner!=0 → Continuous (multiple disjoint ranges - complex case)
+                    (CompOp::NotEqual, 0) => Some(TriggerCondition::Continuous),
 
-                    // corner==0 (not a corner) or corner!=N [N>0] (anywhere except corner N) → Not a trigger
+                    // corner==0 (not a corner) or corner!=N [N>0] → Not a trigger, stays as guard
                     _ => None,
+                }
+            }
+            SpatialVar::IsFinalcorner => {
+                // is_finalcorner==1 → Window[final_corner.start, final_corner.end]
+                if comp.op == CompOp::Equal && comp.value == 1 {
+                    if let Some(corner) = course.corners.last() {
+                        Some(TriggerCondition::Window {
+                            variable: WindowVariable::SpatialPosition,
+                            min_threshold: corner.start,
+                            max_threshold: corner.start + corner.length,
+                        })
+                    } else {
+                        // No corners in course
+                        None
+                    }
+                } else {
+                    // is_finalcorner==0 or other operators → Guard
+                    None
+                }
+            }
+            SpatialVar::IsFinalcornerLaterhalf => {
+                // is_finalcorner_laterhalf==1 → Window[final_corner.midpoint, final_corner.end]
+                if comp.op == CompOp::Equal && comp.value == 1 {
+                    if let Some(corner) = course.corners.last() {
+                        let midpoint = corner.start + corner.length / 2.0;
+                        Some(TriggerCondition::Window {
+                            variable: WindowVariable::SpatialPosition,
+                            min_threshold: midpoint,
+                            max_threshold: corner.start + corner.length,
+                        })
+                    } else {
+                        // No corners in course
+                        None
+                    }
+                } else {
+                    // Other operators → Guard
+                    None
                 }
             }
             SpatialVar::Slope => {
                 match (comp.op, comp.value) {
-                    // slope==1 → Entry to uphill
-                    (CompOp::Equal, 1) => Some(TriggerCondition::SlopeTransition {
-                        slope_type: SlopeType::Uphill,
-                        is_entry: true,
-                    }),
+                    // slope==1 or slope==2 → Continuous (multiple disjoint ranges - complex case)
+                    (CompOp::Equal, 1) | (CompOp::Equal, 2) => Some(TriggerCondition::Continuous),
 
-                    // slope==2 → Entry to downhill
-                    (CompOp::Equal, 2) => Some(TriggerCondition::SlopeTransition {
-                        slope_type: SlopeType::Downhill,
-                        is_entry: true,
-                    }),
-
-                    // slope==0 (flat) or slope!=X (anywhere but uphill/downhill) → Not a trigger
+                    // slope==0 (flat) or slope!=X → Not a trigger, stays as guard
                     _ => None,
                 }
             }
             SpatialVar::IsLastStraight => {
-                // is_last_straight==1 → Entry to final straight
+                // is_last_straight==1 → Window[last_straight.start, last_straight.end]
                 if comp.op == CompOp::Equal && comp.value == 1 {
-                    Some(TriggerCondition::StraightTransition {
-                        is_last: true,
-                        is_entry: true,
-                        is_onetime: false,
-                    })
+                    if let Some(straight) = course.straights.last() {
+                        Some(TriggerCondition::Window {
+                            variable: WindowVariable::SpatialPosition,
+                            min_threshold: straight.start,
+                            max_threshold: straight.end,
+                        })
+                    } else {
+                        // No straights in course
+                        None
+                    }
                 } else {
-                    // Other operators treated as continuous guards
+                    // Other operators → Guard
                     None
                 }
             }
             SpatialVar::IsLastStraightOnetime => {
-                // is_last_straight_onetime==1 → Entry to final straight
+                // is_last_straight_onetime==1 → Keep as one-time event trigger
+                // This is genuinely a one-time activation, not a continuous window
                 if comp.op == CompOp::Equal && comp.value == 1 {
                     Some(TriggerCondition::StraightTransition {
                         is_last: true,
@@ -878,19 +921,16 @@ fn extract_spatial_trigger(comp: &Comp) -> Option<TriggerCondition> {
                         is_onetime: true,
                     })
                 } else {
-                    // Other operators treated as continuous guards
+                    // Other operators → Guard
                     None
                 }
             }
             SpatialVar::StraightFrontType => {
-                // straight_front_type==1 → Entry to audience-side straight
-                // straight_front_type==2 → Entry to opposite-side straight
+                // straight_front_type==1 or ==2 → Continuous (multiple straights)
                 if comp.op == CompOp::Equal && (comp.value == 1 || comp.value == 2) {
-                    Some(TriggerCondition::StraightTransition {
-                        is_last: false, // Not specifically the final straight
-                        is_entry: true,
-                        is_onetime: false,
-                    })
+                    // Complex case: there may be multiple straights of the same type
+                    // Fall back to continuous checking
+                    Some(TriggerCondition::Continuous)
                 } else {
                     // Not a trigger
                     None

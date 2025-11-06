@@ -697,6 +697,7 @@ impl Runner {
                 WindowVariable::AccumulateTime => state.elapsed_time,
                 WindowVariable::DistanceRate => self.position, // Already in meters (converted at build time)
                 WindowVariable::HpPercent => self.hp_percent(),
+                WindowVariable::SpatialPosition => self.position, // Spatial features use position directly
             };
 
             // Check if we're within the window
