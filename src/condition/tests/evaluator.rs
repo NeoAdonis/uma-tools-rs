@@ -53,7 +53,7 @@ fn create_test_race_solver() -> RaceSolver<Runner> {
 
     let mut solver = RaceSolver::new(course, params);
     solver.add_runner(uma, Motivation::Good, skills);
-    solver.build_runners()
+    solver.ready_runners()
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_is_exist_skill_id_in_available_skills() {
 
     let mut solver = RaceSolver::new(course, params);
     solver.add_runner(uma, Motivation::Good, skills);
-    let solver = solver.build_runners();
+    let solver = solver.ready_runners();
 
     // Create comparison: is_exist_skill_id == 203061
     let comp = Comp {

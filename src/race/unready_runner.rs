@@ -80,35 +80,58 @@ pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
     matches!(effect_type, SkillType::RushChanceUp)
 }
 
-/// Builder for constructing a Runner with proper out-of-gate skill activation
-pub struct RunnerBuilder {
-    // Immutable context
+/// A data structure that holds all information needed to initialize a Runner.
+/// It allows for proper activation of out-of-gate skills that can take into
+/// account the runner's base stats, race parameters, and most importantly,
+/// data about other runners.
+pub struct UnreadyRunner {
+    // === Immutable context ===
+    /// Base stats before adjustments. Also used for skill conditions in
+    /// out-of-gate skills.
     pub base: Uma,
+    /// Runner motivation level. It affects base stats and is used for
+    /// evaluating the activation conditions of some out-of-gate skills.
     pub motivation: Motivation,
+    /// Gate number (0-indexed). It determines starting lane position.
     pub gate_roll: u8,
+    /// Gate bracket (0-7, from innermost to outermost).
+    /// Used for some skill conditions.
     pub gate_block: u8,
 
-    // Mutable state being constructed
+    // === Mutable state being constructed ===
+    /// Adjusted stats after applying modifiers and out-of-gate skills.
+    /// For the most part, these are the stats used for race calculations.
     adjusted: Uma,
+    /// Start delay (i.e. time taken to leave the gate) in seconds.
     start_delay: f64,
+    /// Rush chance modifier from out-of-gate skills.
     rush_chance_modifier: f64,
 
-    // Activation tracking
+    // === Activation tracking ===
+    /// Counts of skill activations by phase and type.
     activation_counts: ActivationCounts,
+    /// Set of activated skill IDs.
     activated_skill_ids: HashSet<String>,
+    /// List of activated skills with their activation distances.
     activated_skills: Vec<SkillActivationRecord>,
 
-    // RNG
-    rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-
-    // Skills
+    // === Skills ===
+    /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
-    golden_skill_indices: Vec<usize>,
-    out_of_gate_skills: Vec<Skill>,
+    /// Skills that can be activated after the race starts.
     runtime_skills: Vec<Skill>,
+    /// Skills that activate out of gate as soon as the race starts.
+    out_of_gate_skills: Vec<Skill>,
+    /// Indices of golden skills in `runtime_skills` for activation by skills that
+    /// activate golden skills.
+    golden_skill_indices: Vec<usize>,
+
+    // === Random number generator ===
+    /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
+    rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
 }
 
-impl RunnerBuilder {
+impl UnreadyRunner {
     /// Create a new RunnerBuilder with initial values
     pub fn new(
         uma: Uma,
@@ -166,7 +189,7 @@ impl RunnerBuilder {
             .map(|(i, _)| i)
             .collect::<Vec<usize>>();
 
-        RunnerBuilder {
+        UnreadyRunner {
             base: base_uma,
             motivation,
             gate_roll,

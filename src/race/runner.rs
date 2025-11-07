@@ -12,10 +12,10 @@ use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
-use crate::race::runner_builder::RunnerBuilder;
 use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
+use crate::race::unready_runner::UnreadyRunner;
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::skill::*;
 use crate::uma::*;
@@ -123,48 +123,106 @@ pub struct DuelingState {
     acceleration_modifier: f64,
 }
 
-/// An Uma with additional data related to racing,
-/// that is, an Uma who is running.
+/// An Uma with additional data related to racing, that is, an Uma who is running.
+///
+/// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
 pub struct Runner {
+    /// Base stats before adjustments. After calculating the adjusted stats,
+    /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,
+    /// Adjusted stats after applying modifiers and out-of-gate skills.
+    /// For the most part, these are the stats used for race calculations.
     pub adjusted: Uma,
+    /// Runner motivation level. After applying motivation modifiers to stats,
+    /// this field is only used to evaluate some skill conditions.
     pub motivation: Motivation,
-    pub start_delay: f64, // in seconds
+    /// Gate number (0-indexed). It determines starting lane position.
     pub gate_roll: u8,
+    /// Gate bracket (0-7, from innermost to outermost).
+    /// Used to evaluate some skill conditions.
     pub gate_block: u8,
-    pub speed: f64,        // in m/s
-    pub acceleration: f64, // in m/s^2
-    pub position: f64,     // in m
+    /// Start delay (i.e. time taken to leave the gate) in seconds.
+    pub start_delay: f64,
+    /// Current speed in m/s. Besides position updates, it also affects HP consumption.
+    pub speed: f64,
+    /// Current acceleration in m/s².
+    pub acceleration: f64,
+    /// Current position in the course in meters.
+    pub position: f64,
+    /// Current HP. It is set to `max_hp` at the start of the race and decreases
+    /// over time. It can be restored by skills but cannot exceed `max_hp`.
+    ///
+    /// If HP reaches 0, the runner's maximum speed is greatly reduced.
     pub hp: f64,
+    /// Maximum HP. Calculated from the runner's stamina stat at the start of the race.
     pub max_hp: f64,
+    /// Flag indicating if the runner has emptied her HP at least once.
     pub has_emptied_hp: bool,
+    /// Minimum speed in m/s. It is based on course base speed and guts stat.
     pub min_speed: f64,
+    /// Base target speed in m/s before modifiers.
     pub base_target_speed: f64,
+    /// Target lane position in meters.
     pub target_lane: f64,
+    /// Speed modifier for the current section in m/s.
     pub section_speed_modifier: f64,
+    /// List of skills available for activation.
     pub available_skills: Vec<Skill>,
-    pub activated_skills: Vec<SkillActivationRecord>,
-    pub activated_skill_ids: HashSet<String>,
-    pub skill_modifiers: SkillModifiers,
-    pub active_timed_effects: Vec<ActiveTimedEffect>,
-    pub golden_skill_indices: Vec<usize>,
-    pub rush_chance: f64,
-    pub rush_state: Option<RushState>,
-    pub is_start_dash: bool,
-    pub spot_struggle: Option<StruggleState>,
-    pub dueling: Option<DuelingState>,
-    pub duel_count: u8,
-    pub slope_acceleration: Option<f64>,
-    pub section: u8,
-    pub phase: Phase,
-    pub last_spurt: Option<LastSpurt>,
-    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    pub corner_manager: CornerManager,
-    pub slope_manager: SlopeManager,
-    pub straight_manager: StraightManager,
-    pub trigger_scheduler: TriggerScheduler,
+    // Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
+    /// List of skills that have been activated during the race.
+    pub activated_skills: Vec<SkillActivationRecord>,
+    /// Set of activated skill IDs.
+    pub activated_skill_ids: HashSet<String>,
+    /// Modifiers from skills applied to this runner's stats.
+    pub skill_modifiers: SkillModifiers,
+    /// Effects from skills that are currently active for a limited duration.
+    pub active_timed_effects: Vec<ActiveTimedEffect>,
+    /// List of indices of golden skills in `available_skills`.
+    /// These skills can be activated by other skills.
+    pub golden_skill_indices: Vec<usize>,
+    /// Chance of entering rush (temptation, 掛かり) state.
+    /// This is determined at the start of the race along with deciding whether
+    /// the runner will rush or not.
+    pub rush_chance: f64,
+    /// State related to rushing (temptation, 掛かり). If `None`, the runner is set to
+    /// not rush at all. Otherwise, it tells when and how the rush will happen.
+    pub rush_state: Option<RushState>,
+    /// Flag indicating if the runner is currently in start dash mode.
+    pub is_start_dash: bool,
+    /// State related to spot struggle. If `None`, the runner is not in a struggle.
+    pub spot_struggle: Option<StruggleState>,
+    /// State related to dueling. If `None`, the runner is not currently dueling.
+    pub dueling: Option<DuelingState>,
+    /// Count of duels the runner has engaged in.
+    pub duel_count: u8,
+    /// Current slope acceleration in m/s², if any.
+    pub slope_acceleration: Option<f64>,
+    /// Current section index (0-23).
+    pub section: u8,
+    /// Current race phase.
+    pub phase: Phase,
+    /// Information about the last spurt phase. It is calculated when entering the
+    /// Mid phase. It indicates when the last spurt can start and its max speed.
+    pub last_spurt: Option<LastSpurt>,
+    /// Reference to a `RaceSolver`'s Random Number Generator.
+    /// It is shared with other runners.
+    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    /// Structure used to determine corner entries and exits, along with skills
+    /// triggered by those events.
+    pub corner_manager: CornerManager,
+    /// Structure used to determine slope entries and exits, along with their
+    /// acceleration/deceleration effects as well as skills triggered by slopes.
+    pub slope_manager: SlopeManager,
+    /// Structure used to determine straight entries and exits, along with skills
+    /// triggered by those events.
+    pub straight_manager: StraightManager,
+    /// Scheduler for skill triggers. It contains many queues for different trigger
+    /// types, each with their own criteria (distance, time, etc).
+    pub trigger_scheduler: TriggerScheduler,
+    /// Flag indicating if a skill was activated in the current update cycle.
     pub skill_activated_flag: bool,
+    /// Flag indicating if a healing skill was activated in the current update cycle.
     pub heal_activated_flag: bool,
 }
 
@@ -176,7 +234,7 @@ pub enum StartType {
 }
 
 impl Runner {
-    pub fn new(mut builder: RunnerBuilder, state: &RaceState) -> Self {
+    pub fn new(mut builder: UnreadyRunner, state: &RaceState) -> Self {
         // Apply out-of-gate skills with proper activation tracking
         builder.apply_out_of_gate_skills(state);
 
@@ -242,8 +300,11 @@ impl Runner {
         let distance_multiplier =
             acceleration_distance_proficiency_multiplier(self.adjusted.distance_aptitude);
 
-        let base_acceleration =
-            base_accel * power_component * strategy_multiplier * ground_multiplier * distance_multiplier;
+        let base_acceleration = base_accel
+            * power_component
+            * strategy_multiplier
+            * ground_multiplier
+            * distance_multiplier;
 
         let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
@@ -388,8 +449,11 @@ impl Runner {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
-            let section_speed_modifier =
-                roll_section_speed_modifier(&mut self.rng.borrow_mut(), self.adjusted.wiz, state.course.base_speed());
+            let section_speed_modifier = roll_section_speed_modifier(
+                &mut self.rng.borrow_mut(),
+                self.adjusted.wiz,
+                state.course.base_speed(),
+            );
             self.section_speed_modifier = section_speed_modifier;
             if let Some(rush_state) = &mut self.rush_state
                 && rush_state.section == self.section
@@ -411,7 +475,7 @@ impl Runner {
     }
 
     /// Get current HP percentage.
-    /// 
+    ///
     /// HP determines if the runner can sustain her target speed, decelerating
     /// if it reaches 0.
     /// It's also used to get the distance at which her last spurt can start.
@@ -940,7 +1004,7 @@ impl Runner {
     }
 
     /// Apply a single skill effect to the runner.
-    /// 
+    ///
     /// Effects can be categorized as follows:
     /// - Timed effects (speed, acceleration...): modify a stat for a certain duration
     ///   that is constantly tracked.

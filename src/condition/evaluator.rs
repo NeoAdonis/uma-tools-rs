@@ -41,7 +41,7 @@ use crate::condition::variables::*;
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{Runner, StartType};
-use crate::race::runner_builder::RunnerBuilder;
+use crate::race::unready_runner::UnreadyRunner;
 use crate::race::solver::RaceState;
 use crate::uma::*;
 use crate::units::*;
@@ -191,7 +191,7 @@ impl CompEvaluator for EvaluatorFull {
 pub struct EvaluatorOutOfGate;
 impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
-    type Context = RunnerBuilder;
+    type Context = UnreadyRunner;
 
     /// Evaluate a single comparison in out-of-gate context, using only data available before a race starts.
     fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool {
@@ -248,7 +248,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
 fn get_variable_value_out_of_gate(
     var: &VarType,
     state: &RaceState,
-    builder: &RunnerBuilder,
+    builder: &UnreadyRunner,
 ) -> i32 {
     match var {
         VarType::BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
@@ -601,7 +601,7 @@ fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner)
         - (runner.is_rushed() as i32)
 }
 
-fn get_basic_status_value(var: &StatusVar, builder: &RunnerBuilder) -> i32 {
+fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         StatusVar::Motivation => builder.motivation as i32,

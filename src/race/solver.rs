@@ -9,32 +9,48 @@ use rand::prelude::*;
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
-use crate::race::runner_builder::RunnerBuilder;
+use crate::race::unready_runner::UnreadyRunner;
 use crate::uma::skill::*;
 use crate::uma::*;
 
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
+    /// Random number generator shared by all runners.
+    /// It is initialized with a seed to ensure reproducibility.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    pub elapsed_time: f64,        // Race time in seconds (shared by all umas)
-    pub finish_time: Option<f64>, // Time when first Uma finished
-    pub runners_by_style: HashMap<Style, u8>, // Count of runners by style
-    pub rushed_by_style: HashMap<Style, u8>, // Count of runners currently rushed by style
+    /// Elapsed time in seconds. This value is shared by all runners.
+    pub elapsed_time: f64,
+    /// Time when the first runner finished, in seconds. This might be different from the
+    /// displayed finish time due to scoreboard conversion.
+    pub finish_time: Option<f64>,
+    /// Count of runners by style.
+    pub runners_by_style: HashMap<Style, u8>,
+    /// Count of runners currently rushed by style.
+    pub rushed_by_style: HashMap<Style, u8>,
+    /// Set of existing skill IDs among all runners.
     pub existing_skills: HashSet<String>,
 }
 
-pub struct NoRunner;
-
+/// Race solver that manages the race simulation.
+///
+/// It is managed in two phases:
+/// 
+/// 1. Before runners are ready (`RaceSolver<UnreadyRunner>`): Runners can be added,
+///    but their stats are not calculated yet.
+/// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are calculated
+///    and out-of-gate skills are applied. The simulation can begin.
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
-    pub builders: Vec<RunnerBuilder>,
+    builders: Vec<UnreadyRunner>,
     pub state: RaceState,
-    pub _marker: PhantomData<T>,
+    _marker: PhantomData<T>,
 }
 
-/// Methods available before runners have been built
-impl RaceSolver<NoRunner> {
+/// Methods available BEFORE runners are ready, i.e., before their stats have been
+/// calculated and out-of-gate skills have been applied.
+impl RaceSolver<UnreadyRunner> {
+    /// Create a new RaceSolver with the given course and race parameters.
     pub fn new(course: Course, params: RaceParameters) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
@@ -58,6 +74,7 @@ impl RaceSolver<NoRunner> {
         }
     }
 
+    /// Add a runner to the race BEFORE it starts.
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
         // Get existing skills before moving them into builder
         for skill in &skills {
@@ -65,7 +82,7 @@ impl RaceSolver<NoRunner> {
         }
 
         // Create builder
-        let builder = RunnerBuilder::new(
+        let builder = UnreadyRunner::new(
             uma,
             motivation,
             &self.state.course,
@@ -85,7 +102,10 @@ impl RaceSolver<NoRunner> {
         self.builders.push(builder);
     }
 
-    pub fn build_runners(self) -> RaceSolver<Runner> {
+    /// Get all added runners ready by calculating their stats and activating
+    /// out-of-gate skills. It returns a new RaceSolver with ready runners
+    /// to run the simulation.
+    pub fn ready_runners(self) -> RaceSolver<Runner> {
         let mut runners: Vec<Runner> = Vec::new();
         for builder in self.builders {
             let runner = Runner::new(builder, &self.state);
@@ -100,9 +120,10 @@ impl RaceSolver<NoRunner> {
     }
 }
 
-/// Methods available after runners have been built
+/// Methods available AFTER runners are ready, i.e., after their stats have been
+/// calculated and out-of-gate skills have been applied.
 impl RaceSolver<Runner> {
-    /// Get the time as displayed on the scoreboard after a race finishes
+    /// Get the time as displayed on the scoreboard after a race finishes.
     pub fn scoreboard_time(&self) -> Option<f64> {
         let converted = self.state.finish_time? * 1.18;
         let min = self.state.course.finish_time_min();
@@ -112,6 +133,16 @@ impl RaceSolver<Runner> {
             Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
         } else {
             Some(converted)
+        }
+    }
+
+    /// Run simulation until the first runner finishes.
+    ///
+    /// Race state is updated 15 times per second.
+    pub fn run(&mut self) {
+        let dt = 1.0 / 15.0; // 15 FPS
+        while self.state.finish_time.is_none() {
+            self.step(dt);
         }
     }
 
@@ -156,13 +187,6 @@ impl RaceSolver<Runner> {
 
         if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
             // TODO: Implement spot struggle and dueling checks.
-        }
-    }
-
-    pub fn run(&mut self) {
-        let dt = 1.0 / 15.0; // 15 FPS
-        while self.state.finish_time.is_none() {
-            self.step(dt);
         }
     }
 }

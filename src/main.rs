@@ -70,7 +70,7 @@ fn main() {
     solver.add_runner(uma, motivation, skills);
 
     // Initialize runners
-    let mut solver = solver.build_runners();
+    let mut solver = solver.ready_runners();
 
     {
         let runner = &solver.runners[0];
