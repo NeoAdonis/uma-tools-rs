@@ -7,14 +7,17 @@
 //!
 //! For each skill alternative:
 //! 1. **Parse condition** - Parse condition string into AST.
-//! 2. **Pre-roll random triggers** - Determine random activation points.
-//! 3. **Split condition** - Separate triggers from guards using `split_condition()`.
-//! 4. **Create SkillActivationLogic** - Store triggers + guards together.
-//! 5. **Index triggers** - Add to appropriate scheduler queues/lists.
+//! 2. **Parse precondition** - Parse precondition string (if present).
+//! 3. **Pre-roll random triggers** - Determine random activation points.
+//! 4. **Split condition** - Separate triggers from guards using `split_condition()`.
+//! 5. **Create SkillActivationLogic** - Store triggers + guards + precondition.
+//! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
 //! # Example
 //!
-//! **Input skill condition**: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
+//! **Input skill**:
+//! - **Condition**: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
+//! - **Precondition**: `change_order_onetime<0`
 //!
 //! **After splitting**:
 //!
@@ -25,16 +28,17 @@
 //!     operator: GreaterEqual,
 //!   }],
 //!   guard_condition: Some(Condition), // hp_per>=20 & ground_type==2
+//!   precondition: Some(Condition), // change_order_onetime<0
 //!   /* ... */
 //! }
 //! ```
 //!
-//! **Runtime behavior** - At 1850m:
-//!
-//!   - Check distance triggers.
-//!   - Trigger ready to be fired is found; try to activate skill.
-//!   - Evaluate ONLY guards: `hp_per>=20 & ground_type==2`
-//!   - If true, activate skill.
+//! **Runtime behavior**:
+//!   - **Every frame**: Check if overtaken anyone (`change_order_onetime<0`).
+//!     Once true, skill unlocked (permanent).
+//!   - **At 1850m** (if unlocked): Trigger fires, evaluate guards
+//!     `hp_per>=20 & ground_type==2`.
+//!   - **If guards pass**: Activate skill.
 
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
@@ -48,10 +52,13 @@ use rand::Rng;
 /// Build a complete TriggerScheduler from a list of skills
 ///
 /// This uses trigger-guard separation. For each skill:
-/// 1. Pre-roll random triggers
-/// 2. Split condition into triggers + guards
-/// 3. Create SkillActivationLogic
-/// 4. Index triggers into scheduler queues
+///
+/// 1. Pre-roll random triggers.
+/// 2. Parse precondition (if present).
+/// 3. Split condition into triggers + guards.
+/// 4. Create SkillActivationLogic (triggers + guards + precondition).
+/// 5. Index triggers into scheduler queues.
+/// 6. Initialize precondition tracking (locked/unlocked state).
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -115,9 +122,10 @@ pub fn build_trigger_scheduler(
         }
     }
 
-    // Initialize array to track precondition satisfaction
-    // Skills without preconditions are always "unlocked" (true)
-    // Skills with preconditions start "locked" (false) until precondition is satisfied
+    // Initialize array to track precondition satisfaction (parallel to skill_logics)
+    // Preconditions are checked every frame until satisfied, unlocking the skill
+    // Skills with preconditions start "locked" (false)
+    // Skills without preconditions start "unlocked" (true)
     scheduler.precondition_satisfied = scheduler
         .skill_logics
         .iter()

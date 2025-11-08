@@ -26,6 +26,13 @@
 //!    - Dynamic guards, including monotonic: evaluated at activation time
 //!      (e.g., HP%, rush status).
 //!
+//! **Preconditions** unlock skills permanently (evaluated every frame).
+//!
+//!    - Once satisfied, skill remains unlocked for the rest of the race.
+//!    - Allows event-based activation gates (e.g., "activate after overtaking
+//!      someone").
+//!    - Checked before triggers/guards are evaluated.
+//!
 //! **Activation State** tracks whether skill has fired.
 //!
 //!    - One-time triggers mark skill as "attempted" after first check.
@@ -43,47 +50,57 @@
 //!
 //! - **Trigger**: `distance_rate>=80` (promoted because no explicit triggers exist).
 //! - **Guard**: `ground_type==2`; checked before the race starts.
+//!
+//! Now consider a skill with **precondition**: `change_order_onetime<0`
+//!
+//! - **Every frame**: Check if overtaken anyone. Once true, skill unlocked (permanent).
+//! - **At trigger time** (e.g., 1850m): If unlocked, evaluate guards → activate.
+//! - **If never unlocked**: Trigger fires but skill never activates.
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::*;
 use crate::uma::skill::SkillEffect;
 
-/// Complete activation logic for a skill
-/// Replaces the old approach of scattering skill indices across multiple heaps
+/// Complete activation logic for a skill.
+///
+/// Combines triggers (WHEN to check), guards (IF to activate), and preconditions
+/// (unlock gates) in a single structure.
 #[derive(Clone, Debug)]
 pub struct SkillActivationLogic {
-    /// Index into runner.available_skills
+    /// Index into runner.available_skills.
     pub skill_index: usize,
 
-    /// Which alternative of this skill (skills can have multiple condition sets)
+    /// Which alternative of this skill (skills can have multiple condition sets).
     pub alternative_index: usize,
 
     /// Triggers that determine WHEN to check this skill
     pub triggers: Vec<TriggerCondition>,
 
-    /// Guards that must be true AT activation time
-    /// If None, no guard checks needed (always activates when trigger fires)
+    /// Guards that must be true AT activation time.
+    /// If None, no guard checks needed (always activates when trigger fires).
     pub guard_condition: Option<Condition>,
 
-    /// Precondition that must be evaluated before checking condition
-    /// Evaluated at trigger time, before guard_condition
+    /// Precondition that unlocks the skill (permanent one-time gate).
+    /// Checked every frame until satisfied; once true, skill remains unlocked for
+    /// the race.
+    /// Enables event-based activation (e.g., "activate after overtaking someone").
     pub precondition: Option<Condition>,
 
-    /// Activation state tracking
+    /// Activation state tracking.
     pub state: ActivationState,
 }
 
-/// Tracks whether this skill has been checked/activated
+/// Tracks whether this skill has been checked/activated.
 #[derive(Clone, Debug, Default)]
 pub struct ActivationState {
     /// Has this skill successfully activated?
     pub has_activated: bool,
 
     /// For one-time triggers: has the trigger fired (even if guards failed)?
-    /// Prevents re-checking skills that failed their guards
-    /// NOTE: This only applies to onetime triggers (random gates, spatial events)
-    /// Monotonic triggers can be retried until activated
+    /// Prevents re-checking skills that failed their guards.
+    /// N.B. This only applies to one-time triggers like random gates.
+    /// Monotonic triggers can be retried until activated.
     pub onetime_trigger_attempted: bool,
 }
 
@@ -101,29 +118,29 @@ pub enum WindowVariable {
     SpatialPosition,
 }
 
-/// A trigger condition that determines WHEN to check a skill
+/// A trigger condition that determines WHEN to check a skill.
 #[derive(Clone, Debug)]
 pub enum TriggerCondition {
     // ========== MONOTONIC TRIGGERS ==========
-    /// Time elapsed since race start
+    /// Time elapsed since race start.
     Time { threshold: f64, operator: CompOp },
 
-    /// Distance covered (as percentage 0-100)
+    /// Distance covered (as percentage 0-100).
     DistanceCovered { threshold: f64, operator: CompOp },
 
-    /// Distance remaining (in meters)
+    /// Distance remaining (in meters).
     DistanceRemaining { threshold: f64, operator: CompOp },
 
-    /// HP percentage (0-100)
+    /// HP percentage (0-100).
     HpPercent { threshold: f64, operator: CompOp },
 
     /// Furlong crossed (distance in furlongs)
     FurlongCrossed { threshold: f64, operator: CompOp },
 
     // ========== WINDOW TRIGGERS ==========
-    /// Window trigger: skill can activate within [min, max] range
-    /// Checked continuously while within window
-    /// Pattern: variable>=min & variable<=max
+    /// Window trigger: skill can activate within [min, max] range.
+    /// Checked continuously while within window.
+    /// Pattern: variable>=min & variable<=max.
     Window {
         variable: WindowVariable,
         min_threshold: f64,
@@ -131,12 +148,12 @@ pub enum TriggerCondition {
     },
 
     // ========== PHASE TRIGGERS ==========
-    /// Phase transition - fires once when entering the specified phase
-    /// Note: phase>=2 and phase==2 both fire when Late phase begins
+    /// Phase transition - fires once when entering the specified phase.
+    /// Note: phase>=2 and phase==2 both fire when Late phase begins.
     PhaseChange { phase: Phase },
 
     // ========== SPATIAL TRIGGERS ==========
-    /// Entering or exiting a straight
+    /// Entering or exiting a straight.
     StraightTransition {
         is_last: bool, // true = only last straight
         is_entry: bool,
@@ -144,32 +161,36 @@ pub enum TriggerCondition {
     },
 
     // ========== CONTINUOUS ==========
-    /// Must be checked every frame
-    /// Used for conditions that can't be efficiently triggered
+    /// Must be checked every frame.
+    /// Used for conditions that can't be efficiently triggered.
     Continuous,
 
     // ========== ACTIVATION-DEPENDENT TRIGGERS ==========
-    /// Fires when any skill activates
-    /// Used for is_activate_any_skill==1 conditions
+    /// Fires when any skill activates.
+    /// Used for is_activate_any_skill==1 conditions.
     AnySkillActivation,
 
-    /// Fires when a heal skill activates
-    /// Used for is_activate_heal_skill==1 conditions
+    /// Fires when a heal skill activates.
+    /// Used for is_activate_heal_skill==1 conditions.
     HealSkillActivation,
 }
 
-/// A timed skill effect that is currently active
+/// A timed skill effect that is currently active.
 #[derive(Debug, Clone)]
 pub struct ActiveTimedEffect {
+    /// Skill effect being applied.
     pub effect: SkillEffect,
-    pub expires_at: f64, // Race time (seconds) when effect expires
+    /// Race time in seconds when effect expires.
+    pub expires_at: f64,
 }
 
-/// Record of a skill activation during the race
+/// Record of a skill activation during the race.
 #[derive(Debug, Clone)]
 pub struct SkillActivationRecord {
+    /// Skill ID of the activated skill from the global skill list.
     pub skill_id: String,
-    pub distance: f64, // Distance when activated
+    /// Distance when the skill was activated (in meters from start).
+    pub distance: f64,
 }
 
 impl TriggerCondition {
@@ -184,7 +205,7 @@ impl TriggerCondition {
 }
 
 impl SkillActivationLogic {
-    /// Create a new skill activation logic
+    /// Create a new skill activation logic.
     pub fn new(
         skill_index: usize,
         alternative_index: usize,
@@ -203,7 +224,7 @@ impl SkillActivationLogic {
     }
 
     /// Should this skill be checked at all?
-    /// Returns false if already activated or one-time trigger already attempted
+    /// Returns false if already activated or one-time trigger already attempted.
     pub fn should_check(&self) -> bool {
         if self.state.has_activated {
             return false; // Already activated
@@ -219,12 +240,12 @@ impl SkillActivationLogic {
         true
     }
 
-    /// Mark that we've attempted this trigger (for one-time triggers only)
+    /// Mark that we've attempted this trigger (for one-time triggers only).
     pub fn mark_attempted(&mut self) {
         self.state.onetime_trigger_attempted = true;
     }
 
-    /// Mark that skill has successfully activated
+    /// Mark that skill has successfully activated.
     pub fn mark_activated(&mut self) {
         self.state.has_activated = true;
         self.state.onetime_trigger_attempted = true;
@@ -237,6 +258,9 @@ impl SkillActivationLogic {
 /// - Triggers determine WHEN to check
 /// - Guards must be true AT check time
 ///
+/// N.B. Preconditions are NOT handled here; they're separated earlier in the parsing
+/// pipeline (see `builder.rs`). This function only splits the main `condition` field.
+///
 /// # OR Handling
 ///
 /// For conditions with OR (`@`), this returns **multiple** trigger-guard pairs.
@@ -244,18 +268,26 @@ impl SkillActivationLogic {
 ///
 /// # Example
 ///
-/// Input: `(phase_random==1 & hp_per>=20) @ (corner==2 & ground_type==1)`
+/// Input:
+///
+/// ```text
+/// phase_random==1 & hp_per>=20
+/// @
+/// corner==2 & ground_type==1
+/// ```
 ///
 /// Output (2 branches):
-/// - Branch 1: triggers=[RandomActivation], guards="hp_per>=20"
-/// - Branch 2: triggers=[CornerTransition], guards="ground_type==1"
+///
+/// - Branch 1: triggers=[DistanceCovered], guards="hp_per>=20"
+/// - Branch 2: triggers=[DistanceCovered], guards="ground_type==1"
 ///
 /// # Simple Example
 ///
 /// Input: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
 ///
 /// Output (1 branch):
-/// - Triggers: [RandomActivation { distance: 1850m }]
+///
+/// - Triggers: `[DistanceCovered { distance==1850m }]`
 /// - Guards: `hp_per>=20 & ground_type==2`
 pub fn split_condition(
     condition: &Condition,
@@ -271,8 +303,8 @@ pub fn split_condition(
         .collect()
 }
 
-/// Try to detect a window pattern: variable>=min & variable<=max
-/// Returns Some((window_trigger, remaining_guard)) if detected, None otherwise
+/// Try to detect a window pattern: `variable>=min & variable<=max`.
+/// Returns `Some((window_trigger, remaining_guard))` if detected, `None` otherwise.
 fn try_detect_window(
     left: &CompList,
     right: &CompList,
@@ -326,7 +358,7 @@ fn try_detect_window(
     None
 }
 
-/// Recursively split a CompList, handling OR branches
+/// Recursively split a `CompList`, handling OR branches.
 fn split_comp_list(
     comp_list: &CompList,
     random_activation: &Vec<f64>,
@@ -406,13 +438,14 @@ fn split_comp_list(
     }
 }
 
-/// Apply MonotonicGuard promotion rules
+/// Apply `MonotonicGuard` promotion rules:
 ///
-/// Rules:
-/// 1. If there are explicit triggers (Random/Spatial/Phase/Window), keep them regardless of guards
-/// 2. If no explicit triggers AND there are DynamicGuards, use Continuous trigger
-/// 3. If no explicit triggers AND no DynamicGuards, try to promote MonotonicGuards to triggers
-/// 4. If only guards remain after promotion, add Continuous trigger
+/// 1. If there are explicit triggers (Random/Spatial/Window), keep them regardless
+///    of guards.
+/// 2. If no explicit triggers AND there are dynamic guards, use Continuous trigger.
+/// 3. If no explicit triggers AND no dynamic guards, try to promote monotonic guards
+///    to triggers.
+/// 4. If only guards remain after promotion, add Continuous trigger.
 fn apply_monotonic_promotion(
     mut triggers: Vec<TriggerCondition>,
     guard_condition: Option<Condition>,
@@ -460,9 +493,9 @@ fn apply_monotonic_promotion(
     }
 }
 
-/// Extract MonotonicGuards from guard condition and promote them to triggers
+/// Extract `MonotonicGuard`s from guard condition and promote them to triggers.
 ///
-/// Returns: (promoted triggers, remaining guard condition)
+/// Returns: `(promoted triggers, remaining guard condition)`
 fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option<Condition>) {
     let mut promoted_triggers = Vec::new();
     let mut remaining_guards = Vec::new();
@@ -489,7 +522,7 @@ fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option
     (promoted_triggers, final_guard)
 }
 
-/// Recursively collect comparisons and classify them as triggers or guards
+/// Recursively collect comparisons and classify them as triggers or guards.
 fn collect_and_classify_comps(
     comp_list: &CompList,
     promoted_triggers: &mut Vec<TriggerCondition>,
@@ -532,7 +565,7 @@ fn collect_and_classify_comps(
     }
 }
 
-/// Rebuild guard condition from list of comparisons
+/// Rebuild guard condition from list of comparisons.
 fn rebuild_guard_condition(guards: Vec<Comp>) -> Condition {
     if guards.is_empty() {
         panic!("Cannot rebuild guard condition from empty list");
@@ -551,7 +584,7 @@ fn rebuild_guard_condition(guards: Vec<Comp>) -> Condition {
     Condition { comp_list }
 }
 
-/// Check if a condition contains any DynamicGuard variables
+/// Check if a condition contains any DynamicGuard variables.
 fn contains_dynamic_guard(condition: &Option<Condition>) -> bool {
     if let Some(cond) = condition {
         check_comp_list_for_dynamic_guard(&cond.comp_list)
@@ -560,7 +593,7 @@ fn contains_dynamic_guard(condition: &Option<Condition>) -> bool {
     }
 }
 
-/// Recursively check if a CompList contains DynamicGuard variables
+/// Recursively check if a CompList contains DynamicGuard variables.
 fn check_comp_list_for_dynamic_guard(comp_list: &CompList) -> bool {
     match comp_list {
         CompList::Single(comp) => comp.var.variable_role() == VariableRole::DynamicGuard,
@@ -570,11 +603,11 @@ fn check_comp_list_for_dynamic_guard(comp_list: &CompList) -> bool {
     }
 }
 
-/// Split a single comparison into trigger and guard
+/// Split a single comparison into trigger and guard.
 ///
-/// Note: This function does NOT make promotion decisions for MonotonicGuard.
+/// This function does NOT make promotion decisions for MonotonicGuard.
 /// It treats them as guards by default. Promotion happens at a higher level
-/// in split_comp_list after analyzing all conditions together.
+/// in `split_comp_list()` after analyzing all conditions together.
 fn split_single_comp(
     comp: &Comp,
     random_activation: &[f64],
@@ -675,11 +708,14 @@ fn split_single_comp(
     }
 }
 
-/// Extract monotonic trigger from comparison
+/// Extract monotonic trigger from comparison.
 ///
 /// Detects operator direction mismatches and converts them to window triggers:
-/// - Increasing monotonic variables (distance_rate, accumulatetime) with <= → Window [0, threshold]
-/// - Decreasing monotonic variables (hp_per, remain_distance) with >= → Window [threshold, MAX]
+///
+/// - Increasing monotonic variables (`distance_rate`, `accumulatetime`) with `<=`
+///   → `Window [0, threshold]`
+/// - Decreasing monotonic variables (`hp_per`, `remain_distance`) with `>=`
+///   → `Window [threshold, MAX]`
 fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
     // Helper to determine if this is a reversed operator that needs window conversion
     let needs_window_conversion = |is_increasing: bool, op: CompOp| -> bool {
@@ -794,17 +830,18 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
     }
 }
 
-/// Extract phase trigger from comparison
+/// Extract phase trigger from comparison.
 ///
 /// Phase triggers fire once when entering the specified phase.
 /// The comparison operator is ignored - both `phase==2` and `phase>=2`
 /// fire when Late phase begins (at the phase boundary).
 ///
 /// This is semantically correct because:
-/// - Phases are discrete states, not continuous values
-/// - Skills activate on state transitions (Early→Mid→Late→Last)
-/// - `phase>=2` conceptually means "when in Late or Last phase"
-/// - The trigger fires at Late entry; the skill remains active during Late+Last
+///
+/// - Phases are discrete states, not continuous values.
+/// - Skills activate on state transitions (Early→Mid→Late→Last).
+/// - `phase>=2` conceptually means "when in Late or Last phase".
+/// - The trigger fires at Late entry; the skill remains active during Late+Last.
 fn extract_phase_trigger(comp: &Comp) -> Option<TriggerCondition> {
     match &comp.var {
         VarType::Phase(PhaseVar::Phase) => {
