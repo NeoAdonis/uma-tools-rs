@@ -146,7 +146,7 @@ fn index_trigger(
         } => {
             scheduler.time_triggers.push(TimeTrigger {
                 threshold_seconds: *threshold,
-                skill_index: logic_idx,
+                logic_idx,
                 operator: *operator,
             });
         }
@@ -159,7 +159,7 @@ fn index_trigger(
             let threshold_meters = threshold / 100.0 * course.distance as f64;
             scheduler.distance_triggers.push(DistanceTrigger {
                 threshold_meters,
-                skill_index: logic_idx,
+                logic_idx,
                 operator: *operator,
                 trigger_type: DistanceTriggerType::DistanceRate,
             });
@@ -171,7 +171,7 @@ fn index_trigger(
         } => {
             scheduler.distance_triggers.push(DistanceTrigger {
                 threshold_meters: *threshold,
-                skill_index: logic_idx,
+                logic_idx,
                 operator: *operator,
                 trigger_type: DistanceTriggerType::RemainDistance,
             });
@@ -184,7 +184,7 @@ fn index_trigger(
         } => {
             scheduler.hp_triggers.push(HpTrigger {
                 threshold_percent: *threshold,
-                skill_index: logic_idx,
+                logic_idx,
                 operator: *operator,
             });
         }
@@ -196,7 +196,7 @@ fn index_trigger(
             let threshold_meters = furlongs_to_meters(*threshold);
             scheduler.distance_triggers.push(DistanceTrigger {
                 threshold_meters,
-                skill_index: logic_idx,
+                logic_idx,
                 operator: *operator,
                 trigger_type: DistanceTriggerType::Furlong,
             });
@@ -219,12 +219,12 @@ fn index_trigger(
                 .iter_mut()
                 .find(|t| t.boundary_distance == boundary_distance)
             {
-                existing.skill_indices.push(logic_idx);
+                existing.logic_indices.push(logic_idx);
             } else {
                 triggers.push(PhaseTransitionTrigger {
                     phase: *phase,
                     boundary_distance,
-                    skill_indices: vec![logic_idx],
+                    logic_indices: vec![logic_idx],
                 });
             }
 
@@ -248,7 +248,7 @@ fn index_trigger(
             };
 
             scheduler.window_triggers.push(WindowTrigger {
-                skill_index: logic_idx,
+                logic_idx,
                 variable: *variable,
                 min_threshold: min_value,
                 max_threshold: max_value,
@@ -301,12 +301,12 @@ fn index_trigger(
                     .iter_mut()
                     .find(|t| t.straight_index == straight_idx && t.is_last == *is_last)
                 {
-                    existing.skill_indices.push(logic_idx);
+                    existing.logic_indices.push(logic_idx);
                 } else {
                     scheduler.straight_triggers.push(StraightTrigger {
                         straight_index: straight_idx,
                         is_last: *is_last,
-                        skill_indices: vec![logic_idx],
+                        logic_indices: vec![logic_idx],
                     });
                 }
             }

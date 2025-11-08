@@ -70,7 +70,7 @@ impl Default for TriggerScheduler {
 #[derive(Clone, Debug)]
 pub struct TimeTrigger {
     pub threshold_seconds: f64,
-    pub skill_index: usize,
+    pub logic_idx: usize,
     pub operator: CompOp,
 }
 
@@ -102,7 +102,7 @@ impl Eq for TimeTrigger {}
 #[derive(Clone, Debug)]
 pub struct DistanceTrigger {
     pub threshold_meters: f64,
-    pub skill_index: usize,
+    pub logic_idx: usize,
     pub operator: CompOp,
     pub trigger_type: DistanceTriggerType,
 }
@@ -158,7 +158,7 @@ impl Eq for DistanceTrigger {}
 #[derive(Clone, Debug)]
 pub struct HpTrigger {
     pub threshold_percent: f64,
-    pub skill_index: usize,
+    pub logic_idx: usize,
     pub operator: CompOp,
 }
 
@@ -190,7 +190,7 @@ impl Eq for HpTrigger {}
 pub struct PhaseTransitionTrigger {
     pub phase: Phase,
     pub boundary_distance: f64, // Pre-computed from section boundaries
-    pub skill_indices: Vec<usize>,
+    pub logic_indices: Vec<usize>,
 }
 
 impl Ord for PhaseTransitionTrigger {
@@ -224,7 +224,7 @@ impl Eq for PhaseTransitionTrigger {}
 /// More efficient than continuous triggers when we know the valid range
 #[derive(Clone, Debug)]
 pub struct WindowTrigger {
-    pub skill_index: usize,
+    pub logic_idx: usize,
     pub variable: crate::race::skill_activation::WindowVariable,
     pub min_threshold: f64,
     pub max_threshold: f64,
@@ -239,7 +239,7 @@ pub struct WindowTrigger {
 pub struct StraightTrigger {
     pub straight_index: usize,
     pub is_last: bool,
-    pub skill_indices: Vec<usize>,
+    pub logic_indices: Vec<usize>,
 }
 
 // ========== ACTIVATION TRACKING ==========

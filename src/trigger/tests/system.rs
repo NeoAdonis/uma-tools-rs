@@ -69,12 +69,12 @@ fn test_activation_counts_last_phase() {
 fn test_time_trigger_ordering() {
     let trigger1 = TimeTrigger {
         threshold_seconds: 10.0,
-        skill_index: 0,
+        logic_idx: 0,
         operator: CompOp::GreaterEqual,
     };
     let trigger2 = TimeTrigger {
         threshold_seconds: 5.0,
-        skill_index: 1,
+        logic_idx: 1,
         operator: CompOp::GreaterEqual,
     };
 
@@ -91,13 +91,13 @@ fn test_time_trigger_ordering() {
 fn test_distance_trigger_ordering_remain() {
     let trigger1 = DistanceTrigger {
         threshold_meters: 200.0,
-        skill_index: 0,
+        logic_idx: 0,
         operator: CompOp::LessEqual,
         trigger_type: DistanceTriggerType::RemainDistance,
     };
     let trigger2 = DistanceTrigger {
         threshold_meters: 500.0,
-        skill_index: 1,
+        logic_idx: 1,
         operator: CompOp::LessEqual,
         trigger_type: DistanceTriggerType::RemainDistance,
     };

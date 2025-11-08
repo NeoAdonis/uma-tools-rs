@@ -665,7 +665,7 @@ impl Runner {
                 .straight_triggers
                 .iter()
                 .filter(|t| t.straight_index == straight_idx)
-                .flat_map(|t| t.skill_indices.iter().copied())
+                .flat_map(|t| t.logic_indices.iter().copied())
                 .collect();
 
             for skill_index in skill_indices {
@@ -796,7 +796,7 @@ impl Runner {
             }
 
             let trigger = self.trigger_scheduler.phase_triggers.pop().unwrap();
-            for trigger_index in trigger.skill_indices {
+            for trigger_index in trigger.logic_indices {
                 self.try_activate_skill(trigger_index, state);
             }
         }
@@ -810,7 +810,7 @@ impl Runner {
             }
 
             let trigger = self.trigger_scheduler.distance_triggers.pop().unwrap();
-            let trigger_index = trigger.skill_index;
+            let trigger_index = trigger.logic_idx;
             self.try_activate_skill(trigger_index, state);
         }
     }
@@ -826,7 +826,7 @@ impl Runner {
             }
 
             let trigger = self.trigger_scheduler.hp_triggers.pop().unwrap();
-            let trigger_index = trigger.skill_index;
+            let trigger_index = trigger.logic_idx;
             self.try_activate_skill(trigger_index, state);
         }
     }
@@ -842,7 +842,7 @@ impl Runner {
             }
 
             let trigger = self.trigger_scheduler.time_triggers.pop().unwrap();
-            let trigger_index = trigger.skill_index;
+            let trigger_index = trigger.logic_idx;
             self.try_activate_skill(trigger_index, state);
         }
     }
@@ -866,12 +866,12 @@ impl Runner {
             // Check if we're within the window
             if current_value >= trigger.min_threshold && current_value <= trigger.max_threshold {
                 // Within window - try activation
-                triggers_to_pull.push(trigger.skill_index);
+                triggers_to_pull.push(trigger.logic_idx);
             } else if current_value > trigger.max_threshold {
                 // Exited window without activating - check if we should mark as attempted
-                let logic = &self.trigger_scheduler.skill_logics[trigger.skill_index];
+                let logic = &self.trigger_scheduler.skill_logics[trigger.logic_idx];
                 if !logic.state.has_activated && !logic.state.onetime_trigger_attempted {
-                    triggers_to_mark_attempted.push(trigger.skill_index);
+                    triggers_to_mark_attempted.push(trigger.logic_idx);
                 }
             }
             // If current_value < min_threshold, we haven't entered the window yet (do nothing)
