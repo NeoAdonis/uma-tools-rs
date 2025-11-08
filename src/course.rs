@@ -1,4 +1,4 @@
-include!("track_names.rs");
+include!("course/track_names.rs");
 
 pub mod geometry;
 
