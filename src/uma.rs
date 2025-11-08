@@ -1,3 +1,8 @@
+//! Module containing core data structures to represent an Umamusume (Uma).
+//! This includes stats, aptitudes, running styles, and motivation.
+//! It also provides functions to calculate adjusted stats based on
+//! track conditions, course modifiers, and aptitudes.
+
 pub mod skill;
 
 use crate::course::{ThresholdStat, Track};
@@ -69,7 +74,7 @@ pub struct Uma {
     /// Moreover, it affects HP consumption late-race and last spurt performance;
     /// in short, the higher the Guts, the better the performance on the final stretch.
     pub guts: u16,
-    /// A.k.a. wit, wisdom. Stat that represents how skillful the Uma is.
+    /// a.k.a. wit, wisdom. Stat that represents how skillful the Uma is.
     ///
     /// It affects skill activation rate, chance of avoiding getting rushed,
     /// position keeping, last spurt planning, and more.
@@ -88,7 +93,7 @@ pub struct Uma {
     pub style_aptitude: Aptitude,
 }
 
-/// Helper struct for deserializing Uma with skills from JSON
+/// Helper struct for deserializing Uma with skills from JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
@@ -111,7 +116,9 @@ impl UmaData {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
+    /// # use uma_tools::uma::UmaData;
+    /// # fn try_main() -> Result<(), serde_json::Error> {
     /// let json = r#"{
     ///     "speed": 1500,
     ///     "stamina": 800,
@@ -125,6 +132,9 @@ impl UmaData {
     ///     "skills": [200642]
     /// }"#;
     /// let uma_data = UmaData::from_json(json)?;
+    /// # Ok(())
+    /// # }
+    /// # try_main().unwrap();
     /// ```
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)

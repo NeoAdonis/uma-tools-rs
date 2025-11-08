@@ -6,27 +6,43 @@
 //!
 //! # Overview
 //!
-//! The skill activation process is divided into three main components:
+//! The skill activation process is divided into the following main components:
 //!
-//! 1. **Triggers** determine WHEN to evaluate a skill
-//!    - Random gates: Fire once at pre-rolled location
-//!    - Monotonic: Fire when threshold is crossed
-//!    - One-time events: Fire when event occurs (can check permanently after)
+//! **Triggers** determine WHEN to evaluate a skill.
 //!
-//! 2. **Guards** are evaluated ONLY when trigger fires
-//!    - Static conditions: ground_type==2, motivation>=4
-//!    - Runtime checks: hp_per>=20, running_style==1
+//!   - One-time triggers: Fire once at a specific point. Obtained mainly from random
+//!     conditions; activation points are pre-rolled.
+//!   - Continuous triggers: Checked every frame. Used for conditions that can change
+//!     at any time.
+//!   - Window triggers: Active within a range (e.g., distance or time windows).
+//!   - Monotonic triggers: Obtained by promoting monotonic guard conditions
+//!     (e.g., distance, time, HP%) to triggers when no explicit triggers exist
+//!     and no dynamic guards are present.
 //!
-//! 3. **Activation State** tracks whether skill has fired
-//!    - One-time triggers mark skill as "attempted" after first check
-//!    - Continuous triggers can be checked multiple times
+//! **Guards** are evaluated ONLY when trigger fires.
 //!
-//! # Example
+//!    - Static guards: because they don't change, these can be pre-evaluated
+//!      before the race starts (e.g, ground type, running style).
+//!    - Dynamic guards, including monotonic: evaluated at activation time
+//!      (e.g., HP%, rush status).
+//!
+//! **Activation State** tracks whether skill has fired.
+//!
+//!    - One-time triggers mark skill as "attempted" after first check.
+//!    - Continuous triggers can be checked multiple times.
+//!
+//! # Examples
 //!
 //! Consider a skill with condition: `hp_per>=20 & is_finalcorner_random==1`
 //!
-//! **Random Gate**: `is_finalcorner_random` pre-rolls to distance 1850m
-//! **Guard**: `hp_per>=20` must be true when we reach 1850m
+//! - **Trigger**: `is_finalcorner_random` pre-rolls to distance 1850m
+//!   (within final corner).
+//! - **Guard**: `hp_per>=20` must be true when we reach 1850m.
+//!
+//! Consider another skill with condition: `distance_rate>=80 & ground_type==2`
+//!
+//! - **Trigger**: `distance_rate>=80` (promoted because no explicit triggers exist).
+//! - **Guard**: `ground_type==2`; checked before the race starts.
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;

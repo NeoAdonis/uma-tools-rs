@@ -3,32 +3,56 @@
 //! This module evaluates guard conditions, i.e., conditions that determine whether
 //! a triggered skill can activate or not.
 //!
-//! Trigger conditions (random gates, monotonic thresholds, onetime events) are handled
+//! Trigger conditions (random gates, monotonic thresholds, windows) are handled
 //! by the trigger system and should NEVER reach this evaluator.
 //!
 //! # Architecture
 //!
 //! Conditions are parsed into tree structures (`Condition` -> `CompList` -> `Comp`)
 //! and evaluated recursively:
-//! - **Binary operators**: AND (&) and OR (@) with short-circuit evaluation
-//! - **Leaf comparisons**: Variable operator value (e.g., `hp_per <= 50`)
+//!
+//! - **Binary operators**: AND (&) and OR (@) with short-circuit evaluation.
+//! - **Leaf comparisons**: Variable operator value (e.g., `hp_per <= 50`).
+//!
+//! The `CompEvaluator` trait abstracts the evaluation context, allowing different
+//! implementations for various scenarios. For instance, `EvaluatorFull` uses
+//! actual race state and runner data, while `EvaluatorOutOfGate` uses only
+//! data available before the race starts to evaluate out-of-gate conditions.
+//!
+//! Each comparision (`Comp`) is evaluated separately, allowing an evaluator to
+//! either fetch real-time values, simulate expected values, or even override
+//! certain comparison results for hypothetical scenarios. The latter two might be
+//! required if, for some reason, all variables needed for a condition are not
+//! known at evaluation time; case in point: single-uma simulations where opponent
+//! data is not available.
 //!
 //! # Variable Access
 //!
-//! The `get_variable_value()` function maps ~150+ condition variables to their
-//! current runtime values from `RaceState`. Variables are grouped by category:
-//! - **Race-level**: elapsed_time, course properties, race parameters
-//! - **Runner-level**: position, hp, phase, speed, skill activation state
-//! - **Multi-uma**: Order, near counts, blocking (STUBBED for single-uma mode)
+//! It's up to the evaluator implementation to fetch/provide variable values.
+//! However, common variable retrieval logic is provided via the `get_variable_value()`
+//! function.
+//!
+//! `get_variable_value()` maps ~150+ condition variables to their current runtime
+//! values from `RaceState`. Variables are grouped by categories, each with their
+//! own set of parameters required for evaluation. To mention a few:
+//!
+//! - **Race-level**: elapsed time, course properties, race parameters.
+//! - **Runner-level**: position, HP, phase, speed, skill activation state.
+//! - **Multi-uma**: Order, near counts, blocking (currently STUBBED, as most
+//!   simulations would only care about single-uma scenarios).
+//!
+//! A similar function, `get_variable_value_out_of_gate()`, is provided for
+//! out-of-gate evaluations, which only uses data available before the race starts.
 //!
 //! # Float Handling
 //!
-//! All comparisons use `i32` values. Float variables (hp, position, percentages)
+//! All comparisons use integer values. Float variables (hp, position, percentages)
 //! are converted using `.floor()` for consistent rounding behavior.
 //!
 //! # Multi-Uma Limitations
 //!
-//! For single-uma simulation, multi-uma variables return sensible stub values:
+//! In the current state, multi-uma variables return sensible stub values:
+//!
 //! - `order` = 1 (always first place)
 //! - `order_rate` = 0 (0% = top position)
 //! - `near_count` = 0 (no other umas)
@@ -41,8 +65,8 @@ use crate::condition::variables::*;
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{Runner, StartType};
-use crate::race::unready_runner::UnreadyRunner;
 use crate::race::solver::RaceState;
+use crate::race::unready_runner::UnreadyRunner;
 use crate::uma::*;
 use crate::units::*;
 
@@ -58,7 +82,7 @@ use crate::units::*;
 ///
 /// This function is called by the trigger system when a trigger fires:
 ///
-/// ```ignore
+/// ```rust,ignore
 /// // When HP trigger fires at 50%:
 /// let skill_logic = &skill_activation_logics[trigger.skill_logic_idx];
 ///

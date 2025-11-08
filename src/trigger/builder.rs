@@ -1,34 +1,40 @@
 //! Trigger Builder - Converts skill conditions into trigger-guard separation
+//!
 //! This module is part of the trigger-guard separation architecture.
 //! See `skill_activation.rs` for detailed explanation.
 //!
 //! # Architecture
 //!
 //! For each skill alternative:
-//! 1. **Parse condition** - Parse condition string into AST
-//! 2. **Pre-roll random triggers** - Determine random activation points
-//! 3. **Split condition** - Separate triggers from guards using `split_condition()`
-//! 4. **Create SkillActivationLogic** - Store triggers + guards together
-//! 5. **Index triggers** - Add to appropriate scheduler queues/lists
+//! 1. **Parse condition** - Parse condition string into AST.
+//! 2. **Pre-roll random triggers** - Determine random activation points.
+//! 3. **Split condition** - Separate triggers from guards using `split_condition()`.
+//! 4. **Create SkillActivationLogic** - Store triggers + guards together.
+//! 5. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
 //! # Example
 //!
-//! ```ignore
-//! Input skill condition: "hp_per>=20 & is_finalcorner_random==1 & ground_type==2"
+//! **Input skill condition**: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
 //!
-//! After splitting:
-//!   SkillActivationLogic {
-//!     skill_index: 0,
-//!     triggers: [RandomActivation { distance: 1850m }],
-//!     guard_condition: "hp_per>=20 & ground_type==2",
-//!   }
+//! **After splitting**:
 //!
-//! Runtime behavior:
-//!   At 1850m:
-//!     - Random trigger fires
-//!     - Evaluate ONLY guards: "hp_per>=20 & ground_type==2"
-//!     - If true, activate skill
+//! ```rust,ignore
+//! SkillActivationLogic {
+//!   triggers: [DistanceCovered {
+//!     distance: 1850, // random point in final corner
+//!     operator: GreaterEqual,
+//!   }],
+//!   guard_condition: Some(Condition), // hp_per>=20 & ground_type==2
+//!   /* ... */
+//! }
 //! ```
+//!
+//! **Runtime behavior** - At 1850m:
+//!
+//!   - Check distance triggers.
+//!   - Trigger ready to be fired is found; try to activate skill.
+//!   - Evaluate ONLY guards: `hp_per>=20 & ground_type==2`
+//!   - If true, activate skill.
 
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
