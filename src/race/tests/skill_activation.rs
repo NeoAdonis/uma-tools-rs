@@ -4,6 +4,8 @@ use super::super::skill_activation::*;
 use crate::course::geometry::*;
 use crate::course::*;
 use crate::parser::{CompOp, parse_condition};
+use crate::trigger::builder::build_trigger_scheduler;
+use crate::uma::skill::*;
 
 /// Create a simple test course for testing spatial triggers
 fn create_test_course() -> Course {
@@ -735,4 +737,310 @@ fn test_activate_count_with_static_guard_continuous() {
 
     // Both conditions should be guards
     assert!(guards.is_some());
+}
+
+// ============================================================
+// PRECONDITION TESTS
+// ============================================================
+
+/// Helper function to create a test skill with precondition.
+fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
+    Skill::new(
+        id.to_string(),
+        SkillData {
+            rarity: SkillRarity::White,
+            alternatives: vec![SkillAlternative {
+                condition: condition.to_string(),
+                precondition: precondition.to_string(),
+                base_duration: 40000,
+                effects: vec![SkillEffect {
+                    skill_type: SkillType::TargetSpeed,
+                    target: SkillTarget::Oneself,
+                    modifier: 4000,
+                }],
+            }],
+        },
+    )
+}
+
+#[test]
+fn test_precondition_simple_parsing() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create a skill with a simple precondition
+    let skill =
+        create_skill_with_precondition("test_precondition", "distance_rate>=80", "phase>=2");
+
+    // Build trigger scheduler
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+
+    // Verify skill logic was created
+    assert_eq!(scheduler.skill_logics.len(), 1);
+    let logic = &scheduler.skill_logics[0];
+
+    // Verify precondition was parsed and stored
+    assert!(
+        logic.precondition.is_some(),
+        "Precondition should be parsed"
+    );
+
+    // Verify the precondition contains the expected comparison
+    let precond = logic.precondition.as_ref().unwrap();
+    // The precondition should be "phase>=2"
+    if let crate::parser::CompList::Single(comp) = &precond.comp_list {
+        assert!(matches!(
+            comp.var,
+            crate::condition::variables::VarType::Phase(_)
+        ));
+        assert_eq!(comp.op, CompOp::GreaterEqual);
+        assert_eq!(comp.value, 2);
+    } else {
+        panic!("Expected single comparison in precondition");
+    }
+}
+
+#[test]
+fn test_precondition_complex_and_parsing() {
+    use crate::parser::BinOp;
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create a skill with a complex AND precondition
+    let skill = create_skill_with_precondition(
+        "test_complex",
+        "distance_rate>=80",
+        "phase>=2&hp_per<=50&accumulate_time>=10",
+    );
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+
+    assert_eq!(scheduler.skill_logics.len(), 1);
+    let logic = &scheduler.skill_logics[0];
+
+    // Verify precondition exists
+    assert!(
+        logic.precondition.is_some(),
+        "Complex precondition should be parsed"
+    );
+
+    // Verify it's a binary AND structure (not fully validating the tree, just structure)
+    let precond = logic.precondition.as_ref().unwrap();
+    match &precond.comp_list {
+        crate::parser::CompList::Binary { op, .. } => {
+            assert_eq!(*op, BinOp::And, "Expected AND operator");
+        }
+        _ => panic!("Expected binary AND structure for complex precondition"),
+    }
+}
+
+#[test]
+fn test_empty_precondition_treated_as_none() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create a skill with empty precondition
+    let skill = create_skill_with_precondition(
+        "test_empty",
+        "distance_rate>=80",
+        "", // Empty precondition
+    );
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+
+    assert_eq!(scheduler.skill_logics.len(), 1);
+    let logic = &scheduler.skill_logics[0];
+
+    // Empty precondition should be treated as None
+    assert!(
+        logic.precondition.is_none(),
+        "Empty precondition should be None"
+    );
+}
+
+#[test]
+fn test_or_branches_share_same_precondition() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create a skill with OR condition and a precondition
+    let skill = create_skill_with_precondition(
+        "test_or",
+        "distance_rate>=80@hp_per<=50", // OR condition
+        "phase>=2",                     // Shared precondition
+    );
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+
+    // OR condition should create 2 branches
+    assert_eq!(
+        scheduler.skill_logics.len(),
+        2,
+        "OR condition should create 2 branches"
+    );
+
+    // Both branches should have the same precondition
+    let logic1 = &scheduler.skill_logics[0];
+    let logic2 = &scheduler.skill_logics[1];
+
+    assert!(
+        logic1.precondition.is_some(),
+        "First branch should have precondition"
+    );
+    assert!(
+        logic2.precondition.is_some(),
+        "Second branch should have precondition"
+    );
+
+    // Verify both have phase>=2
+    for (idx, logic) in [logic1, logic2].iter().enumerate() {
+        if let Some(precond) = &logic.precondition {
+            if let crate::parser::CompList::Single(comp) = &precond.comp_list {
+                assert!(
+                    matches!(comp.var, crate::condition::variables::VarType::Phase(_)),
+                    "Branch {} should have phase precondition",
+                    idx
+                );
+                assert_eq!(comp.value, 2, "Branch {} should have phase>=2", idx);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_precondition_only_in_alternative_zero() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create a skill with 2 alternatives - only first has precondition
+    let skill = Skill::new(
+        "test_multi_alt".to_string(),
+        SkillData {
+            rarity: SkillRarity::White,
+            alternatives: vec![
+                SkillAlternative {
+                    condition: "distance_rate>=80".to_string(),
+                    precondition: "phase>=2".to_string(), // Has precondition
+                    base_duration: 40000,
+                    effects: vec![SkillEffect {
+                        skill_type: SkillType::TargetSpeed,
+                        target: SkillTarget::Oneself,
+                        modifier: 4000,
+                    }],
+                },
+                SkillAlternative {
+                    condition: "hp_per<=50".to_string(),
+                    precondition: "".to_string(), // No precondition
+                    base_duration: 40000,
+                    effects: vec![SkillEffect {
+                        skill_type: SkillType::TargetSpeed,
+                        target: SkillTarget::Oneself,
+                        modifier: 3000,
+                    }],
+                },
+            ],
+        },
+    );
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+
+    // Should have 2 skill logics (one per alternative)
+    assert_eq!(scheduler.skill_logics.len(), 2);
+
+    // First logic should have precondition
+    assert!(
+        scheduler.skill_logics[0].precondition.is_some(),
+        "First alternative should have precondition"
+    );
+
+    // Second logic should NOT have precondition
+    assert!(
+        scheduler.skill_logics[1].precondition.is_none(),
+        "Second alternative should not have precondition"
+    );
+}
+
+#[test]
+fn test_precondition_satisfied_array_initialization() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create multiple skills with and without preconditions
+    let skill1 = create_skill_with_precondition("skill1", "distance_rate>=80", "phase>=2");
+    let skill2 = create_skill_with_precondition("skill2", "hp_per<=50", ""); // No precondition
+    let skill3 = create_skill_with_precondition("skill3", "accumulate_time>=10", "hp_per<=30");
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&[skill1, skill2, skill3], &course, &mut rng);
+
+    // Should have 3 skill logics
+    assert_eq!(scheduler.skill_logics.len(), 3);
+
+    // Verify precondition_satisfied array has same length
+    assert_eq!(
+        scheduler.precondition_satisfied.len(),
+        scheduler.skill_logics.len(),
+        "precondition_satisfied array should match skill_logics length"
+    );
+
+    // Verify initialization values
+    // skill1: has precondition → should start as false (locked)
+    assert_eq!(
+        scheduler.precondition_satisfied[0], false,
+        "Skill with precondition should start locked"
+    );
+
+    // skill2: no precondition → should start as true (unlocked)
+    assert_eq!(
+        scheduler.precondition_satisfied[1], true,
+        "Skill without precondition should start unlocked"
+    );
+
+    // skill3: has precondition → should start as false (locked)
+    assert_eq!(
+        scheduler.precondition_satisfied[2], false,
+        "Skill with precondition should start locked"
+    );
+}
+
+#[test]
+fn test_precondition_satisfied_index_correspondence() {
+    use rand::SeedableRng;
+    use rand_pcg::Pcg64Mcg;
+
+    // Create skills with preconditions
+    let skills = vec![
+        create_skill_with_precondition("skill1", "distance_rate>=80", "phase>=2"),
+        create_skill_with_precondition("skill2", "hp_per<=50", "accumulate_time>=10"),
+        create_skill_with_precondition("skill3", "distance_rate>=50", ""),
+    ];
+
+    let course = create_test_course();
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    let scheduler = build_trigger_scheduler(&skills, &course, &mut rng);
+
+    // Verify parallel array correspondence
+    for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
+        let has_precondition = logic.precondition.is_some();
+        let is_unlocked = scheduler.precondition_satisfied[idx];
+
+        // If has precondition, should start locked (false)
+        // If no precondition, should start unlocked (true)
+        assert_eq!(
+            !has_precondition, is_unlocked,
+            "Index {} mismatch: has_precondition={} but is_unlocked={}",
+            idx, has_precondition, is_unlocked
+        );
+    }
 }
