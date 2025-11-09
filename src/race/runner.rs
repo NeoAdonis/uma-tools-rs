@@ -12,10 +12,10 @@ use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
-use crate::race::skill_activation::{ActiveTimedEffect, SkillActivationRecord};
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::trigger::skill_activation::{ActiveTimedEffect, SkillActivationRecord, WindowVariable};
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::skill::*;
 use crate::uma::*;
@@ -848,8 +848,6 @@ impl Runner {
     }
 
     pub fn check_window_triggers(&mut self, state: &RaceState) {
-        use crate::race::skill_activation::WindowVariable;
-
         // Collect trigger checks to avoid borrowing conflicts
         let mut triggers_to_pull = Vec::new();
         let mut triggers_to_mark_attempted = Vec::new();

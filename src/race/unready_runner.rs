@@ -9,9 +9,9 @@ use crate::parser::parse_condition;
 use crate::race::hp::hp_style_multiplier;
 use crate::race::modifiers::roll_section_speed_modifier;
 use crate::race::runner::*;
-use crate::race::skill_activation::SkillActivationRecord;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
+use crate::trigger::skill_activation::SkillActivationRecord;
 use crate::trigger::system::*;
 use crate::*;
 

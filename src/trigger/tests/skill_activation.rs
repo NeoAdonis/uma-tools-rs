@@ -342,9 +342,9 @@ fn test_skill_100901_distance_rate_less_than() {
     // Skill 100901: "distance_rate<=50&corner!=0&order_rate<=50&ground_type==1"
     //
     // Expected behavior:
-    // - corner!=0 creates Continuous trigger (complex case: multiple disjoint corner ranges)
+    // - distance_rate<=50 becomes Window [0, 50]
     // - order_rate<=50 is DynamicGuard
-    // - distance_rate<=50, corner!=0, ground_type==1 are all guards
+    // - corner!=0, ground_type==1 are all guards
     // - Checked continuously every frame
 
     let condition =
@@ -354,9 +354,16 @@ fn test_skill_100901_distance_rate_less_than() {
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
 
-    // Should have Continuous trigger (corner!=0 falls back to continuous)
+    // Should have Window trigger for distance_rate<=50
     assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::DistanceRate,
+            min_threshold: 0.0,
+            max_threshold: 50.0,
+        }
+    ));
 
     // All conditions become guards (checked continuously)
     assert!(guards.is_some());
@@ -609,9 +616,8 @@ fn test_activate_count_with_monotonic_promoted() {
     // Condition: distance_rate>=50&activate_count_heal>=1&order<=3
     //
     // Expected behavior:
-    // - No explicit triggers initially
-    // - order is DynamicGuard → forces Continuous trigger (Rule 2)
-    // - distance_rate stays as guard (can't be promoted when DynamicGuard present)
+    // - Window [50, ∞) detected on distance_rate → promotes to DistanceCovered trigger
+    // - order stays as DynamicGuard
     // - activate_count_heal stays as guard (MonotonicGuard)
     // - All conditions checked continuously
 
@@ -621,9 +627,16 @@ fn test_activate_count_with_monotonic_promoted() {
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
 
-    // Should use Continuous trigger (DynamicGuard present: order, no explicit triggers)
+    // Should use Window trigger
     assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::DistanceRate,
+            min_threshold: 50.0,
+            max_threshold: 100.0,
+        }
+    ));
 
     // activate_count_heal, distance_rate, and order should remain as guards
     assert!(guards.is_some());

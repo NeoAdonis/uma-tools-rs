@@ -42,8 +42,8 @@
 
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
-use crate::race::skill_activation::*;
 use crate::trigger::random::roll_condition;
+use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
 use crate::uma::skill::*;
 use crate::units::furlongs_to_meters;
@@ -145,8 +145,6 @@ fn index_trigger(
     scheduler: &mut TriggerScheduler,
     course: &Course,
 ) {
-    use crate::race::skill_activation::TriggerCondition;
-
     match trigger {
         TriggerCondition::Time {
             threshold,
@@ -246,7 +244,7 @@ fn index_trigger(
         } => {
             // Convert distance_rate percentage to meters if needed
             let (min_value, max_value) = match variable {
-                crate::race::skill_activation::WindowVariable::DistanceRate => {
+                WindowVariable::DistanceRate => {
                     // Convert percentage to meters
                     let min_meters = min_threshold / 100.0 * course.distance as f64;
                     let max_meters = max_threshold / 100.0 * course.distance as f64;

@@ -1,6 +1,6 @@
 use crate::condition::parser::CompOp;
 use crate::course::Phase;
-use crate::race::skill_activation::SkillActivationLogic;
+use crate::trigger::skill_activation::{SkillActivationLogic, WindowVariable};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -225,7 +225,7 @@ impl Eq for PhaseTransitionTrigger {}
 #[derive(Clone, Debug)]
 pub struct WindowTrigger {
     pub logic_idx: usize,
-    pub variable: crate::race::skill_activation::WindowVariable,
+    pub variable: WindowVariable,
     pub min_threshold: f64,
     pub max_threshold: f64,
 }
