@@ -163,6 +163,7 @@ pub enum RaceParamVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunningStyleVar {
+    RunningStyle,
     RunningStyleCountNigeOtherself,
     RunningStyleCountOikomiOtherself,
     RunningStyleCountSame,
@@ -190,7 +191,6 @@ pub enum StatusVar {
     Motivation,
     PostNumber,
     TemptationCount,
-    RunningStyle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -418,6 +418,7 @@ impl VarType {
             "weather" => VarType::RaceParam(RaceParamVar::Weather),
 
             // Running style
+            "running_style" => VarType::RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
                 VarType::RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself)
             }
@@ -441,7 +442,6 @@ impl VarType {
             }
 
             // Status
-            "running_style" => VarType::Status(StatusVar::RunningStyle),
             "behind_near_lane_time" => VarType::Status(StatusVar::BehindNearLaneTime),
             "behind_near_lane_time_set1" => VarType::Status(StatusVar::BehindNearLaneTimeSet1),
             "hp_per" => VarType::Status(StatusVar::HpPer),
@@ -620,6 +620,18 @@ impl VarType {
             // Temptation count (increasing)
             Status(StatusVar::TemptationCount) => MonotonicGuard,
 
+            // Activation counts (increasing)
+            Activation(ActivationVar::ActivateCountAll) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountAllTeam) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountEndAfter) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountHeal) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountLaterHalf) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountMiddle) => MonotonicGuard,
+            Activation(ActivationVar::ActivateCountStart) => MonotonicGuard,
+            Activation(ActivationVar::CompeteFightCount) => MonotonicGuard,
+            Activation(ActivationVar::IsExistSkillId) => MonotonicGuard,
+            Activation(ActivationVar::IsUsedSkillId) => MonotonicGuard,
+
             // PHASE TRIGGERS - Fire when entering new phase
             Phase(PhaseVar::Phase) => PhaseTrigger,
 
@@ -642,6 +654,10 @@ impl VarType {
             Phase(PhaseVar::PhaseLaterhalf) => SpatialTrigger,
             Phase(PhaseVar::PhaseFirstquarter) => SpatialTrigger,
 
+            // ACTIVATION TRIGGERS - Fire when skill is activated
+            Activation(ActivationVar::IsActivateAnySkill) => ActivationTrigger,
+            Activation(ActivationVar::IsActivateHealSkill) => ActivationTrigger,
+
             // STATIC GUARDS - Never change during race
             // Race parameters
             RaceParam(_) => StaticGuard,
@@ -652,28 +668,25 @@ impl VarType {
             // Base stats
             BaseStat(_) => StaticGuard,
 
-            // Special value - By definition, it never changes
-            Always => StaticGuard,
-
             // Static status properties
             Status(StatusVar::Motivation) => StaticGuard,
             Status(StatusVar::PostNumber) => StaticGuard,
+            Status(StatusVar::IsBadstart) => StaticGuard,
 
             // Running style
             // N.B. While running style can technically change, it can only do so
             // from Front Runner to Runaway. Since both styles are considered
-            // the same for skill purposes, we can treat this variable as static
-            Status(StatusVar::RunningStyle) => StaticGuard,
+            // the same for skill purposes, we can treat this type as static
+            RunningStyle(_) => StaticGuard,
+
+            // Special value - By definition, it never changes
+            Always => StaticGuard,
 
             // DYNAMIC GUARDS - Can change during race
-            // Running style
-            RunningStyle(_) => DynamicGuard, // Other running style vars are dynamic (multi-uma)
-
-            // Status flags (continuous checks, but act as guards)
+            // Status flags
             Status(StatusVar::IsLastspurt) => DynamicGuard,
             Status(StatusVar::Lastspurt) => DynamicGuard,
             Status(StatusVar::IsTemptation) => DynamicGuard,
-            Status(StatusVar::IsBadstart) => DynamicGuard,
             Status(StatusVar::IsOvertake) => DynamicGuard,
             Status(StatusVar::IsMoveLane) => DynamicGuard,
             Status(StatusVar::IsBehindIn) => DynamicGuard,
@@ -682,28 +695,14 @@ impl VarType {
             Status(StatusVar::BehindNearLaneTimeSet1) => DynamicGuard,
             Status(StatusVar::InfrontNearLaneTime) => DynamicGuard,
 
-            // Activation counts (can act as guards checked at trigger time)
-            Activation(ActivationVar::ActivateCountAll) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountAllTeam) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountEndAfter) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountHeal) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountLaterHalf) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountMiddle) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountStart) => MonotonicGuard,
-            Activation(ActivationVar::CompeteFightCount) => MonotonicGuard,
-            Activation(ActivationVar::IsExistSkillId) => MonotonicGuard,
-            Activation(ActivationVar::IsUsedSkillId) => MonotonicGuard,
-
-            // Activation triggers
-            Activation(ActivationVar::IsActivateAnySkill) => ActivationTrigger,
-            Activation(ActivationVar::IsActivateHealSkill) => ActivationTrigger,
+            // Skill activation tracking
             Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
 
-            // Order/Rank - Frequently changing
+            // Order/Rank
             Order(_) => DynamicGuard,
 
-            // Distance between runners - Frequently changing
+            // Distance between runners
             Distance(_) => DynamicGuard,
 
             // Blocking

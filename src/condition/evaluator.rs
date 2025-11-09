@@ -622,6 +622,11 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
 fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
     match var {
         // TODO: generate simulation values for one-runner simulations
+        // Running style: 1=Front, 2=Pace, 3=Late, 4=End
+        RunningStyleVar::RunningStyle => match my_style {
+            Style::Runaway => 1, // Runaway is a Front variant
+            _ => my_style as i32,
+        },
         RunningStyleVar::RunningStyleCountNigeOtherself => {
             get_style_count_front_otherself(state, my_style)
         }
@@ -683,12 +688,6 @@ fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         StatusVar::Motivation => builder.motivation as i32,
 
-        // Running style: 1=Front, 2=Pace, 3=Late, 4=End
-        StatusVar::RunningStyle => match builder.base.style {
-            Style::Runaway => 1, // Runaway is a Front variant
-            _ => builder.base.style as i32,
-        },
-
         // Gate bracket: 1=inner-most, 8=outer-most
         StatusVar::PostNumber => (builder.gate_block + 1) as i32,
 
@@ -701,12 +700,6 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         StatusVar::Motivation => runner.motivation as i32,
-
-        // Running style: 1=Front, 2=Pace, 3=Late, 4=End
-        StatusVar::RunningStyle => match runner.adjusted.style {
-            Style::Runaway => 1, // Runaway is a Front variant
-            _ => runner.adjusted.style as i32,
-        },
 
         // Post number (starting gate)
         StatusVar::PostNumber => runner.gate_roll as i32,
