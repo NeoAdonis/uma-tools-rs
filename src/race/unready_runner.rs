@@ -373,6 +373,16 @@ impl UnreadyRunner {
             spot_struggle: None,
             dueling: None,
             duel_count: 0,
+            order: OrderState {
+                order: 1,
+                rate: 0,
+                rate_max: 0,
+                rate_min: 100,
+                delta: 0,
+                overtakes_since_mid: 0,
+                overtakes_since_late: 0,
+                overtakes_since_last_corner: 0,
+            },
             skill_activated_flag: false,
             heal_activated_flag: false,
         }

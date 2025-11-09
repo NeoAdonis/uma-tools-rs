@@ -249,7 +249,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
 fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 {
     match var {
         VarType::BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
-        VarType::Order(pos_var) => get_rank_value(pos_var, state),
+        VarType::Order(pos_var) => get_rank_value(pos_var, runner),
         VarType::Distance(dist_var) => get_distance_value(dist_var, state, runner),
         VarType::Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
@@ -713,35 +713,33 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 }
 
 /// Get rank-related values
-fn get_rank_value(var: &OrderVar, _state: &RaceState) -> i32 {
+fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     match var {
-        // Order and near counts
-        OrderVar::Order => 1,            // STUB: Always first place
-        OrderVar::OrderRate => 0,        // STUB: 0% = top position
+        // Order
+        OrderVar::Order => runner.order.order as i32,
+        OrderVar::OrderRate => runner.order.rate as i32,
+
+        // Near counts
         OrderVar::NearCount => 0,        // STUB: No other umas nearby
         OrderVar::NearInfrontCount => 0, // STUB: No umas ahead
 
-        // Change in order - handled by trigger system
-        OrderVar::ChangeOrderOnetime => {
-            panic!("BUG: change_order_onetime should not be evaluated - it's a trigger variable!")
-        }
-
         // Order change checks
-        OrderVar::ChangeOrderUpEndAfter => 0, // STUB: Never overtaken
-        OrderVar::ChangeOrderUpFinalcornerAfter => 0, // STUB
-        OrderVar::ChangeOrderUpMiddle => 0,   // STUB
+        OrderVar::ChangeOrderOnetime => runner.order.delta as i32,
+        OrderVar::ChangeOrderUpEndAfter => runner.order.overtakes_since_late as i32,
+        OrderVar::ChangeOrderUpFinalcornerAfter => runner.order.overtakes_since_last_corner as i32,
+        OrderVar::ChangeOrderUpMiddle => runner.order.overtakes_since_mid as i32,
 
         // Order rate continue checks
-        OrderVar::OrderRateIn20Continue => 1, // STUB: Always in top 20% (first place)
-        OrderVar::OrderRateIn40Continue => 1, // STUB
-        OrderVar::OrderRateIn50Continue => 1, // STUB
-        OrderVar::OrderRateIn80Continue => 1, // STUB
-        OrderVar::OrderRateOut20Continue => 0, // STUB: Never outside top 20%
-        OrderVar::OrderRateOut40Continue => 0, // STUB
-        OrderVar::OrderRateOut50Continue => 0, // STUB
-        OrderVar::OrderRateOut70Continue => 0, // STUB
+        OrderVar::OrderRateIn20Continue => (runner.order.rate_min <= 20) as i32,
+        OrderVar::OrderRateIn40Continue => (runner.order.rate_min <= 40) as i32,
+        OrderVar::OrderRateIn50Continue => (runner.order.rate_min <= 50) as i32,
+        OrderVar::OrderRateIn80Continue => (runner.order.rate_min <= 80) as i32,
+        OrderVar::OrderRateOut20Continue => (runner.order.rate_max > 20) as i32,
+        OrderVar::OrderRateOut40Continue => (runner.order.rate_max > 40) as i32,
+        OrderVar::OrderRateOut50Continue => (runner.order.rate_max > 50) as i32,
+        OrderVar::OrderRateOut70Continue => (runner.order.rate_max > 70) as i32,
 
-        // Overtake timing
+        // Target overtake times
         OrderVar::OvertakeTargetNoOrderUpTime => 0, // STUB
         OrderVar::OvertakeTargetTime => 0,          // STUB
     }

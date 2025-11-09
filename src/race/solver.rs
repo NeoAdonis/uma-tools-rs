@@ -35,7 +35,7 @@ pub struct RaceState {
 /// Race solver that manages the race simulation.
 ///
 /// It is managed in two phases:
-/// 
+///
 /// 1. Before runners are ready (`RaceSolver<UnreadyRunner>`): Runners can be added,
 ///    but their stats are not calculated yet.
 /// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are calculated
@@ -183,6 +183,16 @@ impl RaceSolver<Runner> {
             // Post-Update
             runner.check_corner_start(&self.state.course.corners);
             runner.check_straight_start(&self.state.course.straights, &self.state);
+        }
+
+        // Update order rate and overtakes
+        self.runners
+            .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+        let total_runners = self.runners.len() as u8;
+        let should_update_range = self.state.elapsed_time > 5.0;
+        for (index, runner) in self.runners.iter_mut().enumerate() {
+            runner.update_order((index + 1) as u8, &self.state.course);
+            runner.update_order_rate(total_runners, should_update_range);
         }
 
         if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {

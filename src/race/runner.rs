@@ -123,6 +123,28 @@ pub struct DuelingState {
     acceleration_modifier: f64,
 }
 
+/// State related to order (rank) in the race.
+pub struct OrderState {
+    /// Current order (rank), 1-based.
+    pub order: u8,
+    /// Current order rate (percentile; "you are in the top X%").
+    pub rate: u8,
+    /// Maximum order rate achieved so far.
+    /// N.B. This value is calculated only after 5 seconds into the race.
+    pub rate_max: u8,
+    /// Minimum order rate achieved so far.
+    /// N.B. This value is calculated only after 5 seconds into the race.
+    pub rate_min: u8,
+    /// Change in order since last update.
+    pub delta: i8,
+    /// Number of overtakes since entering Mid phase.
+    pub overtakes_since_mid: u16,
+    /// Number of overtakes since entering Late phase.
+    pub overtakes_since_late: u16,
+    /// Number of overtakes since entering last corner.
+    pub overtakes_since_last_corner: u16,
+}
+
 /// An Uma with additional data related to racing, that is, an Uma who is running.
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
@@ -196,6 +218,8 @@ pub struct Runner {
     pub dueling: Option<DuelingState>,
     /// Count of duels the runner has engaged in.
     pub duel_count: u8,
+    /// State related to order (rank) in the race.
+    pub order: OrderState,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
     /// Current section index (0-23).
@@ -715,6 +739,39 @@ impl Runner {
                     }
                 }
             }
+        }
+    }
+
+    /// Update order (rank) and overtakes based on current order.
+    pub fn update_order(&mut self, current_order: u8, course: &Course) {
+        let prev_order = self.order.order;
+        self.order.delta = prev_order as i8 - current_order as i8;
+        self.order.order = current_order;
+        if self.order.delta < 0 {
+            if self.phase >= Phase::Mid {
+                self.order.overtakes_since_mid += self.order.delta.unsigned_abs() as u16;
+            }
+            if self.phase >= Phase::Late && self.order.delta < 0 {
+                self.order.overtakes_since_late += self.order.delta.unsigned_abs() as u16;
+            }
+            if course
+                .corners
+                .last()
+                .is_some_and(|x| self.position >= x.start)
+            {
+                self.order.overtakes_since_last_corner += 1;
+            }
+        }
+    }
+
+    /// Update order rate (percentage rank) based on total runners.
+    /// If `should_update_range` is true, also update the min/max order rates.
+    pub fn update_order_rate(&mut self, total_runners: u8, should_update_range: bool) {
+        let rate = ((self.order.order as f64 / total_runners as f64) * 100.0).ceil() as u8;
+        self.order.rate = rate;
+        if should_update_range {
+            self.order.rate_max = self.order.rate_max.max(rate);
+            self.order.rate_min = self.order.rate_min.min(rate);
         }
     }
 
