@@ -23,7 +23,7 @@
 //! either fetch real-time values, simulate expected values, or even override
 //! certain comparison results for hypothetical scenarios. The latter two might be
 //! required if, for some reason, all variables needed for a condition are not
-//! known at evaluation time; case in point: single-uma simulations where opponent
+//! known at evaluation time; case in point: single runner simulations where opponent
 //! data is not available.
 //!
 //! # Variable Access
@@ -38,8 +38,8 @@
 //!
 //! - **Race-level**: elapsed time, course properties, race parameters.
 //! - **Runner-level**: position, HP, phase, speed, skill activation state.
-//! - **Multi-uma**: Order, near counts, blocking (currently STUBBED, as most
-//!   simulations would only care about single-uma scenarios).
+//! - **Multi-runner**: Order, near counts, blocking (currently STUBBED, as most
+//!   simulations would only care about single runner scenarios).
 //!
 //! A similar function, `get_variable_value_out_of_gate()`, is provided for
 //! out-of-gate evaluations, which only uses data available before the race starts.
@@ -49,13 +49,14 @@
 //! All comparisons use integer values. Float variables (hp, position, percentages)
 //! are converted using `.floor()` for consistent rounding behavior.
 //!
-//! # Multi-Uma Limitations
+//! # Multi-runner Limitations
 //!
-//! In the current state, multi-uma variables return sensible stub values:
+//! In the current state, variables depending on multiple runners) return sensible
+//! stub values. For example:
 //!
 //! - `order` = 1 (always first place)
 //! - `order_rate` = 0 (0% = top position)
-//! - `near_count` = 0 (no other umas)
+//! - `near_count` = 0 (no other runners nearby)
 //! - `blocked_front` = 0 (not blocked)
 //!
 //! These are clearly marked with `// STUB:` comments.
@@ -301,7 +302,7 @@ fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
 /// Get distance-related values
 fn get_distance_value(var: &DistanceVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
-        // Multi-uma stubs - distance differences
+        // Distance differences between runners
         DistanceVar::BashinDiffBehind => 999, // STUB: No uma behind (large value)
         DistanceVar::BashinDiffInfront => 999, // STUB: No uma ahead (large value)
         DistanceVar::DistanceDiffRate => 0,   // STUB: 0% = first place
@@ -497,7 +498,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // Race grade: refer to Grade enum for values
         RaceParamVar::Grade => params.grade as i32,
 
-        // Popularity rank (multi-uma)
+        // Popularity rank
         RaceParamVar::Popularity => 1, // STUB: Always most popular in single-uma mode
 
         // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=sakura
@@ -511,15 +512,17 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // Time of day: 0=none/any, 1=morning, 2=noon, 3=evening, 4=night
         RaceParamVar::Time => params.time as i32,
 
-        // Number of visible horses (multi-uma)
+        // Number of visible runners
         RaceParamVar::Visiblehorse => 0, // STUB: No other horses in single-uma mode
 
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy
         RaceParamVar::Weather => params.weather as i32,
 
-        // Multi-uma stubs
-        RaceParamVar::IsExistCharaId => 0, // STUB: No other characters
+        // Count of runners with same skill
         RaceParamVar::SameSkillHorseCount => 1, // STUB: Only self has this skill
+
+        // Existence checks - out of scope
+        RaceParamVar::IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
     }
 }
 
@@ -541,15 +544,15 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
             runner.trigger_scheduler.activation_counts.start as i32
         }
 
-        // Multi-uma stub
-        ActivationVar::ActivateCountAllTeam => 0, // STUB: No team in single-uma mode
-
         // Continuous checks
         ActivationVar::IsActivateAnySkill => runner.skill_activated_flag as i32,
         ActivationVar::IsActivateHealSkill => runner.heal_activated_flag as i32,
         ActivationVar::IsActivateOtherSkillDetail => 0, // STUB: Needs tracking
 
         ActivationVar::IsOtherCharacterActivateAdvantageSkill => 0, // STUB
+
+        // Duel-related counts
+        ActivationVar::CompeteFightCount => runner.duel_count as i32,
 
         // These cases are handled specially because they use the comparison
         // value as parameter instead of comparing against it.
@@ -560,8 +563,10 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
             panic!("is_used_skill_id: should be handled in evaluate_comparison()")
         }
 
-        // Multi-uma showdown stubs
-        ActivationVar::CompeteFightCount => runner.duel_count as i32,
+        // Team-based checks - out of scope
+        ActivationVar::ActivateCountAllTeam => {
+            unimplemented!("activate_count_all_team not implemented")
+        }
     }
 }
 
@@ -692,7 +697,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
             }
         }
 
-        // Multi-uma stubs
+        // Multi-runner checks
         StatusVar::IsBehindIn => 0,             // STUB: No uma behind
         StatusVar::BehindNearLaneTime => 0,     // STUB
         StatusVar::BehindNearLaneTimeSet1 => 0, // STUB
@@ -707,10 +712,10 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get rank-related values (mostly multi-uma stubs)
+/// Get rank-related values
 fn get_rank_value(var: &OrderVar, _state: &RaceState) -> i32 {
     match var {
-        // All multi-uma stubs - return sensible single-uma values
+        // Order and near counts
         OrderVar::Order => 1,            // STUB: Always first place
         OrderVar::OrderRate => 0,        // STUB: 0% = top position
         OrderVar::NearCount => 0,        // STUB: No other umas nearby
@@ -721,7 +726,7 @@ fn get_rank_value(var: &OrderVar, _state: &RaceState) -> i32 {
             panic!("BUG: change_order_onetime should not be evaluated - it's a trigger variable!")
         }
 
-        // Multi-uma stubs
+        // Order change checks
         OrderVar::ChangeOrderUpEndAfter => 0, // STUB: Never overtaken
         OrderVar::ChangeOrderUpFinalcornerAfter => 0, // STUB
         OrderVar::ChangeOrderUpMiddle => 0,   // STUB
@@ -742,10 +747,9 @@ fn get_rank_value(var: &OrderVar, _state: &RaceState) -> i32 {
     }
 }
 
-/// Get blocking values (all multi-uma stubs)
+/// Get blocking values
 fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
     match var {
-        // All blocking variables return 0 (not blocked) in single-uma mode
         BlockingVar::BlockedAllContinuetime => 0, // STUB: Not blocked
         BlockingVar::BlockedFront => 0,           // STUB: Not blocked
         BlockingVar::BlockedFrontContinuetime => 0, // STUB: Not blocked
@@ -753,14 +757,16 @@ fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
     }
 }
 
-/// Get temptation/rush values of other umas (all multi-uma stubs)
+/// Get temptation/rush values of other umas
 fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
-        // All other umas temptation - multi-uma stubs
+        // Rush counts by position
         TemptationVar::TemptationCountBehind => 0, // STUB: No umas behind
         TemptationVar::TemptationCountInfront => 0, // STUB: No umas ahead
         TemptationVar::TemptationOpponentCountBehind => 0, // STUB
         TemptationVar::TemptationOpponentCountInfront => 0, // STUB
+
+        // Rush counts by running style
         TemptationVar::RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
         TemptationVar::RunningStyleTemptationCountOikomi => {
             get_style_temptation_count(state, Style::End)
