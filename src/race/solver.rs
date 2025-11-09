@@ -189,7 +189,11 @@ impl RaceSolver<Runner> {
             runner.check_straight_start(&self.state.course.straights, &self.state);
         }
 
+        self.runners
+            .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+
         self.update_order_values();
+        self.update_blocking_status(delta_time);
 
         if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
             // TODO: Implement spot struggle and dueling checks.
@@ -197,9 +201,16 @@ impl RaceSolver<Runner> {
     }
 
     /// Update order (rank) and distance differences for all runners.
+    /// Runners must be sorted by position in descending order before calling this method.
     fn update_order_values(&mut self) {
-        self.runners
-            .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+        #[cfg(debug_assertions)]
+        {
+            // Debug: check sorting
+            for i in 1..self.runners.len() {
+                debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
+            }
+        }
+
         let total_runners = self.runners.len() as u8;
         let should_update_range = self.state.elapsed_time > 5.0;
         let position_first = self.runners.first().unwrap().position;
@@ -232,6 +243,62 @@ impl RaceSolver<Runner> {
             runner.update_diff_from_behind(position_prev, rush_counter);
             position_prev = runner.position;
             rush_counter += runner.is_rushed() as u8;
+        }
+    }
+
+    /// Update blocking and overlapping status for all runners.
+    /// Runners must be sorted by position in descending order before calling this method.
+    fn update_blocking_status(&mut self, delta_time: f64) {
+        #[cfg(debug_assertions)]
+        {
+            // Debug: check sorting
+            for i in 1..self.runners.len() {
+                debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
+            }
+        }
+
+        for runner in self.runners.iter_mut() {
+            runner.reset_blocking_status();
+        }
+
+        let num_runners = self.runners.len();
+        for i in 0..num_runners {
+            let (left, right) = self.runners.split_at_mut(i + 1);
+            let runner_i = &mut left[i];
+            runner_i.update_blocked_time(delta_time);
+            for runner_j in right {
+                let distance = runner_i.position - runner_j.position;
+                if distance > 20.0 {
+                    break; // Too far to even consider
+                }
+                if runner_j.is_visible(runner_i, &self.state.course) {
+                    // let speed_diff = runner_j.speed - runner_i.speed;
+                    // j can overtake i in less than 15 seconds
+                    // if distance > 0.001
+                    //     && speed_diff / distance < 15.0
+                    //     && (runner_i.base_target_speed < runner_j.base_target_speed
+                    //         || runner_i.is_front_blocked() && runner_i.speed < runner_j.base_target_speed)
+                    // {
+                    //     // add i as overtake target for j
+                    // }
+                }
+                if distance > 3.0 {
+                    continue; // Not close enough to consider blocking
+                }
+                if runner_i.is_near(runner_j, &self.state.course) {
+                    runner_i.nearby_count += 1;
+                    runner_j.nearby_count += 1;
+                    // Runner i is also in front of runner j; update front count
+                    runner_j.nearby_front_count += 1;
+                }
+                if runner_j.is_front_blocked_by(runner_i, &self.state.course) {
+                    runner_j.blocked.speed_limit =
+                        Some((0.988 + 0.012 * distance) * runner_j.speed);
+                }
+                if runner_j.is_side_blocked_by(runner_i, &self.state.course) {
+                    runner_j.blocked.side = true;
+                }
+            }
         }
     }
 }

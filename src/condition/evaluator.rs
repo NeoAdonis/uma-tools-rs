@@ -304,7 +304,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
         Status(status_var) => get_status_value(status_var, runner),
         Random(trigger_var) => get_random_value(trigger_var, state),
-        Blocking(blocking_var) => get_blocking_value(blocking_var, state),
+        Blocking(blocking_var) => get_blocking_value(blocking_var, runner),
         Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
         AccumulateTime => state.elapsed_time.floor() as i32,
         Always => 1,     // Always returns 1 (true)
@@ -761,8 +761,8 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
         OrderVar::OrderRate => runner.order.rate as i32,
 
         // Near counts
-        OrderVar::NearCount => 0,        // STUB: No other umas nearby
-        OrderVar::NearInfrontCount => 0, // STUB: No umas ahead
+        OrderVar::NearCount => runner.nearby_count as i32,
+        OrderVar::NearInfrontCount => runner.nearby_front_count as i32,
 
         // Order change checks
         OrderVar::ChangeOrderOnetime => runner.order.delta as i32,
@@ -787,12 +787,14 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
 }
 
 /// Get blocking values
-fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
+fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     match var {
-        BlockingVar::BlockedAllContinuetime => 0, // STUB: Not blocked
-        BlockingVar::BlockedFront => 0,           // STUB: Not blocked
-        BlockingVar::BlockedFrontContinuetime => 0, // STUB: Not blocked
-        BlockingVar::BlockedSideContinuetime => 0, // STUB: Not blocked
+        BlockingVar::BlockedAllContinuetime => {
+            runner.blocked.front_time.min(runner.blocked.side_time) as i32
+        }
+        BlockingVar::BlockedFront => runner.is_front_blocked() as i32,
+        BlockingVar::BlockedFrontContinuetime => runner.blocked.front_time as i32,
+        BlockingVar::BlockedSideContinuetime => runner.blocked.side_time as i32,
     }
 }
 

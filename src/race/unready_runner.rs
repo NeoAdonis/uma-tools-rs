@@ -345,7 +345,19 @@ impl UnreadyRunner {
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             base_target_speed: 0.85 * course.base_speed(),
-            target_lane: course.starting_lane(self.gate_roll),
+            lane: LaneState {
+                current: course.starting_lane(self.gate_roll),
+                target: course.starting_lane(self.gate_roll),
+            },
+            visible_distance: 20.0,
+            nearby_count: 0,
+            nearby_front_count: 0,
+            blocked: BlockedState {
+                speed_limit: None,
+                front_time: 0.0,
+                side_time: 0.0,
+                side: false,
+            },
             start_delay: self.start_delay,
             available_skills: self.runtime_skills,
             activated_skills: self.activated_skills,

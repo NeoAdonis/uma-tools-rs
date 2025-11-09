@@ -166,6 +166,26 @@ pub struct RushCounter {
     pub behind: u8,
 }
 
+/// Lane state including current and target lane positions in meters.
+pub struct LaneState {
+    /// Current lane position in meters.
+    pub current: f64,
+    /// Target lane position in meters.
+    pub target: f64,
+}
+
+/// Blocking state information.
+pub struct BlockedState {
+    /// Speed limit imposed by front blocking, if any.
+    pub speed_limit: Option<f64>,
+    /// Time spent being front-blocked in seconds.
+    pub front_time: f64,
+    /// Time spent being side-blocked in seconds.
+    pub side_time: f64,
+    /// Whether the runner is currently side-blocked.
+    pub side: bool,
+}
+
 /// An Uma with additional data related to racing, that is, an Uma who is running.
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
@@ -205,8 +225,8 @@ pub struct Runner {
     pub min_speed: f64,
     /// Base target speed in m/s before modifiers.
     pub base_target_speed: f64,
-    /// Target lane position in meters.
-    pub target_lane: f64,
+    /// Lane state including current and target lane positions in meters.
+    pub lane: LaneState,
     /// Speed modifier for the current section in m/s.
     pub section_speed_modifier: f64,
     /// List of skills available for activation.
@@ -243,6 +263,14 @@ pub struct Runner {
     pub order: OrderState,
     /// Distance differences between this runner and others.
     pub position_diff: PositionDiff,
+    /// Furthest distance at which the runner can see other runners, in meters.
+    pub visible_distance: f64,
+    /// Number of nearby runners, both ahead and behind.
+    pub nearby_count: u8,
+    /// Number of nearby runners ahead.
+    pub nearby_front_count: u8,
+    /// Blocking state information.
+    pub blocked: BlockedState,
     /// Number of runners currently in rush (temptation, 掛かり) state ahead and behind.
     pub rush_counter: RushCounter,
     /// Current slope acceleration in m/s², if any.
@@ -283,6 +311,7 @@ pub enum StartType {
 }
 
 impl Runner {
+    /// Create a new Runner from an UnreadyRunner and RaceState.
     pub fn new(mut builder: UnreadyRunner, state: &RaceState) -> Self {
         // Apply out-of-gate skills with proper activation tracking
         builder.apply_out_of_gate_skills(state);
@@ -293,8 +322,7 @@ impl Runner {
 
     /// Determine the lane type based on target lane position.
     pub fn lane_type(&self, course: &Course) -> LaneType {
-        // TODO: track current lane then use that instead of target lane
-        let percent = self.target_lane / course.width();
+        let percent = self.lane.current / course.width();
         if percent <= 0.2 {
             LaneType::Inner
         } else if percent <= 0.4 {
@@ -824,6 +852,81 @@ impl Runner {
         self.rush_counter.behind = rushed_behind;
     }
 
+    /// Check if another runner is visible to this runner.
+    pub fn is_visible(&self, other: &Self, course: &Course) -> bool {
+        let distance = (self.position - other.position).abs();
+        distance <= self.visible_distance
+            && (self.lane.current - other.lane.current).abs()
+                <= ((distance / self.visible_distance) * 11.5 + 2.0) * course.lane_width() / 2.0
+    }
+
+    /// Check if this runner is front-blocked by another runner.
+    pub fn is_front_blocked_by(&self, other: &Self, course: &Course) -> bool {
+        let distance = other.position - self.position;
+        if !(0.0..2.0).contains(&distance) {
+            return false;
+        }
+        let lane_diff = (self.lane.current - other.lane.current).abs();
+        lane_diff < (1.0 - 0.3 * distance) * 0.75 * course.lane_width()
+    }
+
+    /// Check if this runner is side-blocked by another runner.
+    pub fn is_side_blocked_by(&self, other: &Self, course: &Course) -> bool {
+        let distance = (other.position - self.position).abs();
+        if distance >= 1.05 {
+            return false;
+        }
+        let lane_diff = (self.lane.current - other.lane.current).abs();
+        lane_diff < 2.0 * course.lane_width()
+    }
+
+    /// Check if this runner is overlapping with another runner.
+    pub fn is_overlapping(&self, other: &Self, course: &Course) -> bool {
+        let distance = (other.position - self.position).abs();
+        if distance >= 0.4 {
+            return false;
+        }
+        let lane_diff = (self.lane.current - other.lane.current).abs();
+        lane_diff < 0.4 * course.lane_width()
+    }
+
+    /// Check if this runner is near another runner.
+    pub fn is_near(&self, other: &Self, course: &Course) -> bool {
+        let distance = (other.position - self.position).abs();
+        if distance >= 3.0 {
+            return false;
+        }
+        let lane_diff = (self.lane.current - other.lane.current).abs();
+        lane_diff < (3.0 - distance) * course.lane_width()
+    }
+
+    /// Check if this runner is front-blocked.
+    pub fn is_front_blocked(&self) -> bool {
+        self.blocked.speed_limit.is_some()
+    }
+
+    /// Reset blocking status for the next update cycle.
+    pub fn reset_blocking_status(&mut self) {
+        self.nearby_count = 0;
+        self.nearby_front_count = 0;
+        self.blocked.speed_limit = None;
+        self.blocked.side = false;
+    }
+
+    /// Update blocked time counters based on current blocking status.
+    pub fn update_blocked_time(&mut self, delta_time: f64) {
+        if self.blocked.speed_limit.is_some() {
+            self.blocked.front_time += delta_time;
+        } else {
+            self.blocked.front_time = 0.0;
+        }
+        if self.blocked.side {
+            self.blocked.side_time += delta_time;
+        } else {
+            self.blocked.side_time = 0.0;
+        }
+    }
+
     /// Check all preconditions to detect satisfaction at any point during the race.
     /// This must be called every frame to implement proper "one-time unlock" semantics
     /// where preconditions can be satisfied at any time, not just when triggers fire.
@@ -1187,7 +1290,7 @@ impl Runner {
             // Change target lane to (modifier/100)% of course width
             // TODO: review
             let lane_change_percent = effect.modifier as f64 / 10000.0;
-            self.target_lane = course.width() * lane_change_percent;
+            self.lane.target = course.width() * lane_change_percent;
         }
         // "Sympathy" skill activation
         else if matches!(effect_type, SkillType::ActivateSympathy) {
