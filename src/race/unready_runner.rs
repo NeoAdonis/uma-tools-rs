@@ -390,6 +390,10 @@ impl UnreadyRunner {
                 from_prev: 0.0,
                 rate_from_first: 0.0,
             },
+            rush_counter: RushCounter {
+                ahead: 0,
+                behind: 0,
+            },
             skill_activated_flag: false,
             heal_activated_flag: false,
         }

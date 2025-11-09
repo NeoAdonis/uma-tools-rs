@@ -206,6 +206,7 @@ impl RaceSolver<Runner> {
         let position_last = self.runners.last().unwrap().position;
         let position_range = position_first - position_last;
         let mut position_next = position_first;
+        let mut rush_counter = 0;
 
         // From first to last, update order and distance differences from runners ahead
         for (index, runner) in self.runners.iter_mut().enumerate() {
@@ -214,15 +215,23 @@ impl RaceSolver<Runner> {
             }
             runner.update_order((index + 1) as u8, &self.state.course);
             runner.update_order_rate(total_runners, should_update_range);
-            runner.update_diff_from_ahead(position_first, position_next, position_range);
+            runner.update_diff_from_ahead(
+                position_first,
+                position_next,
+                position_range,
+                rush_counter,
+            );
             position_next = runner.position;
+            rush_counter += runner.is_rushed() as u8;
         }
 
         // From last to first, update distance differences from runners behind
         let mut position_prev = position_last;
+        let mut rush_counter = 0;
         for runner in self.runners.iter_mut().rev() {
-            runner.update_diff_from_behind(position_prev);
+            runner.update_diff_from_behind(position_prev, rush_counter);
             position_prev = runner.position;
+            rush_counter += runner.is_rushed() as u8;
         }
     }
 }

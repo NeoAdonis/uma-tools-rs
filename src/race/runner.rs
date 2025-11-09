@@ -158,6 +158,14 @@ pub struct PositionDiff {
     pub rate_from_first: f64,
 }
 
+/// Rush (temptation, 掛かり) counters.
+pub struct RushCounter {
+    /// Number of runners currently in rush state ahead.
+    pub ahead: u8,
+    /// Number of runners currently in rush state behind.
+    pub behind: u8,
+}
+
 /// An Uma with additional data related to racing, that is, an Uma who is running.
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
@@ -235,6 +243,8 @@ pub struct Runner {
     pub order: OrderState,
     /// Distance differences between this runner and others.
     pub position_diff: PositionDiff,
+    /// Number of runners currently in rush (temptation, 掛かり) state ahead and behind.
+    pub rush_counter: RushCounter,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
     /// Current section index (0-23).
@@ -800,15 +810,18 @@ impl Runner {
         position_first: f64,
         position_next: f64,
         position_range: f64,
+        rushed_ahead: u8,
     ) {
         self.position_diff.from_first = position_first - self.position;
         self.position_diff.from_next = position_next - self.position;
         self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
+        self.rush_counter.ahead = rushed_ahead;
     }
 
     /// Update position difference from the runner behind.
-    pub fn update_diff_from_behind(&mut self, position_prev: f64) {
+    pub fn update_diff_from_behind(&mut self, position_prev: f64, rushed_behind: u8) {
         self.position_diff.from_prev = self.position - position_prev;
+        self.rush_counter.behind = rushed_behind;
     }
 
     /// Check all preconditions to detect satisfaction at any point during the race.

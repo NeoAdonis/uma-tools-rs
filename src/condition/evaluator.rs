@@ -807,10 +807,10 @@ fn get_blocking_value(var: &BlockingVar, _state: &RaceState) -> i32 {
 fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     match var {
         // Rush counts by position
-        TemptationVar::TemptationCountBehind => 0, // STUB: No umas behind
-        TemptationVar::TemptationCountInfront => 0, // STUB: No umas ahead
-        TemptationVar::TemptationOpponentCountBehind => 0, // STUB
-        TemptationVar::TemptationOpponentCountInfront => 0, // STUB
+        TemptationVar::TemptationCountBehind => runner.rush_counter.behind as i32,
+        TemptationVar::TemptationCountInfront => runner.rush_counter.ahead as i32,
+        TemptationVar::TemptationOpponentCountBehind => runner.rush_counter.behind as i32, // TODO: find actual opponent count
+        TemptationVar::TemptationOpponentCountInfront => runner.rush_counter.ahead as i32, // TODO: find actual opponent count
 
         // Rush counts by running style
         TemptationVar::RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
