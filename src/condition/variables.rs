@@ -157,7 +157,6 @@ pub enum RaceParamVar {
     SameSkillHorseCount,
     Season,
     Time,
-    Visiblehorse,
     Weather,
 }
 
@@ -204,6 +203,7 @@ pub enum BlockingVar {
     BlockedFront,
     BlockedFrontContinuetime,
     BlockedSideContinuetime,
+    Visiblehorse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -407,9 +407,8 @@ impl VarType {
             "same_skill_horse_count" => RaceParam(RaceParamVar::SameSkillHorseCount),
             "season" => RaceParam(RaceParamVar::Season),
             "time" => RaceParam(RaceParamVar::Time),
-            "visiblehorse" => RaceParam(RaceParamVar::Visiblehorse),
             "weather" => RaceParam(RaceParamVar::Weather),
-
+            
             // Running style
             "running_style" => RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
@@ -431,7 +430,7 @@ impl VarType {
             "running_style_equal_popularity_one" => {
                 RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
             }
-
+            
             // Status
             "behind_near_lane_time" => Status(StatusVar::BehindNearLaneTime),
             "behind_near_lane_time_set1" => Status(StatusVar::BehindNearLaneTimeSet1),
@@ -449,16 +448,17 @@ impl VarType {
             "motivation" => Status(StatusVar::Motivation),
             "post_number" => Status(StatusVar::PostNumber),
             "temptation_count" => Status(StatusVar::TemptationCount),
-
+            
             // Randoms
             "random_lot" => Random(RandomVar::RandomLot),
-
+            
             // Blocking
             "blocked_all_continuetime" => Blocking(BlockingVar::BlockedAllContinuetime),
             "blocked_front" => Blocking(BlockingVar::BlockedFront),
             "blocked_front_continuetime" => Blocking(BlockingVar::BlockedFrontContinuetime),
             "blocked_side_continuetime" => Blocking(BlockingVar::BlockedSideContinuetime),
-
+            "visiblehorse" => Blocking(BlockingVar::Visiblehorse),
+            
             // Rush/Temptation
             "running_style_temptation_count_nige" => {
                 Temptation(TemptationVar::RunningStyleTemptationCountNige)

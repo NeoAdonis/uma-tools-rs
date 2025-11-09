@@ -350,6 +350,7 @@ impl UnreadyRunner {
                 target: course.starting_lane(self.gate_roll),
             },
             visible_distance: 20.0,
+            visible_count: 0,
             nearby_count: 0,
             nearby_front_count: 0,
             blocked: BlockedState {

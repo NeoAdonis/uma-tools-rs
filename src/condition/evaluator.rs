@@ -558,9 +558,6 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // Time of day: 0=none/any, 1=morning, 2=noon, 3=evening, 4=night
         RaceParamVar::Time => params.time as i32,
 
-        // Number of visible runners
-        RaceParamVar::Visiblehorse => 0, // STUB: No other horses in single-uma mode
-
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy
         RaceParamVar::Weather => params.weather as i32,
 
@@ -795,6 +792,7 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
         BlockingVar::BlockedFront => runner.is_front_blocked() as i32,
         BlockingVar::BlockedFrontContinuetime => runner.blocked.front_time as i32,
         BlockingVar::BlockedSideContinuetime => runner.blocked.side_time as i32,
+        BlockingVar::Visiblehorse => runner.visible_count as i32,
     }
 }
 

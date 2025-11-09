@@ -265,6 +265,8 @@ pub struct Runner {
     pub position_diff: PositionDiff,
     /// Furthest distance at which the runner can see other runners, in meters.
     pub visible_distance: f64,
+    /// Number of visible runners within `visible_distance`.
+    pub visible_count: u8,
     /// Number of nearby runners, both ahead and behind.
     pub nearby_count: u8,
     /// Number of nearby runners ahead.
@@ -907,6 +909,7 @@ impl Runner {
 
     /// Reset blocking status for the next update cycle.
     pub fn reset_blocking_status(&mut self) {
+        self.visible_count = 0;
         self.nearby_count = 0;
         self.nearby_front_count = 0;
         self.blocked.speed_limit = None;

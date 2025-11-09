@@ -272,6 +272,7 @@ impl RaceSolver<Runner> {
                     break; // Too far to even consider
                 }
                 if runner_j.is_visible(runner_i, &self.state.course) {
+                    runner_j.visible_count += 1;
                     // let speed_diff = runner_j.speed - runner_i.speed;
                     // j can overtake i in less than 15 seconds
                     // if distance > 0.001
