@@ -293,8 +293,9 @@ impl UnreadyRunner {
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
         for (alt_index, skill) in skills.iter().enumerate() {
+            let skill_id = skill.id.clone();
             let result = parse_condition(&skill.alternatives.first().unwrap().condition);
-            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, state, self);
+            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, skill_id, state, self);
             self.apply_out_of_gate_skill_effect(skill, alt_index);
         }
     }

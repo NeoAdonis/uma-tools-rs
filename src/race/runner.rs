@@ -830,12 +830,15 @@ impl Runner {
         }
 
         // Evaluate precondition
-        let precondition = {
+        let (precondition, current_skill_id) = {
             let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-            logic.precondition.clone()
+            (
+                logic.precondition.clone(),
+                self.available_skills[logic.skill_index].id.clone(),
+            )
         };
         if let Some(precond) = precondition
-            && evaluate_condition(&precond, &EvaluatorFull, state, self)
+            && evaluate_condition(&precond, &EvaluatorFull, current_skill_id, state, self)
         {
             self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
         }
@@ -1071,8 +1074,9 @@ impl Runner {
                 logic.triggers.iter().any(|t| t.is_onetime()),
             )
         };
+        let current_skill_id = self.available_skills[skill_index].id.clone();
         let should_activate = if let Some(guard) = &guard_condition {
-            evaluate_condition(guard, &EvaluatorFull, state, self)
+            evaluate_condition(guard, &EvaluatorFull, current_skill_id, state, self)
         } else {
             true
         };

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
@@ -28,8 +28,8 @@ pub struct RaceState {
     pub runners_by_style: HashMap<Style, u8>,
     /// Count of runners currently rushed by style.
     pub rushed_by_style: HashMap<Style, u8>,
-    /// Set of existing skill IDs among all runners.
-    pub existing_skills: HashSet<String>,
+    /// Count of existing skill IDs among all runners.
+    pub existing_skills: HashMap<String, u8>,
 }
 
 /// Race solver that manages the race simulation.
@@ -63,7 +63,7 @@ impl RaceSolver<UnreadyRunner> {
             finish_time: None,
             runners_by_style: HashMap::new(),
             rushed_by_style: HashMap::new(),
-            existing_skills: HashSet::new(),
+            existing_skills: HashMap::new(),
         };
 
         RaceSolver {
@@ -78,7 +78,11 @@ impl RaceSolver<UnreadyRunner> {
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
         // Get existing skills before moving them into builder
         for skill in &skills {
-            self.state.existing_skills.insert(skill.id.clone());
+            *self
+                .state
+                .existing_skills
+                .entry(skill.id.clone())
+                .or_insert(0) += 1;
         }
 
         // Create builder

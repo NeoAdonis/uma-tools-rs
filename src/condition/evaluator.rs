@@ -113,6 +113,7 @@ use crate::units::*;
 pub fn evaluate_condition<E>(
     condition: &Condition,
     evaluator: &E,
+    skill_id: String,
     state: &E::State,
     context: &E::Context,
 ) -> bool
@@ -120,7 +121,7 @@ where
     E: CompEvaluator,
 {
     evaluate_comp_list(&condition.comp_list, |comp| {
-        evaluator.evaluate(comp, state, context)
+        evaluator.evaluate(comp, skill_id.as_str(), state, context)
     })
 }
 
@@ -165,7 +166,13 @@ pub trait CompEvaluator {
     type Context;
 
     /// Evaluate a single comparison.
-    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool;
+    fn evaluate(
+        &self,
+        comp: &Comp,
+        skill_id: &str,
+        state: &Self::State,
+        context: &Self::Context,
+    ) -> bool;
 }
 
 /// Reference evaluator using actual race state and runner data.
@@ -175,7 +182,13 @@ impl CompEvaluator for EvaluatorFull {
     type Context = Runner;
 
     /// Evaluate a single comparison using actual race state and runner data.
-    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool {
+    fn evaluate(
+        &self,
+        comp: &Comp,
+        skill_id: &str,
+        state: &Self::State,
+        context: &Self::Context,
+    ) -> bool {
         let runner = context;
         // Special cases: skill ID checks require different logic
         match &comp.var {
@@ -192,7 +205,19 @@ impl CompEvaluator for EvaluatorFull {
             }
             VarType::Activation(ActivationVar::IsExistSkillId) => {
                 // Check if at least one runner has skill with ID == comp.value
-                state.existing_skills.contains(&comp.value.to_string())
+                state.existing_skills.contains_key(&comp.value.to_string())
+            }
+            VarType::RaceParam(RaceParamVar::SameSkillHorseCount) => {
+                // Count of runners with same skill
+                let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
+                match comp.op {
+                    CompOp::Equal => count == comp.value,
+                    CompOp::NotEqual => count != comp.value,
+                    CompOp::Greater => count > comp.value,
+                    CompOp::GreaterEqual => count >= comp.value,
+                    CompOp::Less => count < comp.value,
+                    CompOp::LessEqual => count <= comp.value,
+                }
             }
             _ => {
                 // Normal case: get variable value and compare
@@ -219,17 +244,34 @@ impl CompEvaluator for EvaluatorOutOfGate {
     type Context = UnreadyRunner;
 
     /// Evaluate a single comparison in out-of-gate context, using only data available before a race starts.
-    fn evaluate(&self, comp: &Comp, state: &Self::State, context: &Self::Context) -> bool {
-        let builder = context;
+    fn evaluate(
+        &self,
+        comp: &Comp,
+        skill_id: &str,
+        state: &Self::State,
+        context: &Self::Context,
+    ) -> bool {
         match &comp.var {
+            // Special case: skill ID checks require different logic
             VarType::Activation(ActivationVar::IsExistSkillId) => {
-                // Special case: skill ID checks require different logic
                 // Check if at least one runner has skill with ID == comp.value
-                state.existing_skills.contains(&comp.value.to_string())
+                state.existing_skills.contains_key(&comp.value.to_string())
+            }
+            VarType::RaceParam(RaceParamVar::SameSkillHorseCount) => {
+                // Count of runners with same skill
+                let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
+                match comp.op {
+                    CompOp::Equal => count == comp.value,
+                    CompOp::NotEqual => count != comp.value,
+                    CompOp::Greater => count > comp.value,
+                    CompOp::GreaterEqual => count >= comp.value,
+                    CompOp::Less => count < comp.value,
+                    CompOp::LessEqual => count <= comp.value,
+                }
             }
             _ => {
                 // Normal case: get variable value and compare
-                let current_value = get_variable_value_out_of_gate(&comp.var, state, builder);
+                let current_value = get_variable_value_out_of_gate(&comp.var, state, context);
                 let threshold = comp.value;
 
                 match comp.op {
@@ -523,7 +565,9 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         RaceParamVar::Weather => params.weather as i32,
 
         // Count of runners with same skill
-        RaceParamVar::SameSkillHorseCount => 1, // STUB: Only self has this skill
+        RaceParamVar::SameSkillHorseCount => {
+            panic!("same_skill_horse_count: should be handled in evaluate_comparison()")
+        }
 
         // Existence checks - out of scope
         RaceParamVar::IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
