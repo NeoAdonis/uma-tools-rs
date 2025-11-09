@@ -224,23 +224,24 @@ pub enum TemptationVar {
 
 impl fmt::Display for VarType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use VarType::*;
         match self {
-            VarType::BaseStat(s) => write!(f, "base_{}", s),
-            VarType::Order(o) => write!(f, "{}", o),
-            VarType::Distance(d) => write!(f, "{}", d),
-            VarType::Phase(p) => write!(f, "{}", p),
-            VarType::Spatial(l) => write!(f, "{}", l),
-            VarType::Course(c) => write!(f, "{}", c),
-            VarType::Activation(a) => write!(f, "{}", a),
-            VarType::RaceParam(r) => write!(f, "{}", r),
-            VarType::RunningStyle(r) => write!(f, "{}", r),
-            VarType::Status(s) => write!(f, "{}", s),
-            VarType::Random(r) => write!(f, "{}", r),
-            VarType::Blocking(b) => write!(f, "{}", b),
-            VarType::Temptation(t) => write!(f, "{}", t),
-            VarType::AccumulateTime => write!(f, "accumulatetime"),
-            VarType::Always => write!(f, "always"),
-            VarType::Unknown(s) => write!(f, "<unknown:{}>", s),
+            BaseStat(s) => write!(f, "base_{}", s),
+            Order(o) => write!(f, "{}", o),
+            Distance(d) => write!(f, "{}", d),
+            Phase(p) => write!(f, "{}", p),
+            Spatial(l) => write!(f, "{}", l),
+            Course(c) => write!(f, "{}", c),
+            Activation(a) => write!(f, "{}", a),
+            RaceParam(r) => write!(f, "{}", r),
+            RunningStyle(r) => write!(f, "{}", r),
+            Status(s) => write!(f, "{}", s),
+            Random(r) => write!(f, "{}", r),
+            Blocking(b) => write!(f, "{}", b),
+            Temptation(t) => write!(f, "{}", t),
+            AccumulateTime => write!(f, "accumulatetime"),
+            Always => write!(f, "always"),
+            Unknown(s) => write!(f, "<unknown:{}>", s),
         }
     }
 }
@@ -291,229 +292,215 @@ impl_display_snake_case!(TemptationVar);
 
 impl VarType {
     pub fn parse(s: &str) -> Self {
+        use VarType::*;
+
         match s {
             // Base stats
-            "base_speed" => VarType::BaseStat(StatKind::Speed),
-            "base_stamina" => VarType::BaseStat(StatKind::Stamina),
-            "base_power" => VarType::BaseStat(StatKind::Power),
-            "base_guts" => VarType::BaseStat(StatKind::Guts),
-            "base_wiz" => VarType::BaseStat(StatKind::Wiz),
+            "base_speed" => BaseStat(StatKind::Speed),
+            "base_stamina" => BaseStat(StatKind::Stamina),
+            "base_power" => BaseStat(StatKind::Power),
+            "base_guts" => BaseStat(StatKind::Guts),
+            "base_wiz" => BaseStat(StatKind::Wiz),
 
             // Order/Rank
-            "change_order_onetime" => VarType::Order(OrderVar::ChangeOrderOnetime),
-            "change_order_up_end_after" => VarType::Order(OrderVar::ChangeOrderUpEndAfter),
-            "change_order_up_finalcorner_after" => {
-                VarType::Order(OrderVar::ChangeOrderUpFinalcornerAfter)
-            }
-            "change_order_up_middle" => VarType::Order(OrderVar::ChangeOrderUpMiddle),
-            "near_count" => VarType::Order(OrderVar::NearCount),
-            "near_infront_count" => VarType::Order(OrderVar::NearInfrontCount),
-            "order" => VarType::Order(OrderVar::Order),
-            "order_rate" => VarType::Order(OrderVar::OrderRate),
-            "order_rate_in20_continue" => VarType::Order(OrderVar::OrderRateIn20Continue),
-            "order_rate_in40_continue" => VarType::Order(OrderVar::OrderRateIn40Continue),
-            "order_rate_in50_continue" => VarType::Order(OrderVar::OrderRateIn50Continue),
-            "order_rate_in80_continue" => VarType::Order(OrderVar::OrderRateIn80Continue),
-            "order_rate_out20_continue" => VarType::Order(OrderVar::OrderRateOut20Continue),
-            "order_rate_out40_continue" => VarType::Order(OrderVar::OrderRateOut40Continue),
-            "order_rate_out50_continue" => VarType::Order(OrderVar::OrderRateOut50Continue),
-            "order_rate_out70_continue" => VarType::Order(OrderVar::OrderRateOut70Continue),
-            "overtake_target_no_order_up_time" => {
-                VarType::Order(OrderVar::OvertakeTargetNoOrderUpTime)
-            }
-            "overtake_target_time" => VarType::Order(OrderVar::OvertakeTargetTime),
+            "change_order_onetime" => Order(OrderVar::ChangeOrderOnetime),
+            "change_order_up_end_after" => Order(OrderVar::ChangeOrderUpEndAfter),
+            "change_order_up_finalcorner_after" => Order(OrderVar::ChangeOrderUpFinalcornerAfter),
+            "change_order_up_middle" => Order(OrderVar::ChangeOrderUpMiddle),
+            "near_count" => Order(OrderVar::NearCount),
+            "near_infront_count" => Order(OrderVar::NearInfrontCount),
+            "order" => Order(OrderVar::Order),
+            "order_rate" => Order(OrderVar::OrderRate),
+            "order_rate_in20_continue" => Order(OrderVar::OrderRateIn20Continue),
+            "order_rate_in40_continue" => Order(OrderVar::OrderRateIn40Continue),
+            "order_rate_in50_continue" => Order(OrderVar::OrderRateIn50Continue),
+            "order_rate_in80_continue" => Order(OrderVar::OrderRateIn80Continue),
+            "order_rate_out20_continue" => Order(OrderVar::OrderRateOut20Continue),
+            "order_rate_out40_continue" => Order(OrderVar::OrderRateOut40Continue),
+            "order_rate_out50_continue" => Order(OrderVar::OrderRateOut50Continue),
+            "order_rate_out70_continue" => Order(OrderVar::OrderRateOut70Continue),
+            "overtake_target_no_order_up_time" => Order(OrderVar::OvertakeTargetNoOrderUpTime),
+            "overtake_target_time" => Order(OrderVar::OvertakeTargetTime),
 
             // Distance to other runners
-            "bashin_diff_behind" => VarType::Distance(DistanceVar::BashinDiffBehind),
-            "bashin_diff_infront" => VarType::Distance(DistanceVar::BashinDiffInfront),
-            "distance_diff_rate" => VarType::Distance(DistanceVar::DistanceDiffRate),
-            "distance_diff_top_float" => VarType::Distance(DistanceVar::DistanceDiffTopFloat),
-            "distance_diff_top" => VarType::Distance(DistanceVar::DistanceDiffTop),
+            "bashin_diff_behind" => Distance(DistanceVar::BashinDiffBehind),
+            "bashin_diff_infront" => Distance(DistanceVar::BashinDiffInfront),
+            "distance_diff_rate" => Distance(DistanceVar::DistanceDiffRate),
+            "distance_diff_top_float" => Distance(DistanceVar::DistanceDiffTopFloat),
+            "distance_diff_top" => Distance(DistanceVar::DistanceDiffTop),
 
             // Time
-            "accumulatetime" => VarType::AccumulateTime,
+            "accumulatetime" => AccumulateTime,
 
             // Phase
-            "phase" => VarType::Phase(PhaseVar::Phase),
-            "phase_corner_random" => VarType::Phase(PhaseVar::PhaseCornerRandom),
-            "phase_first_half_straight_random" => {
-                VarType::Phase(PhaseVar::PhaseFirstHalfStraightRandom)
-            }
-            "phase_firsthalf" => VarType::Phase(PhaseVar::PhaseFirsthalf),
-            "phase_firsthalf_random" => VarType::Phase(PhaseVar::PhaseFirsthalfRandom),
-            "phase_firstquarter" => VarType::Phase(PhaseVar::PhaseFirstquarter),
-            "phase_firstquarter_random" => VarType::Phase(PhaseVar::PhaseFirstquarterRandom),
-            "phase_laterhalf" => VarType::Phase(PhaseVar::PhaseLaterhalf),
-            "phase_laterhalf_random" => VarType::Phase(PhaseVar::PhaseLaterhalfRandom),
-            "phase_latter_half_straight_random" => {
-                VarType::Phase(PhaseVar::PhaseLatterHalfStraightRandom)
-            }
-            "phase_random" => VarType::Phase(PhaseVar::PhaseRandom),
-            "phase_straight_random" => VarType::Phase(PhaseVar::PhaseStraightRandom),
+            "phase" => Phase(PhaseVar::Phase),
+            "phase_corner_random" => Phase(PhaseVar::PhaseCornerRandom),
+            "phase_first_half_straight_random" => Phase(PhaseVar::PhaseFirstHalfStraightRandom),
+            "phase_firsthalf" => Phase(PhaseVar::PhaseFirsthalf),
+            "phase_firsthalf_random" => Phase(PhaseVar::PhaseFirsthalfRandom),
+            "phase_firstquarter" => Phase(PhaseVar::PhaseFirstquarter),
+            "phase_firstquarter_random" => Phase(PhaseVar::PhaseFirstquarterRandom),
+            "phase_laterhalf" => Phase(PhaseVar::PhaseLaterhalf),
+            "phase_laterhalf_random" => Phase(PhaseVar::PhaseLaterhalfRandom),
+            "phase_latter_half_straight_random" => Phase(PhaseVar::PhaseLatterHalfStraightRandom),
+            "phase_random" => Phase(PhaseVar::PhaseRandom),
+            "phase_straight_random" => Phase(PhaseVar::PhaseStraightRandom),
 
             // Course
-            "corner_count" => VarType::Course(CourseVar::CornerCount),
-            "course_distance" => VarType::Course(CourseVar::CourseDistance),
-            "distance_type" => VarType::Course(CourseVar::DistanceType),
-            "ground_type" => VarType::Course(CourseVar::GroundType),
-            "is_basis_distance" => VarType::Course(CourseVar::IsBasisDistance),
-            "is_dirtgrade" => VarType::Course(CourseVar::IsDirtgrade),
-            "rotation" => VarType::Course(CourseVar::Rotation),
-            "track_id" => VarType::Course(CourseVar::TrackId),
+            "corner_count" => Course(CourseVar::CornerCount),
+            "course_distance" => Course(CourseVar::CourseDistance),
+            "distance_type" => Course(CourseVar::DistanceType),
+            "ground_type" => Course(CourseVar::GroundType),
+            "is_basis_distance" => Course(CourseVar::IsBasisDistance),
+            "is_dirtgrade" => Course(CourseVar::IsDirtgrade),
+            "rotation" => Course(CourseVar::Rotation),
+            "track_id" => Course(CourseVar::TrackId),
 
             // Spatial
-            "all_corner_random" => VarType::Spatial(SpatialVar::AllCornerRandom),
-            "corner" => VarType::Spatial(SpatialVar::Corner),
-            "corner_random" => VarType::Spatial(SpatialVar::CornerRandom),
-            "distance_rate" => VarType::Spatial(SpatialVar::DistanceRate),
-            "distance_rate_after_random" => VarType::Spatial(SpatialVar::DistanceRateAfterRandom),
-            "down_slope_random" => VarType::Spatial(SpatialVar::DownSlopeRandom),
-            "furlong" => VarType::Spatial(SpatialVar::Furlong),
-            "is_finalcorner" => VarType::Spatial(SpatialVar::IsFinalcorner),
-            "is_finalcorner_laterhalf" => VarType::Spatial(SpatialVar::IsFinalcornerLaterhalf),
-            "is_finalcorner_random" => VarType::Spatial(SpatialVar::IsFinalcornerRandom),
-            "is_last_straight" => VarType::Spatial(SpatialVar::IsLastStraight),
-            "is_last_straight_onetime" => VarType::Spatial(SpatialVar::IsLastStraightOnetime),
-            "lane_type" => VarType::Spatial(SpatialVar::LaneType),
-            "last_straight_random" => VarType::Spatial(SpatialVar::LastStraightRandom),
-            "remain_distance" => VarType::Spatial(SpatialVar::RemainDistance),
-            "remain_distance_viewer_id" => VarType::Spatial(SpatialVar::RemainDistanceViewerId),
-            "slope" => VarType::Spatial(SpatialVar::Slope),
-            "straight_front_type" => VarType::Spatial(SpatialVar::StraightFrontType),
-            "straight_random" => VarType::Spatial(SpatialVar::StraightRandom),
-            "up_slope_random" => VarType::Spatial(SpatialVar::UpSlopeRandom),
-            "up_slope_random_later_half" => VarType::Spatial(SpatialVar::UpSlopeRandomLaterHalf),
+            "all_corner_random" => Spatial(SpatialVar::AllCornerRandom),
+            "corner" => Spatial(SpatialVar::Corner),
+            "corner_random" => Spatial(SpatialVar::CornerRandom),
+            "distance_rate" => Spatial(SpatialVar::DistanceRate),
+            "distance_rate_after_random" => Spatial(SpatialVar::DistanceRateAfterRandom),
+            "down_slope_random" => Spatial(SpatialVar::DownSlopeRandom),
+            "furlong" => Spatial(SpatialVar::Furlong),
+            "is_finalcorner" => Spatial(SpatialVar::IsFinalcorner),
+            "is_finalcorner_laterhalf" => Spatial(SpatialVar::IsFinalcornerLaterhalf),
+            "is_finalcorner_random" => Spatial(SpatialVar::IsFinalcornerRandom),
+            "is_last_straight" => Spatial(SpatialVar::IsLastStraight),
+            "is_last_straight_onetime" => Spatial(SpatialVar::IsLastStraightOnetime),
+            "lane_type" => Spatial(SpatialVar::LaneType),
+            "last_straight_random" => Spatial(SpatialVar::LastStraightRandom),
+            "remain_distance" => Spatial(SpatialVar::RemainDistance),
+            "remain_distance_viewer_id" => Spatial(SpatialVar::RemainDistanceViewerId),
+            "slope" => Spatial(SpatialVar::Slope),
+            "straight_front_type" => Spatial(SpatialVar::StraightFrontType),
+            "straight_random" => Spatial(SpatialVar::StraightRandom),
+            "up_slope_random" => Spatial(SpatialVar::UpSlopeRandom),
+            "up_slope_random_later_half" => Spatial(SpatialVar::UpSlopeRandomLaterHalf),
 
             // Activation tracking
-            "activate_count_all_team" => VarType::Activation(ActivationVar::ActivateCountAllTeam),
-            "activate_count_all" => VarType::Activation(ActivationVar::ActivateCountAll),
-            "activate_count_end_after" => VarType::Activation(ActivationVar::ActivateCountEndAfter),
-            "activate_count_heal" => VarType::Activation(ActivationVar::ActivateCountHeal),
-            "activate_count_later_half" => {
-                VarType::Activation(ActivationVar::ActivateCountLaterHalf)
-            }
-            "activate_count_middle" => VarType::Activation(ActivationVar::ActivateCountMiddle),
-            "activate_count_start" => VarType::Activation(ActivationVar::ActivateCountStart),
-            "compete_fight_count" => VarType::Activation(ActivationVar::CompeteFightCount),
-            "is_activate_any_skill" => VarType::Activation(ActivationVar::IsActivateAnySkill),
-            "is_activate_heal_skill" => VarType::Activation(ActivationVar::IsActivateHealSkill),
+            "activate_count_all_team" => Activation(ActivationVar::ActivateCountAllTeam),
+            "activate_count_all" => Activation(ActivationVar::ActivateCountAll),
+            "activate_count_end_after" => Activation(ActivationVar::ActivateCountEndAfter),
+            "activate_count_heal" => Activation(ActivationVar::ActivateCountHeal),
+            "activate_count_later_half" => Activation(ActivationVar::ActivateCountLaterHalf),
+            "activate_count_middle" => Activation(ActivationVar::ActivateCountMiddle),
+            "activate_count_start" => Activation(ActivationVar::ActivateCountStart),
+            "compete_fight_count" => Activation(ActivationVar::CompeteFightCount),
+            "is_activate_any_skill" => Activation(ActivationVar::IsActivateAnySkill),
+            "is_activate_heal_skill" => Activation(ActivationVar::IsActivateHealSkill),
             "is_activate_other_skill_detail" => {
-                VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
+                Activation(ActivationVar::IsActivateOtherSkillDetail)
             }
-            "is_exist_skill_id" => VarType::Activation(ActivationVar::IsExistSkillId),
+            "is_exist_skill_id" => Activation(ActivationVar::IsExistSkillId),
             "is_other_character_activate_advantage_skill" => {
-                VarType::Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
+                Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
             }
-            "is_used_skill_id" => VarType::Activation(ActivationVar::IsUsedSkillId),
+            "is_used_skill_id" => Activation(ActivationVar::IsUsedSkillId),
 
             // Race parameters
-            "grade" => VarType::RaceParam(RaceParamVar::Grade),
-            "ground_condition" => VarType::RaceParam(RaceParamVar::GroundCondition),
-            "is_exist_chara_id" => VarType::RaceParam(RaceParamVar::IsExistCharaId),
-            "popularity" => VarType::RaceParam(RaceParamVar::Popularity),
-            "same_skill_horse_count" => VarType::RaceParam(RaceParamVar::SameSkillHorseCount),
-            "season" => VarType::RaceParam(RaceParamVar::Season),
-            "time" => VarType::RaceParam(RaceParamVar::Time),
-            "visiblehorse" => VarType::RaceParam(RaceParamVar::Visiblehorse),
-            "weather" => VarType::RaceParam(RaceParamVar::Weather),
+            "grade" => RaceParam(RaceParamVar::Grade),
+            "ground_condition" => RaceParam(RaceParamVar::GroundCondition),
+            "is_exist_chara_id" => RaceParam(RaceParamVar::IsExistCharaId),
+            "popularity" => RaceParam(RaceParamVar::Popularity),
+            "same_skill_horse_count" => RaceParam(RaceParamVar::SameSkillHorseCount),
+            "season" => RaceParam(RaceParamVar::Season),
+            "time" => RaceParam(RaceParamVar::Time),
+            "visiblehorse" => RaceParam(RaceParamVar::Visiblehorse),
+            "weather" => RaceParam(RaceParamVar::Weather),
 
             // Running style
-            "running_style" => VarType::RunningStyle(RunningStyleVar::RunningStyle),
+            "running_style" => RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself)
+                RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself)
             }
             "running_style_count_oikomi_otherself" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountOikomiOtherself)
+                RunningStyle(RunningStyleVar::RunningStyleCountOikomiOtherself)
             }
             "running_style_count_sashi_otherself" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountSashiOtherself)
+                RunningStyle(RunningStyleVar::RunningStyleCountSashiOtherself)
             }
             "running_style_count_senko_otherself" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountSenkoOtherself)
+                RunningStyle(RunningStyleVar::RunningStyleCountSenkoOtherself)
             }
-            "running_style_count_same" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountSame)
-            }
+            "running_style_count_same" => RunningStyle(RunningStyleVar::RunningStyleCountSame),
             "running_style_count_same_rate" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleCountSameRate)
+                RunningStyle(RunningStyleVar::RunningStyleCountSameRate)
             }
             "running_style_equal_popularity_one" => {
-                VarType::RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
+                RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
             }
 
             // Status
-            "behind_near_lane_time" => VarType::Status(StatusVar::BehindNearLaneTime),
-            "behind_near_lane_time_set1" => VarType::Status(StatusVar::BehindNearLaneTimeSet1),
-            "hp_per" => VarType::Status(StatusVar::HpPer),
-            "infront_near_lane_time" => VarType::Status(StatusVar::InfrontNearLaneTime),
-            "is_badstart" => VarType::Status(StatusVar::IsBadstart),
-            "is_behind_in" => VarType::Status(StatusVar::IsBehindIn),
-            "is_hp_empty_onetime" => VarType::Status(StatusVar::IsHpEmptyOnetime),
-            "is_lastspurt" => VarType::Status(StatusVar::IsLastspurt),
-            "is_move_lane" => VarType::Status(StatusVar::IsMoveLane),
-            "is_overtake" => VarType::Status(StatusVar::IsOvertake),
-            "is_surrounded" => VarType::Status(StatusVar::IsSurrounded),
-            "is_temptation" => VarType::Status(StatusVar::IsTemptation),
-            "lastspurt" => VarType::Status(StatusVar::Lastspurt),
-            "motivation" => VarType::Status(StatusVar::Motivation),
-            "post_number" => VarType::Status(StatusVar::PostNumber),
-            "temptation_count" => VarType::Status(StatusVar::TemptationCount),
+            "behind_near_lane_time" => Status(StatusVar::BehindNearLaneTime),
+            "behind_near_lane_time_set1" => Status(StatusVar::BehindNearLaneTimeSet1),
+            "hp_per" => Status(StatusVar::HpPer),
+            "infront_near_lane_time" => Status(StatusVar::InfrontNearLaneTime),
+            "is_badstart" => Status(StatusVar::IsBadstart),
+            "is_behind_in" => Status(StatusVar::IsBehindIn),
+            "is_hp_empty_onetime" => Status(StatusVar::IsHpEmptyOnetime),
+            "is_lastspurt" => Status(StatusVar::IsLastspurt),
+            "is_move_lane" => Status(StatusVar::IsMoveLane),
+            "is_overtake" => Status(StatusVar::IsOvertake),
+            "is_surrounded" => Status(StatusVar::IsSurrounded),
+            "is_temptation" => Status(StatusVar::IsTemptation),
+            "lastspurt" => Status(StatusVar::Lastspurt),
+            "motivation" => Status(StatusVar::Motivation),
+            "post_number" => Status(StatusVar::PostNumber),
+            "temptation_count" => Status(StatusVar::TemptationCount),
 
             // Randoms
-            "random_lot" => VarType::Random(RandomVar::RandomLot),
+            "random_lot" => Random(RandomVar::RandomLot),
 
             // Blocking
-            "blocked_all_continuetime" => VarType::Blocking(BlockingVar::BlockedAllContinuetime),
-            "blocked_front" => VarType::Blocking(BlockingVar::BlockedFront),
-            "blocked_front_continuetime" => {
-                VarType::Blocking(BlockingVar::BlockedFrontContinuetime)
-            }
-            "blocked_side_continuetime" => VarType::Blocking(BlockingVar::BlockedSideContinuetime),
+            "blocked_all_continuetime" => Blocking(BlockingVar::BlockedAllContinuetime),
+            "blocked_front" => Blocking(BlockingVar::BlockedFront),
+            "blocked_front_continuetime" => Blocking(BlockingVar::BlockedFrontContinuetime),
+            "blocked_side_continuetime" => Blocking(BlockingVar::BlockedSideContinuetime),
 
             // Rush/Temptation
             "running_style_temptation_count_nige" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationCountNige)
+                Temptation(TemptationVar::RunningStyleTemptationCountNige)
             }
             "running_style_temptation_count_oikomi" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationCountOikomi)
+                Temptation(TemptationVar::RunningStyleTemptationCountOikomi)
             }
             "running_style_temptation_count_sashi" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationCountSashi)
+                Temptation(TemptationVar::RunningStyleTemptationCountSashi)
             }
             "running_style_temptation_count_senko" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationCountSenko)
+                Temptation(TemptationVar::RunningStyleTemptationCountSenko)
             }
             "running_style_temptation_opponent_count_nige" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountNige)
+                Temptation(TemptationVar::RunningStyleTemptationOpponentCountNige)
             }
             "running_style_temptation_opponent_count_oikomi" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountOikomi)
+                Temptation(TemptationVar::RunningStyleTemptationOpponentCountOikomi)
             }
             "running_style_temptation_opponent_count_sashi" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountSashi)
+                Temptation(TemptationVar::RunningStyleTemptationOpponentCountSashi)
             }
             "running_style_temptation_opponent_count_senko" => {
-                VarType::Temptation(TemptationVar::RunningStyleTemptationOpponentCountSenko)
+                Temptation(TemptationVar::RunningStyleTemptationOpponentCountSenko)
             }
-            "temptation_count_behind" => VarType::Temptation(TemptationVar::TemptationCountBehind),
-            "temptation_count_infront" => {
-                VarType::Temptation(TemptationVar::TemptationCountInfront)
-            }
+            "temptation_count_behind" => Temptation(TemptationVar::TemptationCountBehind),
+            "temptation_count_infront" => Temptation(TemptationVar::TemptationCountInfront),
             "temptation_opponent_count_behind" => {
-                VarType::Temptation(TemptationVar::TemptationOpponentCountBehind)
+                Temptation(TemptationVar::TemptationOpponentCountBehind)
             }
             "temptation_opponent_count_infront" => {
-                VarType::Temptation(TemptationVar::TemptationOpponentCountInfront)
+                Temptation(TemptationVar::TemptationOpponentCountInfront)
             }
 
             // Special
-            "always" => VarType::Always,
+            "always" => Always,
 
             // Unknown variable - fallback
             _ => {
                 #[cfg(debug_assertions)]
                 eprintln!("warning: unknown variable '{}', evaluating to false", s);
-                VarType::Unknown(s.to_string())
+                Unknown(s.to_string())
             }
         }
     }
@@ -715,7 +702,7 @@ impl VarType {
             Spatial(SpatialVar::LaneType) => DynamicGuard,
 
             // Unknown
-            VarType::Unknown(_) => DynamicGuard,
+            Unknown(_) => DynamicGuard,
         }
     }
 }

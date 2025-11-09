@@ -189,10 +189,11 @@ impl CompEvaluator for EvaluatorFull {
         state: &Self::State,
         context: &Self::Context,
     ) -> bool {
+        use VarType::*;
         let runner = context;
         // Special cases: skill ID checks require different logic
         match &comp.var {
-            VarType::Activation(ActivationVar::IsUsedSkillId) => {
+            Activation(ActivationVar::IsUsedSkillId) => {
                 // Check if skill with ID == comp.value has been activated
                 let skill_id_str = comp.value.to_string();
                 let skill_exists = runner.activated_skill_ids.contains(&skill_id_str);
@@ -203,11 +204,11 @@ impl CompEvaluator for EvaluatorFull {
                     _ => false, // Other operators don't make sense for skill ID checks
                 }
             }
-            VarType::Activation(ActivationVar::IsExistSkillId) => {
+            Activation(ActivationVar::IsExistSkillId) => {
                 // Check if at least one runner has skill with ID == comp.value
                 state.existing_skills.contains_key(&comp.value.to_string())
             }
-            VarType::RaceParam(RaceParamVar::SameSkillHorseCount) => {
+            RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill
                 let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
                 match comp.op {
@@ -251,13 +252,14 @@ impl CompEvaluator for EvaluatorOutOfGate {
         state: &Self::State,
         context: &Self::Context,
     ) -> bool {
+        use VarType::*;
         match &comp.var {
             // Special case: skill ID checks require different logic
-            VarType::Activation(ActivationVar::IsExistSkillId) => {
+            Activation(ActivationVar::IsExistSkillId) => {
                 // Check if at least one runner has skill with ID == comp.value
                 state.existing_skills.contains_key(&comp.value.to_string())
             }
-            VarType::RaceParam(RaceParamVar::SameSkillHorseCount) => {
+            RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill
                 let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
                 match comp.op {
@@ -289,25 +291,24 @@ impl CompEvaluator for EvaluatorOutOfGate {
 
 /// Get current integer value for any variable type
 fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 {
+    use VarType::*;
     match var {
-        VarType::BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
-        VarType::Order(pos_var) => get_rank_value(pos_var, runner),
-        VarType::Distance(dist_var) => get_distance_value(dist_var, runner),
-        VarType::Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
-        VarType::Course(course_var) => get_course_value(course_var, &state.course),
-        VarType::Spatial(location_var) => get_location_value(location_var, &state.course, runner),
-        VarType::Activation(act_var) => get_activation_value(act_var, runner),
-        VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        VarType::RunningStyle(style_var) => {
-            get_running_style_value(style_var, state, runner.adjusted.style)
-        }
-        VarType::Status(status_var) => get_status_value(status_var, runner),
-        VarType::Random(trigger_var) => get_random_value(trigger_var, state),
-        VarType::Blocking(blocking_var) => get_blocking_value(blocking_var, state),
-        VarType::Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
-        VarType::AccumulateTime => state.elapsed_time.floor() as i32,
-        VarType::Always => 1,     // Always returns 1 (true)
-        VarType::Unknown(_) => 0, // Default to 0
+        BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
+        Order(pos_var) => get_rank_value(pos_var, runner),
+        Distance(dist_var) => get_distance_value(dist_var, runner),
+        Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
+        Course(course_var) => get_course_value(course_var, &state.course),
+        Spatial(location_var) => get_location_value(location_var, &state.course, runner),
+        Activation(act_var) => get_activation_value(act_var, runner),
+        RaceParam(param_var) => get_race_param_value(param_var, &state.params),
+        RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
+        Status(status_var) => get_status_value(status_var, runner),
+        Random(trigger_var) => get_random_value(trigger_var, state),
+        Blocking(blocking_var) => get_blocking_value(blocking_var, state),
+        Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
+        AccumulateTime => state.elapsed_time.floor() as i32,
+        Always => 1,     // Always returns 1 (true)
+        Unknown(_) => 0, // Default to 0
     }
 }
 
@@ -317,16 +318,15 @@ fn get_variable_value_out_of_gate(
     state: &RaceState,
     builder: &UnreadyRunner,
 ) -> i32 {
+    use VarType::*;
     match var {
-        VarType::BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
-        VarType::Course(course_var) => get_course_value(course_var, &state.course),
-        VarType::RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        VarType::RunningStyle(style_var) => {
-            get_running_style_value(style_var, state, builder.base.style)
-        }
-        VarType::Status(status_var) => get_basic_status_value(status_var, builder),
-        VarType::Always => 1, // Always returns 1 (true)
-        _ => 0,               // Not applicable in out-of-gate context
+        BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
+        Course(course_var) => get_course_value(course_var, &state.course),
+        RaceParam(param_var) => get_race_param_value(param_var, &state.params),
+        RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
+        Status(status_var) => get_basic_status_value(status_var, builder),
+        Always => 1, // Always returns 1 (true)
+        _ => 0,      // Not applicable in out-of-gate context
     }
 }
 

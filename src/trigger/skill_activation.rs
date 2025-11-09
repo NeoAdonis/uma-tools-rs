@@ -354,20 +354,22 @@ fn try_detect_window(
     left: &CompList,
     right: &CompList,
 ) -> Option<(TriggerCondition, Option<Condition>)> {
+    use VarType::*;
+
     // We're looking for single comparisons on both sides
     if let (CompList::Single(left_comp), CompList::Single(right_comp)) = (left, right) {
         // Check if both comparisons use the same variable
         let left_var = match &left_comp.var {
-            VarType::AccumulateTime => Some(WindowVariable::AccumulateTime),
-            VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
-            VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
+            AccumulateTime => Some(WindowVariable::AccumulateTime),
+            Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
 
         let right_var = match &right_comp.var {
-            VarType::AccumulateTime => Some(WindowVariable::AccumulateTime),
-            VarType::Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
-            VarType::Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
+            AccumulateTime => Some(WindowVariable::AccumulateTime),
+            Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
 
@@ -578,10 +580,11 @@ fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option
 /// - HpPercent: 1 (lowest - less predictable due to recovery)
 /// - Others: 0 (not promotable)
 fn get_promotion_priority(var: &VarType) -> i32 {
+    use VarType::*;
     match var {
-        VarType::Spatial(SpatialVar::DistanceRate) => 3,
-        VarType::AccumulateTime => 2,
-        VarType::Status(StatusVar::HpPer) => 1,
+        Spatial(SpatialVar::DistanceRate) => 3,
+        AccumulateTime => 2,
+        Status(StatusVar::HpPer) => 1,
         _ => 0,
     }
 }
@@ -599,6 +602,8 @@ fn get_promotion_priority(var: &VarType) -> i32 {
 fn try_promote_single_monotonic_to_window(
     guard_condition: Option<Condition>,
 ) -> (Option<TriggerCondition>, Option<Condition>) {
+    use VarType::*;
+
     let Some(guard) = guard_condition else {
         return (None, None);
     };
@@ -620,7 +625,7 @@ fn try_promote_single_monotonic_to_window(
     // Convert the comparison to a Window trigger
     // For single-sided comparisons, we need to infer the implicit bounds
     let window_trigger = match &best_comp.var {
-        VarType::Spatial(SpatialVar::DistanceRate) => match best_comp.op {
+        Spatial(SpatialVar::DistanceRate) => match best_comp.op {
             CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
                 variable: WindowVariable::DistanceRate,
                 min_threshold: best_comp.value as f64,
@@ -633,7 +638,7 @@ fn try_promote_single_monotonic_to_window(
             }),
             _ => None,
         },
-        VarType::AccumulateTime => {
+        AccumulateTime => {
             match best_comp.op {
                 CompOp::GreaterEqual | CompOp::Greater => {
                     // accumulatetime>=X doesn't need a window, use Time trigger
@@ -647,7 +652,7 @@ fn try_promote_single_monotonic_to_window(
                 _ => None,
             }
         }
-        VarType::Status(StatusVar::HpPer) => {
+        Status(StatusVar::HpPer) => {
             match best_comp.op {
                 CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
                     variable: WindowVariable::HpPercent,
@@ -823,10 +828,12 @@ fn split_single_comp(
     random_activation: &[f64],
     course: &Course,
 ) -> (Vec<TriggerCondition>, Option<Condition>) {
+    use VariableRole::*;
+
     let role = comp.var.variable_role();
 
     match role {
-        VariableRole::RandomTrigger => {
+        RandomTrigger => {
             // Extract random activation trigger
             if let VarType::Random(_) = &comp.var {
                 // If we are here, it means that the activation roll succeeded
@@ -850,7 +857,7 @@ fn split_single_comp(
             }
         }
 
-        VariableRole::MonotonicGuard => {
+        MonotonicGuard => {
             // MonotonicGuard: can be trigger OR guard depending on context
             // Default to guard here; promotion happens at higher level
             let guard = Condition {
@@ -859,7 +866,7 @@ fn split_single_comp(
             (vec![], Some(guard))
         }
 
-        VariableRole::PhaseTrigger => {
+        PhaseTrigger => {
             // Phase with comparison operators (<=, >=, <, >) should be guards, not triggers
             // Only phase==N creates a trigger (fires at phase entry)
             // phase<=1 means "while in Early or Mid" (check at trigger time)
@@ -879,7 +886,7 @@ fn split_single_comp(
             }
         }
 
-        VariableRole::SpatialTrigger => {
+        SpatialTrigger => {
             if let Some(trigger) = extract_spatial_trigger(comp, course) {
                 (vec![trigger], None)
             } else {
@@ -887,7 +894,7 @@ fn split_single_comp(
             }
         }
 
-        VariableRole::ActivationTrigger => {
+        ActivationTrigger => {
             if comp.op == CompOp::Equal
                 && comp.value == 1
                 && let VarType::Activation(activation_var) = &comp.var
@@ -908,7 +915,7 @@ fn split_single_comp(
             (vec![], Some(guard))
         }
 
-        VariableRole::StaticGuard | VariableRole::DynamicGuard => {
+        StaticGuard | DynamicGuard => {
             // Static and Dynamic guards - keep as guard condition
             let guard = Condition {
                 comp_list: CompList::Single(comp.clone()),
@@ -927,6 +934,8 @@ fn split_single_comp(
 /// - Decreasing monotonic variables (`hp_per`, `remain_distance`) with `>=`
 ///   → `Window [threshold, MAX]`
 fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
+    use VarType::*;
+
     // Helper to determine if this is a reversed operator that needs window conversion
     let needs_window_conversion = |is_increasing: bool, op: CompOp| -> bool {
         match (is_increasing, op) {
@@ -939,7 +948,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
     };
 
     match &comp.var {
-        VarType::AccumulateTime => {
+        AccumulateTime => {
             // AccumulateTime is monotonically increasing
             if needs_window_conversion(true, comp.op) {
                 TriggerCondition::Window {
@@ -955,7 +964,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             }
         }
 
-        VarType::Spatial(SpatialVar::DistanceRate) => {
+        Spatial(SpatialVar::DistanceRate) => {
             // DistanceRate is monotonically increasing
             if needs_window_conversion(true, comp.op) {
                 TriggerCondition::Window {
@@ -971,7 +980,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             }
         }
 
-        VarType::Spatial(SpatialVar::RemainDistance) => {
+        Spatial(SpatialVar::RemainDistance) => {
             // RemainDistance is monotonically decreasing
             // Note: <= is normal direction for decreasing, >= is reversed
             if needs_window_conversion(false, comp.op) {
@@ -991,7 +1000,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             }
         }
 
-        VarType::Status(StatusVar::HpPer) => {
+        Status(StatusVar::HpPer) => {
             // Even though HpPer can recover, for the most part it constantly decreases
             // Treat as decreasing for window conversion purposes
             if needs_window_conversion(false, comp.op) {
@@ -1008,12 +1017,12 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             }
         }
 
-        VarType::Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpPercent {
+        Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpPercent {
             threshold: 0.0,
             operator: CompOp::LessEqual,
         },
 
-        VarType::Spatial(SpatialVar::Furlong) => {
+        Spatial(SpatialVar::Furlong) => {
             // Furlong is monotonically increasing
             if needs_window_conversion(true, comp.op) {
                 // furlong<=N means "activate while in first N furlongs"
@@ -1031,7 +1040,7 @@ fn extract_monotonic_trigger(comp: &Comp) -> TriggerCondition {
             }
         }
 
-        VarType::Activation(_) => {
+        Activation(_) => {
             // Treat as continuous trigger
             TriggerCondition::Continuous {}
         }
