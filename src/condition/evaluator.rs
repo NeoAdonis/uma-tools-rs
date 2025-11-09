@@ -250,7 +250,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
     match var {
         VarType::BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
         VarType::Order(pos_var) => get_rank_value(pos_var, runner),
-        VarType::Distance(dist_var) => get_distance_value(dist_var, state, runner),
+        VarType::Distance(dist_var) => get_distance_value(dist_var, runner),
         VarType::Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
         VarType::Course(course_var) => get_course_value(course_var, &state.course),
         VarType::Spatial(location_var) => get_location_value(location_var, &state.course, runner),
@@ -299,20 +299,19 @@ fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
     }
 }
 
-/// Get distance-related values
-fn get_distance_value(var: &DistanceVar, state: &RaceState, runner: &Runner) -> i32 {
+/// Get values related to distance between runners
+fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
     match var {
-        // Distance differences between runners
-        DistanceVar::BashinDiffBehind => 999, // STUB: No uma behind (large value)
-        DistanceVar::BashinDiffInfront => 999, // STUB: No uma ahead (large value)
-        DistanceVar::DistanceDiffRate => 0,   // STUB: 0% = first place
-        DistanceVar::DistanceDiffTop => 0,    // STUB: 0m behind first (we are first)
-        DistanceVar::DistanceDiffTopFloat => 0, // STUB: 0 decimeters behind first
-
-        // Remaining distance for any player character
-        DistanceVar::RemainDistanceViewerId => {
-            // STUB: Single-uma mode, same as self
-            remain_distance(&runner.position, state.course.distance)
+        DistanceVar::BashinDiffBehind => {
+            meters_to_bashin(runner.position_diff.from_prev).floor() as i32
+        }
+        DistanceVar::BashinDiffInfront => {
+            meters_to_bashin(runner.position_diff.from_next).floor() as i32
+        }
+        DistanceVar::DistanceDiffRate => runner.position_diff.rate_from_first.floor() as i32,
+        DistanceVar::DistanceDiffTop => runner.position_diff.from_first.floor() as i32,
+        DistanceVar::DistanceDiffTopFloat => {
+            (runner.position_diff.from_first * 10.0).floor() as i32
         }
     }
 }
@@ -470,6 +469,11 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
 
         // Remaining distance in meters
         SpatialVar::RemainDistance => remain_distance(&runner.position, course.distance),
+
+        // Remaining distance for any player (non-NPC) runner
+        SpatialVar::RemainDistanceViewerId => {
+            unimplemented!("remain_distance_viewer_id not implemented")
+        }
 
         // Random triggers - handled by trigger system
         SpatialVar::AllCornerRandom

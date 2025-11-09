@@ -145,6 +145,19 @@ pub struct OrderState {
     pub overtakes_since_last_corner: u16,
 }
 
+/// Distance differences from other runners.
+pub struct PositionDiff {
+    /// Distance difference from the first-place runner in meters.
+    pub from_first: f64,
+    /// Distance difference from the next runner ahead in meters.
+    pub from_next: f64,
+    /// Distance difference from the previous runner behind in meters.
+    pub from_prev: f64,
+    /// Distance difference rate from the first-place runner relative to the distance
+    /// between first and last place, in percent.
+    pub rate_from_first: f64,
+}
+
 /// An Uma with additional data related to racing, that is, an Uma who is running.
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
@@ -220,6 +233,8 @@ pub struct Runner {
     pub duel_count: u8,
     /// State related to order (rank) in the race.
     pub order: OrderState,
+    /// Distance differences between this runner and others.
+    pub position_diff: PositionDiff,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
     /// Current section index (0-23).
@@ -773,6 +788,27 @@ impl Runner {
             self.order.rate_max = self.order.rate_max.max(rate);
             self.order.rate_min = self.order.rate_min.min(rate);
         }
+    }
+
+    /// Update position differences from other runners ahead.
+    ///
+    /// `position_first`: position of the first-place runner.
+    /// `position_next`: position of the next runner ahead.
+    /// `position_range`: distance between first and last place.
+    pub fn update_diff_from_ahead(
+        &mut self,
+        position_first: f64,
+        position_next: f64,
+        position_range: f64,
+    ) {
+        self.position_diff.from_first = position_first - self.position;
+        self.position_diff.from_next = position_next - self.position;
+        self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
+    }
+
+    /// Update position difference from the runner behind.
+    pub fn update_diff_from_behind(&mut self, position_prev: f64) {
+        self.position_diff.from_prev = self.position - position_prev;
     }
 
     /// Check all preconditions to detect satisfaction at any point during the race.

@@ -185,18 +185,40 @@ impl RaceSolver<Runner> {
             runner.check_straight_start(&self.state.course.straights, &self.state);
         }
 
-        // Update order rate and overtakes
+        self.update_order_values();
+
+        if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
+            // TODO: Implement spot struggle and dueling checks.
+        }
+    }
+
+    /// Update order (rank) and distance differences for all runners.
+    fn update_order_values(&mut self) {
         self.runners
             .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
         let total_runners = self.runners.len() as u8;
         let should_update_range = self.state.elapsed_time > 5.0;
+        let position_first = self.runners.first().unwrap().position;
+        let position_last = self.runners.last().unwrap().position;
+        let position_range = position_first - position_last;
+        let mut position_next = position_first;
+
+        // From first to last, update order and distance differences from runners ahead
         for (index, runner) in self.runners.iter_mut().enumerate() {
+            if runner.has_finished() {
+                continue;
+            }
             runner.update_order((index + 1) as u8, &self.state.course);
             runner.update_order_rate(total_runners, should_update_range);
+            runner.update_diff_from_ahead(position_first, position_next, position_range);
+            position_next = runner.position;
         }
 
-        if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
-            // TODO: Implement spot struggle and dueling checks.
+        // From last to first, update distance differences from runners behind
+        let mut position_prev = position_last;
+        for runner in self.runners.iter_mut().rev() {
+            runner.update_diff_from_behind(position_prev);
+            position_prev = runner.position;
         }
     }
 }

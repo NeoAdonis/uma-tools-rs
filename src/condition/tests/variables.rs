@@ -16,8 +16,8 @@ fn test_known_variables_parse() {
         VarType::Order(OrderVar::Order)
     ));
     assert!(matches!(
-        VarType::parse("remain_distance_viewer_id"),
-        VarType::Distance(DistanceVar::RemainDistanceViewerId)
+        VarType::parse("bashin_diff_behind"),
+        VarType::Distance(DistanceVar::BashinDiffBehind)
     ));
     assert!(matches!(
         VarType::parse("corner_count"),

@@ -383,6 +383,12 @@ impl UnreadyRunner {
                 overtakes_since_late: 0,
                 overtakes_since_last_corner: 0,
             },
+            position_diff: PositionDiff {
+                from_first: 0.0,
+                from_next: 0.0,
+                from_prev: 0.0,
+                rate_from_first: 0.0,
+            },
             skill_activated_flag: false,
             heal_activated_flag: false,
         }

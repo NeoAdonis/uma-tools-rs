@@ -75,7 +75,6 @@ pub enum DistanceVar {
     DistanceDiffRate,
     DistanceDiffTop,
     DistanceDiffTopFloat,
-    RemainDistanceViewerId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +122,7 @@ pub enum SpatialVar {
     LaneType,
     LastStraightRandom,
     RemainDistance,
+    RemainDistanceViewerId,
     Slope,
     StraightFrontType,
     StraightRandom,
@@ -329,7 +329,6 @@ impl VarType {
             "distance_diff_rate" => VarType::Distance(DistanceVar::DistanceDiffRate),
             "distance_diff_top_float" => VarType::Distance(DistanceVar::DistanceDiffTopFloat),
             "distance_diff_top" => VarType::Distance(DistanceVar::DistanceDiffTop),
-            "remain_distance_viewer_id" => VarType::Distance(DistanceVar::RemainDistanceViewerId),
 
             // Time
             "accumulatetime" => VarType::AccumulateTime,
@@ -378,6 +377,7 @@ impl VarType {
             "lane_type" => VarType::Spatial(SpatialVar::LaneType),
             "last_straight_random" => VarType::Spatial(SpatialVar::LastStraightRandom),
             "remain_distance" => VarType::Spatial(SpatialVar::RemainDistance),
+            "remain_distance_viewer_id" => VarType::Spatial(SpatialVar::RemainDistanceViewerId),
             "slope" => VarType::Spatial(SpatialVar::Slope),
             "straight_front_type" => VarType::Spatial(SpatialVar::StraightFrontType),
             "straight_random" => VarType::Spatial(SpatialVar::StraightRandom),
@@ -609,7 +609,7 @@ impl VarType {
 
             // Distance-based (decreasing)
             Spatial(SpatialVar::RemainDistance) => MonotonicGuard,
-            Distance(DistanceVar::RemainDistanceViewerId) => MonotonicGuard,
+            Spatial(SpatialVar::RemainDistanceViewerId) => MonotonicGuard,
 
             // HP-based (decreasing)
             Status(StatusVar::HpPer) => MonotonicGuard,
@@ -700,32 +700,11 @@ impl VarType {
             Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
 
-            // Order/Rank (multi-uma, but act as guards)
-            Order(OrderVar::Order) => DynamicGuard,
-            Order(OrderVar::OrderRate) => DynamicGuard,
-            Order(OrderVar::NearCount) => DynamicGuard,
-            Order(OrderVar::NearInfrontCount) => DynamicGuard,
-            Order(OrderVar::ChangeOrderOnetime) => DynamicGuard,
-            Order(OrderVar::ChangeOrderUpEndAfter) => DynamicGuard,
-            Order(OrderVar::ChangeOrderUpFinalcornerAfter) => DynamicGuard,
-            Order(OrderVar::ChangeOrderUpMiddle) => DynamicGuard,
-            Order(OrderVar::OrderRateIn20Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateIn40Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateIn50Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateIn80Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateOut20Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateOut40Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateOut50Continue) => DynamicGuard,
-            Order(OrderVar::OrderRateOut70Continue) => DynamicGuard,
-            Order(OrderVar::OvertakeTargetTime) => DynamicGuard,
-            Order(OrderVar::OvertakeTargetNoOrderUpTime) => DynamicGuard,
+            // Order/Rank - Frequently changing
+            Order(_) => DynamicGuard,
 
-            // Distance (multi-uma, but act as guards)
-            Distance(DistanceVar::DistanceDiffTop) => DynamicGuard,
-            Distance(DistanceVar::DistanceDiffTopFloat) => DynamicGuard,
-            Distance(DistanceVar::DistanceDiffRate) => DynamicGuard,
-            Distance(DistanceVar::BashinDiffBehind) => DynamicGuard,
-            Distance(DistanceVar::BashinDiffInfront) => DynamicGuard,
+            // Distance between runners - Frequently changing
+            Distance(_) => DynamicGuard,
 
             // Blocking
             Blocking(_) => DynamicGuard,
