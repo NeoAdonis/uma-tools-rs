@@ -9,7 +9,7 @@ pub enum Token {
     BinOp(BinOp),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompOp {
     Equal,        // "=="
     NotEqual,     // "!="
@@ -62,7 +62,7 @@ pub enum CompList {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comp {
     pub var: VarType,
     pub op: CompOp,

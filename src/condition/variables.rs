@@ -1,23 +1,40 @@
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+/// Variable types used in conditions
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VarType {
-    AccumulateTime,                // Elapsed time
-    BaseStat(StatKind),            // Base stats
-    Order(OrderVar),               // Order (rank) related
-    Distance(DistanceVar),         // Distance relative to other runners
-    Phase(PhaseVar),               // Phase/Time related
-    Course(CourseVar),             // Course features
-    Spatial(SpatialVar),           // Runner position relative to course features
-    Activation(ActivationVar),     // Skill activation tracking
-    RaceParam(RaceParamVar),       // Race parameters
-    RunningStyle(RunningStyleVar), // Running style related
-    Status(StatusVar),             // Status/State flags
-    Random(RandomVar),             // Random activation
-    Blocking(BlockingVar),         // Blocking/Lane related
-    Temptation(TemptationVar),     // Rush/Temptation related
-    Always,                        // Special
-    Unknown(String),               // Fallback for unknown variables
+    /// Variable representing accumulated (elapsed) time.
+    AccumulateTime,
+    /// Variable representing base stats.
+    BaseStat(StatKind),
+    /// Variables related to order/rank.
+    Order(OrderVar),
+    /// Variables related to distance between runners.
+    Distance(DistanceVar),
+    /// Variables related to phases.
+    Phase(PhaseVar),
+    /// Variables related to course properties.
+    Course(CourseVar),
+    /// Variables related to spatial position (i.e. position on course or course features).
+    Spatial(SpatialVar),
+    /// Variables related to skill activation tracking.
+    Activation(ActivationVar),
+    /// Variables related to race parameters.
+    RaceParam(RaceParamVar),
+    /// Variables related to running style.
+    RunningStyle(RunningStyleVar),
+    /// Variables related to status/flags.
+    Status(StatusVar),
+    /// Variables whose value is determined randomly.
+    Random(RandomVar),
+    /// Variables related to blocking/lane position.
+    Blocking(BlockingVar),
+    /// Variables related to Rush (Temptation) mechanics.
+    Temptation(TemptationVar),
+    /// Special constant that is always true.
+    Always,
+    /// Fallback type for unknown variables.
+    Unknown(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

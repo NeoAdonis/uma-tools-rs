@@ -299,7 +299,52 @@ pub fn split_condition(
     // Apply promotion logic to each branch at the top level
     branches
         .into_iter()
-        .map(|(triggers, guards)| apply_monotonic_promotion(triggers, guards))
+        .map(|(mut triggers, guards)| {
+            // Check if we already have explicit triggers (Window, Random, Spatial, Phase, etc.)
+            let has_explicit_trigger = triggers
+                .iter()
+                .any(|t| !matches!(t, TriggerCondition::Continuous));
+
+            // Try to promote a single monotonic guard to a window, but only if:
+            // 1. We DON'T already have explicit triggers
+            // 2. We DO have guards
+            // 3. The guards contain at least one dynamic guard
+            //
+            // This optimization handles the specific case where we have BOTH
+            // monotonic guards (that could become windows) AND dynamic guards
+            // (that would normally force Continuous trigger in Rule 2).
+            let has_dynamic_guard = contains_dynamic_guard(&guards);
+            let remaining_guards = if !has_explicit_trigger && guards.is_some() && has_dynamic_guard
+            {
+                let (window_trigger, new_guards) = try_promote_single_monotonic_to_window(guards);
+                if let Some(window) = window_trigger {
+                    triggers.push(window);
+                }
+                new_guards
+            } else {
+                // Keep original guards - let apply_monotonic_promotion() handle it
+                guards
+            };
+
+            // Then apply standard monotonic promotion rules
+            // If we promoted a window above, Rule 1 will keep it (explicit trigger exists)
+            let (final_triggers, final_guards) =
+                apply_monotonic_promotion(triggers, remaining_guards);
+
+            // Finally, remove all Continuous triggers if we have any explicit triggers
+            let cleaned_triggers = if final_triggers
+                .iter()
+                .any(|t| !matches!(t, TriggerCondition::Continuous))
+            {
+                final_triggers
+                    .into_iter()
+                    .filter(|t| !matches!(t, TriggerCondition::Continuous))
+                    .collect()
+            } else {
+                final_triggers
+            };
+            (cleaned_triggers, final_guards)
+        })
         .collect()
 }
 
@@ -520,6 +565,171 @@ fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option
     };
 
     (promoted_triggers, final_guard)
+}
+
+/// Get the promotion priority for a monotonic variable.
+///
+/// Higher priority variables are preferred when promoting a single monotonic
+/// guard to a window trigger in the presence of dynamic guards.
+///
+/// Priority order:
+/// - DistanceRate: 3 (highest - most commonly used spatial trigger)
+/// - AccumulateTime: 2 (medium - time-based progression)
+/// - HpPercent: 1 (lowest - less predictable due to recovery)
+/// - Others: 0 (not promotable)
+fn get_promotion_priority(var: &VarType) -> i32 {
+    match var {
+        VarType::Spatial(SpatialVar::DistanceRate) => 3,
+        VarType::AccumulateTime => 2,
+        VarType::Status(StatusVar::HpPer) => 1,
+        _ => 0,
+    }
+}
+
+/// Try to promote a single monotonic guard to a window trigger.
+///
+/// This is an optimization for conditions with both monotonic and dynamic guards.
+/// Instead of using a Continuous trigger that checks all conditions every frame,
+/// we can promote the highest-priority monotonic guard to a Window trigger,
+/// reducing per-frame evaluation overhead.
+///
+/// Returns: `(promoted window trigger, remaining guard condition)`
+///
+/// If no suitable monotonic guard is found, returns `(None, original guard)`.
+fn try_promote_single_monotonic_to_window(
+    guard_condition: Option<Condition>,
+) -> (Option<TriggerCondition>, Option<Condition>) {
+    let Some(guard) = guard_condition else {
+        return (None, None);
+    };
+
+    // Collect all monotonic guards with their priorities
+    let mut monotonic_candidates: Vec<(i32, Comp)> = Vec::new();
+    collect_monotonic_candidates(&guard.comp_list, &mut monotonic_candidates);
+
+    if monotonic_candidates.is_empty() {
+        return (None, Some(guard));
+    }
+
+    // Sort by priority (highest first)
+    monotonic_candidates.sort_by(|a, b| b.0.cmp(&a.0));
+
+    // Take the highest priority candidate
+    let (_priority, best_comp) = &monotonic_candidates[0];
+
+    // Convert the comparison to a Window trigger
+    // For single-sided comparisons, we need to infer the implicit bounds
+    let window_trigger = match &best_comp.var {
+        VarType::Spatial(SpatialVar::DistanceRate) => match best_comp.op {
+            CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
+                variable: WindowVariable::DistanceRate,
+                min_threshold: best_comp.value as f64,
+                max_threshold: 100.0,
+            }),
+            CompOp::LessEqual | CompOp::Less => Some(TriggerCondition::Window {
+                variable: WindowVariable::DistanceRate,
+                min_threshold: 0.0,
+                max_threshold: best_comp.value as f64,
+            }),
+            _ => None,
+        },
+        VarType::AccumulateTime => {
+            match best_comp.op {
+                CompOp::GreaterEqual | CompOp::Greater => {
+                    // accumulatetime>=X doesn't need a window, use Time trigger
+                    None
+                }
+                CompOp::LessEqual | CompOp::Less => Some(TriggerCondition::Window {
+                    variable: WindowVariable::AccumulateTime,
+                    min_threshold: 0.0,
+                    max_threshold: best_comp.value as f64,
+                }),
+                _ => None,
+            }
+        }
+        VarType::Status(StatusVar::HpPer) => {
+            match best_comp.op {
+                CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
+                    variable: WindowVariable::HpPercent,
+                    min_threshold: best_comp.value as f64,
+                    max_threshold: 100.0,
+                }),
+                CompOp::LessEqual | CompOp::Less => {
+                    // hp_per<=X doesn't need a window, use HpPercent trigger
+                    None
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+
+    let Some(window) = window_trigger else {
+        return (None, Some(guard));
+    };
+
+    // Remove the promoted comparison from the guard condition
+    let remaining_guard = remove_comparison_from_condition(&guard.comp_list, best_comp);
+
+    (Some(window), remaining_guard)
+}
+
+/// Recursively collect monotonic guard candidates with their priorities.
+fn collect_monotonic_candidates(comp_list: &CompList, candidates: &mut Vec<(i32, Comp)>) {
+    match comp_list {
+        CompList::Single(comp) => {
+            let role = comp.var.variable_role();
+            if matches!(role, VariableRole::MonotonicGuard) {
+                let priority = get_promotion_priority(&comp.var);
+                if priority > 0 {
+                    candidates.push((priority, comp.clone()));
+                }
+            }
+        }
+        CompList::Binary { left, op, right } => {
+            if matches!(op, BinOp::And) {
+                // Recurse into both sides of AND
+                collect_monotonic_candidates(left, candidates);
+                collect_monotonic_candidates(right, candidates);
+            }
+            // Ignore OR branches; they should be on a separate split
+        }
+    }
+}
+
+/// Remove a specific comparison from a condition, rebuilding the structure.
+///
+/// Returns the remaining guard condition after removing the comparison,
+/// or `None` if this was the only comparison.
+fn remove_comparison_from_condition(comp_list: &CompList, target: &Comp) -> Option<Condition> {
+    match comp_list {
+        CompList::Single(comp) => {
+            // If this is the target, remove it
+            if comp == target {
+                None
+            } else {
+                Some(Condition {
+                    comp_list: CompList::Single(comp.clone()),
+                })
+            }
+        }
+        CompList::Binary { left, op, right } => {
+            let left_result = remove_comparison_from_condition(left, target);
+            let right_result = remove_comparison_from_condition(right, target);
+
+            match (left_result, right_result) {
+                (None, None) => None,
+                (Some(cond), None) | (None, Some(cond)) => Some(cond),
+                (Some(left_cond), Some(right_cond)) => Some(Condition {
+                    comp_list: CompList::Binary {
+                        left: Box::new(left_cond.comp_list),
+                        op: *op,
+                        right: Box::new(right_cond.comp_list),
+                    },
+                }),
+            }
+        }
+    }
 }
 
 /// Recursively collect comparisons and classify them as triggers or guards.
