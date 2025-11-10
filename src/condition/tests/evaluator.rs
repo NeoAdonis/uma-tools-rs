@@ -73,7 +73,7 @@ fn test_is_used_skill_id_with_activated_skill() {
     };
 
     // Should return true because skill 202051 is activated
-    assert!(EvaluatorFull.evaluate(&comp, "test", &solver.state, &solver.runners[0]));
+    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn test_is_used_skill_id_without_activated_skill() {
     };
 
     // Should return false because skill 202051 is not activated
-    assert!(!EvaluatorFull.evaluate(&comp, "test", &state.state, &state.runners[0]));
+    assert!(!EvaluatorFull.evaluate(&comp, None, &state.state, &state.runners[0]));
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn test_is_used_skill_id_with_different_skill() {
     };
 
     // Should return false because skill 202051 is not activated (only 203781 is)
-    assert!(!EvaluatorFull.evaluate(&comp, "test", &solver.state, &solver.runners[0]));
+    assert!(!EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn test_is_used_skill_id_not_equal() {
     };
 
     // Should return false because skill 202051 IS activated
-    assert!(!EvaluatorFull.evaluate(&comp, "test", &state.state, &state.runners[0]));
+    assert!(!EvaluatorFull.evaluate(&comp, None, &state.state, &state.runners[0]));
 }
 
 #[test]
@@ -195,5 +195,5 @@ fn test_is_exist_skill_id_in_available_skills() {
     };
 
     // Should return true because skill 203061 is in available_skills
-    assert!(EvaluatorFull.evaluate(&comp, "test", &solver.state, &solver.runners[0]));
+    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
 }

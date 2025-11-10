@@ -298,6 +298,8 @@ pub struct Runner {
     pub activated_skills: Vec<SkillActivationRecord>,
     /// Set of activated skill IDs.
     pub activated_skill_ids: HashSet<String>,
+    /// Set of activated skill alternatives (skill_index, alternative_index).
+    pub activated_alternatives: HashSet<(usize, usize)>,
     /// Modifiers from skills applied to this runner's stats.
     pub skill_modifiers: SkillModifiers,
     /// Effects from skills that are currently active for a limited duration.
@@ -1035,15 +1037,11 @@ impl Runner {
         }
 
         // Evaluate precondition
-        let (precondition, current_skill_id) = {
-            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-            (
-                logic.precondition.clone(),
-                self.available_skills[logic.skill_index].id.clone(),
-            )
-        };
+        let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+        let precondition = logic.precondition.clone();
+
         if let Some(precond) = precondition
-            && evaluate_condition(&precond, &EvaluatorFull, current_skill_id, state, self)
+            && evaluate_condition(&precond, &EvaluatorFull, Some(logic), state, self)
         {
             self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
         }
@@ -1239,6 +1237,8 @@ impl Runner {
 
         // Track skill activation
         self.activated_skill_ids.insert(skill_id.clone());
+        self.activated_alternatives
+            .insert((skill_index, alternative_index));
         self.activated_skills.push(SkillActivationRecord {
             skill_id,
             distance: self.position,
@@ -1267,21 +1267,18 @@ impl Runner {
         }
 
         // Get skill logic and conditions
-        let (skill_index, alternative_index, guard_condition, is_onetime) = {
-            let logic = &mut self.trigger_scheduler.skill_logics[trigger_index];
-            if !logic.should_check() {
-                return;
-            }
-            (
-                logic.skill_index,
-                logic.alternative_index,
-                logic.guard_condition.clone(),
-                logic.triggers.iter().any(|t| t.is_onetime()),
-            )
-        };
-        let current_skill_id = self.available_skills[skill_index].id.clone();
+        let logic = &mut self.trigger_scheduler.skill_logics[trigger_index];
+        if !logic.should_check() {
+            return;
+        }
+        let skill_index = logic.skill_index;
+        let alternative_index = logic.alternative_index;
+        let guard_condition = logic.guard_condition.clone();
+        let is_onetime = logic.triggers.iter().any(|t| t.is_onetime());
+
         let should_activate = if let Some(guard) = &guard_condition {
-            evaluate_condition(guard, &EvaluatorFull, current_skill_id, state, self)
+            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+            evaluate_condition(guard, &EvaluatorFull, Some(logic), state, self)
         } else {
             true
         };

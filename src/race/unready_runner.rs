@@ -125,6 +125,10 @@ pub struct UnreadyRunner {
     /// Indices of golden skills in `runtime_skills` for activation by skills that
     /// activate golden skills.
     golden_skill_indices: Vec<usize>,
+    /// Temporary: Number of runners that have the same skill as the one currently being
+    /// evaluated. Used for conditions like `same_skill_horse_count` that need to know
+    /// which skill they're checking.
+    pub same_skill_count: u8,
 
     // === Random number generator ===
     /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
@@ -204,6 +208,7 @@ impl UnreadyRunner {
             golden_skill_indices,
             out_of_gate_skills,
             runtime_skills,
+            same_skill_count: 0,
             rush_chance_modifier: 0.0,
         }
     }
@@ -293,9 +298,11 @@ impl UnreadyRunner {
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
         for (alt_index, skill) in skills.iter().enumerate() {
-            let skill_id = skill.id.clone();
+            // Update count (same_skill_horse_count)
+            self.same_skill_count = state.existing_skills.get(&skill.id).cloned().unwrap_or(0);
+
             let result = parse_condition(&skill.alternatives.first().unwrap().condition);
-            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, skill_id, state, self);
+            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, None, state, self);
             self.apply_out_of_gate_skill_effect(skill, alt_index);
         }
     }
@@ -355,6 +362,7 @@ impl UnreadyRunner {
             available_skills: self.runtime_skills,
             activated_skills: self.activated_skills,
             activated_skill_ids: self.activated_skill_ids,
+            activated_alternatives: HashSet::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             golden_skill_indices: self.golden_skill_indices,

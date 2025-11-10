@@ -68,6 +68,7 @@ use crate::race::parameters::RaceParameters;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
 
@@ -113,7 +114,7 @@ use crate::units::*;
 pub fn evaluate_condition<E>(
     condition: &Condition,
     evaluator: &E,
-    skill_id: String,
+    logic_ctx: Option<&SkillActivationLogic>,
     state: &E::State,
     context: &E::Context,
 ) -> bool
@@ -121,7 +122,7 @@ where
     E: CompEvaluator,
 {
     evaluate_comp_list(&condition.comp_list, |comp| {
-        evaluator.evaluate(comp, skill_id.as_str(), state, context)
+        evaluator.evaluate(comp, logic_ctx, state, context)
     })
 }
 
@@ -169,7 +170,7 @@ pub trait CompEvaluator {
     fn evaluate(
         &self,
         comp: &Comp,
-        skill_id: &str,
+        logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
     ) -> bool;
@@ -185,7 +186,7 @@ impl CompEvaluator for EvaluatorFull {
     fn evaluate(
         &self,
         comp: &Comp,
-        skill_id: &str,
+        logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
     ) -> bool {
@@ -210,6 +211,11 @@ impl CompEvaluator for EvaluatorFull {
             }
             RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill
+                // Extract skill_id from logic context
+                let skill_id = logic_ctx
+                    .and_then(|logic| runner.available_skills.get(logic.skill_index))
+                    .map(|skill| skill.id.as_str())
+                    .unwrap_or("");
                 let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
                 match comp.op {
                     CompOp::Equal => count == comp.value,
@@ -222,7 +228,7 @@ impl CompEvaluator for EvaluatorFull {
             }
             _ => {
                 // Normal case: get variable value and compare
-                let current_value = get_variable_value(&comp.var, state, runner);
+                let current_value = get_variable_value(&comp.var, state, runner, logic_ctx);
                 let threshold = comp.value;
 
                 match comp.op {
@@ -248,7 +254,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
     fn evaluate(
         &self,
         comp: &Comp,
-        skill_id: &str,
+        _logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
     ) -> bool {
@@ -261,7 +267,8 @@ impl CompEvaluator for EvaluatorOutOfGate {
             }
             RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill
-                let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
+                // In out-of-gate context, get value directly from temporary context
+                let count = context.same_skill_count as i32;
                 match comp.op {
                     CompOp::Equal => count == comp.value,
                     CompOp::NotEqual => count != comp.value,
@@ -290,7 +297,12 @@ impl CompEvaluator for EvaluatorOutOfGate {
 }
 
 /// Get current integer value for any variable type
-fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 {
+fn get_variable_value(
+    var: &VarType,
+    state: &RaceState,
+    runner: &Runner,
+    logic_ctx: Option<&SkillActivationLogic>,
+) -> i32 {
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
@@ -299,7 +311,7 @@ fn get_variable_value(var: &VarType, state: &RaceState, runner: &Runner) -> i32 
         Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
         Course(course_var) => get_course_value(course_var, &state.course),
         Spatial(location_var) => get_location_value(location_var, &state.course, runner),
-        Activation(act_var) => get_activation_value(act_var, runner),
+        Activation(act_var) => get_activation_value(act_var, runner, logic_ctx),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
         Status(status_var) => get_status_value(status_var, runner),
@@ -572,7 +584,11 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 }
 
 /// Get activation counter values
-fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
+fn get_activation_value(
+    var: &ActivationVar,
+    runner: &Runner,
+    logic_ctx: Option<&SkillActivationLogic>,
+) -> i32 {
     match var {
         ActivationVar::ActivateCountAll => runner.trigger_scheduler.activation_counts.all as i32,
         ActivationVar::ActivateCountEndAfter => {
@@ -592,7 +608,21 @@ fn get_activation_value(var: &ActivationVar, runner: &Runner) -> i32 {
         // Continuous checks
         ActivationVar::IsActivateAnySkill => runner.skill_activated_flag as i32,
         ActivationVar::IsActivateHealSkill => runner.heal_activated_flag as i32,
-        ActivationVar::IsActivateOtherSkillDetail => 0, // STUB: Needs tracking
+        ActivationVar::IsActivateOtherSkillDetail => {
+            // Check if another alternative of the same skill has activated
+            if let Some(logic) = logic_ctx {
+                let has_other_alternative =
+                    runner
+                        .activated_alternatives
+                        .iter()
+                        .any(|(skill_idx, alt_idx)| {
+                            *skill_idx == logic.skill_index && *alt_idx != logic.alternative_index
+                        });
+                has_other_alternative as i32
+            } else {
+                0
+            }
+        }
 
         ActivationVar::IsOtherCharacterActivateAdvantageSkill => 0, // STUB
 
