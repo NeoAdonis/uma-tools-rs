@@ -191,6 +191,15 @@ pub struct LaneState {
     pub target: f64,
 }
 
+impl LaneState {
+    pub fn new(lane: f64) -> Self {
+        Self {
+            current: lane,
+            target: lane,
+        }
+    }
+}
+
 /// Surrounding state information.
 #[derive(Default)]
 pub struct SurroundState {

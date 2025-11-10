@@ -345,10 +345,7 @@ impl UnreadyRunner {
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             base_target_speed: 0.85 * course.base_speed(),
-            lane: LaneState {
-                current: course.starting_lane(self.gate_roll),
-                target: course.starting_lane(self.gate_roll),
-            },
+            lane: LaneState::new(course.starting_lane(self.gate_roll)),
             visible_distance: 20.0,
             visible_count: 0,
             nearby: NearbyState::default(),
