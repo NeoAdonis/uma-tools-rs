@@ -145,6 +145,21 @@ pub struct OrderState {
     pub overtakes_since_last_corner: u16,
 }
 
+impl Default for OrderState {
+    fn default() -> Self {
+        OrderState {
+            order: 1,
+            rate: 0,
+            rate_max: 0,
+            rate_min: 100,
+            delta: 0,
+            overtakes_since_mid: 0,
+            overtakes_since_late: 0,
+            overtakes_since_last_corner: 0,
+        }
+    }
+}
+
 /// Distance differences from other runners.
 #[derive(Default)]
 pub struct PositionDiff {
