@@ -52,8 +52,6 @@ pub enum OrderVar {
     ChangeOrderUpEndAfter,
     ChangeOrderUpFinalcornerAfter,
     ChangeOrderUpMiddle,
-    NearCount,
-    NearInfrontCount,
     Order,
     OrderRate,
     OrderRateIn20Continue,
@@ -174,17 +172,12 @@ pub enum RunningStyleVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusVar {
-    BehindNearLaneTime,
-    BehindNearLaneTimeSet1,
     HpPer,
-    InfrontNearLaneTime,
     IsBadstart,
-    IsBehindIn,
     IsHpEmptyOnetime,
     IsLastspurt,
     IsMoveLane,
     IsOvertake,
-    IsSurrounded,
     IsTemptation,
     Lastspurt,
     Motivation,
@@ -199,10 +192,17 @@ pub enum RandomVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockingVar {
+    BehindNearLaneTime,
+    BehindNearLaneTimeSet1,
     BlockedAllContinuetime,
     BlockedFront,
     BlockedFrontContinuetime,
     BlockedSideContinuetime,
+    InfrontNearLaneTime,
+    IsBehindIn,
+    IsSurrounded,
+    NearCount,
+    NearInfrontCount,
     Visiblehorse,
 }
 
@@ -307,8 +307,6 @@ impl VarType {
             "change_order_up_end_after" => Order(OrderVar::ChangeOrderUpEndAfter),
             "change_order_up_finalcorner_after" => Order(OrderVar::ChangeOrderUpFinalcornerAfter),
             "change_order_up_middle" => Order(OrderVar::ChangeOrderUpMiddle),
-            "near_count" => Order(OrderVar::NearCount),
-            "near_infront_count" => Order(OrderVar::NearInfrontCount),
             "order" => Order(OrderVar::Order),
             "order_rate" => Order(OrderVar::OrderRate),
             "order_rate_in20_continue" => Order(OrderVar::OrderRateIn20Continue),
@@ -408,7 +406,7 @@ impl VarType {
             "season" => RaceParam(RaceParamVar::Season),
             "time" => RaceParam(RaceParamVar::Time),
             "weather" => RaceParam(RaceParamVar::Weather),
-            
+
             // Running style
             "running_style" => RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
@@ -430,35 +428,37 @@ impl VarType {
             "running_style_equal_popularity_one" => {
                 RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
             }
-            
+
             // Status
-            "behind_near_lane_time" => Status(StatusVar::BehindNearLaneTime),
-            "behind_near_lane_time_set1" => Status(StatusVar::BehindNearLaneTimeSet1),
             "hp_per" => Status(StatusVar::HpPer),
-            "infront_near_lane_time" => Status(StatusVar::InfrontNearLaneTime),
             "is_badstart" => Status(StatusVar::IsBadstart),
-            "is_behind_in" => Status(StatusVar::IsBehindIn),
             "is_hp_empty_onetime" => Status(StatusVar::IsHpEmptyOnetime),
             "is_lastspurt" => Status(StatusVar::IsLastspurt),
             "is_move_lane" => Status(StatusVar::IsMoveLane),
             "is_overtake" => Status(StatusVar::IsOvertake),
-            "is_surrounded" => Status(StatusVar::IsSurrounded),
             "is_temptation" => Status(StatusVar::IsTemptation),
             "lastspurt" => Status(StatusVar::Lastspurt),
             "motivation" => Status(StatusVar::Motivation),
             "post_number" => Status(StatusVar::PostNumber),
             "temptation_count" => Status(StatusVar::TemptationCount),
-            
+
             // Randoms
             "random_lot" => Random(RandomVar::RandomLot),
-            
-            // Blocking
+
+            // Blocking/Surrounding
+            "behind_near_lane_time_set1" => Blocking(BlockingVar::BehindNearLaneTimeSet1),
+            "behind_near_lane_time" => Blocking(BlockingVar::BehindNearLaneTime),
             "blocked_all_continuetime" => Blocking(BlockingVar::BlockedAllContinuetime),
-            "blocked_front" => Blocking(BlockingVar::BlockedFront),
             "blocked_front_continuetime" => Blocking(BlockingVar::BlockedFrontContinuetime),
+            "blocked_front" => Blocking(BlockingVar::BlockedFront),
             "blocked_side_continuetime" => Blocking(BlockingVar::BlockedSideContinuetime),
+            "infront_near_lane_time" => Blocking(BlockingVar::InfrontNearLaneTime),
+            "is_behind_in" => Blocking(BlockingVar::IsBehindIn),
+            "is_surrounded" => Blocking(BlockingVar::IsSurrounded),
+            "near_count" => Blocking(BlockingVar::NearCount),
+            "near_infront_count" => Blocking(BlockingVar::NearInfrontCount),
             "visiblehorse" => Blocking(BlockingVar::Visiblehorse),
-            
+
             // Rush/Temptation
             "running_style_temptation_count_nige" => {
                 Temptation(TemptationVar::RunningStyleTemptationCountNige)
@@ -676,11 +676,6 @@ impl VarType {
             Status(StatusVar::IsTemptation) => DynamicGuard,
             Status(StatusVar::IsOvertake) => DynamicGuard,
             Status(StatusVar::IsMoveLane) => DynamicGuard,
-            Status(StatusVar::IsBehindIn) => DynamicGuard,
-            Status(StatusVar::IsSurrounded) => DynamicGuard,
-            Status(StatusVar::BehindNearLaneTime) => DynamicGuard,
-            Status(StatusVar::BehindNearLaneTimeSet1) => DynamicGuard,
-            Status(StatusVar::InfrontNearLaneTime) => DynamicGuard,
 
             // Skill activation tracking
             Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
@@ -692,7 +687,7 @@ impl VarType {
             // Distance between runners
             Distance(_) => DynamicGuard,
 
-            // Blocking
+            // Blocking/Surrounding
             Blocking(_) => DynamicGuard,
 
             // Temptation/Rush

@@ -735,16 +735,9 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
             }
         }
 
-        // Multi-runner checks
-        StatusVar::IsBehindIn => 0,             // STUB: No uma behind
-        StatusVar::BehindNearLaneTime => 0,     // STUB
-        StatusVar::BehindNearLaneTimeSet1 => 0, // STUB
-        StatusVar::InfrontNearLaneTime => 0,    // STUB
-
         // Continuous checks
         StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
         StatusVar::IsOvertake => 0, // STUB: Multi-uma
-        StatusVar::IsSurrounded => 0, // STUB: Multi-uma
         StatusVar::IsTemptation => runner.is_rushed() as i32,
         StatusVar::TemptationCount => runner.has_rushed() as i32, // You can only rush once
     }
@@ -756,10 +749,6 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
         // Order
         OrderVar::Order => runner.order.order as i32,
         OrderVar::OrderRate => runner.order.rate as i32,
-
-        // Near counts
-        OrderVar::NearCount => runner.nearby_count as i32,
-        OrderVar::NearInfrontCount => runner.nearby_front_count as i32,
 
         // Order change checks
         OrderVar::ChangeOrderOnetime => runner.order.delta as i32,
@@ -785,14 +774,26 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
 
 /// Get blocking values
 fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
+    use BlockingVar::*;
+
     match var {
-        BlockingVar::BlockedAllContinuetime => {
-            runner.blocked.front_time.min(runner.blocked.side_time) as i32
-        }
-        BlockingVar::BlockedFront => runner.is_front_blocked() as i32,
-        BlockingVar::BlockedFrontContinuetime => runner.blocked.front_time as i32,
-        BlockingVar::BlockedSideContinuetime => runner.blocked.side_time as i32,
-        BlockingVar::Visiblehorse => runner.visible_count as i32,
+        // Blocking checks
+        BlockedFront => runner.is_front_blocked() as i32,
+        BlockedFrontContinuetime => runner.blocked.front_time as i32,
+        BlockedSideContinuetime => runner.blocked.side_time as i32,
+        BlockedAllContinuetime => runner.blocked.front_time.min(runner.blocked.side_time) as i32,
+        IsSurrounded => runner.is_surrounded() as i32,
+
+        // Near counts
+        NearCount => runner.nearby.count as i32,
+        NearInfrontCount => runner.nearby.ahead_count as i32,
+        InfrontNearLaneTime => runner.nearby.ahead_same_lane_time.floor() as i32,
+        BehindNearLaneTime => runner.nearby.behind_same_lane_time.floor() as i32,
+        BehindNearLaneTimeSet1 => runner.nearby.behind_set1_time.floor() as i32,
+        IsBehindIn => runner.nearby.behind_in as i32,
+
+        // Visible runner count
+        Visiblehorse => runner.visible_count as i32,
     }
 }
 

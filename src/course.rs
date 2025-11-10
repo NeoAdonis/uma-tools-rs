@@ -304,4 +304,75 @@ impl Course {
 
         Ok(Course { id, data })
     }
+
+    /// Check if a runner is blocked by another runner from the front based on distance
+    /// and lane difference. When front-blocked, the runner's speed is capped.
+    pub fn check_front_blocked(&self, distance: f64, lane_diff: f64) -> bool {
+        if !(0.0..2.0).contains(&distance) {
+            return false;
+        }
+        // Lane difference threshold decreases linearly with distance between runners
+        // At 0m, threshold is 0.75 lanes
+        // At 2m, threshold is 0.3 lanes
+        lane_diff <= (1.0 - 0.3 * distance) * 0.75 * self.lane_width()
+    }
+
+    /// Check if a runner is blocking another runner from the side based on distance
+    /// and lane difference. When side-blocked, the runner cannot change lanes.
+    pub fn check_side_blocked(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 1.05, 2.0)
+    }
+
+    /// Check if a runner is near another runner based on distance and lane difference.
+    /// This is checked by certain skills.
+    pub fn is_near(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 3.0, 3.0)
+    }
+
+    /// Check if a runner is near another runner and in the same lane based on
+    /// distance and lane difference. This is checked by certain skills.
+    pub fn is_near_same_lane(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 2.5, 1.0)
+    }
+
+    /// Check if a runner is behind another runner within a reasonable distance
+    /// and lane difference. This is checked by certain skills.
+    pub fn is_near_behind_set1(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 5.0, 2.7)
+    }
+
+    /// Check if a runner is surrounding another runner from the front (and conversely,
+    /// being surrounded by the other runner from behind) based on distance and lane
+    /// difference. This is checked by certain skills.
+    pub fn is_front_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 3.0, 1.5)
+    }
+
+    /// Check if a runner is surrounding (and being surrounded by) another runner from
+    /// the side based on distance and lane difference.
+    /// This is checked by certain skills.
+    pub fn is_side_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 1.5, 3.0)
+    }
+
+    /// Check if a runner is overlapping with another runner based on position and
+    /// lane difference.
+    pub fn is_overlapping(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 0.4, 0.4)
+    }
+
+    /// Check if a runner is near another runner within a specified distance
+    /// and lane difference.
+    pub fn is_near_by(
+        &self,
+        distance: f64,
+        lane_diff: f64,
+        max_distance: f64,
+        max_lane_diff: f64,
+    ) -> bool {
+        if (0.0..max_distance).contains(&distance) {
+            return false;
+        }
+        lane_diff < max_lane_diff * self.lane_width()
+    }
 }

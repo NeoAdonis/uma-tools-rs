@@ -146,6 +146,7 @@ pub struct OrderState {
 }
 
 /// Distance differences from other runners.
+#[derive(Default)]
 pub struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
     pub from_first: f64,
@@ -159,6 +160,7 @@ pub struct PositionDiff {
 }
 
 /// Rush (temptation, 掛かり) counters.
+#[derive(Default)]
 pub struct RushCounter {
     /// Number of runners currently in rush state ahead.
     pub ahead: u8,
@@ -174,16 +176,51 @@ pub struct LaneState {
     pub target: f64,
 }
 
+/// Surrounding state information.
+#[derive(Default)]
+pub struct SurroundState {
+    pub front: bool,
+    pub back: bool,
+    pub side: bool,
+}
+
 /// Blocking state information.
+#[derive(Default)]
 pub struct BlockedState {
     /// Speed limit imposed by front blocking, if any.
+    /// This also determines whether the runner is front-blocked.
     pub speed_limit: Option<f64>,
+    /// Whether the runner is currently side-blocked.
+    pub side: bool,
     /// Time spent being front-blocked in seconds.
     pub front_time: f64,
     /// Time spent being side-blocked in seconds.
     pub side_time: f64,
-    /// Whether the runner is currently side-blocked.
-    pub side: bool,
+}
+
+/// Information about nearby runners.
+#[derive(Default)]
+pub struct NearbyState {
+    /// Total number of nearby runners.
+    pub count: u8,
+    /// Number of nearby runners ahead.
+    pub ahead_count: u8,
+    /// Whether the runner behind is in a lane that's closer to the center.
+    pub behind_in: bool,
+    /// Number of nearby runners in the same lane ahead.
+    pub ahead_same_lane_count: u8,
+    /// Time spent near runners in the same lane ahead in seconds.
+    pub ahead_same_lane_time: f64,
+    /// Number of nearby runners in the same lane behind.
+    pub behind_same_lane_count: u8,
+    /// Time spent near runners in the same lane behind in seconds.
+    pub behind_same_lane_time: f64,
+    /// Number of runners behind within a reasonable distance.
+    /// Used to calculate variable `behind_near_lane_time_set1`.
+    pub behind_set1_count: u8,
+    /// Time spent near runners behind within a reasonable distance in seconds.
+    /// Maps to variable `behind_near_lane_time_set1`.
+    pub behind_set1_time: f64,
 }
 
 /// An Uma with additional data related to racing, that is, an Uma who is running.
@@ -267,12 +304,12 @@ pub struct Runner {
     pub visible_distance: f64,
     /// Number of visible runners within `visible_distance`.
     pub visible_count: u8,
-    /// Number of nearby runners, both ahead and behind.
-    pub nearby_count: u8,
-    /// Number of nearby runners ahead.
-    pub nearby_front_count: u8,
+    /// Information about nearby runners.
+    pub nearby: NearbyState,
     /// Blocking state information.
     pub blocked: BlockedState,
+    /// Surrounding state information.
+    pub surrounded: SurroundState,
     /// Number of runners currently in rush (temptation, 掛かり) state ahead and behind.
     pub rush_counter: RushCounter,
     /// Current slope acceleration in m/s², if any.
@@ -862,44 +899,43 @@ impl Runner {
                 <= ((distance / self.visible_distance) * 11.5 + 2.0) * course.lane_width() / 2.0
     }
 
-    /// Check if this runner is front-blocked by another runner.
-    pub fn is_front_blocked_by(&self, other: &Self, course: &Course) -> bool {
-        let distance = other.position - self.position;
-        if !(0.0..2.0).contains(&distance) {
-            return false;
-        }
-        let lane_diff = (self.lane.current - other.lane.current).abs();
-        lane_diff < (1.0 - 0.3 * distance) * 0.75 * course.lane_width()
+    /// Update front-blocked state for this runner based on another runner.
+    pub fn update_front_blocked_by(&mut self, other: &Self) {
+        let distance = (other.position - self.position).abs();
+        self.blocked.speed_limit = Some((0.988 + 0.012 * distance) * other.speed);
     }
 
-    /// Check if this runner is side-blocked by another runner.
-    pub fn is_side_blocked_by(&self, other: &Self, course: &Course) -> bool {
-        let distance = (other.position - self.position).abs();
-        if distance >= 1.05 {
-            return false;
-        }
-        let lane_diff = (self.lane.current - other.lane.current).abs();
-        lane_diff < 2.0 * course.lane_width()
+    /// Update side-blocked state for this runner and another.
+    pub fn update_side_blocked_by(&mut self, other: &mut Self) {
+        self.blocked.side = true;
+        other.blocked.side = true;
     }
 
-    /// Check if this runner is overlapping with another runner.
-    pub fn is_overlapping(&self, other: &Self, course: &Course) -> bool {
-        let distance = (other.position - self.position).abs();
-        if distance >= 0.4 {
-            return false;
-        }
-        let lane_diff = (self.lane.current - other.lane.current).abs();
-        lane_diff < 0.4 * course.lane_width()
+    /// Update front-surrounded state for this runner and another.
+    pub fn update_front_surrounded_by(&mut self, other_front: &mut Self) {
+        self.surrounded.front = true;
+        other_front.surrounded.back = true;
     }
 
-    /// Check if this runner is near another runner.
-    pub fn is_near(&self, other: &Self, course: &Course) -> bool {
-        let distance = (other.position - self.position).abs();
-        if distance >= 3.0 {
-            return false;
-        }
-        let lane_diff = (self.lane.current - other.lane.current).abs();
-        lane_diff < (3.0 - distance) * course.lane_width()
+    /// Update back-surrounded state for this runner and another.
+    pub fn update_side_surrounded_by(&mut self, other: &mut Self) {
+        self.surrounded.side = true;
+        other.surrounded.side = true;
+    }
+
+    /// Update nearby state for this runner and another in the same lane ahead.
+    pub fn update_near_same_lane_behind(&mut self, other: &mut Self) {
+        self.nearby.ahead_same_lane_count += 1;
+        other.nearby.behind_same_lane_count += 1;
+    }
+
+    /// Update nearby state for this runner and another ahead.
+    pub fn update_near_behind(&mut self, other: &mut Self) {
+        // Both runners are near each other
+        self.nearby.count += 1;
+        other.nearby.count += 1;
+        // Other runner is in front of this runner
+        self.nearby.ahead_count += 1;
     }
 
     /// Check if this runner is front-blocked.
@@ -907,13 +943,39 @@ impl Runner {
         self.blocked.speed_limit.is_some()
     }
 
+    /// Check if this runner is surrounded on all sides.
+    pub fn is_surrounded(&self) -> bool {
+        self.surrounded.front && self.surrounded.back && self.surrounded.side
+    }
+
     /// Reset blocking status for the next update cycle.
     pub fn reset_blocking_status(&mut self) {
         self.visible_count = 0;
-        self.nearby_count = 0;
-        self.nearby_front_count = 0;
+        self.nearby.count = 0;
+        self.nearby.ahead_count = 0;
+        self.nearby.behind_in = false;
         self.blocked.speed_limit = None;
         self.blocked.side = false;
+        self.surrounded = SurroundState::default();
+    }
+
+    /// Update nearby time counters based on current nearby counts.
+    pub fn update_near_time(&mut self, delta_time: f64) {
+        if self.nearby.ahead_same_lane_count > 0 {
+            self.nearby.ahead_same_lane_time += delta_time;
+        } else {
+            self.nearby.ahead_same_lane_time = 0.0;
+        }
+        if self.nearby.behind_same_lane_count > 0 {
+            self.nearby.behind_same_lane_time += delta_time;
+        } else {
+            self.nearby.behind_same_lane_time = 0.0;
+        }
+        if self.nearby.behind_set1_count > 0 {
+            self.nearby.behind_set1_time += delta_time;
+        } else {
+            self.nearby.behind_set1_time = 0.0;
+        }
     }
 
     /// Update blocked time counters based on current blocking status.

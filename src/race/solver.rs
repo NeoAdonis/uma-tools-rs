@@ -203,13 +203,9 @@ impl RaceSolver<Runner> {
     /// Update order (rank) and distance differences for all runners.
     /// Runners must be sorted by position in descending order before calling this method.
     fn update_order_values(&mut self) {
+        // Debug: check sorting
         #[cfg(debug_assertions)]
-        {
-            // Debug: check sorting
-            for i in 1..self.runners.len() {
-                debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
-            }
-        }
+        self.assert_runners_sorted();
 
         let total_runners = self.runners.len() as u8;
         let should_update_range = self.state.elapsed_time > 5.0;
@@ -249,13 +245,9 @@ impl RaceSolver<Runner> {
     /// Update blocking and overlapping status for all runners.
     /// Runners must be sorted by position in descending order before calling this method.
     fn update_blocking_status(&mut self, delta_time: f64) {
+        // Debug: check sorting
         #[cfg(debug_assertions)]
-        {
-            // Debug: check sorting
-            for i in 1..self.runners.len() {
-                debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
-            }
-        }
+        self.assert_runners_sorted();
 
         for runner in self.runners.iter_mut() {
             runner.reset_blocking_status();
@@ -265,12 +257,22 @@ impl RaceSolver<Runner> {
         for i in 0..num_runners {
             let (left, right) = self.runners.split_at_mut(i + 1);
             let runner_i = &mut left[i];
-            runner_i.update_blocked_time(delta_time);
+            let mut was_runner_behind_checked = false;
+
             for runner_j in right {
-                let distance = runner_i.position - runner_j.position;
-                if distance > 20.0 {
-                    break; // Too far to even consider
+                // Only check runner immediately behind
+                if !was_runner_behind_checked && runner_j.lane.current < runner_i.lane.current {
+                    runner_i.nearby.behind_in = true;
                 }
+                was_runner_behind_checked = true;
+
+                let distance = runner_i.position - runner_j.position;
+                let lane_diff = runner_i.lane.current - runner_j.lane.current;
+
+                if distance > 20.0 {
+                    break; // We have gone too far behind; move to next i
+                }
+
                 if runner_j.is_visible(runner_i, &self.state.course) {
                     runner_j.visible_count += 1;
                     // let speed_diff = runner_j.speed - runner_i.speed;
@@ -283,23 +285,46 @@ impl RaceSolver<Runner> {
                     //     // add i as overtake target for j
                     // }
                 }
-                if distance > 3.0 {
-                    continue; // Not close enough to consider blocking
+
+                if distance > 5.0 {
+                    continue; // Too far for the following checks
                 }
-                if runner_i.is_near(runner_j, &self.state.course) {
-                    runner_i.nearby_count += 1;
-                    runner_j.nearby_count += 1;
-                    // Runner i is also in front of runner j; update front count
-                    runner_j.nearby_front_count += 1;
+
+                // Update surrounding and blocking status
+                if self.state.course.is_front_surrounded(distance, lane_diff) {
+                    runner_j.update_front_surrounded_by(runner_i);
                 }
-                if runner_j.is_front_blocked_by(runner_i, &self.state.course) {
-                    runner_j.blocked.speed_limit =
-                        Some((0.988 + 0.012 * distance) * runner_j.speed);
+                if self.state.course.is_side_surrounded(distance, lane_diff) {
+                    runner_j.update_side_surrounded_by(runner_i);
                 }
-                if runner_j.is_side_blocked_by(runner_i, &self.state.course) {
-                    runner_j.blocked.side = true;
+                if self.state.course.is_near(distance, lane_diff) {
+                    runner_j.update_near_behind(runner_i);
+                }
+                if self.state.course.is_near_same_lane(distance, lane_diff) {
+                    runner_j.update_near_same_lane_behind(runner_i);
+                }
+                if self.state.course.is_near_behind_set1(distance, lane_diff) {
+                    runner_i.nearby.behind_set1_count += 1;
+                }
+                if self.state.course.check_front_blocked(distance, lane_diff) {
+                    runner_j.update_front_blocked_by(runner_i);
+                }
+                if self.state.course.check_side_blocked(distance, lane_diff) {
+                    runner_j.update_side_blocked_by(runner_i);
                 }
             }
+
+            // Checked all runners behind i within a reasonable distance
+            // i block and near statuses can be updated now
+            runner_i.update_blocked_time(delta_time);
+            runner_i.update_near_time(delta_time);
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_runners_sorted(&self) {
+        for i in 1..self.runners.len() {
+            debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
         }
     }
 }
