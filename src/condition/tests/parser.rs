@@ -4,8 +4,8 @@ use super::super::variables::*;
 #[test]
 fn test_simple_condition() {
     let result = parse_condition("hp_per == 100").unwrap();
-    match result.comp_list {
-        CompList::Single(comp) => {
+    match result.comp_tree {
+        ComparisonTree::Single(comp) => {
             assert!(matches!(comp.var, VarType::Status(_)));
             assert_eq!(comp.op, CompOp::Equal);
             assert_eq!(comp.value, 100);
@@ -17,11 +17,11 @@ fn test_simple_condition() {
 #[test]
 fn test_binary_and() {
     let result = parse_condition("hp_per > 50 & base_stamina >= 30").unwrap();
-    match result.comp_list {
-        CompList::Binary { left, op, right } => {
+    match result.comp_tree {
+        ComparisonTree::Binary { left, op, right } => {
             // Left should be a Single comparison
             match *left {
-                CompList::Single(ref comp) => {
+                ComparisonTree::Single(ref comp) => {
                     assert!(matches!(comp.var, VarType::Status(_)));
                     assert_eq!(comp.op, CompOp::Greater);
                     assert_eq!(comp.value, 50);
@@ -31,7 +31,7 @@ fn test_binary_and() {
             assert_eq!(op, BinOp::And);
             // Right should be a Single comparison
             match *right {
-                CompList::Single(ref comp) => {
+                ComparisonTree::Single(ref comp) => {
                     assert!(matches!(comp.var, VarType::BaseStat(_)));
                     assert_eq!(comp.op, CompOp::GreaterEqual);
                     assert_eq!(comp.value, 30);
@@ -47,26 +47,26 @@ fn test_binary_and() {
 fn test_multiple_conditions() {
     // With new precedence: order == 1 & phase != 2 @ corner < 3 parses as (order == 1 & phase != 2) @ corner < 3
     let result = parse_condition("order == 1 & phase != 2 @ corner < 3").unwrap();
-    match result.comp_list {
-        CompList::Binary { left, op, right } => {
+    match result.comp_tree {
+        ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::Or); // Top level is OR
             // Left side should be (order == 1 & phase != 2)
             match *left {
-                CompList::Binary {
+                ComparisonTree::Binary {
                     left: ref inner_left,
                     op: inner_op,
                     right: ref inner_right,
                 } => {
                     assert_eq!(inner_op, BinOp::And);
                     match **inner_left {
-                        CompList::Single(ref comp) => {
+                        ComparisonTree::Single(ref comp) => {
                             assert!(matches!(comp.var, VarType::Order(_)));
                             assert_eq!(comp.value, 1);
                         }
                         _ => panic!("Expected Single"),
                     }
                     match **inner_right {
-                        CompList::Single(ref comp) => {
+                        ComparisonTree::Single(ref comp) => {
                             assert!(matches!(comp.var, VarType::Phase(_)));
                             assert_eq!(comp.value, 2);
                         }
@@ -77,7 +77,7 @@ fn test_multiple_conditions() {
             }
             // Right side should be corner < 3
             match *right {
-                CompList::Single(ref comp) => {
+                ComparisonTree::Single(ref comp) => {
                     assert!(matches!(comp.var, VarType::Spatial(_)));
                     assert_eq!(comp.value, 3);
                 }
@@ -101,8 +101,8 @@ fn test_all_comparison_operators() {
 #[test]
 fn test_negative_numbers() {
     let result = parse_condition("x > -10").unwrap();
-    match result.comp_list {
-        CompList::Single(comp) => {
+    match result.comp_tree {
+        ComparisonTree::Single(comp) => {
             assert_eq!(comp.value, -10);
         }
         _ => panic!("Expected Single"),
@@ -115,8 +115,8 @@ fn test_whitespace_handling() {
     let result2 = parse_condition("  hp  ==  100  ").unwrap();
     let result3 = parse_condition("hp == 100").unwrap();
 
-    assert_eq!(result1.comp_list, result2.comp_list);
-    assert_eq!(result2.comp_list, result3.comp_list);
+    assert_eq!(result1.comp_tree, result2.comp_tree);
+    assert_eq!(result2.comp_tree, result3.comp_tree);
 }
 
 #[test]
@@ -152,12 +152,18 @@ fn test_error_cases() {
 fn test_and_precedence_over_or() {
     // a & b @ c & d should parse as (a & b) @ (c & d)
     let result = parse_condition("a == 1 & b == 2 @ c == 3 & d == 4").unwrap();
-    match result.comp_list {
-        CompList::Binary { left, op, right } => {
+    match result.comp_tree {
+        ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::Or); // Top level is OR
             // Both sides should be AND expressions
-            assert!(matches!(*left, CompList::Binary { op: BinOp::And, .. }));
-            assert!(matches!(*right, CompList::Binary { op: BinOp::And, .. }));
+            assert!(matches!(
+                *left,
+                ComparisonTree::Binary { op: BinOp::And, .. }
+            ));
+            assert!(matches!(
+                *right,
+                ComparisonTree::Binary { op: BinOp::And, .. }
+            ));
         }
         _ => panic!("Expected Binary with OR at top level"),
     }
@@ -167,13 +173,16 @@ fn test_and_precedence_over_or() {
 fn test_left_associativity_and() {
     // a & b & c should parse as (a & b) & c
     let result = parse_condition("a == 1 & b == 2 & c == 3").unwrap();
-    match result.comp_list {
-        CompList::Binary { left, op, right } => {
+    match result.comp_tree {
+        ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::And);
             // Left should be another AND expression
-            assert!(matches!(*left, CompList::Binary { op: BinOp::And, .. }));
+            assert!(matches!(
+                *left,
+                ComparisonTree::Binary { op: BinOp::And, .. }
+            ));
             // Right should be a single comparison
-            assert!(matches!(*right, CompList::Single(_)));
+            assert!(matches!(*right, ComparisonTree::Single(_)));
         }
         _ => panic!("Expected Binary"),
     }
@@ -183,13 +192,16 @@ fn test_left_associativity_and() {
 fn test_left_associativity_or() {
     // a @ b @ c should parse as (a @ b) @ c
     let result = parse_condition("a == 1 @ b == 2 @ c == 3").unwrap();
-    match result.comp_list {
-        CompList::Binary { left, op, right } => {
+    match result.comp_tree {
+        ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::Or);
             // Left should be another OR expression
-            assert!(matches!(*left, CompList::Binary { op: BinOp::Or, .. }));
+            assert!(matches!(
+                *left,
+                ComparisonTree::Binary { op: BinOp::Or, .. }
+            ));
             // Right should be a single comparison
-            assert!(matches!(*right, CompList::Single(_)));
+            assert!(matches!(*right, ComparisonTree::Single(_)));
         }
         _ => panic!("Expected Binary"),
     }
@@ -199,8 +211,8 @@ fn test_left_associativity_or() {
 fn test_complex_precedence() {
     // a @ b & c @ d should parse as a @ (b & c) @ d
     let result = parse_condition("order == 1 @ phase == 2 & corner == 3 @ grade == 4").unwrap();
-    match result.comp_list {
-        CompList::Binary {
+    match result.comp_tree {
+        ComparisonTree::Binary {
             left: left1,
             op: op1,
             right: right1,
@@ -208,21 +220,24 @@ fn test_complex_precedence() {
             assert_eq!(op1, BinOp::Or);
             // Left should be another OR expression
             match *left1 {
-                CompList::Binary {
+                ComparisonTree::Binary {
                     left: ref left2,
                     op: op2,
                     right: ref right2,
                 } => {
                     assert_eq!(op2, BinOp::Or);
                     // left2 should be 'order == 1'
-                    assert!(matches!(**left2, CompList::Single(_)));
+                    assert!(matches!(**left2, ComparisonTree::Single(_)));
                     // right2 should be 'phase == 2 & corner == 3'
-                    assert!(matches!(**right2, CompList::Binary { op: BinOp::And, .. }));
+                    assert!(matches!(
+                        **right2,
+                        ComparisonTree::Binary { op: BinOp::And, .. }
+                    ));
                 }
                 _ => panic!("Expected nested OR on left"),
             }
             // Right should be 'grade == 4'
-            assert!(matches!(*right1, CompList::Single(_)));
+            assert!(matches!(*right1, ComparisonTree::Single(_)));
         }
         _ => panic!("Expected Binary"),
     }
@@ -232,8 +247,8 @@ fn test_complex_precedence() {
 fn test_unknown_variable() {
     // Unknown variables should be parsed as VarType::Unknown
     let result = parse_condition("this_var_does_not_exist == 42").unwrap();
-    match result.comp_list {
-        CompList::Single(comp) => {
+    match result.comp_tree {
+        ComparisonTree::Single(comp) => {
             assert!(matches!(comp.var, VarType::Unknown(_)));
             if let VarType::Unknown(s) = comp.var {
                 assert_eq!(s, "this_var_does_not_exist");
@@ -248,16 +263,16 @@ fn test_unknown_variable() {
 fn test_known_variables() {
     // Test a few known variables to ensure they parse correctly
     let result = parse_condition("always == 1").unwrap();
-    match result.comp_list {
-        CompList::Single(comp) => {
+    match result.comp_tree {
+        ComparisonTree::Single(comp) => {
             assert!(matches!(comp.var, VarType::Always));
         }
         _ => panic!("Expected Single"),
     }
 
     let result = parse_condition("random_lot == 30").unwrap();
-    match result.comp_list {
-        CompList::Single(comp) => {
+    match result.comp_tree {
+        ComparisonTree::Single(comp) => {
             assert!(matches!(comp.var, VarType::Random(_)));
         }
         _ => panic!("Expected Single"),

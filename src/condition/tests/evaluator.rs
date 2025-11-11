@@ -66,7 +66,7 @@ fn test_is_used_skill_id_with_activated_skill() {
         .insert("202051".to_string());
 
     // Create comparison: is_used_skill_id == 202051
-    let comp = Comp {
+    let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
@@ -83,7 +83,7 @@ fn test_is_used_skill_id_without_activated_skill() {
     // No skills in activated_skills
 
     // Create comparison: is_used_skill_id == 202051
-    let comp = Comp {
+    let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
@@ -103,7 +103,7 @@ fn test_is_used_skill_id_with_different_skill() {
         .insert("203781".to_string());
 
     // Create comparison: is_used_skill_id == 202051
-    let comp = Comp {
+    let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
@@ -123,7 +123,7 @@ fn test_is_used_skill_id_not_equal() {
         .insert("202051".to_string());
 
     // Create comparison: is_used_skill_id != 202051
-    let comp = Comp {
+    let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsUsedSkillId),
         op: CompOp::NotEqual,
         value: 202051,
@@ -188,7 +188,7 @@ fn test_is_exist_skill_id_in_available_skills() {
     let solver = solver.ready_runners();
 
     // Create comparison: is_exist_skill_id == 203061
-    let comp = Comp {
+    let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsExistSkillId),
         op: CompOp::Equal,
         value: 203061,

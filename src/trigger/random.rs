@@ -12,17 +12,21 @@ pub fn roll_condition(
     course: &Course,
     rng: &mut impl Rng,
 ) -> Option<Vec<f64>> {
-    visit_comps(&condition.comp_list, course, rng)
+    visit_comps(&condition.comp_tree, course, rng)
 }
 
 /// Visit all comparisons in a list and process random variables
 ///
 /// Returns Some(activation_distances) indicating where the skill should activate,
 /// or None if a random lot roll failed or a condition within the list is invalid
-fn visit_comps(comp_list: &CompList, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
-    match comp_list {
-        CompList::Single(comp) => process_random_comp(comp, course, rng),
-        CompList::Binary { left, op, right } => {
+fn visit_comps(
+    comp_tree: &ComparisonTree,
+    course: &Course,
+    rng: &mut impl Rng,
+) -> Option<Vec<f64>> {
+    match comp_tree {
+        ComparisonTree::Single(comp) => process_random_comp(comp, course, rng),
+        ComparisonTree::Binary { left, op, right } => {
             match op {
                 BinOp::And => {
                     // All comparisons must succeed
@@ -54,7 +58,7 @@ fn visit_comps(comp_list: &CompList, course: &Course, rng: &mut impl Rng) -> Opt
 /// Returns Some(activation_distances) indicating where the skill should activate,
 /// or None if a random lot roll failed or a condition is invalid
 pub fn process_random_comp(
-    comp: &Comp,
+    comp: &Comparison,
     course: &Course,
     rng: &mut impl Rng,
 ) -> Option<Vec<f64>> {

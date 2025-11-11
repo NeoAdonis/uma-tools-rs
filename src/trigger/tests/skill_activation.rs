@@ -803,7 +803,7 @@ fn test_precondition_simple_parsing() {
     // Verify the precondition contains the expected comparison
     let precond = logic.precondition.as_ref().unwrap();
     // The precondition should be "phase>=2"
-    if let crate::parser::CompList::Single(comp) = &precond.comp_list {
+    if let crate::parser::ComparisonTree::Single(comp) = &precond.comp_tree {
         assert!(matches!(
             comp.var,
             crate::condition::variables::VarType::Phase(_)
@@ -843,8 +843,8 @@ fn test_precondition_complex_and_parsing() {
 
     // Verify it's a binary AND structure (not fully validating the tree, just structure)
     let precond = logic.precondition.as_ref().unwrap();
-    match &precond.comp_list {
-        crate::parser::CompList::Binary { op, .. } => {
+    match &precond.comp_tree {
+        crate::parser::ComparisonTree::Binary { op, .. } => {
             assert_eq!(*op, BinOp::And, "Expected AND operator");
         }
         _ => panic!("Expected binary AND structure for complex precondition"),
@@ -916,7 +916,7 @@ fn test_or_branches_share_same_precondition() {
     // Verify both have phase>=2
     for (idx, logic) in [logic1, logic2].iter().enumerate() {
         if let Some(precond) = &logic.precondition {
-            if let crate::parser::CompList::Single(comp) = &precond.comp_list {
+            if let crate::parser::ComparisonTree::Single(comp) = &precond.comp_tree {
                 assert!(
                     matches!(comp.var, crate::condition::variables::VarType::Phase(_)),
                     "Branch {} should have phase precondition",

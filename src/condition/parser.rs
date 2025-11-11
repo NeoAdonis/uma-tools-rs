@@ -49,21 +49,21 @@ impl fmt::Display for BinOp {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Condition {
-    pub comp_list: CompList,
+    pub comp_tree: ComparisonTree,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum CompList {
-    Single(Comp),
+pub enum ComparisonTree {
+    Single(Comparison),
     Binary {
-        left: Box<CompList>,
+        left: Box<ComparisonTree>,
         op: BinOp,
-        right: Box<CompList>,
+        right: Box<ComparisonTree>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Comp {
+pub struct Comparison {
     pub var: VarType,
     pub op: CompOp,
     pub value: i32,
@@ -71,18 +71,18 @@ pub struct Comp {
 
 impl fmt::Display for Condition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.comp_list)
+        write!(f, "{}", self.comp_tree)
     }
 }
 
-impl fmt::Display for CompList {
+impl fmt::Display for ComparisonTree {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CompList::Single(comp) => write!(f, "{}", comp),
-            CompList::Binary { left, op, right } => {
+            ComparisonTree::Single(comp) => write!(f, "{}", comp),
+            ComparisonTree::Binary { left, op, right } => {
                 // Add parentheses for clarity when displaying nested expressions
                 match (&**left, &**right) {
-                    (CompList::Single(_), CompList::Single(_)) => {
+                    (ComparisonTree::Single(_), ComparisonTree::Single(_)) => {
                         write!(f, "{} {} {}", left, op, right)
                     }
                     _ => write!(f, "({}) {} ({})", left, op, right),
@@ -92,7 +92,7 @@ impl fmt::Display for CompList {
     }
 }
 
-impl fmt::Display for Comp {
+impl fmt::Display for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {} {}", self.var, self.op, self.value)
     }
@@ -320,7 +320,7 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Condition, ParseError> {
-        let comp_list = self.parse_or_expression()?;
+        let comp_tree = self.parse_or_expression()?;
 
         if self.current().is_some() {
             return Err(ParseError::UnexpectedToken(
@@ -329,16 +329,16 @@ impl Parser {
             ));
         }
 
-        Ok(Condition { comp_list })
+        Ok(Condition { comp_tree })
     }
 
-    fn parse_or_expression(&mut self) -> Result<CompList, ParseError> {
+    fn parse_or_expression(&mut self) -> Result<ComparisonTree, ParseError> {
         let mut left = self.parse_and_expression()?;
 
         while let Some(Token::BinOp(BinOp::Or)) = self.current() {
             self.advance();
             let right = self.parse_and_expression()?;
-            left = CompList::Binary {
+            left = ComparisonTree::Binary {
                 left: Box::new(left),
                 op: BinOp::Or,
                 right: Box::new(right),
@@ -348,13 +348,13 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_and_expression(&mut self) -> Result<CompList, ParseError> {
+    fn parse_and_expression(&mut self) -> Result<ComparisonTree, ParseError> {
         let mut left = self.parse_primary()?;
 
         while let Some(Token::BinOp(BinOp::And)) = self.current() {
             self.advance();
             let right = self.parse_primary()?;
-            left = CompList::Binary {
+            left = ComparisonTree::Binary {
                 left: Box::new(left),
                 op: BinOp::And,
                 right: Box::new(right),
@@ -364,12 +364,12 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_primary(&mut self) -> Result<CompList, ParseError> {
+    fn parse_primary(&mut self) -> Result<ComparisonTree, ParseError> {
         let comp = self.parse_comp()?;
-        Ok(CompList::Single(comp))
+        Ok(ComparisonTree::Single(comp))
     }
 
-    fn parse_comp(&mut self) -> Result<Comp, ParseError> {
+    fn parse_comp(&mut self) -> Result<Comparison, ParseError> {
         // Parse variable
         let var_str = match self.current() {
             Some(Token::Variable(v)) => v.clone(),
@@ -394,7 +394,7 @@ impl Parser {
         };
         self.advance();
 
-        Ok(Comp { var, op, value })
+        Ok(Comparison { var, op, value })
     }
 }
 

@@ -8,8 +8,8 @@
 //!
 //! # Architecture
 //!
-//! Conditions are parsed into tree structures (`Condition` -> `CompList` -> `Comp`)
-//! and evaluated recursively:
+//! Conditions are parsed into tree structures (`Condition` -> `ComparisonTree` ->
+//! `Comparison`) and evaluated recursively:
 //!
 //! - **Binary operators**: AND (&) and OR (@) with short-circuit evaluation.
 //! - **Leaf comparisons**: Variable operator value (e.g., `hp_per <= 50`).
@@ -19,7 +19,7 @@
 //! actual race state and runner data, while `EvaluatorOutOfGate` uses only
 //! data available before the race starts to evaluate out-of-gate conditions.
 //!
-//! Each comparision (`Comp`) is evaluated separately, allowing an evaluator to
+//! Each `Comparison` is evaluated separately, allowing an evaluator to
 //! either fetch real-time values, simulate expected values, or even override
 //! certain comparison results for hypothetical scenarios. The latter two might be
 //! required if, for some reason, all variables needed for a condition are not
@@ -129,21 +129,21 @@ pub fn evaluate_condition<E>(
 where
     E: CompEvaluator,
 {
-    evaluate_comp_list(&condition.comp_list, |comp| {
+    evaluate_comp_tree(&condition.comp_tree, |comp| {
         evaluator.evaluate(comp, logic_ctx, state, context)
     })
 }
 
 /// Recursively evaluate condition tree (handles AND/OR logic)
-fn evaluate_comp_list<F>(comp_list: &CompList, eval_fn: F) -> bool
+fn evaluate_comp_tree<F>(comp_tree: &ComparisonTree, eval_fn: F) -> bool
 where
-    F: Fn(&Comp) -> bool + Copy,
+    F: Fn(&Comparison) -> bool + Copy,
 {
-    match comp_list {
-        CompList::Single(comp) => eval_fn(comp),
-        CompList::Binary { left, op, right } => match op {
-            BinOp::And => evaluate_comp_list(left, eval_fn) && evaluate_comp_list(right, eval_fn),
-            BinOp::Or => evaluate_comp_list(left, eval_fn) || evaluate_comp_list(right, eval_fn),
+    match comp_tree {
+        ComparisonTree::Single(comp) => eval_fn(comp),
+        ComparisonTree::Binary { left, op, right } => match op {
+            BinOp::And => evaluate_comp_tree(left, eval_fn) && evaluate_comp_tree(right, eval_fn),
+            BinOp::Or => evaluate_comp_tree(left, eval_fn) || evaluate_comp_tree(right, eval_fn),
         },
     }
 }
@@ -177,7 +177,7 @@ pub trait CompEvaluator {
     /// Evaluate a single comparison.
     fn evaluate(
         &self,
-        comp: &Comp,
+        comp: &Comparison,
         logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
@@ -193,7 +193,7 @@ impl CompEvaluator for EvaluatorFull {
     /// Evaluate a single comparison using actual race state and runner data.
     fn evaluate(
         &self,
-        comp: &Comp,
+        comp: &Comparison,
         logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
@@ -269,7 +269,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
     /// Evaluate a single comparison in out-of-gate context, using only data available before a race starts.
     fn evaluate(
         &self,
-        comp: &Comp,
+        comp: &Comparison,
         _logic_ctx: Option<&SkillActivationLogic>,
         state: &Self::State,
         context: &Self::Context,
