@@ -1416,9 +1416,7 @@ impl Runner {
         }
 
         if Skill::is_effect_positive(effect) {
-            self.activation_flags
-                .buff_activated
-                .insert(effect_type.clone());
+            self.activation_flags.buff_activated.insert(*effect_type);
         }
     }
 
