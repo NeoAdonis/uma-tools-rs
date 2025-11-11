@@ -247,6 +247,17 @@ pub struct NearbyState {
     pub behind_set1_time: f64,
 }
 
+/// Skill activation flags for the current update cycle.
+#[derive(Default)]
+pub struct SkillActivationFlags {
+    /// Flag indicating if a skill was activated in the current update cycle.
+    pub any_activated: bool,
+    /// Flag indicating if a healing skill was activated in the current update cycle.
+    pub heal_activated: bool,
+    /// Flag indicating if a buff skill was activated in the current update cycle.
+    pub buff_activated: HashSet<SkillType>,
+}
+
 /// An Uma with additional data related to racing, that is, an Uma who is running.
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
@@ -362,10 +373,8 @@ pub struct Runner {
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
     pub trigger_scheduler: TriggerScheduler,
-    /// Flag indicating if a skill was activated in the current update cycle.
-    pub skill_activated_flag: bool,
-    /// Flag indicating if a healing skill was activated in the current update cycle.
-    pub heal_activated_flag: bool,
+    /// Skill activation flags for the current update cycle.
+    pub activation_flags: SkillActivationFlags,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1059,8 +1068,14 @@ impl Runner {
 
     /// Reset activation flags at the start of each frame.
     pub fn reset_activation_flags(&mut self) {
-        self.skill_activated_flag = false;
-        self.heal_activated_flag = false;
+        self.activation_flags = SkillActivationFlags::default();
+    }
+
+    /// Extract activated buff skills from a runner and update race state.
+    pub fn extract_buff_activations(&mut self, state: &mut RaceState) {
+        state
+            .buffs_activated
+            .extend(self.activation_flags.buff_activated.drain());
     }
 
     /// Check activation-dependent triggers.
@@ -1068,20 +1083,29 @@ impl Runner {
     /// have been checked.
     pub fn check_activation_dependent_triggers(&mut self, state: &RaceState) {
         // Pass 1: Check is_activate_any_skill triggers
-        if self.skill_activated_flag {
-            let any_activation_indices: Vec<usize> =
-                self.trigger_scheduler.any_activation_triggers.to_vec();
-
+        if self.activation_flags.any_activated {
+            let any_activation_indices = self.trigger_scheduler.any_activation_triggers.to_vec();
             for trigger_index in any_activation_indices {
                 self.try_activate_skill(trigger_index, state);
             }
         }
+    }
 
-        // Pass 2: Check is_activate_heal_skill triggers
-        if self.heal_activated_flag {
-            let heal_activation_indices: Vec<usize> =
-                self.trigger_scheduler.heal_activation_triggers.to_vec();
+    /// Check activation-dependent triggers.
+    /// This should be called at the end of each frame after all other triggers
+    /// (and any-skill acivation-dependent triggers) have been checked.
+    pub fn check_buff_dependent_triggers(&mut self, state: &RaceState) {
+        // Pass 2: Check is_other_character_activate_advantage_skill triggers
+        if self.activation_flags.heal_activated {
+            let buff_activation_indices = self.trigger_scheduler.buff_activation_triggers.to_vec();
+            for trigger_index in buff_activation_indices {
+                self.try_activate_skill(trigger_index, state);
+            }
+        }
 
+        // Pass 3: Check is_activate_heal_skill triggers
+        if self.activation_flags.heal_activated {
+            let heal_activation_indices = self.trigger_scheduler.heal_activation_triggers.to_vec();
             for trigger_index in heal_activation_indices {
                 self.try_activate_skill(trigger_index, state);
             }
@@ -1253,9 +1277,9 @@ impl Runner {
         );
 
         // Set activation flags for activation-dependent triggers
-        self.skill_activated_flag = true;
+        self.activation_flags.any_activated = true;
         if self.is_heal_skill_by_index(skill_index) {
-            self.heal_activated_flag = true;
+            self.activation_flags.heal_activated = true;
         }
     }
 
@@ -1389,6 +1413,12 @@ impl Runner {
             {
                 self.activate_skill(skill_index, 0, elapsed_time, course, condition);
             }
+        }
+
+        if Skill::is_effect_positive(effect) {
+            self.activation_flags
+                .buff_activated
+                .insert(effect_type.clone());
         }
     }
 

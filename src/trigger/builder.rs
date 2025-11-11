@@ -145,8 +145,10 @@ fn index_trigger(
     scheduler: &mut TriggerScheduler,
     course: &Course,
 ) {
+    use TriggerCondition::*;
+
     match trigger {
-        TriggerCondition::Time {
+        Time {
             threshold,
             operator,
         } => {
@@ -157,7 +159,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::DistanceCovered {
+        DistanceCovered {
             threshold,
             operator,
         } => {
@@ -171,7 +173,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::DistanceRemaining {
+        DistanceRemaining {
             threshold,
             operator,
         } => {
@@ -183,7 +185,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::HpPercent {
+        HpPercent {
             threshold,
             operator,
             ..
@@ -195,7 +197,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::FurlongCrossed {
+        FurlongCrossed {
             threshold,
             operator,
         } => {
@@ -208,7 +210,7 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::PhaseChange { phase } => {
+        PhaseChange { phase } => {
             // Calculate boundary distance for this phase
             let boundary_distance = match phase {
                 Phase::Early => 0.0,
@@ -237,7 +239,7 @@ fn index_trigger(
             scheduler.phase_triggers.extend(triggers);
         }
 
-        TriggerCondition::Window {
+        Window {
             variable,
             min_threshold,
             max_threshold,
@@ -261,27 +263,33 @@ fn index_trigger(
             });
         }
 
-        TriggerCondition::Continuous => {
+        Continuous => {
             if !scheduler.continuous_triggers.contains(&logic_idx) {
                 scheduler.continuous_triggers.push(logic_idx);
             }
         }
 
         // Activation-dependent triggers
-        TriggerCondition::AnySkillActivation => {
+        AnySkillActivation => {
             if !scheduler.any_activation_triggers.contains(&logic_idx) {
                 scheduler.any_activation_triggers.push(logic_idx);
             }
         }
 
-        TriggerCondition::HealSkillActivation => {
+        BuffSkillActivation => {
+            if !scheduler.buff_activation_triggers.contains(&logic_idx) {
+                scheduler.buff_activation_triggers.push(logic_idx);
+            }
+        }
+
+        HealSkillActivation => {
             if !scheduler.heal_activation_triggers.contains(&logic_idx) {
                 scheduler.heal_activation_triggers.push(logic_idx);
             }
         }
 
         // Straight triggers
-        TriggerCondition::StraightTransition {
+        StraightTransition {
             is_last,
             is_entry: _,   // implicit - we'll check on entry at runtime
             is_onetime: _, // handled at runtime too

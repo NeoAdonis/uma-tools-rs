@@ -170,6 +170,10 @@ pub enum TriggerCondition {
     /// Used for is_activate_any_skill==1 conditions.
     AnySkillActivation,
 
+    /// Fires when a buff skill activates.
+    /// Used for is_other_character_activate_advantage_skill==1 conditions.
+    BuffSkillActivation,
+
     /// Fires when a heal skill activates.
     /// Used for is_activate_heal_skill==1 conditions.
     HealSkillActivation,

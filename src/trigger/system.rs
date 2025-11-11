@@ -33,6 +33,7 @@ pub struct TriggerScheduler {
 
     // Activation-dependent triggers - checked when skills activate
     pub any_activation_triggers: Vec<usize>,
+    pub buff_activation_triggers: Vec<usize>,
     pub heal_activation_triggers: Vec<usize>,
 
     // Activation tracking
@@ -52,6 +53,7 @@ impl TriggerScheduler {
             straight_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
             any_activation_triggers: Vec::new(),
+            buff_activation_triggers: Vec::new(),
             heal_activation_triggers: Vec::new(),
             activation_counts: ActivationCounts::default(),
         }

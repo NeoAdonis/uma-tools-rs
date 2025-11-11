@@ -69,6 +69,7 @@ use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::trigger::skill_activation::SkillActivationLogic;
+use crate::uma::skill::SkillType;
 use crate::uma::*;
 use crate::units::*;
 
@@ -208,6 +209,14 @@ impl CompEvaluator for EvaluatorFull {
             Activation(ActivationVar::IsExistSkillId) => {
                 // Check if at least one runner has skill with ID == comp.value
                 state.existing_skills.contains_key(&comp.value.to_string())
+            }
+            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
+                // Check if any other runner has activated a buff skill with type == comp.value
+                if let Ok(value) = SkillType::try_from(comp.value as u8) {
+                    state.buffs_activated.contains(&value)
+                } else {
+                    false
+                }
             }
             RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill
@@ -575,7 +584,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 
         // Count of runners with same skill
         RaceParamVar::SameSkillHorseCount => {
-            panic!("same_skill_horse_count: should be handled in evaluate_comparison()")
+            panic!("same_skill_horse_count: should be handled in evaluate()")
         }
 
         // Existence checks - out of scope
@@ -589,26 +598,20 @@ fn get_activation_value(
     runner: &Runner,
     logic_ctx: Option<&SkillActivationLogic>,
 ) -> i32 {
+    use ActivationVar::*;
+
     match var {
-        ActivationVar::ActivateCountAll => runner.trigger_scheduler.activation_counts.all as i32,
-        ActivationVar::ActivateCountEndAfter => {
-            runner.trigger_scheduler.activation_counts.end_after as i32
-        }
-        ActivationVar::ActivateCountHeal => runner.trigger_scheduler.activation_counts.heal as i32,
-        ActivationVar::ActivateCountLaterHalf => {
-            runner.trigger_scheduler.activation_counts.later_half as i32
-        }
-        ActivationVar::ActivateCountMiddle => {
-            runner.trigger_scheduler.activation_counts.middle as i32
-        }
-        ActivationVar::ActivateCountStart => {
-            runner.trigger_scheduler.activation_counts.start as i32
-        }
+        ActivateCountAll => runner.trigger_scheduler.activation_counts.all as i32,
+        ActivateCountEndAfter => runner.trigger_scheduler.activation_counts.end_after as i32,
+        ActivateCountHeal => runner.trigger_scheduler.activation_counts.heal as i32,
+        ActivateCountLaterHalf => runner.trigger_scheduler.activation_counts.later_half as i32,
+        ActivateCountMiddle => runner.trigger_scheduler.activation_counts.middle as i32,
+        ActivateCountStart => runner.trigger_scheduler.activation_counts.start as i32,
 
         // Continuous checks
-        ActivationVar::IsActivateAnySkill => runner.skill_activated_flag as i32,
-        ActivationVar::IsActivateHealSkill => runner.heal_activated_flag as i32,
-        ActivationVar::IsActivateOtherSkillDetail => {
+        IsActivateAnySkill => runner.activation_flags.any_activated as i32,
+        IsActivateHealSkill => runner.activation_flags.heal_activated as i32,
+        IsActivateOtherSkillDetail => {
             // Check if another alternative of the same skill has activated
             if let Some(logic) = logic_ctx {
                 let has_other_alternative =
@@ -624,22 +627,23 @@ fn get_activation_value(
             }
         }
 
-        ActivationVar::IsOtherCharacterActivateAdvantageSkill => 0, // STUB
-
         // Duel-related counts
-        ActivationVar::CompeteFightCount => runner.duel_count as i32,
+        CompeteFightCount => runner.duel_count as i32,
 
         // These cases are handled specially because they use the comparison
         // value as parameter instead of comparing against it.
-        ActivationVar::IsExistSkillId => {
-            panic!("is_exist_skill_id: should be handled in evaluate_comparison()")
+        IsExistSkillId => {
+            panic!("is_exist_skill_id: should be handled in evaluate()")
         }
-        ActivationVar::IsUsedSkillId => {
-            panic!("is_used_skill_id: should be handled in evaluate_comparison()")
+        IsOtherCharacterActivateAdvantageSkill => {
+            panic!("is_other_character_activate_advantage_skill: should be handled in evaluate()")
+        }
+        IsUsedSkillId => {
+            panic!("is_used_skill_id: should be handled in evaluate()")
         }
 
         // Team-based checks - out of scope
-        ActivationVar::ActivateCountAllTeam => {
+        ActivateCountAllTeam => {
             unimplemented!("activate_count_all_team not implemented")
         }
     }

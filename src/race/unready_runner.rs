@@ -390,8 +390,7 @@ impl UnreadyRunner {
             order: OrderState::default(),
             position_diff: PositionDiff::default(),
             rush_counter: RushCounter::default(),
-            skill_activated_flag: false,
-            heal_activated_flag: false,
+            activation_flags: SkillActivationFlags::default(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
@@ -30,6 +30,8 @@ pub struct RaceState {
     pub rushed_by_style: HashMap<Style, u8>,
     /// Count of existing skill IDs among all runners.
     pub existing_skills: HashMap<String, u8>,
+    /// Set of activated buff skill types among all runners.
+    pub buffs_activated: HashSet<SkillType>,
 }
 
 /// Race solver that manages the race simulation.
@@ -64,6 +66,7 @@ impl RaceSolver<UnreadyRunner> {
             runners_by_style: HashMap::new(),
             rushed_by_style: HashMap::new(),
             existing_skills: HashMap::new(),
+            buffs_activated: HashSet::new(),
         };
 
         RaceSolver {
@@ -183,10 +186,15 @@ impl RaceSolver<Runner> {
             runner.update_slope(&self.state.course.slopes, &mut *self.state.rng.borrow_mut());
             runner.check_window_triggers(&self.state); // Distance, time, HP windows
             runner.check_activation_dependent_triggers(&self.state);
-            runner.update_skill_durations(self.state.elapsed_time);
+            runner.extract_buff_activations(&mut self.state);
             // Post-Update
             runner.check_corner_start(&self.state.course.corners);
             runner.check_straight_start(&self.state.course.straights, &self.state);
+        }
+
+        for runner in &mut self.runners {
+            runner.check_buff_dependent_triggers(&self.state);
+            runner.update_skill_durations(self.state.elapsed_time);
         }
 
         self.runners

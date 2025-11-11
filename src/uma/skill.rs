@@ -1,9 +1,10 @@
+use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use std::collections::HashMap;
 
 /// Represents the type of skill effect.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, Hash, TryFromPrimitive)]
 #[repr(u8)]
 pub enum SkillType {
     /// Modify speed stat.
@@ -172,7 +173,7 @@ impl Skill {
     }
 
     /// Determine whether a skill effect is positive or negative.
-    fn is_effect_positive(effect: &SkillEffect) -> bool {
+    pub fn is_effect_positive(effect: &SkillEffect) -> bool {
         match effect.skill_type {
             // Purely positive effects
             SkillType::ActivateRandomGold

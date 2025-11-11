@@ -12,9 +12,9 @@ name = "uma-tools-rs"
 path = "src/main.rs"
 
 [dependencies]
+num_enum = "0.7"
 rand = "0.9"
 rand_pcg = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1"
-
