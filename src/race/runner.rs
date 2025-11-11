@@ -687,11 +687,7 @@ impl Runner {
             rush_state.start_time = state.elapsed_time;
             // Rushed for at least 3 seconds
             rush_state.end_time = state.elapsed_time + 3.0;
-            state
-                .rushed_by_style
-                .entry(self.base.style)
-                .and_modify(|e| *e += 1)
-                .or_insert(1);
+            *state.rushed_by_style.entry(self.base.style).or_insert(0) += 1;
             // TODO: implement position strat change
         }
     }
