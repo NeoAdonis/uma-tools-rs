@@ -33,33 +33,40 @@
 //! function.
 //!
 //! `get_variable_value()` maps ~150+ condition variables to their current runtime
-//! values from `RaceState`. Variables are grouped by categories, each with their
-//! own set of parameters required for evaluation. To mention a few:
+//! values from `RaceState` or `Runner`. Variables are grouped by categories, each with
+//! their own set of parameters required for evaluation. To mention a few:
 //!
 //! - **Race-level**: elapsed time, course properties, race parameters.
 //! - **Runner-level**: position, HP, phase, speed, skill activation state.
-//! - **Multi-runner**: Order, near counts, blocking (currently STUBBED, as most
-//!   simulations would only care about single runner scenarios).
+//! - **Multi-runner**: order, near counts, blocking; these values are precomputed
+//!   during race updates, then stored either as race-level or runner-level values
+//!   depending on their nature.
 //!
 //! A similar function, `get_variable_value_out_of_gate()`, is provided for
 //! out-of-gate evaluations, which only uses data available before the race starts.
 //!
 //! # Float Handling
 //!
-//! All comparisons use integer values. Float variables (hp, position, percentages)
+//! All comparisons use integer values. Float variables (HP, position, percentages)
 //! are converted using `.floor()` for consistent rounding behavior.
 //!
-//! # Multi-runner Limitations
+//! # Unimplemented Variables
 //!
-//! In the current state, variables depending on multiple runners) return sensible
-//! stub values. For example:
+//! In the current state, a few variables that depend on multiple runners return
+//! sensible stub values; these are clearly marked with `// STUB:` comments:
 //!
-//! - `order` = 1 (always first place)
-//! - `order_rate` = 0 (0% = top position)
-//! - `near_count` = 0 (no other runners nearby)
-//! - `blocked_front` = 0 (not blocked)
+//! - `popularity`: Popularity is not implemented; returns 1 (most popular).
+//! - `running_style_equal_popularity_one`: Popularity is not implemented; returns 1
+//!   (runner is most popular, thus our style is the same as the most popula runner).
+//! - ...and others; these are work-in-progress.
 //!
-//! These are clearly marked with `// STUB:` comments.
+//! There are also variables that are not implemented at all as they are only used
+//! in non-PvP contexts, which is out of scope for this simulator. The evaluator
+//! will panic if these are encountered:
+//!
+//! - `is_exist_chara_id`
+//! - `remain_distance_viewer_id`
+//! - `activate_count_all_team`
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
