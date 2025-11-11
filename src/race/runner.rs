@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use rand::prelude::*;
 
-use crate::condition::evaluator::{EvaluatorFull, evaluate_condition};
+use crate::condition::evaluator::{EvaluatorFull, evaluate_comparison_list, evaluate_condition};
 use crate::condition::parser::CompOp;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
@@ -1293,14 +1293,14 @@ impl Runner {
         }
         let skill_index = logic.skill_index;
         let alternative_index = logic.alternative_index;
-        let guard_condition = logic.guard_condition.clone();
+        let guards = logic.guards.clone();
         let is_onetime = logic.triggers.iter().any(|t| t.is_onetime());
 
-        let should_activate = if let Some(guard) = &guard_condition {
-            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-            evaluate_condition(guard, &EvaluatorFull, Some(logic), state, self)
+        let should_activate = if guards.is_empty() {
+            true // No guards - always activate when trigger fires
         } else {
-            true
+            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+            evaluate_comparison_list(&guards, &EvaluatorFull, Some(logic), state, self)
         };
 
         if should_activate {

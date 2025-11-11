@@ -69,6 +69,12 @@ pub struct Comparison {
     pub value: i32,
 }
 
+/// A flat list of comparisons that must all be true (AND conjunction).
+///
+/// After splitting OR branches, each branch's guards are guaranteed to be
+/// a simple AND conjunction of comparisons, which can be represented as a list.
+pub type ComparisonList = Vec<Comparison>;
+
 impl fmt::Display for Condition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.comp_tree)

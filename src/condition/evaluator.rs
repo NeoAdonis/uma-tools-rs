@@ -80,40 +80,28 @@ use crate::uma::skill::SkillType;
 use crate::uma::*;
 use crate::units::*;
 
-/// Evaluate a guard condition against current race state using the provided evaluator.
+/// Evaluate a guard condition (tree structure) against current race state.
 ///
-/// **IMPORTANT**: This should ONLY be called with guard conditions after trigger-guard
-/// separation. Trigger variables (random gates, monotonic triggers, onetime events) will
+/// **IMPORTANT**: This should ONLY be called with preconditions that may contain OR.
+/// For guards (which are flat AND conjunctions), use `evaluate_comparison_list()` instead.
+///
+/// Trigger variables (random gates, monotonic triggers, onetime events) will
 /// cause a panic if they reach this evaluator.
 ///
-/// Returns `true` if the guard condition is satisfied, `false` otherwise.
+/// Returns `true` if the condition is satisfied, `false` otherwise.
 ///
 /// # Usage
 ///
-/// This function is called by the trigger system when a trigger fires:
+/// This function is primarily used for evaluating preconditions:
 ///
 /// ```rust,ignore
-/// // When HP trigger fires at 50%:
-/// let skill_logic = &skill_activation_logics[trigger.skill_logic_idx];
-///
-/// if let Some(guard) = &skill_logic.guard_condition {
-///     // Evaluate ONLY the guard (no trigger variables)
-///     if evaluate_condition(guard, &race_state) {
-///         activate_skill(&race_state, &skill);
+/// // Evaluate precondition (may contain OR)
+/// if let Some(precondition) = &skill_logic.precondition {
+///     if evaluate_condition(precondition, &EvaluatorFull, None, state, runner) {
+///         // Unlock skill permanently
 ///     }
 /// }
 /// ```
-///
-/// # Example Guard Conditions
-///
-/// Valid (guard variables only):
-/// - `"ground_type==2 & motivation>=4"` ✓
-/// - `"running_style==1 & season==1"` ✓
-/// - `"hp_per>=20"` ✓ (Note: hp_per is a guard when checked AT trigger time)
-///
-/// Invalid (contains trigger variables):
-/// - `"phase_random==1 & hp_per>=20"` ✗ (will panic)
-/// - `"is_last_straight_onetime==1"` ✗ (will panic)
 ///
 /// # Panics
 ///
@@ -132,6 +120,57 @@ where
     evaluate_comp_tree(&condition.comp_tree, |comp| {
         evaluator.evaluate(comp, logic_ctx, state, context)
     })
+}
+
+/// Evaluate a list of guard comparisons (all must be true - AND conjunction).
+///
+/// This is the primary function for evaluating guards after trigger-guard separation.
+/// Guards are guaranteed to be flat AND conjunctions (no OR operations).
+///
+/// Returns `true` if ALL comparisons evaluate to true (or list is empty), `false` otherwise.
+/// Uses short-circuit evaluation: stops at the first false comparison.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// // When trigger fires, evaluate guards:
+/// let logic = &skill_activation_logics[trigger.skill_logic_idx];
+/// if logic.guards.is_empty() {
+///     // No guards - always activate
+///     activate_skill();
+/// } else {
+///     // Check all guards (AND conjunction)
+///     if evaluate_comparison_list(&logic.guards, &EvaluatorFull, Some(logic), state, runner) {
+///         activate_skill();
+///     }
+/// }
+/// ```
+///
+/// # Example Guard Lists
+///
+/// - `[]` → true (no guards, always activates)
+/// - `[ground_type==2]` → true if ground is dirt
+/// - `[ground_type==2, motivation>=4]` → true if both conditions are met
+/// - `[hp_per>=20, running_style==1]` → true if HP >= 20% AND style is Front Runner
+///
+/// # Panics
+///
+/// Panics if any comparison contains trigger variables that should have been
+/// separated during the splitting phase.
+pub fn evaluate_comparison_list<E>(
+    comparisons: &ComparisonList,
+    evaluator: &E,
+    logic_ctx: Option<&SkillActivationLogic>,
+    state: &E::State,
+    context: &E::Context,
+) -> bool
+where
+    E: CompEvaluator,
+{
+    // Short-circuit AND: return false on first failure
+    comparisons
+        .iter()
+        .all(|comp| evaluator.evaluate(comp, logic_ctx, state, context))
 }
 
 /// Recursively evaluate condition tree (handles AND/OR logic)

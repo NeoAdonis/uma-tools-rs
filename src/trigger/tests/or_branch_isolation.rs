@@ -73,9 +73,9 @@ fn test_position_based_or_mutual_exclusion() {
 
     // Both should have triggers and guards
     assert!(!triggers1.is_empty(), "Branch 1 should have triggers");
-    assert!(guards1.is_some(), "Branch 1 should have guards");
+    assert!(!guards1.is_empty(), "Branch 1 should have guards");
     assert!(!triggers2.is_empty(), "Branch 2 should have triggers");
-    assert!(guards2.is_some(), "Branch 2 should have guards");
+    assert!(!guards2.is_empty(), "Branch 2 should have guards");
 
     // The key property: bashin_diff_infront and bashin_diff_behind are mutually exclusive
     // This is enforced at runtime by the guard evaluation logic
@@ -103,7 +103,7 @@ fn test_order_based_or_mutual_exclusion() {
         assert_eq!(triggers.len(), 1, "Branch {} should have 1 trigger", idx);
         // Trigger can be either DistanceCovered or Continuous depending on dynamic guards
         assert!(!triggers.is_empty(), "Branch {} should have a trigger", idx);
-        assert!(guards.is_some(), "Branch {} should have guards", idx);
+        assert!(!guards.is_empty(), "Branch {} should have guards", idx);
     }
 
     // The key property: order==1 and order==2 are mutually exclusive
@@ -138,7 +138,7 @@ fn test_complex_three_branch_distance_ranges() {
     for (idx, (triggers, guards)) in branches.iter().enumerate() {
         assert!(!triggers.is_empty(), "Branch {} should have triggers", idx);
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have guards including distance checks",
             idx
         );
@@ -255,7 +255,7 @@ fn test_three_branch_or_mutual_exclusion() {
             idx
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have ground_condition as guard",
             idx
         );
@@ -299,7 +299,7 @@ fn test_four_branch_evaluation_priority() {
             idx
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have change_order guards",
             idx
         );
@@ -345,7 +345,7 @@ fn test_similar_conditions_or_branches() {
             idx
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have guards for order_rate and overtake condition",
             idx
         );
@@ -387,7 +387,7 @@ fn test_or_branches_with_shared_base_conditions() {
             idx
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have guards including order condition",
             idx
         );

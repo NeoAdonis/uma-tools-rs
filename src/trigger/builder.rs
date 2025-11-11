@@ -93,7 +93,7 @@ pub fn build_trigger_scheduler(
             let branches = split_condition(&condition, random_activations, course);
 
             // Create SkillActivationLogic for each branch
-            for (triggers, guard_condition) in branches {
+            for (triggers, guards) in branches {
                 // Add continuous trigger if no triggers found
                 let final_triggers = if triggers.is_empty() {
                     vec![TriggerCondition::Continuous]
@@ -106,7 +106,7 @@ pub fn build_trigger_scheduler(
                     skill_idx,
                     alt_idx,
                     final_triggers.clone(),
-                    guard_condition,
+                    guards,
                     precondition.clone(),
                 );
 

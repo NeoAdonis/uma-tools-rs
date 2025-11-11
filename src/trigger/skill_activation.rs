@@ -21,10 +21,12 @@
 //!
 //! **Guards** are evaluated ONLY when trigger fires.
 //!
+//!    - Represented as a flat list (`Vec<Comparison>`) - all must be true.
 //!    - Static guards: because they don't change, these can be pre-evaluated
 //!      before the race starts (e.g, ground type, running style).
 //!    - Dynamic guards, including monotonic: evaluated at activation time
 //!      (e.g., HP%, rush status).
+//!    - No OR operations in guards - OR is handled by splitting into separate branches.
 //!
 //! **Preconditions** unlock skills permanently (evaluated every frame).
 //!
@@ -44,12 +46,12 @@
 //!
 //! - **Trigger**: `is_finalcorner_random` pre-rolls to distance 1850m
 //!   (within final corner).
-//! - **Guard**: `hp_per>=20` must be true when we reach 1850m.
+//! - **Guards**: `[hp_per>=20]` - must be true when we reach 1850m.
 //!
 //! Consider another skill with condition: `distance_rate>=80 & ground_type==2`
 //!
 //! - **Trigger**: `distance_rate>=80` (promoted because no explicit triggers exist).
-//! - **Guard**: `ground_type==2`; checked before the race starts.
+//! - **Guards**: `[ground_type==2]` - checked before the race starts.
 //!
 //! Now consider a skill with **precondition**: `change_order_onetime<0`
 //!
@@ -77,9 +79,9 @@ pub struct SkillActivationLogic {
     /// Triggers that determine WHEN to check this skill
     pub triggers: Vec<TriggerCondition>,
 
-    /// Guards that must be true AT activation time.
-    /// If None, no guard checks needed (always activates when trigger fires).
-    pub guard_condition: Option<Condition>,
+    /// Guards that must ALL be true AT activation time.
+    /// Empty list means no guard checks needed (always activates when trigger fires).
+    pub guards: ComparisonList,
 
     /// Precondition that unlocks the skill (permanent one-time gate).
     /// Checked every frame until satisfied; once true, skill remains unlocked for
@@ -214,14 +216,14 @@ impl SkillActivationLogic {
         skill_index: usize,
         alternative_index: usize,
         triggers: Vec<TriggerCondition>,
-        guard_condition: Option<Condition>,
+        guards: ComparisonList,
         precondition: Option<Condition>,
     ) -> Self {
         SkillActivationLogic {
             skill_index,
             alternative_index,
             triggers,
-            guard_condition,
+            guards,
             precondition,
             state: ActivationState::default(),
         }
@@ -260,7 +262,7 @@ impl SkillActivationLogic {
 ///
 /// This is the core algorithm that separates conditions based on their role:
 /// - Triggers determine WHEN to check
-/// - Guards must be true AT check time
+/// - Guards must be all true AT check time
 ///
 /// N.B. Preconditions are NOT handled here; they're separated earlier in the parsing
 /// pipeline (see `builder.rs`). This function only splits the main `condition` field.
@@ -269,6 +271,7 @@ impl SkillActivationLogic {
 ///
 /// For conditions with OR (`@`), this returns **multiple** trigger-guard pairs.
 /// The caller should create separate SkillActivationLogic for each OR branch.
+/// Each branch's guards are guaranteed to be a pure AND conjunction (flat list).
 ///
 /// # Example
 ///
@@ -282,8 +285,8 @@ impl SkillActivationLogic {
 ///
 /// Output (2 branches):
 ///
-/// - Branch 1: triggers=[DistanceCovered], guards="hp_per>=20"
-/// - Branch 2: triggers=[DistanceCovered], guards="ground_type==1"
+/// - Branch 1: triggers=[DistanceCovered], guards=[hp_per>=20]
+/// - Branch 2: triggers=[DistanceCovered], guards=[ground_type==1]
 ///
 /// # Simple Example
 ///
@@ -292,12 +295,12 @@ impl SkillActivationLogic {
 /// Output (1 branch):
 ///
 /// - Triggers: `[DistanceCovered { distance==1850m }]`
-/// - Guards: `hp_per>=20 & ground_type==2`
+/// - Guards: `[hp_per>=20, ground_type==2]`
 pub fn split_condition(
     condition: &Condition,
     random_activation: Vec<f64>,
     course: &Course,
-) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
+) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
     let branches = split_comp_tree(&condition.comp_tree, &random_activation, course);
 
     // Apply promotion logic to each branch at the top level
@@ -317,18 +320,19 @@ pub fn split_condition(
             // This optimization handles the specific case where we have BOTH
             // monotonic guards (that could become windows) AND dynamic guards
             // (that would normally force Continuous trigger in Rule 2).
-            let has_dynamic_guard = contains_dynamic_guard(&guards);
-            let remaining_guards = if !has_explicit_trigger && guards.is_some() && has_dynamic_guard
-            {
-                let (window_trigger, new_guards) = try_promote_single_monotonic_to_window(guards);
-                if let Some(window) = window_trigger {
-                    triggers.push(window);
-                }
-                new_guards
-            } else {
-                // Keep original guards - let apply_monotonic_promotion() handle it
-                guards
-            };
+            let has_dynamic_guard = contains_dynamic_guard_in_list(&guards);
+            let remaining_guards =
+                if !has_explicit_trigger && !guards.is_empty() && has_dynamic_guard {
+                    let (window_trigger, new_guards) =
+                        try_promote_single_monotonic_to_window(guards);
+                    if let Some(window) = window_trigger {
+                        triggers.push(window);
+                    }
+                    new_guards
+                } else {
+                    // Keep original guards - let apply_monotonic_promotion() handle it
+                    guards
+                };
 
             // Then apply standard monotonic promotion rules
             // If we promoted a window above, Rule 1 will keep it (explicit trigger exists)
@@ -353,11 +357,11 @@ pub fn split_condition(
 }
 
 /// Try to detect a window pattern: `variable>=min & variable<=max`.
-/// Returns `Some((window_trigger, remaining_guard))` if detected, `None` otherwise.
+/// Returns `Some((window_trigger, remaining_guards))` if detected, `None` otherwise.
 fn try_detect_window(
     left: &ComparisonTree,
     right: &ComparisonTree,
-) -> Option<(TriggerCondition, Option<Condition>)> {
+) -> Option<(TriggerCondition, ComparisonList)> {
     use VarType::*;
 
     // We're looking for single comparisons on both sides
@@ -389,7 +393,7 @@ fn try_detect_window(
                         min_threshold: left_comp.value as f64,
                         max_threshold: right_comp.value as f64,
                     },
-                    None, // No remaining guards
+                    vec![], // No remaining guards
                 ));
             }
             // Check for pattern: left<=Y & right>=X (reversed order)
@@ -400,7 +404,7 @@ fn try_detect_window(
                         min_threshold: right_comp.value as f64,
                         max_threshold: left_comp.value as f64,
                     },
-                    None, // No remaining guards
+                    vec![], // No remaining guards
                 ));
             }
         }
@@ -410,11 +414,12 @@ fn try_detect_window(
 }
 
 /// Recursively split a `ComparisonTree`, handling OR branches.
+/// Returns a list of (triggers, guards) where guards is a flat list of comparisons.
 fn split_comp_tree(
     comp_tree: &ComparisonTree,
     random_activation: &Vec<f64>,
     course: &Course,
-) -> Vec<(Vec<TriggerCondition>, Option<Condition>)> {
+) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
     match comp_tree {
         ComparisonTree::Single(comp) => {
             // Base case: single comparison
@@ -427,11 +432,11 @@ fn split_comp_tree(
                 // Try to detect window pattern first (before splitting further)
                 // Note: try_detect_window only matches direct AND of two comparisons
                 // If there are additional conditions, they'll be handled below
-                if let Some((window_trigger, _)) = try_detect_window(left, right) {
+                if let Some((window_trigger, guards)) = try_detect_window(left, right) {
                     // Window detected! Return it as a single trigger with no guards
                     // (Additional guards would require more complex pattern like: (A>=X & A<=Y) & B
                     // which isn't matched by our simple pattern detector)
-                    return vec![(vec![window_trigger], None)];
+                    return vec![(vec![window_trigger], guards)];
                 }
 
                 // Not a simple window, proceed with normal AND processing
@@ -443,30 +448,18 @@ fn split_comp_tree(
                 // (unless there are nested ORs, which we'll handle recursively)
                 let mut results = Vec::new();
 
-                for (left_triggers, left_guard) in left_splits {
-                    for (right_triggers, right_guard) in &right_splits {
+                for (left_triggers, left_guards) in left_splits {
+                    for (right_triggers, right_guards) in &right_splits {
                         // Combine triggers
                         let mut combined_triggers = left_triggers.clone();
                         combined_triggers.extend(right_triggers.clone());
 
-                        // Combine guards with AND
-                        let combined_guard = match (&left_guard, right_guard) {
-                            (None, None) => None,
-                            (Some(g), None) | (None, Some(g)) => Some(g.clone()),
-                            (Some(g1), Some(g2)) => {
-                                // Create AND of both guards
-                                Some(Condition {
-                                    comp_tree: ComparisonTree::Binary {
-                                        left: Box::new(g1.comp_tree.clone()),
-                                        op: BinOp::And,
-                                        right: Box::new(g2.comp_tree.clone()),
-                                    },
-                                })
-                            }
-                        };
+                        // Combine guards by concatenating the lists (all must be true)
+                        let mut combined_guards = left_guards.clone();
+                        combined_guards.extend(right_guards.clone());
 
                         // Promotion will be applied at top level
-                        results.push((combined_triggers, combined_guard));
+                        results.push((combined_triggers, combined_guards));
                     }
                 }
 
@@ -499,28 +492,28 @@ fn split_comp_tree(
 /// 4. If only guards remain after promotion, add Continuous trigger.
 fn apply_monotonic_promotion(
     mut triggers: Vec<TriggerCondition>,
-    guard_condition: Option<Condition>,
-) -> (Vec<TriggerCondition>, Option<Condition>) {
+    guards: ComparisonList,
+) -> (Vec<TriggerCondition>, ComparisonList) {
     // Check if we have explicit triggers (not Continuous)
     let has_explicit_trigger = triggers
         .iter()
         .any(|t| !matches!(t, TriggerCondition::Continuous));
 
     // Check if guards contain any DynamicGuard variables
-    let has_dynamic_guard = contains_dynamic_guard(&guard_condition);
+    let has_dynamic_guard = contains_dynamic_guard_in_list(&guards);
 
     if has_explicit_trigger {
         // Rule 1: Explicit triggers exist → keep them, guards stay as guards
         // This includes Window, Random, Spatial, Phase triggers
         // DynamicGuards don't force Continuous when we already have explicit triggers
-        (triggers, guard_condition)
+        (triggers, guards)
     } else if has_dynamic_guard {
         // Rule 2: No explicit triggers + DynamicGuards → use Continuous trigger
-        (vec![TriggerCondition::Continuous], guard_condition)
+        (vec![TriggerCondition::Continuous], guards)
     } else {
         // Rule 3: No explicit triggers, no DynamicGuards → try to promote MonotonicGuards
-        if let Some(guard) = guard_condition {
-            let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guard);
+        if !guards.is_empty() {
+            let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guards);
 
             if !promoted_triggers.is_empty() {
                 // Successfully promoted some MonotonicGuards to triggers
@@ -531,7 +524,7 @@ fn apply_monotonic_promotion(
                 if triggers.is_empty() {
                     triggers.push(TriggerCondition::Continuous);
                 }
-                (triggers, Some(guard))
+                (triggers, guards)
             }
         } else {
             // No guards at all
@@ -539,38 +532,39 @@ fn apply_monotonic_promotion(
                 // No triggers, no guards → Continuous (shouldn't happen often)
                 triggers.push(TriggerCondition::Continuous);
             }
-            (triggers, None)
+            (triggers, guards)
         }
     }
 }
 
-/// Extract `MonotonicGuard`s from guard condition and promote them to triggers.
+/// Extract `MonotonicGuard`s from guard list and promote them to triggers.
 ///
-/// Returns: `(promoted triggers, remaining guard condition)`
-fn promote_monotonic_guards(guard: &Condition) -> (Vec<TriggerCondition>, Option<Condition>) {
+/// Returns: `(promoted triggers, remaining guards)`
+fn promote_monotonic_guards(guards: &ComparisonList) -> (Vec<TriggerCondition>, ComparisonList) {
     let mut promoted_triggers = Vec::new();
     let mut remaining_guards = Vec::new();
 
-    // Collect all comparisons from guard
-    collect_and_classify_comps(
-        &guard.comp_tree,
-        &mut promoted_triggers,
-        &mut remaining_guards,
-    );
+    // Classify each comparison
+    for comp in guards {
+        let role = comp.var.variable_role();
+        if matches!(role, VariableRole::MonotonicGuard) {
+            // Promote to trigger
+            let trigger = extract_monotonic_trigger(comp);
+            promoted_triggers.push(trigger);
 
-    // Rebuild remaining guard condition
-    let final_guard = if remaining_guards.is_empty() {
-        None
-    } else if remaining_guards.len() == 1 {
-        Some(Condition {
-            comp_tree: ComparisonTree::Single(remaining_guards[0].clone()),
-        })
-    } else {
-        // Multiple guards - combine with AND
-        Some(rebuild_guard_condition(remaining_guards))
-    };
+            // For activate_count_* variables (and other activation counters),
+            // keep the comparison as a guard because they promote to Continuous
+            // triggers that must check the guard condition every frame
+            if matches!(comp.var, VarType::Activation(_)) {
+                remaining_guards.push(comp.clone());
+            }
+        } else {
+            // Keep as guard
+            remaining_guards.push(comp.clone());
+        }
+    }
 
-    (promoted_triggers, final_guard)
+    (promoted_triggers, remaining_guards)
 }
 
 /// Get the promotion priority for a monotonic variable.
@@ -600,24 +594,32 @@ fn get_promotion_priority(var: &VarType) -> i32 {
 /// we can promote the highest-priority monotonic guard to a Window trigger,
 /// reducing per-frame evaluation overhead.
 ///
-/// Returns: `(promoted window trigger, remaining guard condition)`
+/// Returns: `(promoted window trigger, remaining guards)`
 ///
-/// If no suitable monotonic guard is found, returns `(None, original guard)`.
+/// If no suitable monotonic guard is found, returns `(None, original guards)`.
 fn try_promote_single_monotonic_to_window(
-    guard_condition: Option<Condition>,
-) -> (Option<TriggerCondition>, Option<Condition>) {
+    guards: ComparisonList,
+) -> (Option<TriggerCondition>, ComparisonList) {
     use VarType::*;
 
-    let Some(guard) = guard_condition else {
-        return (None, None);
-    };
+    if guards.is_empty() {
+        return (None, vec![]);
+    }
 
     // Collect all monotonic guards with their priorities
     let mut monotonic_candidates: Vec<(i32, Comparison)> = Vec::new();
-    collect_monotonic_candidates(&guard.comp_tree, &mut monotonic_candidates);
+    for comp in &guards {
+        let role = comp.var.variable_role();
+        if matches!(role, VariableRole::MonotonicGuard) {
+            let priority = get_promotion_priority(&comp.var);
+            if priority > 0 {
+                monotonic_candidates.push((priority, comp.clone()));
+            }
+        }
+    }
 
     if monotonic_candidates.is_empty() {
-        return (None, Some(guard));
+        return (None, guards);
     }
 
     // Sort by priority (highest first)
@@ -674,158 +676,23 @@ fn try_promote_single_monotonic_to_window(
     };
 
     let Some(window) = window_trigger else {
-        return (None, Some(guard));
+        return (None, guards);
     };
 
-    // Remove the promoted comparison from the guard condition
-    let remaining_guard = remove_comparison_from_condition(&guard.comp_tree, best_comp);
+    // Remove the promoted comparison from the guards list
+    let remaining_guards: ComparisonList = guards
+        .into_iter()
+        .filter(|comp| comp != best_comp)
+        .collect();
 
-    (Some(window), remaining_guard)
+    (Some(window), remaining_guards)
 }
 
-/// Recursively collect monotonic guard candidates with their priorities.
-fn collect_monotonic_candidates(
-    comp_tree: &ComparisonTree,
-    candidates: &mut Vec<(i32, Comparison)>,
-) {
-    match comp_tree {
-        ComparisonTree::Single(comp) => {
-            let role = comp.var.variable_role();
-            if matches!(role, VariableRole::MonotonicGuard) {
-                let priority = get_promotion_priority(&comp.var);
-                if priority > 0 {
-                    candidates.push((priority, comp.clone()));
-                }
-            }
-        }
-        ComparisonTree::Binary { left, op, right } => {
-            if matches!(op, BinOp::And) {
-                // Recurse into both sides of AND
-                collect_monotonic_candidates(left, candidates);
-                collect_monotonic_candidates(right, candidates);
-            }
-            // Ignore OR branches; they should be on a separate split
-        }
-    }
-}
-
-/// Remove a specific comparison from a condition, rebuilding the structure.
-///
-/// Returns the remaining guard condition after removing the comparison,
-/// or `None` if this was the only comparison.
-fn remove_comparison_from_condition(
-    comp_tree: &ComparisonTree,
-    target: &Comparison,
-) -> Option<Condition> {
-    match comp_tree {
-        ComparisonTree::Single(comp) => {
-            // If this is the target, remove it
-            if comp == target {
-                None
-            } else {
-                Some(Condition {
-                    comp_tree: ComparisonTree::Single(comp.clone()),
-                })
-            }
-        }
-        ComparisonTree::Binary { left, op, right } => {
-            let left_result = remove_comparison_from_condition(left, target);
-            let right_result = remove_comparison_from_condition(right, target);
-
-            match (left_result, right_result) {
-                (None, None) => None,
-                (Some(cond), None) | (None, Some(cond)) => Some(cond),
-                (Some(left_cond), Some(right_cond)) => Some(Condition {
-                    comp_tree: ComparisonTree::Binary {
-                        left: Box::new(left_cond.comp_tree),
-                        op: *op,
-                        right: Box::new(right_cond.comp_tree),
-                    },
-                }),
-            }
-        }
-    }
-}
-
-/// Recursively collect comparisons and classify them as triggers or guards.
-fn collect_and_classify_comps(
-    comp_tree: &ComparisonTree,
-    promoted_triggers: &mut Vec<TriggerCondition>,
-    remaining_guards: &mut Vec<Comparison>,
-) {
-    match comp_tree {
-        ComparisonTree::Single(comp) => {
-            let role = comp.var.variable_role();
-            if matches!(role, VariableRole::MonotonicGuard) {
-                // Promote to trigger
-                let trigger = extract_monotonic_trigger(comp);
-                promoted_triggers.push(trigger.clone());
-
-                // For activate_count_* variables (and other activation counters),
-                // keep the comparison as a guard because they promote to Continuous
-                // triggers that must check the guard condition every frame
-                if matches!(comp.var, VarType::Activation(_)) {
-                    remaining_guards.push(comp.clone());
-                }
-            } else {
-                // Keep as guard
-                remaining_guards.push(comp.clone());
-            }
-        }
-        ComparisonTree::Binary { left, op, right } => {
-            if matches!(op, BinOp::And) {
-                // For AND, recurse into both sides
-                collect_and_classify_comps(left, promoted_triggers, remaining_guards);
-                collect_and_classify_comps(right, promoted_triggers, remaining_guards);
-            } else {
-                // For OR, we can't split - keep as guard
-                // This is a complex case that we'll treat conservatively
-                remaining_guards.push(Comparison {
-                    var: VarType::Unknown("complex_or".to_string()),
-                    op: CompOp::Equal,
-                    value: 0,
-                });
-            }
-        }
-    }
-}
-
-/// Rebuild guard condition from list of comparisons.
-fn rebuild_guard_condition(guards: Vec<Comparison>) -> Condition {
-    if guards.is_empty() {
-        panic!("Cannot rebuild guard condition from empty list");
-    }
-
-    let mut comp_tree = ComparisonTree::Single(guards[0].clone());
-
-    for guard in guards.iter().skip(1) {
-        comp_tree = ComparisonTree::Binary {
-            left: Box::new(comp_tree),
-            op: BinOp::And,
-            right: Box::new(ComparisonTree::Single(guard.clone())),
-        };
-    }
-
-    Condition { comp_tree }
-}
-
-/// Check if a condition contains any DynamicGuard variables.
-fn contains_dynamic_guard(condition: &Option<Condition>) -> bool {
-    if let Some(cond) = condition {
-        check_comp_tree_for_dynamic_guard(&cond.comp_tree)
-    } else {
-        false
-    }
-}
-
-/// Recursively check if a ComparisonTree contains DynamicGuard variables.
-fn check_comp_tree_for_dynamic_guard(comp_tree: &ComparisonTree) -> bool {
-    match comp_tree {
-        ComparisonTree::Single(comp) => comp.var.variable_role() == VariableRole::DynamicGuard,
-        ComparisonTree::Binary { left, right, .. } => {
-            check_comp_tree_for_dynamic_guard(left) || check_comp_tree_for_dynamic_guard(right)
-        }
-    }
+/// Check if a comparison list contains any DynamicGuard variables.
+fn contains_dynamic_guard_in_list(guards: &ComparisonList) -> bool {
+    guards
+        .iter()
+        .any(|comp| comp.var.variable_role() == VariableRole::DynamicGuard)
 }
 
 /// Split a single comparison into trigger and guard.
@@ -837,7 +704,7 @@ fn split_single_comp(
     comp: &Comparison,
     random_activation: &[f64],
     course: &Course,
-) -> (Vec<TriggerCondition>, Option<Condition>) {
+) -> (Vec<TriggerCondition>, ComparisonList) {
     use VariableRole::*;
 
     let role = comp.var.variable_role();
@@ -847,15 +714,8 @@ fn split_single_comp(
             // Extract random activation trigger
             if let VarType::Random(_) = &comp.var {
                 // If we are here, it means that the activation roll succeeded
-                // → create a trigger that always fires
-                let guard = Condition {
-                    comp_tree: ComparisonTree::Single(Comparison {
-                        var: VarType::Always,
-                        op: CompOp::Equal,
-                        value: 1,
-                    }),
-                };
-                (vec![], Some(guard))
+                // → return no guards; the skill always activates at the rolled point
+                (vec![], vec![])
             } else {
                 // Create trigger based on random activation distance
                 let trigger = TriggerCondition::DistanceCovered {
@@ -863,17 +723,14 @@ fn split_single_comp(
                     operator: comp.op,
                 };
                 // TODO: remove the used activation distance
-                (vec![trigger], None)
+                (vec![trigger], vec![])
             }
         }
 
         MonotonicGuard => {
             // MonotonicGuard: can be trigger OR guard depending on context
             // Default to guard here; promotion happens at higher level
-            let guard = Condition {
-                comp_tree: ComparisonTree::Single(comp.clone()),
-            };
-            (vec![], Some(guard))
+            (vec![], vec![comp.clone()])
         }
 
         PhaseTrigger => {
@@ -883,24 +740,21 @@ fn split_single_comp(
             if comp.op == CompOp::Equal {
                 // phase==N → PhaseTrigger (fire at phase entry)
                 if let Some(trigger) = extract_phase_trigger(comp) {
-                    (vec![trigger], None)
+                    (vec![trigger], vec![])
                 } else {
-                    (vec![TriggerCondition::Continuous], None)
+                    (vec![TriggerCondition::Continuous], vec![])
                 }
             } else {
                 // phase<=N, phase>=N, etc. → DynamicGuard (check at trigger time)
-                let guard = Condition {
-                    comp_tree: ComparisonTree::Single(comp.clone()),
-                };
-                (vec![], Some(guard))
+                (vec![], vec![comp.clone()])
             }
         }
 
         SpatialTrigger => {
             if let Some(trigger) = extract_spatial_trigger(comp, course) {
-                (vec![trigger], None)
+                (vec![trigger], vec![])
             } else {
-                (vec![TriggerCondition::Continuous], None)
+                (vec![TriggerCondition::Continuous], vec![])
             }
         }
 
@@ -911,26 +765,20 @@ fn split_single_comp(
             {
                 match activation_var {
                     ActivationVar::IsActivateAnySkill => {
-                        return (vec![TriggerCondition::AnySkillActivation], None);
+                        return (vec![TriggerCondition::AnySkillActivation], vec![]);
                     }
                     ActivationVar::IsActivateHealSkill => {
-                        return (vec![TriggerCondition::HealSkillActivation], None);
+                        return (vec![TriggerCondition::HealSkillActivation], vec![]);
                     }
                     _ => {} // Other activation variables stay as guards
                 }
             }
-            let guard = Condition {
-                comp_tree: ComparisonTree::Single(comp.clone()),
-            };
-            (vec![], Some(guard))
+            (vec![], vec![comp.clone()])
         }
 
         StaticGuard | DynamicGuard => {
-            // Static and Dynamic guards - keep as guard condition
-            let guard = Condition {
-                comp_tree: ComparisonTree::Single(comp.clone()),
-            };
-            (vec![], Some(guard))
+            // Static and Dynamic guards - keep as guard
+            (vec![], vec![comp.clone()])
         }
     }
 }

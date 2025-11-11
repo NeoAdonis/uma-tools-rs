@@ -72,7 +72,7 @@ fn test_split_simple_guard_only() {
     assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
     // Should preserve both guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn test_split_hp_trigger_with_guards() {
     ));
 
     // Should have ground_type guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_split_random_gate_with_guards() {
     ));
 
     // Should have hp_per guard (NOT phase_random)
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn test_split_onetime_event() {
     ));
 
     // No guards
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn test_split_or_condition() {
             .iter()
             .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
     );
-    assert!(guards1.is_some());
+    assert!(!guards1.is_empty());
 
     // Branch 2: corner trigger (Continuous fallback) + guards
     let (triggers2, guards2) = &branches[1];
@@ -182,7 +182,7 @@ fn test_split_or_condition() {
             .iter()
             .any(|t| matches!(t, TriggerCondition::Continuous))
     );
-    assert!(guards2.is_some());
+    assert!(!guards2.is_empty());
 }
 
 // ============================================================================
@@ -211,7 +211,7 @@ fn test_distance_rate_less_than_becomes_window() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn test_distance_rate_greater_than_stays_trigger() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -259,7 +259,7 @@ fn test_accumulatetime_less_than_becomes_window() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn test_accumulatetime_greater_than_stays_trigger() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn test_hp_per_greater_than_becomes_window() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -330,7 +330,7 @@ fn test_hp_per_less_than_stays_trigger() {
     ));
 
     // ground_type should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================================
@@ -366,7 +366,7 @@ fn test_skill_100901_distance_rate_less_than() {
     ));
 
     // All conditions become guards (checked continuously)
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -389,7 +389,7 @@ fn test_less_operator_also_converts() {
         }
     ));
 
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -412,7 +412,7 @@ fn test_greater_operator_also_converts() {
         }
     ));
 
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -436,7 +436,7 @@ fn test_window_detection_still_works() {
     ));
 
     // No remaining guards
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
 
 // ============================================================================
@@ -479,7 +479,7 @@ fn test_phase_less_than_equal_bug() {
     assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
     // All conditions should be guards (checked every frame)
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 
     // Success! Now the skill will activate when:
     // - phase is <=Mid AND
@@ -506,7 +506,7 @@ fn test_phase_equality_still_creates_trigger() {
     ));
 
     // accumulatetime should be a guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================================
@@ -535,7 +535,7 @@ fn test_dynamic_guard_forces_continuous() {
     assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
     // All conditions should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -563,7 +563,7 @@ fn test_static_guards_allow_monotonic_trigger() {
     ));
 
     // ground_type should be a guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================================
@@ -607,7 +607,7 @@ fn test_activate_count_with_window_trigger() {
     ));
 
     // All other conditions should be guards (including activate_count_all, order_rate)
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -639,7 +639,7 @@ fn test_activate_count_with_monotonic_promoted() {
     ));
 
     // activate_count_heal, distance_rate, and order should remain as guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -666,7 +666,7 @@ fn test_activate_count_with_phase_trigger() {
     assert!(matches!(triggers[0], TriggerCondition::PhaseChange { .. }));
 
     // activate_count_middle and other conditions should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -700,7 +700,7 @@ fn test_activate_count_with_spatial_trigger() {
     ));
 
     // All other conditions (including activate_count_middle) should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -724,7 +724,7 @@ fn test_activate_count_alone_continuous() {
     assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
     // activate_count_middle should be a guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -749,7 +749,7 @@ fn test_activate_count_with_static_guard_continuous() {
     assert!(matches!(triggers[0], TriggerCondition::Continuous));
 
     // Both conditions should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================

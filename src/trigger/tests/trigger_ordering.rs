@@ -72,7 +72,7 @@ fn test_phase_transition_and_distance_threshold() {
 
     // Should have PhaseChange trigger (explicit trigger takes precedence)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(triggers[0], TriggerCondition::PhaseChange { phase: _ }),
@@ -81,7 +81,7 @@ fn test_phase_transition_and_distance_threshold() {
 
     // distance_rate, order, and order_rate become guards
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have guards for distance_rate, order, and order_rate"
     );
 
@@ -118,7 +118,7 @@ fn test_multiple_conditions_align_at_phase_boundary() {
 
     // Should have PhaseChange trigger
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
@@ -127,7 +127,7 @@ fn test_multiple_conditions_align_at_phase_boundary() {
 
     // All other conditions (distance_rate, slope, order_rate) become guards
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have guards for simultaneous conditions"
     );
 
@@ -158,7 +158,7 @@ fn test_six_conditions_simultaneous() {
 
     // Should have PhaseChange trigger (phase==1 is explicit trigger)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
@@ -167,7 +167,7 @@ fn test_six_conditions_simultaneous() {
 
     // All five other conditions become guards
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have guards for all non-trigger conditions"
     );
 
@@ -203,7 +203,7 @@ fn test_distance_rate_and_remain_distance_alignment() {
 
     // Should have Window trigger for distance_rate 66-68%
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(
@@ -218,7 +218,7 @@ fn test_distance_rate_and_remain_distance_alignment() {
     );
 
     // order_rate and remain_distance become guards
-    assert!(guards.is_some(), "Should have guards");
+    assert!(!guards.is_empty(), "Should have guards");
 
     // Key behavior: Window is only 2% wide (66-68%)
     // When entering this window, must also check:
@@ -251,7 +251,7 @@ fn test_hp_trigger_during_distance_window() {
 
     // Should have HpPercent trigger (HP is monitored separately)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(
@@ -265,7 +265,7 @@ fn test_hp_trigger_during_distance_window() {
     );
 
     // distance_type becomes guard
-    assert!(guards.is_some(), "Should have distance_type guard");
+    assert!(!guards.is_empty(), "Should have distance_type guard");
 
     // Key behavior: HP can drop below 30% at any distance
     // HP trigger is monotonic decreasing, fires when crossing threshold
@@ -298,7 +298,7 @@ fn test_continuous_trigger_with_multiple_dynamic_guards() {
 
     // Should use Continuous trigger (dynamic guards present)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         !triggers.is_empty(),
@@ -306,7 +306,7 @@ fn test_continuous_trigger_with_multiple_dynamic_guards() {
     );
 
     // All conditions become guards (checked every frame)
-    assert!(guards.is_some(), "Should have all conditions as guards");
+    assert!(!guards.is_empty(), "Should have all conditions as guards");
 
     // Key behavior: Continuous trigger checks every frame
     // All guards (accumulatetime, blocked_front_continuetime, order_rate, overtake_target_time)
@@ -339,7 +339,7 @@ fn test_explicit_trigger_takes_precedence_over_dynamic_guards() {
 
     // Should have PhaseChange trigger (explicit trigger has precedence)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
@@ -348,7 +348,7 @@ fn test_explicit_trigger_takes_precedence_over_dynamic_guards() {
 
     // Dynamic guards (blocked_front_continuetime, order_rate) are checked when trigger fires
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have dynamic guards checked on trigger"
     );
 

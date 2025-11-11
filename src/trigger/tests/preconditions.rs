@@ -82,7 +82,7 @@ fn test_precondition_with_window_trigger() {
 
     // Verify trigger is spatial window (not affected by precondition)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(
@@ -96,7 +96,7 @@ fn test_precondition_with_window_trigger() {
     );
 
     // is_last_straight==1 has no additional guards
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 
     // Verify precondition_satisfied array is initialized correctly
     assert_eq!(

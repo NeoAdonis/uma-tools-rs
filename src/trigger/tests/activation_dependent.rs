@@ -84,10 +84,7 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
     // Alternative 2 (index 1) has activation dependency
     let logic_alt2 = &scheduler.skill_logics[1];
 
-    let (triggers, guards) = (
-        &logic_alt2.triggers[..],
-        logic_alt2.guard_condition.as_ref(),
-    );
+    let (triggers, guards) = (&logic_alt2.triggers[..], logic_alt2.guards.as_slice());
 
     // Should have PhaseChange trigger
     assert_eq!(triggers.len(), 1);
@@ -98,7 +95,7 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
 
     // is_activate_other_skill_detail==1 should be a guard
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have is_activate_other_skill_detail as guard"
     );
 
@@ -197,7 +194,7 @@ fn test_activation_dependent_or_branches() {
         let logic = &scheduler.skill_logics[idx];
         assert_eq!(1, 1, "Each OR branch should have 1 branch");
 
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         // Should have spatial window trigger (is_last_straight)
         assert_eq!(triggers.len(), 1);
@@ -215,7 +212,7 @@ fn test_activation_dependent_or_branches() {
 
         // Should have guards including is_activate_other_skill_detail
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have activation dependency guard",
             idx
         );
@@ -263,7 +260,7 @@ fn test_alternative_with_and_without_dependency() {
     // Alternative 1 (indices 0-1): No activation dependency
     for idx in 0..=1 {
         let logic = &scheduler.skill_logics[idx];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         // Should have Window trigger for distance_rate<=50
         assert_eq!(triggers.len(), 1);
@@ -280,15 +277,12 @@ fn test_alternative_with_and_without_dependency() {
             idx
         );
 
-        assert!(guards.is_some());
+        assert!(!guards.is_empty());
     }
 
     // Alternative 2 (index 2): Has activation dependency
     let logic_alt2 = &scheduler.skill_logics[2];
-    let (triggers, guards) = (
-        &logic_alt2.triggers[..],
-        logic_alt2.guard_condition.as_ref(),
-    );
+    let (triggers, guards) = (&logic_alt2.triggers[..], logic_alt2.guards.as_slice());
 
     // Should have Continuous trigger (corner==0 is complex)
     assert_eq!(triggers.len(), 1);
@@ -299,7 +293,7 @@ fn test_alternative_with_and_without_dependency() {
 
     // Should have guards including is_activate_other_skill_detail
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Alt 2 should have activation dependency guard"
     );
 
@@ -335,7 +329,7 @@ fn test_other_character_skill_activation() {
     // All branches have is_other_character_activate_advantage_skill dependency
     for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
         assert_eq!(1, 1);
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         // Should have spatial window trigger (is_finalcorner)
         assert_eq!(triggers.len(), 1);
@@ -353,7 +347,7 @@ fn test_other_character_skill_activation() {
 
         // Should have guards including other character activation check
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "Branch {} should have other character activation dependency",
             idx
         );
@@ -383,7 +377,7 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         assert_eq!(triggers.len(), 1);
         assert!(
@@ -391,7 +385,7 @@ fn test_activation_dependency_variable_detection() {
             "is_activate_other_skill_detail should use Continuous trigger"
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "is_activate_other_skill_detail should remain as guard"
         );
     }
@@ -405,7 +399,7 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         assert_eq!(triggers.len(), 1);
         assert!(
@@ -413,7 +407,7 @@ fn test_activation_dependency_variable_detection() {
             "is_activate_heal_skill should create HealSkillActivation trigger"
         );
         assert!(
-            guards.is_none(),
+            guards.is_empty(),
             "is_activate_heal_skill should have no guards (becomes trigger)"
         );
     }
@@ -431,7 +425,7 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
 
         assert_eq!(triggers.len(), 1);
         assert!(
@@ -439,7 +433,7 @@ fn test_activation_dependency_variable_detection() {
             "is_other_character_activate_advantage_skill should use Continuous trigger"
         );
         assert!(
-            guards.is_some(),
+            !guards.is_empty(),
             "is_other_character_activate_advantage_skill should remain as guard"
         );
     }
@@ -481,7 +475,7 @@ fn test_activation_dependency_with_precondition() {
 
     // Should have Window trigger (distance_rate>=50 promoted to window with dynamic guard present)
     assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guard_condition.as_ref());
+    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
     assert_eq!(triggers.len(), 1);
     assert!(
         matches!(
@@ -497,7 +491,7 @@ fn test_activation_dependency_with_precondition() {
 
     // Should have guards including activation dependency
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have guards with activation dependency"
     );
 

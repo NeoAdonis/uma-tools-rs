@@ -51,7 +51,7 @@ fn test_distance_rate_window_detection() {
     ));
 
     // order_rate>50 should remain as guard
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn test_remain_distance_narrow_window_boundaries() {
     );
 
     // order and slope should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================================
@@ -107,7 +107,7 @@ fn test_hp_percent_window() {
     ));
 
     // hp_per and order should be guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn test_accumulate_time_window() {
     );
 
     // All other conditions become guards
-    assert!(guards.is_some());
+    assert!(!guards.is_empty());
 }
 
 // ============================================================================
@@ -173,7 +173,7 @@ fn test_spatial_position_last_straight() {
         assert_eq!(max_threshold, 2000.0);
     }
 
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn test_spatial_position_specific_corner() {
         assert_eq!(max_threshold, 925.0);
     }
 
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
 
 // ============================================================================
@@ -265,7 +265,7 @@ fn test_order_rate_multiple_windows_or_branches() {
             "Branch {} should have Window trigger",
             idx
         );
-        assert!(guards.is_some(), "Branch {} should have guards", idx);
+        assert!(!guards.is_empty(), "Branch {} should have guards", idx);
     }
 }
 
@@ -296,7 +296,7 @@ fn test_window_with_multiple_guards() {
 
     // Multiple conditions should be guards
     assert!(
-        guards.is_some(),
+        !guards.is_empty(),
         "Should have guards for order_rate and ground_type"
     );
 }
@@ -328,7 +328,7 @@ fn test_window_reversed_order_detection() {
         }
     ));
 
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
 
 #[test]
@@ -354,5 +354,5 @@ fn test_single_sided_window_conversion() {
         }
     ));
 
-    assert!(guards.is_none());
+    assert!(guards.is_empty());
 }
