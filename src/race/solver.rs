@@ -202,10 +202,6 @@ impl RaceSolver<Runner> {
 
         self.update_order_values();
         self.update_blocking_status(delta_time);
-
-        if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
-            // TODO: Implement spot struggle and dueling checks.
-        }
     }
 
     /// Update order (rank) and distance differences for all runners.
@@ -259,6 +255,7 @@ impl RaceSolver<Runner> {
 
         for runner in self.runners.iter_mut() {
             runner.reset_blocking_status();
+            runner.uncheck_duel_targets();
         }
 
         let num_runners = self.runners.len();
@@ -320,12 +317,26 @@ impl RaceSolver<Runner> {
                 if self.state.course.check_side_blocked(distance, lane_diff) {
                     runner_j.update_side_blocked_by(runner_i);
                 }
+
+                // Update spot struggle and dueling status
+                if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
+                    if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
+                    {
+                        runner_i.start_spot_struggle(self.state.elapsed_time);
+                        runner_j.start_spot_struggle(self.state.elapsed_time);
+                    }
+                    if self.state.course.check_dueling(distance, lane_diff) {
+                        runner_i.update_duel_target(runner_j, delta_time);
+                        runner_j.update_duel_target(runner_i, delta_time);
+                    }
+                }
             }
 
             // Checked all runners behind i within a reasonable distance
-            // i block and near statuses can be updated now
+            // runner_i's block, near and dueling statuses can be updated now
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
+            runner_i.filter_duel_targets();
         }
     }
 

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::prelude::*;
@@ -121,6 +121,16 @@ pub struct StruggleState {
 pub struct DuelingState {
     target_speed_modifier: f64,
     acceleration_modifier: f64,
+}
+
+/// Information about a duel target.
+pub struct DuelTarget {
+    /// Whether this target has been checked in the current update cycle.
+    is_checked: bool,
+    /// Whether the runner is currently dueling with this target.
+    is_dueling: bool,
+    /// Time spent engaging with this target in seconds.
+    engagement_time: f64,
 }
 
 /// State related to order (rank) in the race.
@@ -331,6 +341,8 @@ pub struct Runner {
     pub spot_struggle: Option<StruggleState>,
     /// State related to dueling. If `None`, the runner is not currently dueling.
     pub dueling: Option<DuelingState>,
+    /// Duel targets being tracked for potential dueling. Gate number is used as key.
+    pub duel_targets: HashMap<u8, DuelTarget>,
     /// Count of duels the runner has engaged in.
     pub duel_count: u8,
     /// State related to order (rank) in the race.
@@ -600,12 +612,14 @@ impl Runner {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
-            let section_speed_modifier = roll_section_speed_modifier(
+            // Update section speed modifier
+            self.section_speed_modifier = roll_section_speed_modifier(
                 &mut self.rng.borrow_mut(),
                 self.adjusted.wiz,
                 state.course.base_speed(),
             );
-            self.section_speed_modifier = section_speed_modifier;
+
+            // Start rush if conditions are met
             if let Some(rush_state) = &mut self.rush_state
                 && rush_state.section == self.section
                 && !rush_state.is_rushed
@@ -613,6 +627,12 @@ impl Runner {
             {
                 self.start_rush(state);
             }
+
+            // Stop spot struggle if 9th section is entered
+            if self.section == 8 {
+                self.stop_spot_struggle(state.elapsed_time);
+            }
+
             // Phase can only advance at section boundaries
             let prev_phase = self.phase;
             self.phase = Phase::from_position(self.position, &state.course);
@@ -739,6 +759,33 @@ impl Runner {
         self.rush_state.as_ref().is_some_and(|s| s.start_time > 0.0)
     }
 
+    /// Check if a spot struggle (位置取り争い) can occur with another runner.
+    pub fn can_spot_struggle(
+        &self,
+        other: &Self,
+        distance: f64,
+        lane_diff: f64,
+        course: &Course,
+    ) -> bool {
+        if self.position <= 150.0 || other.position <= 150.0 {
+            return false;
+        }
+        if self.section > 6 || other.section > 6 {
+            return false;
+        }
+        match self.adjusted.style {
+            Style::Front => {
+                matches!(other.adjusted.style, Style::Front)
+                    && course.is_near_by(distance, lane_diff, 3.75, 0.165)
+            }
+            Style::Runaway => {
+                matches!(other.adjusted.style, Style::Runaway)
+                    && course.is_near_by(distance, lane_diff, 5.0, 0.416)
+            }
+            _ => false,
+        }
+    }
+
     /// Start a spot struggle (Lead competition, 位置取り争い).
     ///
     /// When there are 2 or more front runners early in the race,
@@ -747,6 +794,9 @@ impl Runner {
     /// During a spot struggle, runners gain a speed boost based on their guts
     /// stat, but also consume HP at a higher rate.
     pub fn start_spot_struggle(&mut self, elapsed_time: f64) {
+        if self.is_spot_struggling() {
+            return;
+        }
         let modifier = (500.0 * self.adjusted.guts as f64).powf(0.6) * 0.0001;
         let duration = (700.0 * self.adjusted.guts as f64).sqrt() * 0.012;
         self.spot_struggle = Some(StruggleState {
@@ -755,9 +805,50 @@ impl Runner {
         });
     }
 
+    /// Stop the spot struggle (位置取り争い).
+    pub fn stop_spot_struggle(&mut self, elapsed_time: f64) {
+        if let Some(struggle) = &mut self.spot_struggle {
+            struggle.expires_at = elapsed_time; // Set to expire immediately
+        }
+    }
+
     /// Check if the runner is currently in a spot struggle (位置取り争い).
     pub fn is_spot_struggling(&self) -> bool {
         self.spot_struggle.is_some()
+    }
+
+    /// Uncheck all duel targets at the start of an update cycle.
+    pub fn uncheck_duel_targets(&mut self) {
+        for target in self.duel_targets.values_mut() {
+            target.is_checked = false;
+        }
+    }
+
+    /// Update duel target engagement time and start dueling if conditions are met.
+    pub fn update_duel_target(&mut self, target: &Self, delta_time: f64) {
+        let target_entry = self
+            .duel_targets
+            .entry(target.gate_roll)
+            .or_insert(DuelTarget {
+                is_checked: true,
+                is_dueling: false,
+                engagement_time: 0.0,
+            });
+        target_entry.engagement_time += delta_time;
+
+        if !target_entry.is_dueling
+            && target_entry.engagement_time > 2.0
+            && target.order.rate <= 50
+            && (self.speed - target.speed).abs() < 0.6
+        {
+            target_entry.is_dueling = true;
+            self.start_dueling();
+        }
+    }
+
+    /// Remove duel targets that were not checked in the current update cycle.
+    pub fn filter_duel_targets(&mut self) {
+        self.duel_targets.retain(|_k, v| v.is_checked);
     }
 
     /// Start a duel (Compete Fight, 追い比べ).

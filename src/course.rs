@@ -355,6 +355,12 @@ impl Course {
         self.is_near_by(distance, lane_diff, 1.5, 3.0)
     }
 
+    /// Check if a runner is within dueling range of another runner based on distance
+    /// and lane difference.
+    pub fn check_dueling(&self, distance: f64, lane_diff: f64) -> bool {
+        self.is_near_by(distance, lane_diff, 3.0, 0.25)
+    }
+
     /// Check if a runner is overlapping with another runner based on position and
     /// lane difference.
     pub fn is_overlapping(&self, distance: f64, lane_diff: f64) -> bool {

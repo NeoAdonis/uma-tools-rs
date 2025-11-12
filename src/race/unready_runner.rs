@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::Rng;
@@ -386,6 +386,7 @@ impl UnreadyRunner {
             finish_time: None,
             spot_struggle: None,
             dueling: None,
+            duel_targets: HashMap::new(),
             duel_count: 0,
             order: OrderState::default(),
             position_diff: PositionDiff::default(),
