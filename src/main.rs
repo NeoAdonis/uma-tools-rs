@@ -1,3 +1,4 @@
+use uma_tools::configuration::Language;
 use uma_tools::course::*;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;

@@ -6,6 +6,7 @@ use rand::prelude::*;
 
 use crate::condition::evaluator::{EvaluatorFull, evaluate_comparison_list, evaluate_condition};
 use crate::condition::parser::CompOp;
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
@@ -19,14 +20,6 @@ use crate::trigger::skill_activation::{ActiveTimedEffect, SkillActivationRecord,
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::skill::*;
 use crate::uma::*;
-
-#[allow(dead_code)]
-pub enum GameBehavior {
-    Original,         // when the game was first released
-    FirstAnniversary, // after the first anniversary update
-}
-
-pub static GAME_BEHAVIOR: GameBehavior = GameBehavior::Original;
 
 /// Skill modifiers that are applied during race calculations.
 #[derive(Debug, Clone)]

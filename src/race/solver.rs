@@ -6,9 +6,10 @@ use std::vec;
 
 use rand::prelude::*;
 
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
+use crate::race::runner::Runner;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::uma::skill::*;
 use crate::uma::*;

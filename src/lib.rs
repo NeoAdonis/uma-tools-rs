@@ -1,4 +1,5 @@
 pub mod condition;
+pub mod configuration;
 pub mod course;
 pub mod race;
 pub mod trigger;

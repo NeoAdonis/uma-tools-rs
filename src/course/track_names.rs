@@ -1,8 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Language {
-    Japanese,
-    English,
-}
+use crate::configuration::Language;
 
 pub fn get_track_name(track_id: u16, language: Language) -> Option<&'static str> {
     match (track_id, language) {

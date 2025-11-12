@@ -2,11 +2,12 @@
 
 use rand::Rng;
 
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::{Course, Phase};
 use crate::race::hp::estimate_hp_consumption;
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
-use crate::race::runner::{GAME_BEHAVIOR, GameBehavior, Runner};
+use crate::race::runner::Runner;
 use crate::uma::{Aptitude, Style};
 
 /// Parameters defining the last spurt behavior of a runner.
