@@ -817,7 +817,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Continuous checks
         StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
-        StatusVar::IsOvertake => 0, // STUB: Multi-uma
+        StatusVar::IsOvertake => runner.is_in_overtake_mode() as i32,
         StatusVar::IsTemptation => runner.is_rushed() as i32,
         StatusVar::TemptationCount => runner.has_rushed() as i32, // You can only rush once
     }
@@ -825,30 +825,28 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
 /// Get rank-related values
 fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
+    use OrderVar::*;
+
     match var {
         // Order
-        OrderVar::Order => runner.order.order as i32,
-        OrderVar::OrderRate => runner.order.rate as i32,
+        Order => runner.order.order as i32,
+        OrderRate => runner.order.rate as i32,
 
         // Order change checks
-        OrderVar::ChangeOrderOnetime => runner.order.delta as i32,
-        OrderVar::ChangeOrderUpEndAfter => runner.order.overtakes_since_late as i32,
-        OrderVar::ChangeOrderUpFinalcornerAfter => runner.order.overtakes_since_last_corner as i32,
-        OrderVar::ChangeOrderUpMiddle => runner.order.overtakes_since_mid as i32,
+        ChangeOrderOnetime => runner.order.delta as i32,
+        ChangeOrderUpEndAfter => runner.order.overtakes_since_late as i32,
+        ChangeOrderUpFinalcornerAfter => runner.order.overtakes_since_last_corner as i32,
+        ChangeOrderUpMiddle => runner.order.overtakes_since_mid as i32,
 
         // Order rate continue checks
-        OrderVar::OrderRateIn20Continue => (runner.order.rate_min <= 20) as i32,
-        OrderVar::OrderRateIn40Continue => (runner.order.rate_min <= 40) as i32,
-        OrderVar::OrderRateIn50Continue => (runner.order.rate_min <= 50) as i32,
-        OrderVar::OrderRateIn80Continue => (runner.order.rate_min <= 80) as i32,
-        OrderVar::OrderRateOut20Continue => (runner.order.rate_max > 20) as i32,
-        OrderVar::OrderRateOut40Continue => (runner.order.rate_max > 40) as i32,
-        OrderVar::OrderRateOut50Continue => (runner.order.rate_max > 50) as i32,
-        OrderVar::OrderRateOut70Continue => (runner.order.rate_max > 70) as i32,
-
-        // Target overtake times
-        OrderVar::OvertakeTargetNoOrderUpTime => 0, // STUB
-        OrderVar::OvertakeTargetTime => 0,          // STUB
+        OrderRateIn20Continue => (runner.order.rate_min <= 20) as i32,
+        OrderRateIn40Continue => (runner.order.rate_min <= 40) as i32,
+        OrderRateIn50Continue => (runner.order.rate_min <= 50) as i32,
+        OrderRateIn80Continue => (runner.order.rate_min <= 80) as i32,
+        OrderRateOut20Continue => (runner.order.rate_max > 20) as i32,
+        OrderRateOut40Continue => (runner.order.rate_max > 40) as i32,
+        OrderRateOut50Continue => (runner.order.rate_max > 50) as i32,
+        OrderRateOut70Continue => (runner.order.rate_max > 70) as i32,
     }
 }
 
@@ -871,6 +869,10 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
         BehindNearLaneTime => runner.nearby.behind_same_lane_time.floor() as i32,
         BehindNearLaneTimeSet1 => runner.nearby.behind_set1_time.floor() as i32,
         IsBehindIn => runner.nearby.behind_in as i32,
+
+        // Target overtake times
+        OvertakeTargetNoOrderUpTime => runner.overtake_target_time as i32,
+        OvertakeTargetTime => runner.being_overtake_target_time as i32,
 
         // Visible runner count
         Visiblehorse => runner.visible_count as i32,

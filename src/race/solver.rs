@@ -257,6 +257,7 @@ impl RaceSolver<Runner> {
         for runner in self.runners.iter_mut() {
             runner.reset_blocking_status();
             runner.uncheck_duel_targets();
+            runner.reset_overtake_checks();
         }
 
         let num_runners = self.runners.len();
@@ -281,15 +282,10 @@ impl RaceSolver<Runner> {
 
                 if runner_j.is_visible(runner_i, &self.state.course) {
                     runner_j.visible_count += 1;
-                    // let speed_diff = runner_j.speed - runner_i.speed;
-                    // j can overtake i in less than 15 seconds
-                    // if distance > 0.001
-                    //     && speed_diff / distance < 15.0
-                    //     && (runner_i.base_target_speed < runner_j.base_target_speed
-                    //         || runner_i.is_front_blocked() && runner_i.speed < runner_j.base_target_speed)
-                    // {
-                    //     // add i as overtake target for j
-                    // }
+                    // Check if runner_i is an overtake target for runner_j
+                    if runner_j.check_overtake_target(runner_i, delta_time) {
+                        runner_i.being_overtake_target_time += delta_time;
+                    }
                 }
 
                 if distance > 5.0 {
@@ -338,6 +334,21 @@ impl RaceSolver<Runner> {
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
             runner_i.filter_duel_targets();
+            runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
+        }
+
+        // Calculate overtake lane targets (needs access to all runners)
+        // Use unsafe pointer to access runners slice while iterating
+        let runners_ptr = self.runners.as_ptr();
+        let runners_len = self.runners.len();
+
+        for i in 0..num_runners {
+            let runner = &mut self.runners[i];
+            if runner.is_in_overtake_mode() && !runner.blocked.side {
+                // Safety: We're only reading from other runners, not modifying them
+                let all_runners = unsafe { std::slice::from_raw_parts(runners_ptr, runners_len) };
+                runner.calculate_overtake_lane_target(&self.state.course, all_runners);
+            }
         }
     }
 

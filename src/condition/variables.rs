@@ -62,8 +62,6 @@ pub enum OrderVar {
     OrderRateOut40Continue,
     OrderRateOut50Continue,
     OrderRateOut70Continue,
-    OvertakeTargetNoOrderUpTime,
-    OvertakeTargetTime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -203,6 +201,8 @@ pub enum BlockingVar {
     IsSurrounded,
     NearCount,
     NearInfrontCount,
+    OvertakeTargetNoOrderUpTime,
+    OvertakeTargetTime,
     Visiblehorse,
 }
 
@@ -317,8 +317,6 @@ impl VarType {
             "order_rate_out40_continue" => Order(OrderVar::OrderRateOut40Continue),
             "order_rate_out50_continue" => Order(OrderVar::OrderRateOut50Continue),
             "order_rate_out70_continue" => Order(OrderVar::OrderRateOut70Continue),
-            "overtake_target_no_order_up_time" => Order(OrderVar::OvertakeTargetNoOrderUpTime),
-            "overtake_target_time" => Order(OrderVar::OvertakeTargetTime),
 
             // Distance to other runners
             "bashin_diff_behind" => Distance(DistanceVar::BashinDiffBehind),
@@ -457,6 +455,10 @@ impl VarType {
             "is_surrounded" => Blocking(BlockingVar::IsSurrounded),
             "near_count" => Blocking(BlockingVar::NearCount),
             "near_infront_count" => Blocking(BlockingVar::NearInfrontCount),
+            "overtake_target_no_order_up_time" => {
+                Blocking(BlockingVar::OvertakeTargetNoOrderUpTime)
+            }
+            "overtake_target_time" => Blocking(BlockingVar::OvertakeTargetTime),
             "visiblehorse" => Blocking(BlockingVar::Visiblehorse),
 
             // Rush/Temptation
