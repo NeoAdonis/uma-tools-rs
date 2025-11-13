@@ -13,10 +13,14 @@ pub enum VarType {
     Distance(DistanceVar),
     /// Variables related to phases.
     Phase(PhaseVar),
+    /// Variables related to random phase aspects.
+    RandomPhase(RandomPhaseVar),
     /// Variables related to course properties.
     Course(CourseVar),
     /// Variables related to spatial position (i.e. position on course or course features).
     Spatial(SpatialVar),
+    /// Variables related to random positional aspects.
+    RandomSpatial(RandomSpatialVar),
     /// Variables related to skill activation tracking.
     Activation(ActivationVar),
     /// Variables related to race parameters.
@@ -76,17 +80,9 @@ pub enum DistanceVar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhaseVar {
     Phase,
-    PhaseCornerRandom,
     PhaseFirsthalf,
-    PhaseFirsthalfRandom,
-    PhaseFirstHalfStraightRandom,
     PhaseFirstquarter,
-    PhaseFirstquarterRandom,
     PhaseLaterhalf,
-    PhaseLaterhalfRandom,
-    PhaseLatterHalfStraightRandom,
-    PhaseRandom,
-    PhaseStraightRandom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,27 +99,43 @@ pub enum CourseVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpatialVar {
-    AllCornerRandom,
     Corner,
-    CornerRandom,
     DistanceRate,
-    DistanceRateAfterRandom,
-    DownSlopeRandom,
     Furlong,
     IsFinalcorner,
     IsFinalcornerLaterhalf,
-    IsFinalcornerRandom,
     IsLastStraight,
     IsLastStraightOnetime,
     LaneType,
-    LastStraightRandom,
     RemainDistance,
     RemainDistanceViewerId,
     Slope,
     StraightFrontType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RandomSpatialVar {
+    AllCornerRandom,
+    CornerRandom,
+    DistanceRateAfterRandom,
+    DownSlopeRandom,
+    IsFinalcornerRandom,
+    LastStraightRandom,
     StraightRandom,
     UpSlopeRandom,
     UpSlopeRandomLaterHalf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RandomPhaseVar {
+    PhaseCornerRandom,
+    PhaseFirsthalfRandom,
+    PhaseFirstHalfStraightRandom,
+    PhaseFirstquarterRandom,
+    PhaseLaterhalfRandom,
+    PhaseLatterHalfStraightRandom,
+    PhaseRandom,
+    PhaseStraightRandom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,6 +253,8 @@ impl fmt::Display for VarType {
             Temptation(t) => write!(f, "{}", t),
             AccumulateTime => write!(f, "accumulatetime"),
             Always => write!(f, "always"),
+            RandomSpatial(rs) => write!(f, "{}", rs),
+            RandomPhase(rp) => write!(f, "{}", rp),
             Unknown(s) => write!(f, "<unknown:{}>", s),
         }
     }
@@ -280,7 +294,9 @@ macro_rules! impl_display_snake_case {
 impl_display_snake_case!(OrderVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
+impl_display_snake_case!(RandomPhaseVar);
 impl_display_snake_case!(SpatialVar);
+impl_display_snake_case!(RandomSpatialVar);
 impl_display_snake_case!(CourseVar);
 impl_display_snake_case!(ActivationVar);
 impl_display_snake_case!(RaceParamVar);
@@ -330,17 +346,19 @@ impl VarType {
 
             // Phase
             "phase" => Phase(PhaseVar::Phase),
-            "phase_corner_random" => Phase(PhaseVar::PhaseCornerRandom),
-            "phase_first_half_straight_random" => Phase(PhaseVar::PhaseFirstHalfStraightRandom),
             "phase_firsthalf" => Phase(PhaseVar::PhaseFirsthalf),
-            "phase_firsthalf_random" => Phase(PhaseVar::PhaseFirsthalfRandom),
             "phase_firstquarter" => Phase(PhaseVar::PhaseFirstquarter),
-            "phase_firstquarter_random" => Phase(PhaseVar::PhaseFirstquarterRandom),
             "phase_laterhalf" => Phase(PhaseVar::PhaseLaterhalf),
-            "phase_laterhalf_random" => Phase(PhaseVar::PhaseLaterhalfRandom),
-            "phase_latter_half_straight_random" => Phase(PhaseVar::PhaseLatterHalfStraightRandom),
-            "phase_random" => Phase(PhaseVar::PhaseRandom),
-            "phase_straight_random" => Phase(PhaseVar::PhaseStraightRandom),
+
+            // Random Phase
+            "phase_corner_random" => RandomPhase(RandomPhaseVar::PhaseCornerRandom),
+            "phase_first_half_straight_random" => RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom),
+            "phase_firsthalf_random" => RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom),
+            "phase_firstquarter_random" => RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom),
+            "phase_laterhalf_random" => RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom),
+            "phase_latter_half_straight_random" => RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom),
+            "phase_random" => RandomPhase(RandomPhaseVar::PhaseRandom),
+            "phase_straight_random" => RandomPhase(RandomPhaseVar::PhaseStraightRandom),
 
             // Course
             "corner_count" => Course(CourseVar::CornerCount),
@@ -353,27 +371,31 @@ impl VarType {
             "track_id" => Course(CourseVar::TrackId),
 
             // Spatial
-            "all_corner_random" => Spatial(SpatialVar::AllCornerRandom),
             "corner" => Spatial(SpatialVar::Corner),
-            "corner_random" => Spatial(SpatialVar::CornerRandom),
             "distance_rate" => Spatial(SpatialVar::DistanceRate),
-            "distance_rate_after_random" => Spatial(SpatialVar::DistanceRateAfterRandom),
-            "down_slope_random" => Spatial(SpatialVar::DownSlopeRandom),
             "furlong" => Spatial(SpatialVar::Furlong),
             "is_finalcorner" => Spatial(SpatialVar::IsFinalcorner),
             "is_finalcorner_laterhalf" => Spatial(SpatialVar::IsFinalcornerLaterhalf),
-            "is_finalcorner_random" => Spatial(SpatialVar::IsFinalcornerRandom),
             "is_last_straight" => Spatial(SpatialVar::IsLastStraight),
             "is_last_straight_onetime" => Spatial(SpatialVar::IsLastStraightOnetime),
             "lane_type" => Spatial(SpatialVar::LaneType),
-            "last_straight_random" => Spatial(SpatialVar::LastStraightRandom),
             "remain_distance" => Spatial(SpatialVar::RemainDistance),
             "remain_distance_viewer_id" => Spatial(SpatialVar::RemainDistanceViewerId),
             "slope" => Spatial(SpatialVar::Slope),
             "straight_front_type" => Spatial(SpatialVar::StraightFrontType),
-            "straight_random" => Spatial(SpatialVar::StraightRandom),
-            "up_slope_random" => Spatial(SpatialVar::UpSlopeRandom),
-            "up_slope_random_later_half" => Spatial(SpatialVar::UpSlopeRandomLaterHalf),
+
+            // Random Spatial
+            "all_corner_random" => RandomSpatial(RandomSpatialVar::AllCornerRandom),
+            "corner_random" => RandomSpatial(RandomSpatialVar::CornerRandom),
+            "distance_rate_after_random" => {
+                RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom)
+            }
+            "down_slope_random" => RandomSpatial(RandomSpatialVar::DownSlopeRandom),
+            "is_finalcorner_random" => RandomSpatial(RandomSpatialVar::IsFinalcornerRandom),
+            "last_straight_random" => RandomSpatial(RandomSpatialVar::LastStraightRandom),
+            "straight_random" => RandomSpatial(RandomSpatialVar::StraightRandom),
+            "up_slope_random" => RandomSpatial(RandomSpatialVar::UpSlopeRandom),
+            "up_slope_random_later_half" => RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf),
 
             // Activation tracking
             "activate_count_all_team" => Activation(ActivationVar::ActivateCountAllTeam),
@@ -569,24 +591,9 @@ impl VarType {
 
         match self {
             // RANDOM GATES - Activate at pre-rolled location, check guards there
-            Random(RandomVar::RandomLot) => RandomTrigger,
-            Phase(PhaseVar::PhaseRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseFirsthalfRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseFirstquarterRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseLaterhalfRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseCornerRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseStraightRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseFirstHalfStraightRandom) => RandomTrigger,
-            Phase(PhaseVar::PhaseLatterHalfStraightRandom) => RandomTrigger,
-            Spatial(SpatialVar::IsFinalcornerRandom) => RandomTrigger,
-            Spatial(SpatialVar::CornerRandom) => RandomTrigger,
-            Spatial(SpatialVar::AllCornerRandom) => RandomTrigger,
-            Spatial(SpatialVar::StraightRandom) => RandomTrigger,
-            Spatial(SpatialVar::LastStraightRandom) => RandomTrigger,
-            Spatial(SpatialVar::UpSlopeRandom) => RandomTrigger,
-            Spatial(SpatialVar::UpSlopeRandomLaterHalf) => RandomTrigger,
-            Spatial(SpatialVar::DownSlopeRandom) => RandomTrigger,
-            Spatial(SpatialVar::DistanceRateAfterRandom) => RandomTrigger,
+            Random(_) => RandomTrigger,
+            RandomPhase(_) => RandomTrigger,
+            RandomSpatial(_) => RandomTrigger,
 
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context
             // Time-based

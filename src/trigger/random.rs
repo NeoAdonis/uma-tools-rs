@@ -77,7 +77,7 @@ pub fn process_random_comp(
         }
 
         // Random point during a phase
-        Phase(PhaseVar::PhaseRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseRandom) => {
             // phase_random==X where X is phase (0=Early, 1=Mid, 2=Late, 3=Last)
             let phase = match comp.value {
                 0 => CoursePhase::Early,
@@ -92,7 +92,7 @@ pub fn process_random_comp(
             Some(vec![activation_distance])
         }
 
-        Phase(PhaseVar::PhaseFirsthalfRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom) => {
             // phase_firsthalf_random==X where X is phase
             // Activates at random point during first half of specified phase
             let phase = match comp.value {
@@ -109,7 +109,7 @@ pub fn process_random_comp(
             Some(vec![activation_distance])
         }
 
-        Phase(PhaseVar::PhaseFirstquarterRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom) => {
             // phase_firstquarter_random==X where X is phase
             // Activates at random point during first quarter of specified phase
             let phase = match comp.value {
@@ -126,7 +126,7 @@ pub fn process_random_comp(
             Some(vec![activation_distance])
         }
 
-        Phase(PhaseVar::PhaseLaterhalfRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom) => {
             // phase_laterhalf_random==X where X is phase
             // Activates at random point during second half of specified phase
             let phase = match comp.value {
@@ -143,7 +143,7 @@ pub fn process_random_comp(
             Some(vec![activation_distance])
         }
 
-        Phase(PhaseVar::PhaseCornerRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseCornerRandom) => {
             // phase_corner_random==X where X is phase
             // Picks random point during a corner in specified phase
             let phase = match comp.value {
@@ -175,7 +175,7 @@ pub fn process_random_comp(
             }
         }
 
-        Phase(PhaseVar::PhaseStraightRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseStraightRandom) => {
             // phase_straight_random==X where X is phase
             // Picks random point during a straight in specified phase
             let phase = match comp.value {
@@ -205,7 +205,7 @@ pub fn process_random_comp(
             }
         }
 
-        Phase(PhaseVar::PhaseFirstHalfStraightRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom) => {
             // TODO: Under investigation - straight in first half of race
             let section_len = course.section_length();
             let halfway = section_len * 12.0;
@@ -229,7 +229,7 @@ pub fn process_random_comp(
             }
         }
 
-        Phase(PhaseVar::PhaseLatterHalfStraightRandom) => {
+        RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => {
             // TODO: Under investigation - straight in second half of race
             let section_len = course.section_length();
             let halfway = section_len * 12.0;
@@ -253,7 +253,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::IsFinalcornerRandom) => {
+        RandomSpatial(RandomSpatialVar::IsFinalcornerRandom) => {
             // is_finalcorner_random==1
             // Picks random point on final corner
             if let Some(last_corner) = course.corners.last() {
@@ -266,7 +266,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::CornerRandom) => {
+        RandomSpatial(RandomSpatialVar::CornerRandom) => {
             // corner_random==X where X is corner number (1-indexed)
             let corner_idx = (comp.value - 1) as usize;
             if corner_idx < course.corners.len() {
@@ -280,7 +280,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::AllCornerRandom) => {
+        RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
             // all_corner_random==1
             // Picks 4 random points (roll random corner, then random point on it, 4 times)
             // TODO: extend to multiple activations
@@ -296,7 +296,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::StraightRandom) => {
+        RandomSpatial(RandomSpatialVar::StraightRandom) => {
             // straight_random==1
             // Picks random straight, then random point on it
             if !course.straights.is_empty() {
@@ -311,7 +311,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::LastStraightRandom) => {
+        RandomSpatial(RandomSpatialVar::LastStraightRandom) => {
             // last_straight_random==1
             // Picks random point on final straight
             if let Some(last_straight) = course.straights.last() {
@@ -324,7 +324,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::UpSlopeRandom) => {
+        RandomSpatial(RandomSpatialVar::UpSlopeRandom) => {
             // up_slope_random==1
             // Picks random point on any uphill
             let uphills: Vec<_> = course.slopes.iter().filter(|s| s.is_uphill()).collect();
@@ -340,7 +340,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::UpSlopeRandomLaterHalf) => {
+        RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
             // up_slope_random_later_half==1
             // Picks random point on any uphill in second half of race
             let section_len = course.section_length();
@@ -363,7 +363,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::DownSlopeRandom) => {
+        RandomSpatial(RandomSpatialVar::DownSlopeRandom) => {
             // down_slope_random==1
             // Picks random point on any downhill
             let downhills: Vec<_> = course.slopes.iter().filter(|s| s.is_downhill()).collect();
@@ -379,7 +379,7 @@ pub fn process_random_comp(
             }
         }
 
-        Spatial(SpatialVar::DistanceRateAfterRandom) => {
+        RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom) => {
             // distance_rate_after_random==X where X is percentage
             // Picks random point after X% of the race
             let threshold_distance = (comp.value as f64 / 100.0) * course.distance as f64;

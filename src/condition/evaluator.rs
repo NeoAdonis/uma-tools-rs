@@ -370,12 +370,17 @@ fn get_variable_value(
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
         Status(status_var) => get_status_value(status_var, runner),
-        Random(trigger_var) => get_random_value(trigger_var, state),
         Blocking(blocking_var) => get_blocking_value(blocking_var, runner),
         Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
         AccumulateTime => state.elapsed_time.floor() as i32,
         Always => 1,     // Always returns 1 (true)
         Unknown(_) => 0, // Default to 0
+        Random(_) | RandomSpatial(_) | RandomPhase(_) => {
+            panic!(
+                "BUG: Random variable {:?} should not be evaluated - it's a trigger variable!",
+                var
+            )
+        }
     }
 }
 
@@ -399,94 +404,81 @@ fn get_variable_value_out_of_gate(
 
 /// Get base stat value
 fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
+    use StatKind::*;
     match stat {
-        StatKind::Speed => uma.speed as i32,
-        StatKind::Stamina => uma.stamina as i32,
-        StatKind::Power => uma.power as i32,
-        StatKind::Guts => uma.guts as i32,
-        StatKind::Wiz => uma.wiz as i32,
+        Speed => uma.speed as i32,
+        Stamina => uma.stamina as i32,
+        Power => uma.power as i32,
+        Guts => uma.guts as i32,
+        Wiz => uma.wiz as i32,
     }
 }
 
 /// Get values related to distance between runners
 fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
+    use DistanceVar::*;
     match var {
-        DistanceVar::BashinDiffBehind => {
-            meters_to_bashin(runner.position_diff.from_prev).floor() as i32
-        }
-        DistanceVar::BashinDiffInfront => {
-            meters_to_bashin(runner.position_diff.from_next).floor() as i32
-        }
-        DistanceVar::DistanceDiffRate => runner.position_diff.rate_from_first.floor() as i32,
-        DistanceVar::DistanceDiffTop => runner.position_diff.from_first.floor() as i32,
-        DistanceVar::DistanceDiffTopFloat => {
-            (runner.position_diff.from_first * 10.0).floor() as i32
-        }
+        BashinDiffBehind => meters_to_bashin(runner.position_diff.from_prev).floor() as i32,
+        BashinDiffInfront => meters_to_bashin(runner.position_diff.from_next).floor() as i32,
+        DistanceDiffRate => runner.position_diff.rate_from_first.floor() as i32,
+        DistanceDiffTop => runner.position_diff.from_first.floor() as i32,
+        DistanceDiffTopFloat => (runner.position_diff.from_first * 10.0).floor() as i32,
     }
 }
 
 /// Get phase-related values
 fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
+    use PhaseVar::*;
+
     match var {
         // Current phase: 0=Early, 1=Mid, 2=Late, 3=Last
-        PhaseVar::Phase => runner.phase as i32,
+        Phase => runner.phase as i32,
 
         // Phase subdivisions
-        PhaseVar::PhaseFirstquarter => (runner.position < course.quarterway()) as i32,
-        PhaseVar::PhaseFirsthalf => (runner.position < course.halfway()) as i32,
-        PhaseVar::PhaseLaterhalf => (runner.position >= course.halfway()) as i32,
-
-        // Random triggers - handled by trigger system, not evaluated here
-        PhaseVar::PhaseCornerRandom
-        | PhaseVar::PhaseFirsthalfRandom
-        | PhaseVar::PhaseFirstHalfStraightRandom
-        | PhaseVar::PhaseFirstquarterRandom
-        | PhaseVar::PhaseLaterhalfRandom
-        | PhaseVar::PhaseLatterHalfStraightRandom
-        | PhaseVar::PhaseRandom
-        | PhaseVar::PhaseStraightRandom => {
-            panic!(
-                "BUG: Random phase trigger {:?} should not be evaluated - it's a trigger variable!",
-                var
-            )
-        }
+        PhaseFirstquarter => (runner.position < course.quarterway()) as i32,
+        PhaseFirsthalf => (runner.position < course.halfway()) as i32,
+        PhaseLaterhalf => (runner.position >= course.halfway()) as i32,
     }
 }
 
 /// Get course-related values
 fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
+    use CourseVar::*;
+
     match var {
         // Total corners on course
-        CourseVar::CornerCount => course.corners.len() as i32,
+        CornerCount => course.corners.len() as i32,
 
         // Direct course distance
-        CourseVar::CourseDistance => course.distance,
+        CourseDistance => course.distance,
 
         // Distance type: 1=short, 2=mile, 3=medium, 4=long
-        CourseVar::DistanceType => course.distance_type as i32,
+        DistanceType => course.distance_type as i32,
 
         // Ground type: 1=turf, 2=dirt
-        CourseVar::GroundType => course.surface as i32,
+        GroundType => course.surface as i32,
 
         // Is basis distance (multiple of 400m)
-        CourseVar::IsBasisDistance => course.is_basis_distance() as i32,
+        IsBasisDistance => course.is_basis_distance() as i32,
 
         // Is exchange race (dirt grade): races at Ooi, Kawasaki, Funabashi, or Morioka
-        CourseVar::IsDirtgrade => course.is_exchange_race() as i32,
+        IsDirtgrade => course.is_exchange_race() as i32,
 
         // Rotation: 1=clockwise, 2=counterclockwise, 4=straight
-        CourseVar::Rotation => course.turn as i32,
+        Rotation => course.turn as i32,
 
         // Track ID
-        CourseVar::TrackId => course.race_track_id as i32,
+        TrackId => course.race_track_id as i32,
     }
 }
 
 /// Get location-related values
 fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
+    use SpatialVar::*;
+
     match var {
         // Which corner: 0=none, 1-4=corner number
-        SpatialVar::Corner => {
+        Corner => {
             if let Some(idx) = runner.current_corner() {
                 (idx + 1) as i32 // 1-based index
             } else {
@@ -495,7 +487,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Is on final corner or beyond
-        SpatialVar::IsFinalcorner => {
+        IsFinalcorner => {
             if course.corners.is_empty() {
                 0 // False if no corners
             } else {
@@ -511,7 +503,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Is on second half of final corner
-        SpatialVar::IsFinalcornerLaterhalf => {
+        IsFinalcornerLaterhalf => {
             if course.corners.is_empty() {
                 0
             } else {
@@ -527,7 +519,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Is on last straight
-        SpatialVar::IsLastStraight => {
+        IsLastStraight => {
             if course.corners.is_empty() {
                 1 // First (and only) straight is last straight
             } else {
@@ -543,17 +535,17 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // One-time trigger - handled by trigger system
-        SpatialVar::IsLastStraightOnetime => {
+        IsLastStraightOnetime => {
             panic!(
                 "BUG: is_last_straight_onetime should not be evaluated - it's a trigger variable!"
             )
         }
 
         // Current lane: 0=inner, 1=middle, 2=outer, 3=outside
-        SpatialVar::LaneType => runner.lane_type(course) as i32,
+        LaneType => runner.lane_type(course) as i32,
 
         // Slope: 0=flat, 1=uphill, 2=downhill
-        SpatialVar::Slope => {
+        Slope => {
             if let Some(idx) = runner.current_slope() {
                 course.slopes[idx].slope_type() as i32
             } else {
@@ -562,7 +554,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Straight front type: 1=facing audience, 2=opposite from audience
-        SpatialVar::StraightFrontType => {
+        StraightFrontType => {
             if let Some(idx) = runner.current_straight() {
                 course.straights[idx].front_type as i32
             } else {
@@ -571,48 +563,34 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Distance covered as percentage (0-100)
-        SpatialVar::DistanceRate => distance_rate(&runner.position, course.distance),
+        DistanceRate => course.distance_rate(runner.position).floor() as i32,
 
         // Distance in furlongs
-        SpatialVar::Furlong => distance_to_furlongs(runner.position),
+        Furlong => meters_to_furlongs(runner.position).floor() as i32,
 
         // Remaining distance in meters
-        SpatialVar::RemainDistance => remain_distance(&runner.position, course.distance),
+        RemainDistance => course.remain_distance(runner.position).floor() as i32,
 
         // Remaining distance for any player (non-NPC) runner
-        SpatialVar::RemainDistanceViewerId => {
+        RemainDistanceViewerId => {
             unimplemented!("remain_distance_viewer_id not implemented")
-        }
-
-        // Random triggers - handled by trigger system
-        SpatialVar::AllCornerRandom
-        | SpatialVar::CornerRandom
-        | SpatialVar::DistanceRateAfterRandom
-        | SpatialVar::DownSlopeRandom
-        | SpatialVar::IsFinalcornerRandom
-        | SpatialVar::LastStraightRandom
-        | SpatialVar::StraightRandom
-        | SpatialVar::UpSlopeRandom
-        | SpatialVar::UpSlopeRandomLaterHalf => {
-            panic!(
-                "BUG: {:?} should not be evaluated - it's a trigger variable!",
-                var
-            )
         }
     }
 }
 
 /// Get race parameter values
 fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
+    use RaceParamVar::*;
+
     match var {
         // Track condition: 1=firm, 2=good, 3=soft, 4=heavy
-        RaceParamVar::GroundCondition => params.condition as i32,
+        GroundCondition => params.condition as i32,
 
         // Race grade: refer to Grade enum for values
-        RaceParamVar::Grade => params.grade as i32,
+        Grade => params.grade as i32,
 
         // Popularity rank
-        RaceParamVar::Popularity => 1, // STUB: Always most popular in single-uma mode
+        Popularity => 1, // STUB: Always most popular in single-uma mode
 
         // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=sakura
         //
@@ -620,21 +598,21 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // conditions that check for spring should also match sakura.
         // When applicable, this is handled directly in the condition
         // definitions (i.e., "season==1@season==5").
-        RaceParamVar::Season => params.season as i32,
+        Season => params.season as i32,
 
         // Time of day: 0=none/any, 1=morning, 2=noon, 3=evening, 4=night
-        RaceParamVar::Time => params.time as i32,
+        Time => params.time as i32,
 
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy
-        RaceParamVar::Weather => params.weather as i32,
+        Weather => params.weather as i32,
 
         // Count of runners with same skill
-        RaceParamVar::SameSkillHorseCount => {
+        SameSkillHorseCount => {
             panic!("same_skill_horse_count: should be handled in evaluate()")
         }
 
         // Existence checks - out of scope
-        RaceParamVar::IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
+        IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
     }
 }
 
@@ -697,31 +675,25 @@ fn get_activation_value(
 
 /// Get running style values
 fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
+    use RunningStyleVar::*;
+
     match var {
         // TODO: generate simulation values for one-runner simulations
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End
-        RunningStyleVar::RunningStyle => match my_style {
+        RunningStyle => match my_style {
             Style::Runaway => 1, // Runaway is a Front variant
             _ => my_style as i32,
         },
-        RunningStyleVar::RunningStyleCountNigeOtherself => {
-            get_style_count_front_otherself(state, my_style)
-        }
-        RunningStyleVar::RunningStyleCountOikomiOtherself => {
-            get_style_count_otherself(state, Style::End, my_style)
-        }
-        RunningStyleVar::RunningStyleCountSame => get_style_count(state, my_style),
-        RunningStyleVar::RunningStyleCountSameRate => {
+        RunningStyleCountNigeOtherself => get_style_count_front_otherself(state, my_style),
+        RunningStyleCountOikomiOtherself => get_style_count_otherself(state, Style::End, my_style),
+        RunningStyleCountSame => get_style_count(state, my_style),
+        RunningStyleCountSameRate => {
             (get_style_count(state, my_style) as f64 / state.params.gates as f64 * 100.0).floor()
                 as i32
         }
-        RunningStyleVar::RunningStyleCountSashiOtherself => {
-            get_style_count_otherself(state, Style::Late, my_style)
-        }
-        RunningStyleVar::RunningStyleCountSenkoOtherself => {
-            get_style_count_otherself(state, Style::Pace, my_style)
-        }
-        RunningStyleVar::RunningStyleEqualPopularityOne => 1, // STUB: We are most popular
+        RunningStyleCountSashiOtherself => get_style_count_otherself(state, Style::Late, my_style),
+        RunningStyleCountSenkoOtherself => get_style_count_otherself(state, Style::Pace, my_style),
+        RunningStyleEqualPopularityOne => 1, // STUB: We are most popular
     }
 }
 
@@ -774,21 +746,23 @@ fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
 
 /// Get status values (HP, last spurt, continuous checks)
 fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
+    use StatusVar::*;
+
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
-        StatusVar::Motivation => runner.motivation as i32,
+        Motivation => runner.motivation as i32,
 
         // Post number (starting gate)
-        StatusVar::PostNumber => runner.gate_roll as i32,
+        PostNumber => runner.gate_roll as i32,
 
         // HP as percentage (0-100)
-        StatusVar::HpPer => runner.hp_percent().floor() as i32,
+        HpPer => runner.hp_percent().floor() as i32,
 
         // HP is (or has been at some point) empty
-        StatusVar::IsHpEmptyOnetime => runner.has_emptied_hp as i32,
+        IsHpEmptyOnetime => runner.has_emptied_hp as i32,
 
         // Is in last spurt mode (not the phase)
-        StatusVar::IsLastspurt => {
+        IsLastspurt => {
             if runner.last_spurt.is_some() {
                 1
             } else {
@@ -797,7 +771,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         }
 
         // Last spurt state: 0=can't finish, 1=above base, 2=can finish at max
-        StatusVar::Lastspurt => {
+        Lastspurt => {
             // TODO: change logic to determine outcome of last spurt
             if runner.last_spurt.is_some() {
                 2 // Can finish at max
@@ -807,7 +781,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         }
 
         // Start is too late
-        StatusVar::IsBadstart => {
+        IsBadstart => {
             if runner.start_type() == StartType::Late {
                 1
             } else {
@@ -816,10 +790,10 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         }
 
         // Continuous checks
-        StatusVar::IsMoveLane => 0, // STUB: Lane change tracking not implemented
-        StatusVar::IsOvertake => runner.is_in_overtake_mode() as i32,
-        StatusVar::IsTemptation => runner.is_rushed() as i32,
-        StatusVar::TemptationCount => runner.has_rushed() as i32, // You can only rush once
+        IsMoveLane => 0, // STUB: Lane change tracking not implemented
+        IsOvertake => runner.is_in_overtake_mode() as i32,
+        IsTemptation => runner.is_rushed() as i32,
+        TemptationCount => runner.has_rushed() as i32, // You can only rush once
     }
 }
 
@@ -881,60 +855,31 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
 
 /// Get temptation/rush values of other umas
 fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
+    use TemptationVar::*;
+
     match var {
         // Rush counts by position
-        TemptationVar::TemptationCountBehind => runner.rush_counter.behind as i32,
-        TemptationVar::TemptationCountInfront => runner.rush_counter.ahead as i32,
-        TemptationVar::TemptationOpponentCountBehind => runner.rush_counter.behind as i32, // TODO: find actual opponent count
-        TemptationVar::TemptationOpponentCountInfront => runner.rush_counter.ahead as i32, // TODO: find actual opponent count
+        TemptationCountBehind => runner.rush_counter.behind as i32,
+        TemptationCountInfront => runner.rush_counter.ahead as i32,
+        TemptationOpponentCountBehind => runner.rush_counter.behind as i32, // TODO: find actual opponent count
+        TemptationOpponentCountInfront => runner.rush_counter.ahead as i32, // TODO: find actual opponent count
 
         // Rush counts by running style
-        TemptationVar::RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
-        TemptationVar::RunningStyleTemptationCountOikomi => {
-            get_style_temptation_count(state, Style::End)
-        }
-        TemptationVar::RunningStyleTemptationCountSashi => {
-            get_style_temptation_count(state, Style::Late)
-        }
-        TemptationVar::RunningStyleTemptationCountSenko => {
-            get_style_temptation_count(state, Style::Pace)
-        }
-        TemptationVar::RunningStyleTemptationOpponentCountNige => {
+        RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
+        RunningStyleTemptationCountOikomi => get_style_temptation_count(state, Style::End),
+        RunningStyleTemptationCountSashi => get_style_temptation_count(state, Style::Late),
+        RunningStyleTemptationCountSenko => get_style_temptation_count(state, Style::Pace),
+        RunningStyleTemptationOpponentCountNige => {
             get_style_temptation_opponent_count_front(state, runner)
         }
-        TemptationVar::RunningStyleTemptationOpponentCountOikomi => {
+        RunningStyleTemptationOpponentCountOikomi => {
             get_style_temptation_count_opponent(state, Style::End, runner)
         }
-        TemptationVar::RunningStyleTemptationOpponentCountSashi => {
+        RunningStyleTemptationOpponentCountSashi => {
             get_style_temptation_count_opponent(state, Style::Late, runner)
         }
-        TemptationVar::RunningStyleTemptationOpponentCountSenko => {
+        RunningStyleTemptationOpponentCountSenko => {
             get_style_temptation_count_opponent(state, Style::Pace, runner)
         }
     }
-}
-
-/// Get random values
-fn get_random_value(var: &RandomVar, _state: &RaceState) -> i32 {
-    match var {
-        // Pre-rolled at race start - handled by trigger system
-        RandomVar::RandomLot => {
-            panic!("BUG: random_lot should not be evaluated - it's a trigger variable!")
-        }
-    }
-}
-
-/// Convert position to distance rate percentage (0-100)
-fn distance_rate(position: &f64, course_distance: i32) -> i32 {
-    (position / course_distance as f64 * 100.0).floor() as i32
-}
-
-/// Calculate remaining distance in meters
-fn remain_distance(position: &f64, course_distance: i32) -> i32 {
-    (course_distance as f64 - position).floor() as i32
-}
-
-/// Convert distance in meters to furlongs
-fn distance_to_furlongs(distance_meters: f64) -> i32 {
-    meters_to_furlongs(distance_meters).floor() as i32
 }

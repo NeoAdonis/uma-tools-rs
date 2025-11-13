@@ -197,6 +197,16 @@ impl Course {
         self.finish_time_min as f64 / 10000.0
     }
 
+    /// Get remaining distance in meters from a given position.
+    pub fn remain_distance(&self, position: f64) -> f64 {
+        (self.distance as f64 - position).max(0.0)
+    }
+
+    /// Get the distance rate (percentage of course completed) from a given position.
+    pub fn distance_rate(&self, position: f64) -> f64 {
+        (position / self.distance as f64 * 100.0).floor()
+    }
+
     /// Get the section index (0-23) from a given position in meters.
     pub fn section_from_position(&self, position: f64) -> u8 {
         (position / self.section_length()).floor() as u8
