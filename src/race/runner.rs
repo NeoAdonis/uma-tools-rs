@@ -27,6 +27,7 @@ pub struct SkillModifiers {
     pub target_speed: f64,
     pub current_speed: f64,
     pub acceleration: f64,
+    pub lane_speed: f64,
     pub duration_scaling: f64, // Multiplicative, defaults to 1.0
 }
 
@@ -36,6 +37,7 @@ impl Default for SkillModifiers {
             target_speed: 0.0,
             current_speed: 0.0,
             acceleration: 0.0,
+            lane_speed: 0.0,
             duration_scaling: 1.0, // Multiplicative default
         }
     }
@@ -85,13 +87,15 @@ pub fn is_style_change(effect_type: &SkillType) -> bool {
 /// Check if an effect type is a timed effect.
 #[inline]
 pub fn is_timed_effect(effect_type: &SkillType) -> bool {
+    use SkillType::*;
     matches!(
         effect_type,
-        SkillType::Acceleration
-            | SkillType::TargetSpeed
-            | SkillType::CurrentSpeed
-            | SkillType::CurrentSpeedWithNaturalDeceleration
-            | SkillType::ExtendEvolvedDuration
+        Acceleration
+            | TargetSpeed
+            | CurrentSpeed
+            | CurrentSpeedWithNaturalDeceleration
+            | ExtendEvolvedDuration
+            | LaneMovementSpeed
     )
 }
 
@@ -216,6 +220,8 @@ pub struct LaneState {
     pub current: f64,
     /// Target lane position in meters.
     pub target: f64,
+    /// Current lateral speed in m/s.
+    pub speed: f64,
 }
 
 impl LaneState {
@@ -223,6 +229,7 @@ impl LaneState {
         Self {
             current: lane,
             target: lane,
+            speed: 0.0,
         }
     }
 }
@@ -605,6 +612,54 @@ impl Runner {
                 self.adjusted.distance_aptitude,
             ) + struggle_mod
         };
+    }
+
+    /// Update lane position towards target lane.
+    pub fn update_lane(&mut self, course: &Course, delta_time: f64) {
+        const LANE_ACCELERATION: f64 = 0.03; // m/s²
+        let lane_diff = self.lane.target - self.lane.current;
+
+        if lane_diff.abs() < 0.0001 {
+            self.lane.current = self.lane.target;
+            self.lane.speed = 0.0;
+            return;
+        }
+
+        let order_modifier = if self.phase >= Phase::Late {
+            1.0 + self.order.order as f64 * 0.01
+        } else {
+            1.0
+        };
+        // TODO: obtain proper first move lane point
+        let first_move_modifier = if self.phase == Phase::Early {
+            1.0 + self.lane.current / course.width() * 0.05
+        } else {
+            1.0
+        };
+
+        let target_speed = 0.02
+            * (0.3 + 0.001 * self.adjusted.power as f64)
+            * first_move_modifier
+            * order_modifier;
+        self.lane.speed = (self.lane.speed + LANE_ACCELERATION * delta_time).min(target_speed);
+
+        let skill_modifier = self.skill_modifiers.lane_speed;
+        let direction_modifier = if lane_diff > 0.0 {
+            1.0
+        } else {
+            -(1.0 + self.lane.current)
+        };
+
+        let actual_speed = (self.lane.speed + skill_modifier).clamp(0.0, 0.6) * direction_modifier;
+        let actual_change = actual_speed * delta_time;
+
+        // TODO: check if blocked from lane change
+        if actual_change.abs() >= lane_diff.abs() {
+            self.lane.current = self.lane.target;
+            self.lane.speed = 0.0;
+        } else {
+            self.lane.current += actual_change;
+        }
     }
 
     /// Update the runner's position based on effective current speed.
@@ -1857,10 +1912,6 @@ impl Runner {
         else if matches!(effect_type, SkillType::Fov) {
             // TODO: implement FOV change
         }
-        // Lane movement speed change
-        else if matches!(effect_type, SkillType::LaneMovementSpeed) {
-            // TODO: implement lane movement speed change
-        }
         // Lane change
         else if matches!(effect_type, SkillType::LaneChange) {
             // Change target lane to (modifier/100)% of course width
@@ -1899,20 +1950,24 @@ impl Runner {
 
     /// Recalculate skill modifiers from active timed effects.
     fn recalculate_skill_modifiers(&mut self) {
+        use SkillType::*;
         let mut mods = SkillModifiers::default();
 
         for effect in &self.active_timed_effects {
             match effect.effect.skill_type {
-                SkillType::Acceleration => {
+                Acceleration => {
                     mods.acceleration += effect.effect.modifier as f64;
                 }
-                SkillType::TargetSpeed => {
+                TargetSpeed => {
                     mods.target_speed += effect.effect.modifier as f64;
                 }
-                SkillType::CurrentSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
+                CurrentSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
                     mods.current_speed += effect.effect.modifier as f64;
                 }
-                SkillType::ExtendEvolvedDuration => {
+                LaneMovementSpeed => {
+                    mods.lane_speed += effect.effect.modifier as f64 / 10000.0;
+                }
+                ExtendEvolvedDuration => {
                     // Duration scaling is multiplicative
                     mods.duration_scaling *= effect.effect.modifier as f64 / 10000.0;
                 }

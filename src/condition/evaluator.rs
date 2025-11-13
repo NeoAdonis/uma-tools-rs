@@ -53,12 +53,11 @@
 //! # Unimplemented Variables
 //!
 //! In the current state, a few variables that depend on multiple runners return
-//! sensible stub values; these are clearly marked with `// STUB:` comments:
+//! sensible stub values:
 //!
 //! - `popularity`: Popularity is not implemented; returns 1 (most popular).
 //! - `running_style_equal_popularity_one`: Popularity is not implemented; returns 1
 //!   (runner is most popular, thus our style is the same as the most popula runner).
-//! - ...and others; these are work-in-progress.
 //!
 //! There are also variables that are not implemented at all as they are only used
 //! in non-PvP contexts, which is out of scope for this simulator. The evaluator
@@ -762,13 +761,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         IsHpEmptyOnetime => runner.has_emptied_hp as i32,
 
         // Is in last spurt mode (not the phase)
-        IsLastspurt => {
-            if runner.last_spurt.is_some() {
-                1
-            } else {
-                0
-            }
-        }
+        IsLastspurt => runner.last_spurt.is_some() as i32,
 
         // Last spurt state: 0=can't finish, 1=above base, 2=can finish at max
         Lastspurt => {
@@ -781,17 +774,23 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         }
 
         // Start is too late
-        IsBadstart => {
-            if runner.start_type() == StartType::Late {
-                1
+        IsBadstart => matches!(runner.start_type(), StartType::Late) as i32,
+
+        // Lane movement
+        IsMoveLane => {
+            if runner.lane.speed < 0.0 {
+                1 // Moving inward
+            } else if runner.lane.speed > 0.0 {
+                2 // Moving outward
             } else {
-                0
+                0 // Not moving
             }
         }
 
-        // Continuous checks
-        IsMoveLane => 0, // STUB: Lane change tracking not implemented
+        // Overtake mode
         IsOvertake => runner.is_in_overtake_mode() as i32,
+
+        // Temptation/rush checks
         IsTemptation => runner.is_rushed() as i32,
         TemptationCount => runner.has_rushed() as i32, // You can only rush once
     }

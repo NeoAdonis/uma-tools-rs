@@ -183,6 +183,7 @@ impl RaceSolver<Runner> {
                 self.state.finish_time = Some(self.state.elapsed_time);
                 // TODO: calculate how many lenghts ahead the runner is from the next runner
             }
+            runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, &self.state);
             runner.update_slope(&self.state.course.slopes, &mut *self.state.rng.borrow_mut());
             runner.check_window_triggers(&self.state); // Distance, time, HP windows
