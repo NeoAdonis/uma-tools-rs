@@ -45,7 +45,7 @@ pub struct RaceState {
 ///    and out-of-gate skills are applied. The simulation can begin.
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
-    builders: Vec<UnreadyRunner>,
+    builders: HashMap<u8, UnreadyRunner>,
     pub state: RaceState,
     _marker: PhantomData<T>,
 }
@@ -72,7 +72,7 @@ impl RaceSolver<UnreadyRunner> {
 
         RaceSolver {
             runners: vec![],
-            builders: vec![],
+            builders: HashMap::new(),
             state,
             _marker: PhantomData,
         }
@@ -80,6 +80,10 @@ impl RaceSolver<UnreadyRunner> {
 
     /// Add a runner to the race BEFORE it starts.
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
+        if self.builders.len() as u8 >= self.state.params.gates {
+            panic!("Cannot add more runners than available gates");
+        }
+
         // Get existing skills before moving them into builder
         for skill in &skills {
             *self
@@ -89,9 +93,22 @@ impl RaceSolver<UnreadyRunner> {
                 .or_insert(0) += 1;
         }
 
+        // Roll gate
+        let gate_roll = loop {
+            let roll = self
+                .state
+                .rng
+                .borrow_mut()
+                .random_range(1..=self.state.params.gates);
+            if !self.builders.contains_key(&roll) {
+                break roll;
+            }
+        };
+
         // Create builder
         let builder = UnreadyRunner::new(
             uma,
+            gate_roll,
             motivation,
             &self.state.course,
             &self.state.params,
@@ -107,7 +124,7 @@ impl RaceSolver<UnreadyRunner> {
             .or_insert(0) += 1;
 
         // Add to builders list
-        self.builders.push(builder);
+        self.builders.insert(gate_roll, builder);
     }
 
     /// Get all added runners ready by calculating their stats and activating
@@ -116,12 +133,12 @@ impl RaceSolver<UnreadyRunner> {
     pub fn ready_runners(self) -> RaceSolver<Runner> {
         let mut runners: Vec<Runner> = Vec::new();
         for builder in self.builders {
-            let runner = Runner::new(builder, &self.state);
+            let runner = Runner::new(builder.1, &self.state);
             runners.push(runner);
         }
         RaceSolver {
             runners,
-            builders: vec![],
+            builders: HashMap::new(),
             state: self.state,
             _marker: PhantomData,
         }
@@ -137,7 +154,7 @@ impl RaceSolver<Runner> {
         let min = self.state.course.finish_time_min();
         let max = self.state.course.finish_time_max();
         let clamped = converted.clamp(min, max);
-        if converted < min || converted > max {
+        if !(min..=max).contains(&converted) {
             Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
         } else {
             Some(converted)

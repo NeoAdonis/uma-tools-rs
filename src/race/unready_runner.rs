@@ -139,6 +139,7 @@ impl UnreadyRunner {
     /// Create a new RunnerBuilder with initial values
     pub fn new(
         uma: Uma,
+        gate_roll: u8,
         motivation: Motivation,
         course: &Course,
         params: &RaceParameters,
@@ -146,8 +147,6 @@ impl UnreadyRunner {
         rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     ) -> Self {
         // Calculate base stats
-        // TODO: check for collisions; maybe use a hashset instead of a vector?
-        let gate_roll: u8 = rng.borrow_mut().random_range(0..=params.gates - 1_u8);
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
 
@@ -266,12 +265,14 @@ impl UnreadyRunner {
     /// 7 and 8 will share bracket 7, gates 8 and 9 will share bracket 8), etc. If
     /// there are more than 16 participants, the process starts from bracket 8 again.
     ///
-    /// N.B. In this explanation, all numbers are 1-indexed for clarity, but the
-    /// function uses 0-based indexing.
+    /// N.B. All inputs and outputs are 1-indexed.
     fn get_gate_bracket(gate_roll: u8, max_gates: u8) -> u8 {
         if max_gates <= 8 {
             return gate_roll;
         }
+
+        // Convert to 0-indexed for easier calculation
+        let mut gate_roll = gate_roll - 1;
 
         let extra = max_gates - 8;
         let base_extra = extra / 8; // Extra gates all brackets get
@@ -285,13 +286,16 @@ impl UnreadyRunner {
         let num_small = 8 - remainder;
         let total_in_small = num_small * gates_per_small;
 
-        if gate_roll < total_in_small {
+        gate_roll = if gate_roll < total_in_small {
             // In a "smaller" bracket
             gate_roll / gates_per_small
         } else {
             // In a "larger" bracket (with extra gate)
             num_small + (gate_roll - total_in_small) / gates_per_large
-        }
+        };
+
+        // Convert back to 1-indexed
+        gate_roll + 1
     }
 
     /// Apply all out-of-gate skills
