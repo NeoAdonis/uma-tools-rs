@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use rand::Rng;
 
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::hp::hp_style_multiplier;
@@ -344,6 +345,18 @@ impl UnreadyRunner {
             course.base_speed(),
         );
 
+        // Calculate force-in modifier based on style and randomness
+        let force_in_modifier = if matches!(GAME_BEHAVIOR, GameBehavior::Original) {
+            0.0
+        } else {
+            self.rng.borrow_mut().random_range(0.0..0.1)
+                + match self.adjusted.style {
+                    Style::Runaway | Style::Front => 0.02,
+                    Style::Pace | Style::Late => 0.01,
+                    Style::End => 0.3,
+                }
+        };
+
         // Initialize race state
         Runner {
             base: self.base,
@@ -356,6 +369,7 @@ impl UnreadyRunner {
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             base_target_speed: 0.85 * course.base_speed(),
+            force_in_modifier,
             lane: LaneState::new(course.starting_lane(self.gate_roll)),
             visible_distance: 20.0,
             visible_count: 0,
@@ -380,6 +394,8 @@ impl UnreadyRunner {
             rush_chance,
             rush_state,
             is_start_dash: true,
+            next_positioning_check: self.start_delay,
+            positioning_strategy: PositioningStrategy::Normal,
             slope_acceleration: None,
             last_spurt: None,
             rng: self.rng,

@@ -191,6 +191,30 @@ impl Default for OrderState {
     }
 }
 
+/// Positioning strategy during the first 10 sections (5/12) of the race.
+/// For front-runners, it determines the pacing behavior to stay ahead or catch up.
+/// For non-front-runners, it determines the pacing behavior to keep their distance
+/// from the pacemaker.
+pub enum PositioningStrategy {
+    /// Run at regular pace.
+    Normal,
+    /// *(Front-runners only.)*
+    /// Try to stay ahead by pacing up to a certain distance.
+    FrontSpeedUp,
+    /// *(Front-runners only.)*
+    /// Try to catch up with first place by pacing up to a certain distance.
+    FrontOvertake,
+    /// *(Non-front-runners only.)*
+    /// Try to stay within a certain distance from pacemaker by pacing up.
+    PaceUp(f64),
+    /// *(Non-front-runners only.)*
+    /// Try to fall back within a certain distance from pacemaker by pacing down.
+    PaceDown(f64),
+    /// **Introduced by 1.5 Anniversary update in Japan.** Speed up if there is another
+    /// runner ahead whose strategy should actually position her behind.
+    PaceUpEx,
+}
+
 /// Distance differences from other runners.
 #[derive(Default)]
 pub struct PositionDiff {
@@ -331,6 +355,9 @@ pub struct Runner {
     pub min_speed: f64,
     /// Base target speed in m/s before modifiers.
     pub base_target_speed: f64,
+    /// Spped modifier applied early in the race to encourage running towards the
+    /// inner fence. Calculated before race begins based on running style.
+    pub force_in_modifier: f64,
     /// Lane state including current and target lane positions in meters.
     pub lane: LaneState,
     /// Speed modifier for the current section in m/s.
@@ -394,6 +421,10 @@ pub struct Runner {
     pub surrounded: SurroundState,
     /// Number of runners currently in rush (temptation, 掛かり) state ahead and behind.
     pub rush_counter: RushCounter,
+    /// Current positioning strategy during the first 10 sections (5/12) of the race.
+    pub positioning_strategy: PositioningStrategy,
+    /// Next time to check positioning strategy conditions, in seconds.
+    pub next_positioning_check: f64,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
     /// Current section index (0-23).
@@ -586,14 +617,50 @@ impl Runner {
 
     /// Calculate the target speed including all modifiers.
     fn target_speed(&self) -> f64 {
+        let position_multiplier = match self.positioning_strategy {
+            PositioningStrategy::Normal => 1.0,
+            PositioningStrategy::FrontSpeedUp => 1.04,
+            PositioningStrategy::FrontOvertake => 1.05,
+            PositioningStrategy::PaceUp(_) => 1.04,
+            PositioningStrategy::PaceDown(_) => {
+                if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
+                    && self.phase >= Phase::Mid
+                {
+                    0.945
+                } else {
+                    0.915
+                }
+            }
+            PositioningStrategy::PaceUpEx => 2.0,
+        };
+
+        // TODO: Also check if runner changed lanes on last frame
+        let move_lane_modifier = if GAME_BEHAVIOR >= GameBehavior::FirstAnniversary
+            && self.skill_modifiers.lane_speed > 0.0
+        {
+            (0.0002 * self.adjusted.power as f64).sqrt()
+        } else {
+            0.0
+        };
+
+        // TODO: Apply only when an uma is more than 0.12 course width away from the inner fence and inside is open.
+        let force_in_modifier = if matches!(self.phase, Phase::Early) {
+            self.force_in_modifier
+        } else {
+            0.0
+        };
+
         let dueling_modifier = self
             .dueling
             .as_ref()
             .map_or(0.0, |d| d.target_speed_modifier);
-        self.base_target_speed
+
+        self.base_target_speed * position_multiplier
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
             + dueling_modifier
+            + move_lane_modifier
+            + force_in_modifier
     }
 
     /// Update the base target speed based on current phase and conditions.
@@ -659,6 +726,179 @@ impl Runner {
             self.lane.speed = 0.0;
         } else {
             self.lane.current += actual_change;
+        }
+    }
+
+    /// Criteria for front-runners to speed up to stay ahead or catch up.
+    fn can_speed_up_to_front(&self, distance_ahead: f64, is_single_front_runner: bool) -> bool {
+        let distance_threshold = if self.adjusted.style == Style::Runaway {
+            17.5
+        } else if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary && is_single_front_runner {
+            12.5
+        } else {
+            4.5
+        };
+
+        distance_ahead < distance_threshold
+    }
+
+    /// Update positioning strategy for front-runners during the first 10 sections
+    /// (5/12 of the race).
+    /// The strategy determines whether to pace up to stay ahead or catch up with
+    /// first place.
+    ///
+    /// `distance_ahead` is the distance to the runner behind IF this runner is in first place,
+    /// or 0 otherwise.
+    pub fn update_positioning_front(
+        &mut self,
+        elapsed_time: f64,
+        distance_ahead: f64,
+        is_single_front_runner: bool,
+    ) {
+        match self.positioning_strategy {
+            PositioningStrategy::Normal => {
+                if elapsed_time < self.next_positioning_check {
+                    return;
+                }
+
+                self.next_positioning_check += 2.0;
+
+                let chance = 0.2 * (self.adjusted.wiz as f64 * 0.1).log10();
+                let pass_roll = self.rng.borrow_mut().random_bool(chance);
+                if !pass_roll {
+                    return;
+                }
+
+                if distance_ahead >= 0.0 {
+                    if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner) {
+                        return;
+                    }
+                    // Try to stay ahead
+                    self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
+                } else {
+                    // Try to catch up with pacemaker
+                    self.positioning_strategy = PositioningStrategy::FrontOvertake;
+                }
+            }
+            PositioningStrategy::FrontSpeedUp => {
+                // Exit if sufficiently ahead
+                if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner) {
+                    self.positioning_strategy = PositioningStrategy::Normal;
+                }
+            }
+            PositioningStrategy::FrontOvertake => {
+                // Exit if already in first place and well ahead
+                let distance_threshold = if matches!(self.adjusted.style, Style::Runaway) {
+                    27.5
+                } else {
+                    10.0
+                };
+                if distance_ahead > distance_threshold {
+                    self.positioning_strategy = PositioningStrategy::Normal;
+                }
+            }
+            _ => {
+                debug_assert!(false, "BUG: Invalid positioning strategy for front runner")
+            }
+        }
+    }
+
+    /// Update positioning strategy for non-front-runners during the first 10 sections
+    /// (5/12 of the race).
+    /// The strategy determines whether to pace up or down to keep distance from
+    /// the pacemaker.
+    ///
+    /// `distance_behind` is the distance from the pacemaker in meters
+    /// (0 if we are the pacemaker).
+    pub fn update_positioning_non_front(
+        &mut self,
+        elapsed_time: f64,
+        course_length: f64,
+        distance_behind: f64,
+    ) {
+        debug_assert!(
+            distance_behind >= 0.0,
+            "BUG: No runner should be ahead of pacemaker"
+        );
+
+        match self.positioning_strategy {
+            PositioningStrategy::Normal => {
+                if elapsed_time < self.next_positioning_check {
+                    return;
+                }
+
+                self.next_positioning_check += 2.0;
+
+                // Determine target distance range based on style and course length
+                let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;
+                let range = match self.adjusted.style {
+                    Style::Pace => 3.0..(5.0 * course_multiplier),
+                    Style::Late => (6.5 * course_multiplier)..(7.0 * course_multiplier),
+                    Style::End => (7.5 * course_multiplier)..(8.0 * course_multiplier),
+                    _ => 0.0..0.0,
+                };
+                if range.contains(&distance_behind) {
+                    return;
+                }
+
+                if distance_behind > range.end {
+                    // Catch up to a certain distance (if wiz allows)
+                    let chance = 0.15 * (self.adjusted.wiz as f64 * 0.1).log10();
+                    let pass_roll = self.rng.borrow_mut().random_bool(chance);
+                    if !pass_roll {
+                        return;
+                    }
+
+                    let threshold = self.rng.borrow_mut().random_range(range);
+                    self.positioning_strategy = PositioningStrategy::PaceUp(threshold);
+                } else if distance_behind < range.start
+                    && self.skill_modifiers.current_speed.abs() < 0.0001
+                    && self.skill_modifiers.target_speed.abs() < 0.0001
+                {
+                    // Pace down to a certain distance
+                    // (unless affected by speed-increasing skills)
+                    // 1.5 anniv. patch: if in mid-race, the maximum distance is
+                    // replaced with the midpoint between min and max before rolling
+                    let threshold = if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
+                        && self.phase >= Phase::Mid
+                    {
+                        let min = range.start;
+                        let max = range.end;
+                        let mid = (min + max) / 2.0;
+                        let adjusted_range = min..mid;
+                        self.rng.borrow_mut().random_range(adjusted_range)
+                    } else {
+                        self.rng.borrow_mut().random_range(range)
+                    };
+                    self.positioning_strategy = PositioningStrategy::PaceDown(threshold);
+                }
+            }
+            PositioningStrategy::PaceUp(threshold) => {
+                // Exit when caught up within threshold
+                if distance_behind < threshold {
+                    self.positioning_strategy = PositioningStrategy::Normal;
+                    self.next_positioning_check = elapsed_time + 3.0;
+                }
+                return;
+            }
+            PositioningStrategy::PaceDown(threshold) => {
+                // Exit when fallen back beyond threshold
+                // or when affected by speed-increasing skills
+                if distance_behind > threshold
+                    || self.skill_modifiers.current_speed.abs() > 0.0001
+                    || self.skill_modifiers.target_speed.abs() > 0.0001
+                {
+                    self.positioning_strategy = PositioningStrategy::Normal;
+                    self.next_positioning_check = elapsed_time + 3.0;
+                }
+                return;
+            }
+            _ => {
+                debug_assert!(
+                    false,
+                    "BUG: Invalid positioning strategy for non-front runner"
+                )
+            }
         }
     }
 

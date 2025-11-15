@@ -221,13 +221,13 @@ impl RaceSolver<Runner> {
 
         self.update_order_values();
         self.update_blocking_status(delta_time);
+        self.update_positioning_strategy();
     }
 
     /// Update order (rank) and distance differences for all runners.
     /// Runners must be sorted by position in descending order before calling this method.
     fn update_order_values(&mut self) {
         // Debug: check sorting
-        #[cfg(debug_assertions)]
         self.assert_runners_sorted();
 
         let total_runners = self.runners.len() as u8;
@@ -269,7 +269,6 @@ impl RaceSolver<Runner> {
     /// Runners must be sorted by position in descending order before calling this method.
     fn update_blocking_status(&mut self, delta_time: f64) {
         // Debug: check sorting
-        #[cfg(debug_assertions)]
         self.assert_runners_sorted();
 
         for runner in self.runners.iter_mut() {
@@ -370,8 +369,70 @@ impl RaceSolver<Runner> {
         }
     }
 
-    #[cfg(debug_assertions)]
+    /// Update positioning strategy for all runners.
+    /// Runners must be sorted by position in descending order before calling this method.
+    fn update_positioning_strategy(&mut self) {
+        // Debug: check sorting
+        self.assert_runners_sorted();
+
+        let is_single_front_runner = self
+            .state
+            .runners_by_style
+            .get(&Style::Front)
+            .copied()
+            .unwrap_or(0)
+            == 1;
+
+        // Find pacemaker (the most forward runner with the most aggressive style)
+        // TODO: fix; this is valid only before the 1.5 anniversary update
+        let mut pacemaker_style = self.runners[0].adjusted.style;
+        let mut pacemaker_position = self.runners[0].position;
+        for i in 0..self.runners.len() {
+            let runner_i = &self.runners[i];
+            if runner_i.adjusted.style < pacemaker_style {
+                pacemaker_style = runner_i.adjusted.style;
+                pacemaker_position = runner_i.position;
+            }
+            // Because runners are sorted by position descendingly, we only
+            // need to update pacemaker when a more agressive style is found
+        }
+
+        for i in 0..self.runners.len() {
+            let runner = &self.runners[i];
+            match runner.adjusted.style {
+                Style::Front | Style::Runaway => {
+                    // Determine if we are in first place, and by how much
+                    let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
+                        runner.position - self.runners[i + 1].position
+                    } else {
+                        0.0
+                    };
+                    let runner = &mut self.runners[i];
+                    runner.update_positioning_front(
+                        self.state.elapsed_time,
+                        distance_ahead,
+                        is_single_front_runner,
+                    )
+                }
+                _ => {
+                    // Determine distance behind pacemaker
+                    let distance_behind = pacemaker_position - runner.position;
+                    let runner = &mut self.runners[i];
+                    runner.update_positioning_non_front(
+                        self.state.elapsed_time,
+                        self.state.course.distance as f64,
+                        distance_behind,
+                    )
+                }
+            }
+        }
+
+        // TODO: implement PaceUpEx strategy
+    }
+
+    #[inline]
     fn assert_runners_sorted(&self) {
+        #[cfg(debug_assertions)]
         for i in 1..self.runners.len() {
             debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
         }

@@ -9,14 +9,14 @@ use crate::course::{ThresholdStat, Track};
 use crate::race::parameters::TrackCondition;
 use serde::Deserialize;
 
-/// Running style or strategy of the Uma. The values represent, in order:
+/// Running style or strategy of an Uma. The values represent, in order:
 ///
 /// - Front runner (逃げ): Leads the race.
 /// - Pace chaser (先行): Stays near the front behind the leaders.
 /// - Late surger (差し): Stays in the middle and makes a late charge.
 /// - End closer (追込): Stays at the back and sprints at the end.
 /// - Runaway (大逃げ): A front runner with even more aggressive pacing.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Deserialize, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
     #[serde(rename = "Nige")]
@@ -29,6 +29,23 @@ pub enum Style {
     End,
     #[serde(rename = "Oonige")]
     Runaway,
+}
+
+impl Ord for Style {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Smaller value => more aggressive style
+        // Runaway has a bigger value in data, but is the most aggressive style
+        // Treat it as 0 for comparison purposes
+        let value_self = match self {
+            Style::Runaway => 0u8,
+            _ => *self as u8,
+        };
+        let value_other = match other {
+            Style::Runaway => 0u8,
+            _ => *other as u8,
+        };
+        value_self.cmp(&value_other)
+    }
 }
 
 /// Aptitude levels for distance, track surface, and running style.

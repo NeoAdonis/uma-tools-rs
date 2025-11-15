@@ -38,9 +38,10 @@ fn last_spurt_speed_max(
     let speed_component = (500.0 * speed_stat as f64).sqrt()
         * distance_proficiency_multiplier(distance_aptitude)
         * 0.002;
-    let guts_component = match GAME_BEHAVIOR {
-        GameBehavior::Original => 0.0,
-        GameBehavior::FirstAnniversary => (450.0 * guts_stat as f64).powf(0.597) * 0.0001,
+    let guts_component = if matches!(GAME_BEHAVIOR, GameBehavior::Original) {
+        0.0
+    } else {
+        (450.0 * guts_stat as f64).powf(0.597) * 0.0001
     };
     base_component + speed_component + guts_component
 }
