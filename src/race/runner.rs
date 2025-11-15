@@ -28,6 +28,7 @@ pub struct SkillModifiers {
     pub current_speed: f64,
     pub acceleration: f64,
     pub lane_speed: f64,
+    pub target_lane: Option<f64>,
     pub duration_scaling: f64, // Multiplicative, defaults to 1.0
 }
 
@@ -38,6 +39,7 @@ impl Default for SkillModifiers {
             current_speed: 0.0,
             acceleration: 0.0,
             lane_speed: 0.0,
+            target_lane: None,
             duration_scaling: 1.0, // Multiplicative default
         }
     }
@@ -96,6 +98,7 @@ pub fn is_timed_effect(effect_type: &SkillType) -> bool {
             | CurrentSpeedWithNaturalDeceleration
             | ExtendEvolvedDuration
             | LaneMovementSpeed
+            | LaneChange
     )
 }
 
@@ -683,10 +686,17 @@ impl Runner {
     /// Update lane position towards target lane.
     pub fn update_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.03; // m/s²
-        let lane_diff = self.lane.target - self.lane.current;
 
+        // Skill modifiers override target lane if present
+        let target_lane = if let Some(skill_target) = self.skill_modifiers.target_lane {
+            skill_target * course.width()
+        } else {
+            self.lane.target
+        };
+
+        let lane_diff = target_lane - self.lane.current;
         if lane_diff.abs() < 0.0001 {
-            self.lane.current = self.lane.target;
+            self.lane.current = target_lane;
             self.lane.speed = 0.0;
             return;
         }
@@ -721,7 +731,7 @@ impl Runner {
 
         // TODO: check if blocked from lane change
         if actual_change.abs() >= lane_diff.abs() {
-            self.lane.current = self.lane.target;
+            self.lane.current = target_lane;
             self.lane.speed = 0.0;
         } else {
             self.lane.current += actual_change;
@@ -2256,13 +2266,6 @@ impl Runner {
         else if matches!(effect_type, SkillType::Fov) {
             // TODO: implement FOV change
         }
-        // Lane change
-        else if matches!(effect_type, SkillType::LaneChange) {
-            // Change target lane to (modifier/100)% of course width
-            // TODO: review
-            let lane_change_percent = effect.modifier as f64 / 10000.0;
-            self.lane.target = course.width() * lane_change_percent;
-        }
         // "Sympathy" skill activation
         else if matches!(effect_type, SkillType::ActivateSympathy) {
             // Force activation of skill with ID "201631" if available
@@ -2310,6 +2313,9 @@ impl Runner {
                 }
                 LaneMovementSpeed => {
                     mods.lane_speed += effect.effect.modifier as f64 / 10000.0;
+                }
+                LaneChange => {
+                    mods.target_lane = Some(effect.effect.modifier as f64 / 10000.0);
                 }
                 ExtendEvolvedDuration => {
                     // Duration scaling is multiplicative
