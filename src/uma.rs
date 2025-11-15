@@ -16,7 +16,7 @@ use serde::Deserialize;
 /// - Late surger (差し): Stays in the middle and makes a late charge.
 /// - End closer (追込): Stays at the back and sprints at the end.
 /// - Runaway (大逃げ): A front runner with even more aggressive pacing.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Deserialize, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
     #[serde(rename = "Nige")]
@@ -45,6 +45,12 @@ impl Ord for Style {
             _ => *other as u8,
         };
         value_self.cmp(&value_other)
+    }
+}
+
+impl PartialOrd for Style {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 

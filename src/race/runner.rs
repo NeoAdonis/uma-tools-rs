@@ -878,7 +878,6 @@ impl Runner {
                     self.positioning_strategy = PositioningStrategy::Normal;
                     self.next_positioning_check = elapsed_time + 3.0;
                 }
-                return;
             }
             PositioningStrategy::PaceDown(threshold) => {
                 // Exit when fallen back beyond threshold
@@ -890,7 +889,6 @@ impl Runner {
                     self.positioning_strategy = PositioningStrategy::Normal;
                     self.next_positioning_check = elapsed_time + 3.0;
                 }
-                return;
             }
             _ => {
                 debug_assert!(
@@ -1316,13 +1314,13 @@ impl Runner {
         }
 
         // On final straight AND extra move lane is on the outside
-        if self.is_on_final_straight(course) {
-            if let Some(extra) = self.extra_move_lane {
-                if extra > self.lane.current && self.has_lane_space_to(extra, all_runners) {
-                    self.lane.target = extra.clamp(0.0, course.width());
-                    return;
-                }
-            }
+        if self.is_on_final_straight(course)
+            && let Some(extra) = self.extra_move_lane
+            && extra > self.lane.current
+            && self.has_lane_space_to(extra, all_runners)
+        {
+            self.lane.target = extra.clamp(0.0, course.width());
+            return;
         }
 
         // In early-race or mid-race - move inward by 0.05 course width
@@ -1335,18 +1333,15 @@ impl Runner {
         }
 
         // In mid-race AND less than 1.75 horse lane from inside runner
-        if self.phase == Phase::Mid {
-            if let Some((inside_lane, distance_in_lanes)) =
+        if self.phase == Phase::Mid
+            && let Some((inside_lane, distance_in_lanes)) =
                 self.find_inside_runner(all_runners, course)
-            {
-                if distance_in_lanes < 1.75 {
-                    // Move to 2.0 horse lanes away from inside runner
-                    let target = inside_lane + 2.0 * course.lane_width();
-                    if self.has_lane_space_to(target, all_runners) {
-                        self.lane.target = target.clamp(0.0, course.width());
-                        return;
-                    }
-                }
+            && distance_in_lanes < 1.75
+        {
+            // Move to 2.0 horse lanes away from inside runner
+            let target = inside_lane + 2.0 * course.lane_width();
+            if self.has_lane_space_to(target, all_runners) {
+                self.lane.target = target.clamp(0.0, course.width());
             }
         }
 
@@ -1606,7 +1601,7 @@ impl Runner {
             return false;
         }
         self.current_straight()
-            .map_or(false, |idx| idx == course.straights.len() - 1)
+            .is_some_and(|idx| idx == course.straights.len() - 1)
     }
 
     /// Find the closest uma on the inside (lower lane value).

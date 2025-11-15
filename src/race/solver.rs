@@ -381,7 +381,7 @@ impl RaceSolver<Runner> {
             // Determine which mode to use: normal vs overtake
             let distance_to_move_lane = move_lane_point - runner.position;
             let within_200m_of_move_lane =
-                distance_to_move_lane >= 0.0 && distance_to_move_lane <= 200.0;
+                (0.0..=200.0).contains(&distance_to_move_lane);
 
             // Use normal mode if:
             // 1. Not in overtake mode, OR
