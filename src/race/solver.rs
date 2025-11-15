@@ -7,7 +7,7 @@ use std::vec;
 use rand::prelude::*;
 
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
-use crate::course::Course;
+use crate::course::{Course, Phase};
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::Runner;
 use crate::race::unready_runner::UnreadyRunner;
@@ -354,16 +354,44 @@ impl RaceSolver<Runner> {
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
-        // Calculate overtake lane targets (needs access to all runners)
+        // Calculate lane targets (needs access to all runners)
         // Use unsafe pointer to access runners slice while iterating
         let runners_ptr = self.runners.as_ptr();
         let runners_len = self.runners.len();
 
+        // STUB: Using first corner as move lane point; should use course.move_lane_point when available
+        let move_lane_point = self
+            .state
+            .course
+            .corners
+            .first()
+            .map_or(self.state.course.halfway(), |c| c.start);
+
         for i in 0..num_runners {
             let runner = &mut self.runners[i];
-            if runner.is_in_overtake_mode() && !runner.blocked.side {
-                // Safety: We're only reading from other runners, not modifying them
-                let all_runners = unsafe { std::slice::from_raw_parts(runners_ptr, runners_len) };
+
+            // Skip if side-blocked (can't change lanes anyway)
+            if runner.blocked.side {
+                continue;
+            }
+
+            // Safety: We're only reading from other runners, not modifying them
+            let all_runners = unsafe { std::slice::from_raw_parts(runners_ptr, runners_len) };
+
+            // Determine which mode to use: normal vs overtake
+            let distance_to_move_lane = move_lane_point - runner.position;
+            let within_200m_of_move_lane =
+                distance_to_move_lane >= 0.0 && distance_to_move_lane <= 200.0;
+
+            // Use normal mode if:
+            // 1. Not in overtake mode, OR
+            // 2. In Early/Mid phase AND within 200m of move lane point
+            let use_normal_mode = !runner.is_in_overtake_mode()
+                || (matches!(runner.phase, Phase::Early | Phase::Mid) && within_200m_of_move_lane);
+
+            if use_normal_mode {
+                runner.calculate_normal_mode_lane_target(&self.state.course, all_runners);
+            } else {
                 runner.calculate_overtake_lane_target(&self.state.course, all_runners);
             }
         }

@@ -499,8 +499,7 @@ impl Runner {
 
     /// Check if the runner is currently in position keep pace down mode.
     pub fn is_pace_down(&self) -> bool {
-        // TODO: implement
-        false
+        matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_))
     }
 
     /// Update acceleration based on current speed and target speed.
@@ -1300,6 +1299,60 @@ impl Runner {
         self.overtake_state.is_some()
     }
 
+    /// Calculate lane target when in normal mode (not overtaking).
+    /// Rules are checked in priority order; first match wins.
+    pub fn calculate_normal_mode_lane_target(&mut self, course: &Course, all_runners: &[Runner]) {
+        // Out of HP - stay in current lane
+        if self.hp <= 0.0 {
+            self.lane.target = self.lane.current;
+            return;
+        }
+
+        // Position keeping mode is pace-down
+        // Set target to 0.18 of course width (18% from inside)
+        if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
+            self.lane.target = (0.18 * course.width()).clamp(0.0, course.width());
+            return;
+        }
+
+        // On final straight AND extra move lane is on the outside
+        if self.is_on_final_straight(course) {
+            if let Some(extra) = self.extra_move_lane {
+                if extra > self.lane.current && self.has_lane_space_to(extra, all_runners) {
+                    self.lane.target = extra.clamp(0.0, course.width());
+                    return;
+                }
+            }
+        }
+
+        // In early-race or mid-race - move inward by 0.05 course width
+        if matches!(self.phase, Phase::Early | Phase::Mid) {
+            let target = self.lane.current - 0.05 * course.width();
+            if target >= 0.0 && self.has_lane_space_to(target, all_runners) {
+                self.lane.target = target;
+                return;
+            }
+        }
+
+        // In mid-race AND less than 1.75 horse lane from inside runner
+        if self.phase == Phase::Mid {
+            if let Some((inside_lane, distance_in_lanes)) =
+                self.find_inside_runner(all_runners, course)
+            {
+                if distance_in_lanes < 1.75 {
+                    // Move to 2.0 horse lanes away from inside runner
+                    let target = inside_lane + 2.0 * course.lane_width();
+                    if self.has_lane_space_to(target, all_runners) {
+                        self.lane.target = target.clamp(0.0, course.width());
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Default - keep straight; target lane remains as-is
+    }
+
     /// Calculate target lane when in overtake mode.
     /// Should be called every frame after overtake state is finalized.
     pub fn calculate_overtake_lane_target(&mut self, course: &Course, all_runners: &[Runner]) {
@@ -1545,6 +1598,62 @@ impl Runner {
         if let Some(furthest) = furthest_visible {
             self.extra_move_lane = Some(furthest.lane.current);
         }
+    }
+
+    /// Check if runner is currently on the final straight.
+    fn is_on_final_straight(&self, course: &Course) -> bool {
+        if course.straights.is_empty() {
+            return false;
+        }
+        self.current_straight()
+            .map_or(false, |idx| idx == course.straights.len() - 1)
+    }
+
+    /// Find the closest uma on the inside (lower lane value).
+    /// Returns (inside_uma_lane, distance_in_horse_lanes) if found.
+    fn find_inside_runner(&self, all_runners: &[Runner], course: &Course) -> Option<(f64, f64)> {
+        let mut closest_inside: Option<(f64, f64)> = None;
+
+        for other in all_runners {
+            // Skip self
+            if other.gate_roll == self.gate_roll {
+                continue;
+            }
+
+            // Only consider runners on the inside (lower lane value)
+            if other.lane.current >= self.lane.current {
+                continue;
+            }
+
+            // Check if within reasonable distance
+            let position_distance = (self.position - other.position).abs();
+            if position_distance > 5.0 {
+                continue;
+            }
+
+            // Calculate lane distance in horse lanes
+            let lane_diff_in_horse_lanes =
+                (self.lane.current - other.lane.current) / course.lane_width();
+
+            // Only consider if within 3 horse lanes
+            if lane_diff_in_horse_lanes > 3.0 {
+                continue;
+            }
+
+            // Track closest (smallest lane difference)
+            match closest_inside {
+                None => {
+                    closest_inside = Some((other.lane.current, lane_diff_in_horse_lanes));
+                }
+                Some((_, current_diff)) => {
+                    if lane_diff_in_horse_lanes < current_diff {
+                        closest_inside = Some((other.lane.current, lane_diff_in_horse_lanes));
+                    }
+                }
+            }
+        }
+
+        closest_inside
     }
 
     /// Get the current corner index if in a corner.
