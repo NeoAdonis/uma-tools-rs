@@ -24,12 +24,19 @@ use crate::uma::*;
 /// Skill modifiers that are applied during race calculations.
 #[derive(Debug, Clone)]
 pub struct SkillModifiers {
+    /// Modifies target speed. Positive values increase it.
     pub target_speed: f64,
+    /// Modifies current speed directly. Positive values increase it.
     pub current_speed: f64,
+    /// Modifies acceleration. Positive values increase it.
     pub acceleration: f64,
+    /// Modifies lane movement speed. Positive values increase lane change speed.
     pub lane_speed: f64,
+    /// Sets the target lane directly (0.0 to 1.0, relative to course width).
+    /// `None` means no change.
     pub target_lane: Option<f64>,
-    pub duration_scaling: f64, // Multiplicative, defaults to 1.0
+    /// Affects duration of timed effects. Multiplicative - 1.0 means no change.
+    pub duration_scaling: f64,
 }
 
 impl Default for SkillModifiers {
@@ -2295,6 +2302,20 @@ impl Runner {
         })
     }
 
+    /// Update skill durations and remove expired effects.
+    pub fn update_skill_durations(&mut self, elapsed_time: f64) {
+        let before_count = self.active_timed_effects.len();
+
+        // Remove expired effects
+        self.active_timed_effects
+            .retain(|effect| effect.expires_at > elapsed_time);
+
+        // Recalculate modifiers if any effects expired
+        if self.active_timed_effects.len() != before_count {
+            self.recalculate_skill_modifiers();
+        }
+    }
+
     /// Recalculate skill modifiers from active timed effects.
     fn recalculate_skill_modifiers(&mut self) {
         use SkillType::*;
@@ -2326,19 +2347,5 @@ impl Runner {
         }
 
         self.skill_modifiers = mods;
-    }
-
-    /// Update skill durations and remove expired effects.
-    pub fn update_skill_durations(&mut self, elapsed_time: f64) {
-        let before_count = self.active_timed_effects.len();
-
-        // Remove expired effects
-        self.active_timed_effects
-            .retain(|effect| effect.expires_at > elapsed_time);
-
-        // Recalculate modifiers if any effects expired
-        if self.active_timed_effects.len() != before_count {
-            self.recalculate_skill_modifiers();
-        }
     }
 }
