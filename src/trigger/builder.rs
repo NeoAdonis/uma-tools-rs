@@ -1,11 +1,13 @@
-//! Trigger Builder - Converts skill conditions into trigger-guard separation
+//! # Trigger Builder
 //!
-//! This module is part of the trigger-guard separation architecture.
-//! See `skill_activation.rs` for detailed explanation.
+//! This module contains functions for separating skill conditions into triggers and
+//! guards to facilitate efficient skill activation checking. See
+//! `skill_activation.rs` for a detailed explanation.
 //!
-//! # Architecture
+//! ## Architecture
 //!
 //! For each skill alternative:
+//!
 //! 1. **Parse condition** - Parse condition string into AST.
 //! 2. **Parse precondition** - Parse precondition string (if present).
 //! 3. **Pre-roll random triggers** - Determine random activation points.
@@ -13,9 +15,10 @@
 //! 5. **Create SkillActivationLogic** - Store triggers + guards + precondition.
 //! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
-//! # Example
+//! ## Example
 //!
 //! **Input skill**:
+//!
 //! - **Condition**: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
 //! - **Precondition**: `change_order_onetime<0`
 //!
@@ -34,8 +37,9 @@
 //! ```
 //!
 //! **Runtime behavior**:
+//!
 //!   - **Every frame**: Check if overtaken anyone (`change_order_onetime<0`).
-//!     Once true, skill unlocked (permanent).
+//!     Once true, skill unlocked for activation attempts.
 //!   - **At 1850m** (if unlocked): Trigger fires, evaluate guards
 //!     `hp_per>=20 & ground_type==2`.
 //!   - **If guards pass**: Activate skill.

@@ -1,4 +1,4 @@
-//! Popularity
+//! # Popularity Calculation
 //!
 //! An runner's popularity (favorite rank) is obtained from three "judges". Each judge
 //! gives a score based on various stats:

@@ -1,4 +1,4 @@
-//! Condition Evaluator - Evaluates guard conditions against race state
+//! # Condition Evaluator
 //!
 //! This module evaluates guard conditions, i.e., conditions that determine whether
 //! a triggered skill can activate or not.
@@ -6,7 +6,7 @@
 //! Trigger conditions (random gates, monotonic thresholds, windows) are handled
 //! by the trigger system and should NEVER reach this evaluator.
 //!
-//! # Architecture
+//! ## Architecture
 //!
 //! Conditions are parsed into tree structures (`Condition` -> `ComparisonTree` ->
 //! `Comparison`) and evaluated recursively:
@@ -26,7 +26,7 @@
 //! known at evaluation time; case in point: single runner simulations where opponent
 //! data is not available.
 //!
-//! # Variable Access
+//! ## Variable Access
 //!
 //! It's up to the evaluator implementation to fetch/provide variable values.
 //! However, common variable retrieval logic is provided via the `get_variable_value()`
@@ -45,12 +45,12 @@
 //! A similar function, `get_variable_value_out_of_gate()`, is provided for
 //! out-of-gate evaluations, which only uses data available before the race starts.
 //!
-//! # Float Handling
+//! ## Float Handling
 //!
 //! All comparisons use integer values. Float variables (HP, position, percentages)
 //! are converted using `.floor()` for consistent rounding behavior.
 //!
-//! # Unimplemented Variables
+//! ## Unimplemented Variables
 //!
 //! There are variables that are not implemented at all as they are only used in
 //! non-PvP contexts, which is out of scope for this simulator. The evaluator will

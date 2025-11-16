@@ -1,12 +1,12 @@
-//! Skill Activation Logic - Trigger-Guard Separation System
+//! # Skill Activation Logic
 //!
 //! This module implements the refined skill activation system that separates
 //! **triggers** (which determine WHEN to check a skill) from **guards**
 //! (which must be true AT activation time).
 //!
-//! # Overview
+//! ## Overview
 //!
-//! The skill activation process is divided into the following main components:
+//! The skill activation logic is divided into the following main components:
 //!
 //! **Triggers** determine WHEN to evaluate a skill.
 //!
@@ -15,32 +15,36 @@
 //!   - Continuous triggers: Checked every frame. Used for conditions that can change
 //!     at any time.
 //!   - Window triggers: Active within a range (e.g., distance or time windows).
-//!   - Monotonic triggers: Obtained by promoting monotonic guard conditions
-//!     (e.g., distance, time, HP%) to triggers when no explicit triggers exist
-//!     and no dynamic guards are present.
+//!   - Monotonic triggers: Obtained by promoting monotonic guard conditions (values
+//!     that only increase or decrease, e.g., distance, time, HP) to triggers when no
+//!     explicit triggers exist and no dynamic guards are present.
 //!
 //! **Guards** are evaluated ONLY when trigger fires.
 //!
-//!    - Represented as a flat list (`Vec<Comparison>`) - all must be true.
-//!    - Static guards: because they don't change, these can be pre-evaluated
-//!      before the race starts (e.g, ground type, running style).
-//!    - Dynamic guards, including monotonic: evaluated at activation time
-//!      (e.g., HP%, rush status).
-//!    - No OR operations in guards - OR is handled by splitting into separate branches.
+//!    - Represented as a flat list (`Vec<Comparison>`) - all of these must be true
+//!      for a skill to activate.
+//!    - OR operations are handled by splitting condition trees into separate
+//!      list (branches).
+//!    - Can contain static guards - conditions that never change and can be
+//!      pre-evaluated before the race starts (e.g, ground type, running style).
+//!    - It can also contain dynamic guards - conditions to be evaluated at activation
+//!      time (e.g., HP, rush status). Some of these can be promoted to triggers if
+//!      they are monotonic.
 //!
 //! **Preconditions** unlock skills permanently (evaluated every frame).
 //!
-//!    - Once satisfied, skill remains unlocked for the rest of the race.
 //!    - Allows event-based activation gates (e.g., "activate after overtaking
 //!      someone").
-//!    - Checked before triggers/guards are evaluated.
+//!    - Checked before triggers/guards can be evaluated.
+//!    - Once satisfied, skill remains unlocked for the rest of the race for
+//!      activation attempts.
 //!
 //! **Activation State** tracks whether skill has fired.
 //!
 //!    - One-time triggers mark skill as "attempted" after first check.
 //!    - Continuous triggers can be checked multiple times.
 //!
-//! # Examples
+//! ## Examples
 //!
 //! Consider a skill with condition: `hp_per>=20 & is_finalcorner_random==1`
 //!
@@ -55,7 +59,7 @@
 //!
 //! Now consider a skill with **precondition**: `change_order_onetime<0`
 //!
-//! - **Every frame**: Check if overtaken anyone. Once true, skill unlocked (permanent).
+//! - **Every frame**: Check if overtaken anyone. Once true, skill unlocked.
 //! - **At trigger time** (e.g., 1850m): If unlocked, evaluate guards → activate.
 //! - **If never unlocked**: Trigger fires but skill never activates.
 
