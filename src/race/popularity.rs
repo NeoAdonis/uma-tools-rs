@@ -508,11 +508,13 @@ mod tests {
     fn test_phi_calculation() {
         // Test normal case
         let phi = calculate_phi(15.0, 10.0, 5.0);
-        assert!((phi - 1.0).abs() < 0.001);
+        // 1 std dev above mean = 50 + 10 = 60
+        assert!((phi - 60.0).abs() < 0.001);
 
         // Test zero std dev (all values same)
         let phi = calculate_phi(10.0, 10.0, 0.0);
-        assert_eq!(phi, 0.0);
+        // mean value = 50
+        assert_eq!(phi, 50.0);
     }
 
     #[test]
