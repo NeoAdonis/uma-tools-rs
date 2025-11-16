@@ -22,11 +22,13 @@ pub struct RaceState {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Elapsed time in seconds. This value is shared by all runners.
     pub elapsed_time: f64,
-    /// Time when the first runner finished, in seconds. This might be different from the
+    /// Time when the first runner finished, in seconds. This might be different from
     /// displayed finish time due to scoreboard conversion.
     pub finish_time: Option<f64>,
     /// Count of runners by style.
     pub runners_by_style: HashMap<Style, u8>,
+    /// Running style of the most popular runner.
+    pub style_most_popular: Style,
     /// Count of runners currently rushed by style.
     pub rushed_by_style: HashMap<Style, u8>,
     /// Count of existing skill IDs among all runners.
@@ -64,6 +66,7 @@ impl RaceSolver<UnreadyRunner> {
             rng,
             elapsed_time: 0.0,
             finish_time: None,
+            style_most_popular: Style::Front,
             runners_by_style: HashMap::new(),
             rushed_by_style: HashMap::new(),
             existing_skills: HashMap::new(),
@@ -131,15 +134,32 @@ impl RaceSolver<UnreadyRunner> {
     /// out-of-gate skills. It returns a new RaceSolver with ready runners
     /// to run the simulation.
     pub fn ready_runners(self) -> RaceSolver<Runner> {
+        // Collect all UnreadyRunners and move state out
+        let mut builders: Vec<UnreadyRunner> = self.builders.into_values().collect();
+        let mut state = self.state;
+
+        // Calculate popularity for all runners
+        let popularity_ranks = crate::race::popularity::calculate_popularity(&mut builders, &state);
+
+        // Assign popularity ranks to each runner
+        for (i, builder) in builders.iter_mut().enumerate() {
+            builder.popularity_rank = popularity_ranks[i];
+            if builder.popularity_rank == 1 {
+                state.style_most_popular = builder.base.style;
+            }
+        }
+
+        // Build final runners
         let mut runners: Vec<Runner> = Vec::new();
-        for builder in self.builders {
-            let runner = Runner::new(builder.1, &self.state);
+        for builder in builders {
+            let runner = Runner::new(builder, &state);
             runners.push(runner);
         }
+
         RaceSolver {
             runners,
             builders: HashMap::new(),
-            state: self.state,
+            state,
             _marker: PhantomData,
         }
     }
@@ -188,7 +208,7 @@ impl RaceSolver<Runner> {
             }
             runner.reset_activation_flags();
             runner.update_rush_state(&mut self.state);
-            runner.check_all_preconditions(&self.state); // Check all preconditions every frame
+            runner.check_all_preconditions(&self.state); // Check every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
             runner.update_target_speed(self.state.course.base_speed()); // TODO: review
@@ -380,8 +400,7 @@ impl RaceSolver<Runner> {
 
             // Determine which mode to use: normal vs overtake
             let distance_to_move_lane = move_lane_point - runner.position;
-            let within_200m_of_move_lane =
-                (0.0..=200.0).contains(&distance_to_move_lane);
+            let within_200m_of_move_lane = (0.0..=200.0).contains(&distance_to_move_lane);
 
             // Use normal mode if:
             // 1. Not in overtake mode, OR
@@ -397,8 +416,8 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update positioning strategy for all runners.
-    /// Runners must be sorted by position in descending order before calling this method.
+    /// Update positioning strategy for all runners. Runners must be sorted by
+    /// position in descending order before calling this method.
     fn update_positioning_strategy(&mut self) {
         // Debug: check sorting
         self.assert_runners_sorted();

@@ -52,16 +52,9 @@
 //!
 //! # Unimplemented Variables
 //!
-//! In the current state, a few variables that depend on multiple runners return
-//! sensible stub values:
-//!
-//! - `popularity`: Popularity is not implemented; returns 1 (most popular).
-//! - `running_style_equal_popularity_one`: Popularity is not implemented; returns 1
-//!   (runner is most popular, thus our style is the same as the most popula runner).
-//!
-//! There are also variables that are not implemented at all as they are only used
-//! in non-PvP contexts, which is out of scope for this simulator. The evaluator
-//! will panic if these are encountered:
+//! There are variables that are not implemented at all as they are only used in
+//! non-PvP contexts, which is out of scope for this simulator. The evaluator will
+//! panic if these are encountered:
 //!
 //! - `is_exist_chara_id`
 //! - `remain_distance_viewer_id`
@@ -588,9 +581,6 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // Race grade: refer to Grade enum for values
         Grade => params.grade as i32,
 
-        // Popularity rank
-        Popularity => 1, // STUB: Always most popular in single-uma mode
-
         // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=sakura
         //
         // N.B. Cherry blossom season is semantically part of spring;
@@ -692,7 +682,7 @@ fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: S
         }
         RunningStyleCountSashiOtherself => get_style_count_otherself(state, Style::Late, my_style),
         RunningStyleCountSenkoOtherself => get_style_count_otherself(state, Style::Pace, my_style),
-        RunningStyleEqualPopularityOne => 1, // STUB: We are most popular
+        RunningStyleEqualPopularityOne => (my_style == state.style_most_popular) as i32,
     }
 }
 
@@ -732,12 +722,17 @@ fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner)
 }
 
 fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
+    use StatusVar::*;
+
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
-        StatusVar::Motivation => builder.motivation as i32,
+        Motivation => builder.motivation as i32,
+
+        // Popularity rank
+        Popularity => builder.popularity_rank as i32,
 
         // Gate bracket: 1=inner-most, 8=outer-most
-        StatusVar::PostNumber => builder.gate_block as i32,
+        PostNumber => builder.gate_block as i32,
 
         _ => panic!("Unsupported status variable in out-of-gate context"),
     }
@@ -750,6 +745,9 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         Motivation => runner.motivation as i32,
+
+        // Popularity rank
+        Popularity => runner.popularity_rank as i32,
 
         // Post number (starting gate)
         PostNumber => runner.gate_roll as i32,
@@ -880,5 +878,122 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
         RunningStyleTemptationOpponentCountSenko => {
             get_style_temptation_count_opponent(state, Style::Pace, runner)
         }
+    }
+}
+
+/// Recursively check static guards in a condition tree.
+///
+/// Returns true if all static guards pass. Runtime guards are ignored (assumed
+/// possible). Uses short-circuit evaluation for AND/OR logic.
+///
+/// This is useful for determining if a skill CAN activate on a course, independent
+/// of runtime conditions like HP, order, or phase.
+pub fn check_static_guards(
+    tree: &ComparisonTree,
+    state: &RaceState,
+    runner: &UnreadyRunner,
+) -> bool {
+    match tree {
+        ComparisonTree::Single(comp) => evaluate_static_comparison(comp, state, runner),
+        ComparisonTree::Binary { left, op, right } => match op {
+            BinOp::And => {
+                check_static_guards(left, state, runner)
+                    && check_static_guards(right, state, runner)
+            }
+            BinOp::Or => {
+                check_static_guards(left, state, runner)
+                    || check_static_guards(right, state, runner)
+            }
+        },
+    }
+}
+
+/// Evaluate a single comparison for static guard checking.
+///
+/// Returns true if:
+/// - The variable is runtime-only (assumed possible to satisfy)
+/// - The variable is static and the comparison evaluates to true
+/// - The variable is popularity (special case to avoid circular dependency)
+///
+/// Returns false if:
+/// - The variable is static and the comparison evaluates to false
+pub fn evaluate_static_comparison(
+    comp: &Comparison,
+    state: &RaceState,
+    runner: &UnreadyRunner,
+) -> bool {
+    use VarType::*;
+
+    // Special case: popularity variables return true to avoid circular dependency
+    if matches!(
+        comp.var,
+        Status(StatusVar::Popularity)
+            | RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
+    ) {
+        return true;
+    }
+
+    // Check if this is a static guard
+    let role = comp.var.variable_role();
+    if !matches!(role, VariableRole::StaticGuard) {
+        // Runtime variable - assume it could be satisfied
+        return true;
+    }
+
+    // Static guard - evaluate it
+    EvaluatorOutOfGate::evaluate(&EvaluatorOutOfGate, comp, None, state, runner)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_variable_role_static_guards() {
+        use crate::condition::variables::{
+            CourseVar, RaceParamVar, StatKind, VarType, VariableRole,
+        };
+
+        // Course variables should be StaticGuard
+        let ground_var = VarType::Course(CourseVar::GroundType);
+        assert!(matches!(
+            ground_var.variable_role(),
+            VariableRole::StaticGuard
+        ));
+
+        // Race param variables should be StaticGuard
+        let season_var = VarType::RaceParam(RaceParamVar::Season);
+        assert!(matches!(
+            season_var.variable_role(),
+            VariableRole::StaticGuard
+        ));
+
+        // Base stat variables should be StaticGuard
+        let speed_var = VarType::BaseStat(StatKind::Speed);
+        assert!(matches!(
+            speed_var.variable_role(),
+            VariableRole::StaticGuard
+        ));
+    }
+
+    #[test]
+    fn test_variable_role_runtime_guards() {
+        use crate::condition::variables::{OrderVar, PhaseVar, StatusVar, VarType, VariableRole};
+
+        // HP is runtime
+        let hp_var = VarType::Status(StatusVar::HpPer);
+        assert!(!matches!(hp_var.variable_role(), VariableRole::StaticGuard));
+
+        // Order is runtime
+        let order_var = VarType::Order(OrderVar::Order);
+        assert!(!matches!(
+            order_var.variable_role(),
+            VariableRole::StaticGuard
+        ));
+
+        // Phase is runtime
+        let phase_var = VarType::Phase(PhaseVar::Phase);
+        assert!(!matches!(
+            phase_var.variable_role(),
+            VariableRole::StaticGuard
+        ));
     }
 }

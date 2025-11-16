@@ -294,12 +294,20 @@ fn threshold_stat_bonus(stat_value: u16) -> f64 {
     }
 }
 
+/// Calculate base stats multiplier from motivation.
+///
+/// Returns motivation_value × 0.02 + 1.0, where motivation values range from
+/// -2 (awful) to +2 (great).
+pub fn motivation_multiplier(motivation: Motivation) -> f64 {
+    1.0 + (motivation as i8 as f64) * 0.02
+}
+
 impl Uma {
     /// Convert raw Uma stats to base stats using motivation multiplier.
     pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before motivation
         // multiplier based on team rank. This is out of scope for this simulator.
-        let motivation_multiplier = 1.0 + (motivation as i8 as f64) * 0.02;
+        let motivation_multiplier = motivation_multiplier(motivation);
         Uma {
             speed: calculate_base_stat(raw.speed, motivation_multiplier),
             stamina: calculate_base_stat(raw.stamina, motivation_multiplier),
@@ -327,5 +335,22 @@ impl Distribution<Motivation> for StandardUniform {
             3 => Motivation::Good,
             _ => Motivation::Great,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_motivation_multiplier() {
+        // Normal = 0; multiplier should be 1.0
+        assert_eq!(motivation_multiplier(Motivation::Normal), 1.0);
+
+        // Great = +2; multiplier should be 1.04
+        assert!((motivation_multiplier(Motivation::Great) - 1.04).abs() < 0.001);
+
+        // Awful = -2; multiplier should be 0.96
+        assert!((motivation_multiplier(Motivation::Awful) - 0.96).abs() < 0.001);
     }
 }

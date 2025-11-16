@@ -13,6 +13,7 @@ use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
+use crate::race::popularity::JudgeScores;
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
@@ -461,6 +462,10 @@ pub struct Runner {
     pub trigger_scheduler: TriggerScheduler,
     /// Skill activation flags for the current update cycle.
     pub activation_flags: SkillActivationFlags,
+    /// Popularity rank (favorite rank) in the race (1-indexed).
+    pub popularity_rank: u8,
+    /// Scores and marks from the three judges used for popularity calculation.
+    pub judge_scores: JudgeScores,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

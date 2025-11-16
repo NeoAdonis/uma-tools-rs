@@ -161,7 +161,6 @@ pub enum RaceParamVar {
     Grade,
     GroundCondition,
     IsExistCharaId,
-    Popularity,
     SameSkillHorseCount,
     Season,
     Time,
@@ -191,6 +190,7 @@ pub enum StatusVar {
     IsTemptation,
     Lastspurt,
     Motivation,
+    Popularity,
     PostNumber,
     TemptationCount,
 }
@@ -421,7 +421,6 @@ impl VarType {
             "grade" => RaceParam(RaceParamVar::Grade),
             "ground_condition" => RaceParam(RaceParamVar::GroundCondition),
             "is_exist_chara_id" => RaceParam(RaceParamVar::IsExistCharaId),
-            "popularity" => RaceParam(RaceParamVar::Popularity),
             "same_skill_horse_count" => RaceParam(RaceParamVar::SameSkillHorseCount),
             "season" => RaceParam(RaceParamVar::Season),
             "time" => RaceParam(RaceParamVar::Time),
@@ -459,6 +458,7 @@ impl VarType {
             "is_temptation" => Status(StatusVar::IsTemptation),
             "lastspurt" => Status(StatusVar::Lastspurt),
             "motivation" => Status(StatusVar::Motivation),
+            "popularity" => Status(StatusVar::Popularity),
             "post_number" => Status(StatusVar::PostNumber),
             "temptation_count" => Status(StatusVar::TemptationCount),
 
@@ -674,6 +674,9 @@ impl VarType {
             // from Front Runner to Runaway. Since both styles are considered
             // the same for skill purposes, we can treat this type as static
             RunningStyle(_) => StaticGuard,
+
+            // Popularity
+            Status(StatusVar::Popularity) => StaticGuard,
 
             // Special value - By definition, it never changes
             Always => StaticGuard,

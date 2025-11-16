@@ -267,6 +267,28 @@ impl Skill {
         false
     }
 
+    /// Check if this skill can activate on a specific course (ignoring wisdom-based
+    /// activation chance).
+    ///
+    /// This evaluates only course-static guards (ground_type, distance_type, etc.)
+    /// and ignores runtime guards (hp_per, phase, order, etc.) which are assumed to be
+    /// potentially satisfiable during the race.
+    ///
+    /// Returns true if at least one alternative can activate on this course.
+    pub fn is_activable_on_course(
+        &self,
+        state: &crate::race::solver::RaceState,
+        runner: &crate::race::unready_runner::UnreadyRunner,
+    ) -> bool {
+        // A skill is activable if at least one of its alternatives can activate
+        for alternative in &self.alternatives {
+            if can_alternative_activate(alternative, state, runner) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Load all skills from a JSON file into a HashMap.
     ///
     /// # Arguments
@@ -292,4 +314,34 @@ impl Skill {
 
         Ok(skills_map)
     }
+}
+
+/// Check if a specific skill alternative can activate on this course.
+///
+/// Parses the alternative's condition and evaluates only static guards.
+/// Returns true if all static guards pass (or there are no static guards).
+fn can_alternative_activate(
+    alternative: &SkillAlternative,
+    state: &crate::race::solver::RaceState,
+    runner: &crate::race::unready_runner::UnreadyRunner,
+) -> bool {
+    use crate::condition::evaluator::check_static_guards;
+    use crate::condition::parser::parse_condition;
+
+    // Empty condition means always activable
+    if alternative.condition.is_empty() {
+        return true;
+    }
+
+    // Parse condition
+    let condition = match parse_condition(&alternative.condition) {
+        Ok(cond) => cond,
+        Err(_) => {
+            // If parsing fails, conservatively assume activable
+            return true;
+        }
+    };
+
+    // Check static guards only
+    check_static_guards(&condition.comp_tree, state, runner)
 }

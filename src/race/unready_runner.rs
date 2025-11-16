@@ -9,6 +9,7 @@ use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::hp::hp_style_multiplier;
 use crate::race::modifiers::roll_section_speed_modifier;
+use crate::race::popularity::JudgeScores;
 use crate::race::runner::*;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
@@ -120,9 +121,9 @@ pub struct UnreadyRunner {
     /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
     /// Skills that can be activated after the race starts.
-    runtime_skills: Vec<Skill>,
+    pub runtime_skills: Vec<Skill>,
     /// Skills that activate out of gate as soon as the race starts.
-    out_of_gate_skills: Vec<Skill>,
+    pub out_of_gate_skills: Vec<Skill>,
     /// Indices of golden skills in `runtime_skills` for activation by skills that
     /// activate golden skills.
     golden_skill_indices: Vec<usize>,
@@ -130,6 +131,13 @@ pub struct UnreadyRunner {
     /// evaluated. Used for conditions like `same_skill_horse_count` that need to know
     /// which skill they're checking.
     pub same_skill_count: u8,
+
+    // === Popularity ===
+    /// Popularity rank (favorite rank) in the race (1-indexed).
+    /// Set by the popularity calculation system before race starts.
+    pub popularity_rank: u8,
+    /// Scores and marks from the three judges used for popularity calculation.
+    pub judge_scores: JudgeScores,
 
     // === Random number generator ===
     /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
@@ -154,7 +162,7 @@ impl UnreadyRunner {
         // Calculate skill activation chance and determine whether skills can activate
         // N.B. As observed, skill activation update happens before out-of-gate skills activate.
         // Thus, out-of-gate skills don't affect skill activation chance.
-        let skill_chance = (1.0 - 90.0 / uma.wiz as f64).max(0.2);
+        let skill_chance = (1.0 - 90.0 / base_uma.wiz as f64).max(0.2);
         let available_skills = skills
             .into_iter()
             .filter(|skill| {
@@ -209,6 +217,8 @@ impl UnreadyRunner {
             out_of_gate_skills,
             runtime_skills,
             same_skill_count: 0,
+            popularity_rank: 0,
+            judge_scores: JudgeScores::default(),
             rush_chance_modifier: 0.0,
         }
     }
@@ -416,6 +426,8 @@ impl UnreadyRunner {
             position_diff: PositionDiff::default(),
             rush_counter: RushCounter::default(),
             activation_flags: SkillActivationFlags::default(),
+            popularity_rank: self.popularity_rank,
+            judge_scores: self.judge_scores,
         }
     }
 }
