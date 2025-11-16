@@ -7,6 +7,8 @@ pub enum VarType {
     AccumulateTime,
     /// Variable representing base stats.
     BaseStat(StatKind),
+    /// Variable related to state before race start.
+    InitialState(InitialStateVar),
     /// Variables related to order/rank.
     Order(OrderVar),
     /// Variables related to distance between runners.
@@ -48,6 +50,13 @@ pub enum StatKind {
     Power,
     Guts,
     Wiz,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InitialStateVar {
+    Motivation,
+    Popularity,
+    PostNumber,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,9 +198,6 @@ pub enum StatusVar {
     IsOvertake,
     IsTemptation,
     Lastspurt,
-    Motivation,
-    Popularity,
-    PostNumber,
     TemptationCount,
 }
 
@@ -239,6 +245,7 @@ impl fmt::Display for VarType {
         use VarType::*;
         match self {
             BaseStat(s) => write!(f, "base_{}", s),
+            InitialState(i) => write!(f, "initial_{}", i),
             Order(o) => write!(f, "{}", o),
             Distance(d) => write!(f, "{}", d),
             Phase(p) => write!(f, "{}", p),
@@ -291,6 +298,7 @@ macro_rules! impl_display_snake_case {
     };
 }
 
+impl_display_snake_case!(InitialStateVar);
 impl_display_snake_case!(OrderVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
@@ -317,6 +325,11 @@ impl VarType {
             "base_power" => BaseStat(StatKind::Power),
             "base_guts" => BaseStat(StatKind::Guts),
             "base_wiz" => BaseStat(StatKind::Wiz),
+
+            // Initial state
+            "motivation" => InitialState(InitialStateVar::Motivation),
+            "popularity" => InitialState(InitialStateVar::Popularity),
+            "post_number" => InitialState(InitialStateVar::PostNumber),
 
             // Order/Rank
             "change_order_onetime" => Order(OrderVar::ChangeOrderOnetime),
@@ -457,9 +470,6 @@ impl VarType {
             "is_overtake" => Status(StatusVar::IsOvertake),
             "is_temptation" => Status(StatusVar::IsTemptation),
             "lastspurt" => Status(StatusVar::Lastspurt),
-            "motivation" => Status(StatusVar::Motivation),
-            "popularity" => Status(StatusVar::Popularity),
-            "post_number" => Status(StatusVar::PostNumber),
             "temptation_count" => Status(StatusVar::TemptationCount),
 
             // Randoms
@@ -664,9 +674,10 @@ impl VarType {
             // Base stats
             BaseStat(_) => StaticGuard,
 
+            // Initial state properties
+            InitialState(_) => StaticGuard,
+
             // Static status properties
-            Status(StatusVar::Motivation) => StaticGuard,
-            Status(StatusVar::PostNumber) => StaticGuard,
             Status(StatusVar::IsBadstart) => StaticGuard,
 
             // Running style
@@ -674,9 +685,6 @@ impl VarType {
             // from Front Runner to Runaway. Since both styles are considered
             // the same for skill purposes, we can treat this type as static
             RunningStyle(_) => StaticGuard,
-
-            // Popularity
-            Status(StatusVar::Popularity) => StaticGuard,
 
             // Special value - By definition, it never changes
             Always => StaticGuard,

@@ -353,6 +353,7 @@ fn get_variable_value(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
+        InitialState(status_var) => get_initial_state_value(status_var, runner),
         Order(pos_var) => get_rank_value(pos_var, runner),
         Distance(dist_var) => get_distance_value(dist_var, runner),
         Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
@@ -385,10 +386,10 @@ fn get_variable_value_out_of_gate(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
+        InitialState(status_var) => get_initial_state_value_unready(status_var, builder),
         Course(course_var) => get_course_value(course_var, &state.course),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
-        Status(status_var) => get_basic_status_value(status_var, builder),
         Always => 1, // Always returns 1 (true)
         _ => 0,      // Not applicable in out-of-gate context
     }
@@ -721,8 +722,9 @@ fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner)
         - (runner.is_rushed() as i32)
 }
 
-fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
-    use StatusVar::*;
+/// Get initial state values in out-of-gate context
+fn get_initial_state_value_unready(var: &InitialStateVar, builder: &UnreadyRunner) -> i32 {
+    use InitialStateVar::*;
 
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
@@ -733,14 +735,12 @@ fn get_basic_status_value(var: &StatusVar, builder: &UnreadyRunner) -> i32 {
 
         // Gate bracket: 1=inner-most, 8=outer-most
         PostNumber => builder.gate_block as i32,
-
-        _ => panic!("Unsupported status variable in out-of-gate context"),
     }
 }
 
-/// Get status values (HP, last spurt, continuous checks)
-fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
-    use StatusVar::*;
+/// Get initial state values
+fn get_initial_state_value(var: &InitialStateVar, runner: &Runner) -> i32 {
+    use InitialStateVar::*;
 
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
@@ -749,9 +749,16 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         // Popularity rank
         Popularity => runner.popularity_rank as i32,
 
-        // Post number (starting gate)
-        PostNumber => runner.gate_roll as i32,
+        // Gate bracket: 1=inner-most, 8=outer-most
+        PostNumber => runner.gate_block as i32,
+    }
+}
 
+/// Get status values (HP, last spurt, continuous checks)
+fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
+    use StatusVar::*;
+
+    match var {
         // HP as percentage (0-100)
         HpPer => runner.hp_percent().floor() as i32,
 
@@ -927,7 +934,7 @@ pub fn evaluate_static_comparison(
     // Special case: popularity variables return true to avoid circular dependency
     if matches!(
         comp.var,
-        Status(StatusVar::Popularity)
+        InitialState(InitialStateVar::Popularity)
             | RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
     ) {
         return true;
