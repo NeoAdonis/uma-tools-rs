@@ -91,7 +91,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
         runner.adjusted.guts,
     );
 
-    if runner.hp >= max_hp_required {
+    if runner.hp.current >= max_hp_required {
         runner.last_spurt = Some(LastSpurt {
             max_speed: max_last_spurt_speed,
             target_distance: runner.position,
@@ -114,11 +114,11 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
         );
 
         // Find distance we can actually run at this speed with available HP
-        let usable_distance = if hp_required <= runner.hp {
+        let usable_distance = if hp_required <= runner.hp.current {
             remaining_distance
         } else {
             // Scale down distance based on HP available
-            let hp_ratio = runner.hp / hp_required;
+            let hp_ratio = runner.hp.current / hp_required;
             (calculation_distance * hp_ratio) + 60.0
         };
 

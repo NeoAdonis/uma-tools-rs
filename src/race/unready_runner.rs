@@ -7,7 +7,7 @@ use rand::Rng;
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
-use crate::race::hp::hp_style_multiplier;
+use crate::race::hp::{HpState, hp_style_multiplier};
 use crate::race::modifiers::roll_section_speed_modifier;
 use crate::race::popularity::JudgeScores;
 use crate::race::runner::*;
@@ -388,9 +388,7 @@ impl UnreadyRunner {
             section: 0,
             phase: Phase::Early,
             section_speed_modifier,
-            hp: max_hp,
-            max_hp,
-            has_emptied_hp: false,
+            hp: HpState::new(max_hp),
             position: 0.0,
             rush_chance,
             rush_state,

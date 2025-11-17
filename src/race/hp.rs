@@ -2,6 +2,49 @@ use crate::course::*;
 use crate::race::parameters::TrackCondition;
 use crate::uma::Style;
 
+/// Health Points (HP) state.
+///
+/// HP determines if the runner can sustain her target speed, decelerating
+/// if it reaches 0.
+/// It's also used to get the distance at which her last spurt can start.
+pub struct HpState {
+    /// Current HP. It is set to `max_hp` at the start of the race and decreases
+    /// over time. It can be restored by skills but cannot exceed `max_hp`.
+    ///
+    /// If HP reaches 0, the runner's maximum speed is greatly reduced.
+    pub current: f64,
+    /// Maximum HP. Calculated from the runner's stamina stat at the start of the race.
+    pub maximum: f64,
+    /// Flag indicating if the runner has emptied her HP at least once.
+    pub has_emptied: bool,
+}
+
+impl HpState {
+    /// Create a new HP state with given maximum HP.
+    pub fn new(maximum: f64) -> Self {
+        Self {
+            current: maximum,
+            maximum,
+            has_emptied: false,
+        }
+    }
+
+    /// Check if HP is empty (i.e., current HP <= 0).
+    pub fn is_empty(&self) -> bool {
+        self.current <= 0.0
+    }
+
+    /// Get current HP percentage.
+    pub fn percent(&self) -> f64 {
+        self.current / self.maximum * 100.0
+    }
+
+    /// Recover HP by a given amount, clamped to maximum.
+    pub fn recover(&mut self, amount: f64) {
+        self.current = (self.current + amount).min(self.maximum);
+    }
+}
+
 fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
     match (track, condition) {
         (Track::Turf, TrackCondition::Firm) => 1.0,

@@ -362,15 +362,8 @@ pub struct Runner {
     pub acceleration: f64,
     /// Current position in the course in meters.
     pub position: f64,
-    /// Current HP. It is set to `max_hp` at the start of the race and decreases
-    /// over time. It can be restored by skills but cannot exceed `max_hp`.
-    ///
-    /// If HP reaches 0, the runner's maximum speed is greatly reduced.
-    pub hp: f64,
-    /// Maximum HP. Calculated from the runner's stamina stat at the start of the race.
-    pub max_hp: f64,
-    /// Flag indicating if the runner has emptied her HP at least once.
-    pub has_emptied_hp: bool,
+    /// Current HP state.
+    pub hp: HpState,
     /// Minimum speed in m/s. It is based on course base speed and guts stat.
     pub min_speed: f64,
     /// Base target speed in m/s before modifiers.
@@ -567,7 +560,7 @@ impl Runner {
 
     /// Calculate decreasing acceleration (i.e., deceleration).
     fn decelerate(&mut self) {
-        self.acceleration = if self.hp <= 0.0 {
+        self.acceleration = if self.hp.is_empty() {
             -1.2
         } else if self.is_pace_down() {
             -0.5
@@ -990,15 +983,6 @@ impl Runner {
         }
     }
 
-    /// Get current HP percentage.
-    ///
-    /// HP determines if the runner can sustain her target speed, decelerating
-    /// if it reaches 0.
-    /// It's also used to get the distance at which her last spurt can start.
-    pub fn hp_percent(&self) -> f64 {
-        self.hp / self.max_hp * 100.0
-    }
-
     /// Update HP based on current speed, phase, and modifiers.
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
         let mut multiplier = if let Some(struggle) = &self.spot_struggle
@@ -1022,7 +1006,7 @@ impl Runner {
         if self.is_accelerating_downhill() {
             multiplier *= 0.4;
         }
-        self.hp -= calculate_hp_consumption_per_second(
+        self.hp.current -= calculate_hp_consumption_per_second(
             self.speed,
             &state.course,
             state.params.condition,
@@ -1030,11 +1014,11 @@ impl Runner {
             self.adjusted.guts,
             multiplier,
         ) * delta_time;
-        if self.hp <= 0.0 {
-            self.has_emptied_hp = true;
+        if self.hp.is_empty() {
+            self.hp.has_emptied = true;
         }
         // Exit dueling state if HP is below 5%
-        if self.hp_percent() < 5.0 {
+        if self.hp.percent() < 5.0 {
             self.dueling = None;
         }
         self.check_hp_triggers(state);
@@ -1328,7 +1312,7 @@ impl Runner {
     /// Rules are checked in priority order; first match wins.
     pub fn calculate_normal_mode_lane_target(&mut self, course: &Course, all_runners: &[Runner]) {
         // Out of HP - stay in current lane
-        if self.hp <= 0.0 {
+        if self.hp.is_empty() {
             self.lane.target = self.lane.current;
             return;
         }
@@ -2033,7 +2017,7 @@ impl Runner {
     pub fn check_hp_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.hp_triggers.peek() {
             if !Self::should_fire_trigger(
-                self.hp_percent(),
+                self.hp.percent(),
                 trigger.threshold_percent,
                 trigger.operator,
             ) {
@@ -2072,7 +2056,7 @@ impl Runner {
             let current_value = match trigger.variable {
                 WindowVariable::AccumulateTime => state.elapsed_time,
                 WindowVariable::DistanceRate => self.position, // Already in meters (converted at build time)
-                WindowVariable::HpPercent => self.hp_percent(),
+                WindowVariable::HpPercent => self.hp.percent(),
                 WindowVariable::SpatialPosition => self.position, // Spatial features use position directly
             };
 
@@ -2245,7 +2229,7 @@ impl Runner {
         }
         // Recovery (HP restoration)
         else if matches!(effect_type, SkillType::Recovery) {
-            self.hp = (self.hp + effect.modifier as f64).min(self.max_hp);
+            self.hp.recover(effect.modifier as f64);
 
             // Increment heal skill count
             self.trigger_scheduler.activation_counts.increment_heal();
