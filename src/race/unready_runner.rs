@@ -91,16 +91,13 @@ pub struct UnreadyRunner {
     /// Base stats before adjustments. Also used for skill conditions in
     /// out-of-gate skills.
     pub base: Uma,
-    /// Runner motivation level. It affects base stats and is used for
-    /// evaluating the activation conditions of some out-of-gate skills.
-    pub motivation: Motivation,
-    /// Gate number (0-indexed). It determines starting lane position.
+    /// Gate number (1-indexed). It determines starting lane position.
+    /// It is also used as a unique identifier for the runner.
     pub gate_roll: u8,
-    /// Gate bracket (0-7, from innermost to outermost).
-    /// Used for some skill conditions.
-    pub gate_block: u8,
 
     // === Mutable state being constructed ===
+    /// Set of static values related to the runner at the start of the race.
+    pub initial_state: InitialState,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
     adjusted: Uma,
@@ -131,13 +128,6 @@ pub struct UnreadyRunner {
     /// evaluated. Used for conditions like `same_skill_horse_count` that need to know
     /// which skill they're checking.
     pub same_skill_count: u8,
-
-    // === Popularity ===
-    /// Popularity rank (favorite rank) in the race (1-indexed).
-    /// Set by the popularity calculation system before race starts.
-    pub popularity_rank: u8,
-    /// Scores and marks from the three judges used for popularity calculation.
-    pub judge_scores: JudgeScores,
 
     // === Random number generator ===
     /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
@@ -203,10 +193,14 @@ impl UnreadyRunner {
 
         UnreadyRunner {
             base: base_uma,
-            motivation,
             gate_roll,
-            gate_block,
             adjusted: adjusted_uma,
+            initial_state: InitialState {
+                motivation,
+                gate_block,
+                popularity_rank: 0,
+                judge_scores: JudgeScores::default(),
+            },
             start_delay,
             activation_counts: ActivationCounts::default(),
             activated_skill_ids: HashSet::new(),
@@ -217,8 +211,6 @@ impl UnreadyRunner {
             out_of_gate_skills,
             runtime_skills,
             same_skill_count: 0,
-            popularity_rank: 0,
-            judge_scores: JudgeScores::default(),
             rush_chance_modifier: 0.0,
         }
     }
@@ -369,11 +361,10 @@ impl UnreadyRunner {
 
         // Initialize race state
         Runner {
+            gate_roll: self.gate_roll,
             base: self.base,
             adjusted: self.adjusted,
-            motivation: self.motivation,
-            gate_roll: self.gate_roll,
-            gate_block: self.gate_block,
+            initial_state: self.initial_state,
             speed: 3.0,
             acceleration: 0.0, // start dash acceleration is applied separately
             min_speed: 0.85 * course.base_speed()
@@ -426,8 +417,6 @@ impl UnreadyRunner {
             position_diff: PositionDiff::default(),
             rush_counter: RushCounter::default(),
             activation_flags: SkillActivationFlags::default(),
-            popularity_rank: self.popularity_rank,
-            judge_scores: self.judge_scores,
         }
     }
 }

@@ -143,8 +143,8 @@ impl RaceSolver<UnreadyRunner> {
 
         // Assign popularity ranks to each runner
         for (i, builder) in builders.iter_mut().enumerate() {
-            builder.popularity_rank = popularity_ranks[i];
-            if builder.popularity_rank == 1 {
+            builder.initial_state.popularity_rank = popularity_ranks[i];
+            if builder.initial_state.popularity_rank == 1 {
                 state.style_most_popular = builder.base.style;
             }
         }

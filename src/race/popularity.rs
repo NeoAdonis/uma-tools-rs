@@ -335,7 +335,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
         let (added_speed, added_stamina, added_power) = calculate_added_points(runner, state);
 
         // Get coefficients
-        let mood_coef = motivation_multiplier(runner.motivation);
+        let mood_coef = motivation_multiplier(runner.initial_state.motivation);
         let distance_coef = distance_proficiency_multiplier(runner.base.distance_aptitude);
         let track_coef = ground_type_proficiency_multiplier(runner.base.track_aptitude);
 
@@ -420,7 +420,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
         }
 
         ranks[runner_idx] = current_rank;
-        runners[runner_idx].judge_scores = judge_scores;
+        runners[runner_idx].initial_state.judge_scores = judge_scores;
         prev_points = points;
     }
 

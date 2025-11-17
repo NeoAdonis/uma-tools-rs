@@ -110,6 +110,18 @@ pub fn is_timed_effect(effect_type: &SkillType) -> bool {
     )
 }
 
+pub struct InitialState {
+    /// Runner motivation level. It affects initial stat adjustments,
+    /// and is also used to evaluate some skill conditions.
+    pub motivation: Motivation,
+    /// Popularity rank (favorite rank) in the race (1-indexed).
+    pub popularity_rank: u8,
+    /// Scores and marks from the three judges used for popularity calculation.
+    pub judge_scores: JudgeScores,
+    /// Gate bracket (1-8, from innermost to outermost).
+    pub gate_block: u8,
+}
+
 /// State related to rushing (temptation, 掛かり).
 pub struct RushState {
     pub section: u8,
@@ -331,20 +343,17 @@ pub struct SkillActivationFlags {
 ///
 /// N.B. This structure should be created from an `UnreadyRunner` via `RaceSolver`.
 pub struct Runner {
+    /// Gate number (1-indexed). It determines starting lane position.
+    /// It is also used as a unique identifier for the runner.
+    pub gate_roll: u8,
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
     pub adjusted: Uma,
-    /// Runner motivation level. After applying motivation modifiers to stats,
-    /// this field is only used to evaluate some skill conditions.
-    pub motivation: Motivation,
-    /// Gate number (0-indexed). It determines starting lane position.
-    pub gate_roll: u8,
-    /// Gate bracket (0-7, from innermost to outermost).
-    /// Used to evaluate some skill conditions.
-    pub gate_block: u8,
+    /// Set of static values related to the runner at the start of the race.
+    pub initial_state: InitialState,
     /// Start delay (i.e. time taken to leave the gate) in seconds.
     pub start_delay: f64,
     /// Current speed in m/s. Besides position updates, it also affects HP consumption.
@@ -462,10 +471,6 @@ pub struct Runner {
     pub trigger_scheduler: TriggerScheduler,
     /// Skill activation flags for the current update cycle.
     pub activation_flags: SkillActivationFlags,
-    /// Popularity rank (favorite rank) in the race (1-indexed).
-    pub popularity_rank: u8,
-    /// Scores and marks from the three judges used for popularity calculation.
-    pub judge_scores: JudgeScores,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

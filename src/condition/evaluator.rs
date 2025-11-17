@@ -64,6 +64,7 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::Course;
 use crate::race::parameters::RaceParameters;
+use crate::race::runner::InitialState;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
@@ -353,7 +354,7 @@ fn get_variable_value(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
-        InitialState(status_var) => get_initial_state_value(status_var, runner),
+        InitialState(status_var) => get_initial_state_value(status_var, &runner.initial_state),
         Order(pos_var) => get_rank_value(pos_var, runner),
         Distance(dist_var) => get_distance_value(dist_var, runner),
         Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
@@ -386,7 +387,7 @@ fn get_variable_value_out_of_gate(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
-        InitialState(status_var) => get_initial_state_value_unready(status_var, builder),
+        InitialState(status_var) => get_initial_state_value(status_var, &builder.initial_state),
         Course(course_var) => get_course_value(course_var, &state.course),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
@@ -722,35 +723,19 @@ fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner)
         - (runner.is_rushed() as i32)
 }
 
-/// Get initial state values in out-of-gate context
-fn get_initial_state_value_unready(var: &InitialStateVar, builder: &UnreadyRunner) -> i32 {
-    use InitialStateVar::*;
-
-    match var {
-        // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
-        Motivation => builder.motivation as i32,
-
-        // Popularity rank
-        Popularity => builder.popularity_rank as i32,
-
-        // Gate bracket: 1=inner-most, 8=outer-most
-        PostNumber => builder.gate_block as i32,
-    }
-}
-
 /// Get initial state values
-fn get_initial_state_value(var: &InitialStateVar, runner: &Runner) -> i32 {
+fn get_initial_state_value(var: &InitialStateVar, state: &InitialState) -> i32 {
     use InitialStateVar::*;
 
     match var {
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
-        Motivation => runner.motivation as i32,
+        Motivation => state.motivation as i32,
 
         // Popularity rank
-        Popularity => runner.popularity_rank as i32,
+        Popularity => state.popularity_rank as i32,
 
         // Gate bracket: 1=inner-most, 8=outer-most
-        PostNumber => runner.gate_block as i32,
+        PostNumber => state.gate_block as i32,
     }
 }
 
