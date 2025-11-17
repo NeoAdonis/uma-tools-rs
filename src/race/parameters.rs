@@ -80,7 +80,7 @@ pub enum Grade {
 
 /// Struct representing the parameters of a race.
 pub struct RaceParameters {
-    pub condition: TrackCondition,
+    pub track_condition: TrackCondition,
     pub weather: Weather,
     pub season: Season,
     pub time: Time,

@@ -20,7 +20,7 @@ fn main() {
 
     // TODO: load parameters from args
     let params = RaceParameters {
-        condition: rng.random::<TrackCondition>(),
+        track_condition: rng.random::<TrackCondition>(),
         weather: rng.random::<Weather>(),
         season: rng.random::<Season>(),
         time: rng.random::<Time>(),

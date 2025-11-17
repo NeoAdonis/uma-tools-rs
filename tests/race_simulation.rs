@@ -22,7 +22,7 @@ fn test_basic_race_simulation() {
 
     // Create race parameters
     let _params = RaceParameters {
-        condition: TrackCondition::Good,
+        track_condition: TrackCondition::Good,
         weather: Weather::Sunny,
         season: Season::Spring,
         time: Time::Noon,

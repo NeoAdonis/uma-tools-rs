@@ -977,7 +977,7 @@ impl Runner {
             if prev_phase != self.phase {
                 self.check_phase_triggers(state);
                 if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-                    calculate_last_spurt(self, &state.course, state.params.condition);
+                    calculate_last_spurt(self, &state.course, state.params.track_condition);
                 }
             }
         }
@@ -1009,7 +1009,7 @@ impl Runner {
         self.hp.current -= calculate_hp_consumption_per_second(
             self.speed,
             &state.course,
-            state.params.condition,
+            state.params.track_condition,
             self.phase,
             self.adjusted.guts,
             multiplier,
@@ -2107,7 +2107,7 @@ impl Runner {
         alternative_index: usize,
         elapsed_time: f64,
         course: &Course,
-        condition: TrackCondition,
+        track_condition: TrackCondition,
     ) {
         // Clone the skill data we need to avoid borrow checker issues
         let skill_id = self.available_skills[skill_index].id.clone();
@@ -2126,7 +2126,7 @@ impl Runner {
                     elapsed_time,
                     scaled_duration,
                     course,
-                    condition,
+                    track_condition,
                 ),
                 _ => continue, // TODO: Handle other targets
             }
@@ -2189,7 +2189,7 @@ impl Runner {
                 alternative_index,
                 state.elapsed_time,
                 &state.course,
-                state.params.condition,
+                state.params.track_condition,
             );
             self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
         } else if is_onetime {
@@ -2212,7 +2212,7 @@ impl Runner {
         elapsed_time: f64,
         scaled_duration: f64,
         course: &Course,
-        condition: TrackCondition,
+        track_condition: TrackCondition,
     ) {
         let effect_type = &effect.skill_type;
 
@@ -2236,7 +2236,7 @@ impl Runner {
 
             // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
             if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
-                calculate_last_spurt(self, course, condition);
+                calculate_last_spurt(self, course, track_condition);
             }
         }
         // Activate random gold skill
@@ -2248,7 +2248,7 @@ impl Runner {
                     .random_range(0..self.golden_skill_indices.len());
                 let golden_skill_idx = self.golden_skill_indices[idx];
                 // Recursively activate the golden skill (use first alternative)
-                self.activate_skill(golden_skill_idx, 0, elapsed_time, course, condition);
+                self.activate_skill(golden_skill_idx, 0, elapsed_time, course, track_condition);
             }
         }
         // Style change
@@ -2276,7 +2276,7 @@ impl Runner {
                 .enumerate()
                 .find(|(_, skill)| skill.id == "201631")
             {
-                self.activate_skill(skill_index, 0, elapsed_time, course, condition);
+                self.activate_skill(skill_index, 0, elapsed_time, course, track_condition);
             }
         }
 

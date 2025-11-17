@@ -40,7 +40,7 @@ fn create_test_race_solver() -> RaceSolver<Runner> {
     let course = Course::new_test(10006, course_data);
 
     let params = RaceParameters {
-        condition: TrackCondition::Good,
+        track_condition: TrackCondition::Good,
         weather: Weather::Sunny,
         season: Season::Spring,
         grade: Grade::G1,
@@ -165,7 +165,7 @@ fn test_is_exist_skill_id_in_available_skills() {
     let course = Course::new_test(10006, course_data);
 
     let params = RaceParameters {
-        condition: TrackCondition::Good,
+        track_condition: TrackCondition::Good,
         weather: Weather::Sunny,
         season: Season::Spring,
         grade: Grade::G1,

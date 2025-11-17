@@ -23,9 +23,9 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
     // N.B. In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
     Uma {
-        speed: calculate_adjusted_speed(uma.speed, parameters.condition, course_modifier),
+        speed: calculate_adjusted_speed(uma.speed, parameters.track_condition, course_modifier),
         stamina: uma.stamina,
-        power: calculate_adjusted_power(uma.power, course.surface, parameters.condition),
+        power: calculate_adjusted_power(uma.power, course.surface, parameters.track_condition),
         guts: uma.guts,
         wiz: calculate_adjusted_wiz(uma.wiz, uma.track_aptitude),
         style: uma.style,

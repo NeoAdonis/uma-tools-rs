@@ -180,16 +180,16 @@ impl UmaData {
 }
 
 /// Calculate track speed modifier based on track condition.
-pub fn track_speed_modifier(condition: TrackCondition) -> u16 {
-    match condition {
+pub fn track_speed_modifier(track_condition: TrackCondition) -> u16 {
+    match track_condition {
         TrackCondition::Heavy => 50,
         _ => 0,
     }
 }
 
 /// Calculate track power modifier based on track type and condition.
-pub fn track_power_modifier(track: Track, condition: TrackCondition) -> u16 {
-    match (track, condition) {
+pub fn track_power_modifier(track: Track, track_condition: TrackCondition) -> u16 {
+    match (track, track_condition) {
         (Track::Turf, TrackCondition::Firm) => 0,
         (Track::Turf, TrackCondition::Good) => 50,
         (Track::Turf, TrackCondition::Soft) => 50,
@@ -228,17 +228,17 @@ pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
 /// Calculate adjusted speed after applying course and track modifiers.
 pub fn calculate_adjusted_speed(
     base_speed: u16,
-    condition: TrackCondition,
+    track_condition: TrackCondition,
     course_modifier: f64,
 ) -> u16 {
     let modified_speed = (base_speed as f64 * course_modifier) as u16;
-    let track_modifier = track_speed_modifier(condition);
+    let track_modifier = track_speed_modifier(track_condition);
     modified_speed.saturating_sub(track_modifier).max(1)
 }
 
 /// Calculate adjusted power after applying track modifier.
-pub fn calculate_adjusted_power(base_power: u16, track: Track, condition: TrackCondition) -> u16 {
-    let modifier = track_power_modifier(track, condition);
+pub fn calculate_adjusted_power(base_power: u16, track: Track, track_condition: TrackCondition) -> u16 {
+    let modifier = track_power_modifier(track, track_condition);
     base_power.saturating_sub(modifier).max(1)
 }
 

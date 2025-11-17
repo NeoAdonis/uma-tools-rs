@@ -45,8 +45,8 @@ impl HpState {
     }
 }
 
-fn hp_ground_modifier(track: Track, condition: TrackCondition) -> f64 {
-    match (track, condition) {
+fn hp_ground_modifier(track: Track, track_condition: TrackCondition) -> f64 {
+    match (track, track_condition) {
         (Track::Turf, TrackCondition::Firm) => 1.0,
         (Track::Turf, TrackCondition::Good) => 1.0,
         (Track::Turf, TrackCondition::Soft) => 1.02,
@@ -90,14 +90,14 @@ pub fn hp_style_multiplier(style: Style) -> f64 {
 pub fn calculate_hp_consumption_per_second(
     current_speed: f64,
     course: &Course,
-    condition: TrackCondition,
+    track_condition: TrackCondition,
     phase: Phase,
     guts_stat: u16,
     status_modifier: f64,
 ) -> f64 {
     let speed_diff = current_speed - course.base_speed() + 12.0;
     let base_consumption = 20.0 * speed_diff.powi(2) / 144.0;
-    let ground_modifier = hp_ground_modifier(course.surface, condition);
+    let ground_modifier = hp_ground_modifier(course.surface, track_condition);
 
     let consumption = base_consumption * status_modifier * ground_modifier;
 
@@ -111,7 +111,7 @@ pub fn calculate_hp_consumption_per_second(
 pub fn estimate_hp_consumption(
     speed: f64,
     course: &Course,
-    condition: TrackCondition,
+    track_condition: TrackCondition,
     distance: f64,
     guts_stat: u16,
 ) -> f64 {
@@ -126,7 +126,7 @@ pub fn estimate_hp_consumption(
     let hp_per_second = calculate_hp_consumption_per_second(
         speed,
         course,
-        condition,
+        track_condition,
         Phase::Last, // Last spurt phase for guts modifier
         guts_stat,
         1.0, // No special status modifier

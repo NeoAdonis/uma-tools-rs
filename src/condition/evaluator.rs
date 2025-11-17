@@ -578,7 +578,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 
     match var {
         // Track condition: 1=firm, 2=good, 3=soft, 4=heavy
-        GroundCondition => params.condition as i32,
+        GroundCondition => params.track_condition as i32,
 
         // Race grade: refer to Grade enum for values
         Grade => params.grade as i32,

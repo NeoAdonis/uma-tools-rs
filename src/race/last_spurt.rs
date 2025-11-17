@@ -59,7 +59,7 @@ fn last_spurt_speed_max(
 /// from there, the total time to finish the race. A candidate is picked based on a
 /// probability influenced by the runner's wisdom stat. A higher wisdom increases the
 /// chance of picking a higher speed.
-pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: TrackCondition) {
+pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, track_condition: TrackCondition) {
     // TODO: review function
 
     let max_last_spurt_speed = last_spurt_speed_max(
@@ -86,7 +86,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
     let max_hp_required = estimate_hp_consumption(
         max_last_spurt_speed,
         course,
-        condition,
+        track_condition,
         calculation_distance,
         runner.adjusted.guts,
     );
@@ -108,7 +108,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, condition: Tra
         let hp_required = estimate_hp_consumption(
             test_speed,
             course,
-            condition,
+            track_condition,
             calculation_distance,
             runner.adjusted.guts,
         );
