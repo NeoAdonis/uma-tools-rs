@@ -372,7 +372,6 @@ impl UnreadyRunner {
             base_target_speed: 0.85 * course.base_speed(),
             force_in_modifier,
             lane: LaneState::new(course.starting_lane(self.gate_roll)),
-            visible_distance: 20.0,
             visible_count: 0,
             nearby: NearbyState::default(),
             blocked: BlockedState::default(),

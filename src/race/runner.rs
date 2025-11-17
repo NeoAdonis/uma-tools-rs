@@ -33,6 +33,8 @@ pub struct SkillModifiers {
     pub acceleration: f64,
     /// Modifies lane movement speed. Positive values increase lane change speed.
     pub lane_speed: f64,
+    /// Modifies visible distance. Positive values increase it.
+    pub visible_distance: f64,
     /// Sets the target lane directly (0.0 to 1.0, relative to course width).
     /// `None` means no change.
     pub target_lane: Option<f64>,
@@ -47,6 +49,7 @@ impl Default for SkillModifiers {
             current_speed: 0.0,
             acceleration: 0.0,
             lane_speed: 0.0,
+            visible_distance: 0.0,
             target_lane: None,
             duration_scaling: 1.0, // Multiplicative default
         }
@@ -104,6 +107,7 @@ pub fn is_timed_effect(effect_type: &SkillType) -> bool {
             | TargetSpeed
             | CurrentSpeed
             | CurrentSpeedWithNaturalDeceleration
+            | Fov
             | ExtendEvolvedDuration
             | LaneMovementSpeed
             | LaneChange
@@ -422,9 +426,7 @@ pub struct Runner {
     pub order: OrderState,
     /// Distance differences between this runner and others.
     pub position_diff: PositionDiff,
-    /// Furthest distance at which the runner can see other runners, in meters.
-    pub visible_distance: f64,
-    /// Number of visible runners within `visible_distance`.
+    /// Number of visible runners in this runner's field of view.
     pub visible_count: u8,
     /// Information about nearby runners.
     pub nearby: NearbyState,
@@ -1805,9 +1807,11 @@ impl Runner {
     /// Check if another runner is visible to this runner.
     pub fn is_visible(&self, other: &Self, course: &Course) -> bool {
         let distance = (self.position - other.position).abs();
-        distance <= self.visible_distance
+        // Visibility starts at 20m, modified by skill bonuses
+        let visible_distance = 20.0 + self.skill_modifiers.visible_distance;
+        distance <= visible_distance
             && (self.lane.current - other.lane.current).abs()
-                <= ((distance / self.visible_distance) * 11.5 + 2.0) * course.lane_width() / 2.0
+                <= ((distance / visible_distance) * 11.5 + 2.0) * course.lane_width() / 2.0
     }
 
     /// Update front-blocked state for this runner based on another runner.
@@ -2263,10 +2267,6 @@ impl Runner {
                 rush_state.max_duration += effect.modifier as f64 / 10000.0;
             }
         }
-        // FOV change
-        else if matches!(effect_type, SkillType::Fov) {
-            // TODO: implement FOV change
-        }
         // "Sympathy" skill activation
         else if matches!(effect_type, SkillType::ActivateSympathy) {
             // Force activation of skill with ID "201631" if available
@@ -2315,26 +2315,29 @@ impl Runner {
         use SkillType::*;
         let mut mods = SkillModifiers::default();
 
-        for effect in &self.active_timed_effects {
-            match effect.effect.skill_type {
+        for timed in &self.active_timed_effects {
+            match timed.effect.skill_type {
                 Acceleration => {
-                    mods.acceleration += effect.effect.modifier as f64;
+                    mods.acceleration += timed.effect.modifier as f64;
                 }
                 TargetSpeed => {
-                    mods.target_speed += effect.effect.modifier as f64;
+                    mods.target_speed += timed.effect.modifier as f64;
                 }
                 CurrentSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
-                    mods.current_speed += effect.effect.modifier as f64;
+                    mods.current_speed += timed.effect.modifier as f64;
                 }
                 LaneMovementSpeed => {
-                    mods.lane_speed += effect.effect.modifier as f64 / 10000.0;
+                    mods.lane_speed += timed.effect.modifier as f64 / 10000.0;
+                }
+                Fov => {
+                    mods.visible_distance += timed.effect.modifier as f64 / 10000.0;
                 }
                 LaneChange => {
-                    mods.target_lane = Some(effect.effect.modifier as f64 / 10000.0);
+                    mods.target_lane = Some(timed.effect.modifier as f64 / 10000.0);
                 }
                 ExtendEvolvedDuration => {
                     // Duration scaling is multiplicative
-                    mods.duration_scaling *= effect.effect.modifier as f64 / 10000.0;
+                    mods.duration_scaling *= timed.effect.modifier as f64 / 10000.0;
                 }
                 _ => {}
             }
