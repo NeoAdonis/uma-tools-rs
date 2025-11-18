@@ -1087,8 +1087,7 @@ impl Runner {
             }
             if state.elapsed_time >= rush_state.end_time {
                 // 55% chance of snapping out
-                let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
-                if roll < 55.0 {
+                if self.rng.borrow_mut().random_bool(0.55) {
                     self.end_rush(state);
                 } else {
                     // Extend rush by 3 seconds
@@ -1751,14 +1750,13 @@ impl Runner {
                 if has_second_passed {
                     if self.is_accelerating_downhill() {
                         // 20% chance to stop each second
-                        let roll: f64 = rng.random();
-                        if roll < 0.2 {
+                        if rng.random_bool(0.2) {
                             self.stop_slope_acceleration();
                         }
                     } else {
-                        let roll: f64 = rng.random();
+                        // Wisdom * 0.04% chance to start each second
                         let chance = self.adjusted.wiz as f64 * 0.0004;
-                        if roll < chance {
+                        if rng.random_bool(chance) {
                             self.start_downhill_acceleration(slopes[idx].slope_percent());
                         }
                     }

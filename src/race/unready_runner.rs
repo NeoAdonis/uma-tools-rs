@@ -161,8 +161,7 @@ impl UnreadyRunner {
                     return true;
                 }
                 // Other skills activate based on chance
-                let roll: f64 = rng.borrow_mut().random();
-                roll < skill_chance
+                rng.borrow_mut().random_bool(skill_chance)
             })
             .collect::<Vec<Skill>>();
 
@@ -178,7 +177,7 @@ impl UnreadyRunner {
         // Calculate adjusted stats (before out-of-gate skills)
         let adjusted_uma = adjust_stats(&base_uma, course, params);
 
-        // Determine start delay
+        // Determine start delay (0.0 to 0.1 seconds)
         let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
 
         // Build golden skill indices for random activation

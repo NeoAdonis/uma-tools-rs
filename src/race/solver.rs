@@ -175,6 +175,7 @@ impl RaceSolver<Runner> {
         let max = self.state.course.finish_time_max();
         let clamped = converted.clamp(min, max);
         if !(min..=max).contains(&converted) {
+            // Add random offset between 0.0 and 1.0 seconds
             Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
         } else {
             Some(converted)

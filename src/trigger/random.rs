@@ -68,8 +68,8 @@ pub fn process_random_comp(
         // Pure probability roll
         Random(RandomVar::RandomLot) => {
             // random_lot==X means X% chance of activation
-            let roll: f64 = rng.random();
-            if roll * 100.0 < comp.value as f64 {
+            let chance = comp.value as f64 / 100.0;
+            if rng.random_bool(chance) {
                 Some(vec![0.0]) // Success, activation distance is 0 (immediate)
             } else {
                 None // Failed roll
