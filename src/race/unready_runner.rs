@@ -323,10 +323,33 @@ impl UnreadyRunner {
 
         // Set starting speed (done in the constructor)
         // Determine rush chance
-        let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
+        let rush_chance = (0.065 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier;
-        let roll: f64 = self.rng.borrow_mut().random_range(0.0..100.0);
-        let rush_state = if roll < rush_chance {
+        let can_rush = self.rng.borrow_mut().random_bool(rush_chance);
+        let rush_state = if can_rush {
+            let style = match self.adjusted.style {
+                Style::Front | Style::Runaway => self.adjusted.style,
+                Style::Pace => Style::Front,
+                Style::Late => {
+                    // 75% chance to change strategy to Front, 25% to Pace
+                    if self.rng.borrow_mut().random_bool(0.75) {
+                        Style::Front
+                    } else {
+                        Style::Pace
+                    }
+                }
+                Style::End => {
+                    // 70% chance to change strategy to Front, 20% to Pace, 10% to Late
+                    let roll: f64 = self.rng.borrow_mut().random();
+                    if roll < 0.7 {
+                        Style::Front
+                    } else if roll < 0.9 {
+                        Style::Pace
+                    } else {
+                        Style::Late
+                    }
+                }
+            };
             // Uma will rush in a random section between 2 and 9 (1-indexed)
             let section = self.rng.borrow_mut().random_range(1..=8);
             Some(RushState {
@@ -335,6 +358,7 @@ impl UnreadyRunner {
                 end_time: f64::MAX,
                 max_duration: 12.0,
                 is_rushed: false,
+                style,
             })
         } else {
             None

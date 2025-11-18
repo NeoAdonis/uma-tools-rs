@@ -422,23 +422,24 @@ impl RaceSolver<Runner> {
         // Debug: check sorting
         self.assert_runners_sorted();
 
-        let is_single_front_runner = self
-            .state
-            .runners_by_style
-            .get(&Style::Front)
-            .copied()
-            .unwrap_or(0)
-            == 1;
+        // Because we are counting how many runners are *currently* behaving as
+        // front runners rather than *actual* front runners, we cannot use
+        // runners_by_style from RaceState.
+        let mut front_runner_count = 0;
 
         // Find pacemaker (the most forward runner with the most aggressive style)
         // TODO: fix; this is valid only before the 1.5 anniversary update
-        let mut pacemaker_style = self.runners[0].adjusted.style;
+        let mut pacemaker_style = self.runners[0].positioning_style();
         let mut pacemaker_position = self.runners[0].position;
         for i in 0..self.runners.len() {
             let runner_i = &self.runners[i];
-            if runner_i.adjusted.style < pacemaker_style {
-                pacemaker_style = runner_i.adjusted.style;
+            let style = runner_i.positioning_style();
+            if style < pacemaker_style {
+                pacemaker_style = style;
                 pacemaker_position = runner_i.position;
+            }
+            if matches!(style, Style::Front | Style::Runaway) {
+                front_runner_count += 1;
             }
             // Because runners are sorted by position descendingly, we only
             // need to update pacemaker when a more agressive style is found
@@ -446,7 +447,7 @@ impl RaceSolver<Runner> {
 
         for i in 0..self.runners.len() {
             let runner = &self.runners[i];
-            match runner.adjusted.style {
+            match runner.positioning_style() {
                 Style::Front | Style::Runaway => {
                     // Determine if we are in first place, and by how much
                     let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
@@ -458,7 +459,7 @@ impl RaceSolver<Runner> {
                     runner.update_positioning_front(
                         self.state.elapsed_time,
                         distance_ahead,
-                        is_single_front_runner,
+                        front_runner_count == 1,
                     )
                 }
                 _ => {

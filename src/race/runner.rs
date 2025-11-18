@@ -133,6 +133,7 @@ pub struct RushState {
     pub end_time: f64,
     pub max_duration: f64,
     pub is_rushed: bool,
+    pub style: Style,
 }
 
 /// Modifier applied during spot struggle and its expiration time.
@@ -752,7 +753,7 @@ impl Runner {
 
     /// Criteria for front-runners to speed up to stay ahead or catch up.
     fn can_speed_up_to_front(&self, distance_ahead: f64, is_single_front_runner: bool) -> bool {
-        let distance_threshold = if self.adjusted.style == Style::Runaway {
+        let distance_threshold = if self.positioning_style() == Style::Runaway {
             17.5
         } else if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary && is_single_front_runner {
             12.5
@@ -784,6 +785,14 @@ impl Runner {
 
                 self.next_positioning_check += 2.0;
 
+                // Use original style to determine if runner was originally a
+                // front-runner that should speed up.
+                if self.is_rushed() && matches!(self.adjusted.style, Style::Front | Style::Runaway)
+                {
+                    self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
+                    return;
+                }
+
                 let chance = 0.2 * (self.adjusted.wiz as f64 * 0.1).log10();
                 let pass_roll = self.rng.borrow_mut().random_bool(chance);
                 if !pass_roll {
@@ -809,7 +818,7 @@ impl Runner {
             }
             PositioningStrategy::FrontOvertake => {
                 // Exit if already in first place and well ahead
-                let distance_threshold = if matches!(self.adjusted.style, Style::Runaway) {
+                let distance_threshold = if matches!(self.positioning_style(), Style::Runaway) {
                     27.5
                 } else {
                     10.0
@@ -837,11 +846,6 @@ impl Runner {
         course_length: f64,
         distance_behind: f64,
     ) {
-        debug_assert!(
-            distance_behind >= 0.0,
-            "BUG: No runner should be ahead of pacemaker"
-        );
-
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
@@ -852,7 +856,7 @@ impl Runner {
 
                 // Determine target distance range based on style and course length
                 let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;
-                let range = match self.adjusted.style {
+                let range = match self.positioning_style() {
                     Style::Pace => 3.0..(5.0 * course_multiplier),
                     Style::Late => (6.5 * course_multiplier)..(7.0 * course_multiplier),
                     Style::End => (7.5 * course_multiplier)..(8.0 * course_multiplier),
@@ -1026,6 +1030,15 @@ impl Runner {
         self.check_hp_triggers(state);
     }
 
+    /// Get the current style used for positioning strategy decisions.
+    pub fn positioning_style(&self) -> Style {
+        if self.is_rushed() {
+            self.rush_state.as_ref().unwrap().style
+        } else {
+            self.adjusted.style
+        }
+    }
+
     /// Enter rush (temptation, 掛かり) state.
     ///
     /// The runner will move ahead of the position dictated by their style,
@@ -1039,7 +1052,9 @@ impl Runner {
             // Rushed for at least 3 seconds
             rush_state.end_time = state.elapsed_time + 3.0;
             *state.rushed_by_style.entry(self.base.style).or_insert(0) += 1;
-            // TODO: implement position strat change
+            // Force positioning strategy change immediately
+            self.positioning_strategy = PositioningStrategy::Normal;
+            self.next_positioning_check = state.elapsed_time;
         }
     }
 
@@ -1054,6 +1069,9 @@ impl Runner {
                 .rushed_by_style
                 .entry(self.base.style)
                 .and_modify(|e| *e -= 1);
+            // Force positioning strategy change immediately
+            self.positioning_strategy = PositioningStrategy::Normal;
+            self.next_positioning_check = state.elapsed_time;
         }
     }
 
@@ -1104,6 +1122,8 @@ impl Runner {
         if self.section > 6 || other.section > 6 {
             return false;
         }
+        // ? Can rushed runners behaving like front-runners enter spot struggle?
+        // ? Assume no for now; use adjusted style only.
         match self.adjusted.style {
             Style::Front => {
                 matches!(other.adjusted.style, Style::Front)

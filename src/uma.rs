@@ -16,42 +16,19 @@ use serde::Deserialize;
 /// - Late surger (差し): Stays in the middle and makes a late charge.
 /// - End closer (追込): Stays at the back and sprints at the end.
 /// - Runaway (大逃げ): A front runner with even more aggressive pacing.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
+    #[serde(rename = "Oonige")]
+    Runaway = 0,
     #[serde(rename = "Nige")]
-    Front = 1,
+    Front,
     #[serde(rename = "Senkou")]
     Pace,
     #[serde(rename = "Sasi")]
     Late,
     #[serde(rename = "Oikomi")]
     End,
-    #[serde(rename = "Oonige")]
-    Runaway,
-}
-
-impl Ord for Style {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Smaller value => more aggressive style
-        // Runaway has a bigger value in data, but is the most aggressive style
-        // Treat it as 0 for comparison purposes
-        let value_self = match self {
-            Style::Runaway => 0u8,
-            _ => *self as u8,
-        };
-        let value_other = match other {
-            Style::Runaway => 0u8,
-            _ => *other as u8,
-        };
-        value_self.cmp(&value_other)
-    }
-}
-
-impl PartialOrd for Style {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 /// Aptitude levels for distance, track surface, and running style.
@@ -237,7 +214,11 @@ pub fn calculate_adjusted_speed(
 }
 
 /// Calculate adjusted power after applying track modifier.
-pub fn calculate_adjusted_power(base_power: u16, track: Track, track_condition: TrackCondition) -> u16 {
+pub fn calculate_adjusted_power(
+    base_power: u16,
+    track: Track,
+    track_condition: TrackCondition,
+) -> u16 {
     let modifier = track_power_modifier(track, track_condition);
     base_power.saturating_sub(modifier).max(1)
 }
