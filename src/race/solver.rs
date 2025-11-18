@@ -439,7 +439,7 @@ impl RaceSolver<Runner> {
                 pacemaker_style = style;
                 pacemaker_position = runner_i.position;
             }
-            if matches!(style, Style::Front | Style::Runaway) {
+            if style.is_front_like() {
                 front_runner_count += 1;
             }
             // Because runners are sorted by position descendingly, we only
@@ -448,31 +448,28 @@ impl RaceSolver<Runner> {
 
         for i in 0..self.runners.len() {
             let runner = &self.runners[i];
-            match runner.positioning_style() {
-                Style::Front | Style::Runaway => {
-                    // Determine if we are in first place, and by how much
-                    let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
-                        runner.position - self.runners[i + 1].position
-                    } else {
-                        0.0
-                    };
-                    let runner = &mut self.runners[i];
-                    runner.update_positioning_front(
-                        self.state.elapsed_time,
-                        distance_ahead,
-                        front_runner_count == 1,
-                    )
-                }
-                _ => {
-                    // Determine distance behind pacemaker
-                    let distance_behind = pacemaker_position - runner.position;
-                    let runner = &mut self.runners[i];
-                    runner.update_positioning_non_front(
-                        self.state.elapsed_time,
-                        self.state.course.distance as f64,
-                        distance_behind,
-                    )
-                }
+            if runner.positioning_style().is_front_like() {
+                // Determine if we are in first place, and by how much
+                let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
+                    runner.position - self.runners[i + 1].position
+                } else {
+                    0.0
+                };
+                let runner = &mut self.runners[i];
+                runner.update_positioning_front(
+                    self.state.elapsed_time,
+                    distance_ahead,
+                    front_runner_count == 1,
+                )
+            } else {
+                // Determine distance behind pacemaker
+                let distance_behind = pacemaker_position - runner.position;
+                let runner = &mut self.runners[i];
+                runner.update_positioning_non_front(
+                    self.state.elapsed_time,
+                    self.state.course.distance as f64,
+                    distance_behind,
+                )
             }
         }
 

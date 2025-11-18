@@ -327,6 +327,7 @@ impl UnreadyRunner {
         let can_rush = self.rng.borrow_mut().random_bool(rush_chance);
         let rush_state = if can_rush {
             let style = match self.adjusted.style {
+                // Front-like styles (Front and Runaway) keep their style when rushing
                 Style::Front | Style::Runaway => self.adjusted.style,
                 Style::Pace => Style::Front,
                 Style::Late => {

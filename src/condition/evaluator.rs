@@ -667,15 +667,13 @@ fn get_activation_value(
 /// Get running style values
 fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
     use RunningStyleVar::*;
+    let my_style = my_style.base_style();
 
     match var {
         // TODO: generate simulation values for one-runner simulations
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End
-        RunningStyle => match my_style {
-            Style::Runaway => 1, // Runaway is a Front variant
-            _ => my_style as i32,
-        },
-        RunningStyleCountNigeOtherself => get_style_count_front_otherself(state, my_style),
+        RunningStyle => my_style as i32,
+        RunningStyleCountNigeOtherself => get_style_count_otherself(state, Style::Front, my_style),
         RunningStyleCountOikomiOtherself => get_style_count_otherself(state, Style::End, my_style),
         RunningStyleCountSame => get_style_count(state, my_style),
         RunningStyleCountSameRate => {
@@ -696,31 +694,13 @@ fn get_style_count_otherself(state: &RaceState, style: Style, my_style: Style) -
     state.runners_by_style.get(&style).cloned().unwrap_or(0) as i32 - (my_style == style) as i32
 }
 
-fn get_style_count_front_otherself(state: &RaceState, my_style: Style) -> i32 {
-    // Runaway is considered a Front variant
-    get_style_count_otherself(state, Style::Front, my_style)
-        + get_style_count_otherself(state, Style::Runaway, my_style)
-}
-
 fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
     state.rushed_by_style.get(&style).cloned().unwrap_or(0) as i32
 }
 
-fn get_style_temptation_count_front(state: &RaceState) -> i32 {
-    // Runaway is considered a Front variant
-    get_style_temptation_count(state, Style::Front)
-        + get_style_temptation_count(state, Style::Runaway)
-}
-
-fn get_style_temptation_count_opponent(state: &RaceState, style: Style, runner: &Runner) -> i32 {
+fn get_style_temptation_opponent_count(state: &RaceState, style: Style, my_style: Style) -> i32 {
     // TODO: Opponents != Otherself; find actual opponent count
-    get_style_temptation_count(state, style) - (runner.is_rushed() as i32)
-}
-
-fn get_style_temptation_opponent_count_front(state: &RaceState, runner: &Runner) -> i32 {
-    get_style_temptation_count(state, Style::Front)
-        + get_style_temptation_count(state, Style::Runaway)
-        - (runner.is_rushed() as i32)
+    get_style_temptation_count(state, style) - (my_style == style) as i32
 }
 
 /// Get initial state values
@@ -854,21 +834,21 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
         TemptationOpponentCountInfront => runner.rush_counter.ahead as i32, // TODO: find actual opponent count
 
         // Rush counts by running style
-        RunningStyleTemptationCountNige => get_style_temptation_count_front(state),
+        RunningStyleTemptationCountNige => get_style_temptation_count(state, Style::Front),
         RunningStyleTemptationCountOikomi => get_style_temptation_count(state, Style::End),
         RunningStyleTemptationCountSashi => get_style_temptation_count(state, Style::Late),
         RunningStyleTemptationCountSenko => get_style_temptation_count(state, Style::Pace),
         RunningStyleTemptationOpponentCountNige => {
-            get_style_temptation_opponent_count_front(state, runner)
+            get_style_temptation_opponent_count(state, Style::Front, runner.base_style())
         }
         RunningStyleTemptationOpponentCountOikomi => {
-            get_style_temptation_count_opponent(state, Style::End, runner)
+            get_style_temptation_opponent_count(state, Style::End, runner.base_style())
         }
         RunningStyleTemptationOpponentCountSashi => {
-            get_style_temptation_count_opponent(state, Style::Late, runner)
+            get_style_temptation_opponent_count(state, Style::Late, runner.base_style())
         }
         RunningStyleTemptationOpponentCountSenko => {
-            get_style_temptation_count_opponent(state, Style::Pace, runner)
+            get_style_temptation_opponent_count(state, Style::Pace, runner.base_style())
         }
     }
 }

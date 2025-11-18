@@ -486,6 +486,11 @@ impl Runner {
         builder.build(&state.course)
     }
 
+    /// Get the base style, treating Runaway as a variant of Front.
+    pub fn base_style(&self) -> Style {
+        self.adjusted.style.base_style()
+    }
+
     /// Determine the lane type based on target lane position.
     pub fn lane_type(&self, course: &Course) -> LaneType {
         let percent = self.lane.current / course.width();
@@ -787,8 +792,7 @@ impl Runner {
 
                 // Use original style to determine if runner was originally a
                 // front-runner that should speed up.
-                if self.is_rushed() && matches!(self.adjusted.style, Style::Front | Style::Runaway)
-                {
+                if self.is_rushed() && self.adjusted.style.is_front_like() {
                     self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
                     return;
                 }

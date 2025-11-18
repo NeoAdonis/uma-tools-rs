@@ -9,26 +9,89 @@ use crate::course::{ThresholdStat, Track};
 use crate::race::parameters::TrackCondition;
 use serde::Deserialize;
 
-/// Running style or strategy of an Uma. The values represent, in order:
+/// Running style or strategy of an Uma. The values represent in order, from most to
+/// least aggressive:
 ///
-/// - Front runner (逃げ): Leads the race.
-/// - Pace chaser (先行): Stays near the front behind the leaders.
-/// - Late surger (差し): Stays in the middle and makes a late charge.
-/// - End closer (追込): Stays at the back and sprints at the end.
-/// - Runaway (大逃げ): A front runner with even more aggressive pacing.
+/// - Runaway (大逃げ): A front runner that tries to outpace others from the start.
+/// - Front runner (逃げ): Aims to lead the race.
+/// - Pace chaser (先行): Stays near the front, behind the front runners (if any).
+/// - Late surger (差し): Stays in the middle, behind front runners and pace chasers,
+///   and makes a late surge.
+/// - End closer (追込): Stays at the back and sprints towards the end.
+///
+/// ## Notes on Runaway vs Front
+///
+/// Runaway is a variant of Front running with more aggressive pacing. In many
+/// contexts, they share the same behavior (e.g., positioning strategy, rush
+/// calculations), but in specific situations (e.g., HP multipliers, phase modifiers,
+/// spot struggle), they have distinct values.
+///
+/// When required to treat both Front and Runaway the same way, `is_front_like()` can
+/// be used. Otherwise, explicit matching on `Style` should be done to handle their
+/// distinct behaviors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
+    /// 大逃げ, ōnige - A front runner that tries to outpace others from the start.
+    /// In many contexts, it is treated similarly to `Style::Front` (see `Style`).
     #[serde(rename = "Oonige")]
     Runaway = 0,
+    /// 逃げ, nige - Aims to lead the race.
     #[serde(rename = "Nige")]
-    Front,
+    Front = 1,
+    /// 先行, senkō - Stays near the front, behind the front runners (if any).
     #[serde(rename = "Senkou")]
-    Pace,
+    Pace = 2,
+    /// 差し, sashi - Stays in the middle, behind front runners and pace chasers,
+    /// and makes a late surge.
     #[serde(rename = "Sasi")]
-    Late,
+    Late = 3,
+    /// 追込, oikomi - Stays at the back and sprints towards the end.
     #[serde(rename = "Oikomi")]
-    End,
+    End = 4,
+}
+
+impl Style {
+    /// Returns `true` if this style is a front-running style (Front or Runaway).
+    ///
+    /// Used when treating both Front and Runaway the same way is desired,
+    /// (e.g., in positioning strategy or rush detection).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use uma_tools::uma::Style;
+    ///
+    /// assert!(Style::Front.is_front_like());
+    /// assert!(Style::Runaway.is_front_like());
+    /// assert!(!Style::Pace.is_front_like());
+    /// ```
+    #[inline]
+    pub fn is_front_like(self) -> bool {
+        matches!(self, Style::Front | Style::Runaway)
+    }
+
+    /// Returns the base style, treating Runaway as a variant of Front.
+    ///
+    /// This maps Runaway to Front and returns all other styles unchanged.
+    /// Useful to group styles for condition evaluation or statistical purposes.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use uma_tools::uma::Style;
+    ///
+    /// assert_eq!(Style::Runaway.base_style(), Style::Front);
+    /// assert_eq!(Style::Front.base_style(), Style::Front);
+    /// assert_eq!(Style::Pace.base_style(), Style::Pace);
+    /// ```
+    #[inline]
+    pub fn base_style(self) -> Style {
+        match self {
+            Style::Runaway => Style::Front,
+            _ => self,
+        }
+    }
 }
 
 /// Aptitude levels for distance, track surface, and running style.

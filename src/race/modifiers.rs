@@ -13,8 +13,8 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
         (Style::End, Phase::Early) => 0.945,
         (Style::Runaway, Phase::Early) => 1.17,
         // Mid-race
-        (Style::Front | Style::Pace | Style::Late | Style::End, Phase::Mid) => 1.0,
         (Style::Runaway, Phase::Mid) => 0.94,
+        (_, Phase::Mid) => 1.0, // All styles except Runaway
         // Late-race and Last spurt
         (Style::Front, Phase::Late | Phase::Last) => 0.996,
         (Style::Pace, Phase::Late | Phase::Last) => 0.996,
