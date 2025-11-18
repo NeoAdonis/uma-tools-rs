@@ -419,6 +419,7 @@ impl UnreadyRunner {
             next_positioning_check: self.start_delay,
             positioning_strategy: PositioningStrategy::Normal,
             slope_acceleration: None,
+            downhill_time: 0.0,
             last_spurt: None,
             rng: self.rng,
             corner_manager: CornerManager::new(),

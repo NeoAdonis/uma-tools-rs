@@ -443,6 +443,9 @@ pub struct Runner {
     pub next_positioning_check: f64,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
+    /// Time spent going downhill in seconds. Used to determine chance of downhill
+    /// acceleration each second.
+    pub downhill_time: f64,
     /// Current section index (0-23).
     pub section: u8,
     /// Current race phase.
@@ -1738,19 +1741,30 @@ impl Runner {
     }
 
     /// Update slope state and apply slope-based acceleration/deceleration.
-    pub fn update_slope(&mut self, slopes: &[Slope], rng: &mut impl Rng) {
+    pub fn update_slope(&mut self, slopes: &[Slope], delta_time: f64, rng: &mut impl Rng) {
         if let Some((slope_idx, _slope_type)) =
             self.slope_manager.check_entry(self.position, slopes)
         {
+            // Entering slope - apply uphill deceleration if applicable
             if slopes[slope_idx].is_uphill() {
                 self.start_uphill_deceleration(slopes[slope_idx].slope_percent());
+            } else {
+                // Downhill - reset downhill timer
+                self.downhill_time = 0.0;
             }
         } else if let Some(_slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
+            // Exiting slope - stop any slope-based acceleration/deceleration
             self.stop_slope_acceleration();
         } else if let Some(idx) = self.current_slope() {
             // On slope - check for downhill acceleration
             if slopes[idx].is_downhill() {
-                let has_second_passed = false; // TODO: track time on slope
+                self.downhill_time += delta_time;
+                let has_second_passed = (self.downhill_time > 0.0)
+                    .then(|| {
+                        self.downhill_time -= 1.0;
+                        true
+                    })
+                    .unwrap_or(false);
                 if has_second_passed {
                     if self.is_accelerating_downhill() {
                         // 20% chance to stop each second
