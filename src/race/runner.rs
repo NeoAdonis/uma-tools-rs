@@ -1759,12 +1759,14 @@ impl Runner {
             // On slope - check for downhill acceleration
             if slopes[idx].is_downhill() {
                 self.downhill_time += delta_time;
-                let has_second_passed = (self.downhill_time > 0.0)
-                    .then(|| {
+                let has_second_passed = if self.downhill_time > 0.0 {
+                    {
                         self.downhill_time -= 1.0;
                         true
-                    })
-                    .unwrap_or(false);
+                    }
+                } else {
+                    false
+                };
                 if has_second_passed {
                     if self.is_accelerating_downhill() {
                         // 20% chance to stop each second
