@@ -24,9 +24,9 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
     }
 }
 
-/// Calculate ground type proficiency multiplier based on aptitude.
-pub fn ground_type_proficiency_multiplier(aptitude: Aptitude) -> f64 {
-    match aptitude {
+/// Calculate acceleration multiplier based on track aptitude.
+pub fn ground_type_proficiency_multiplier(track_aptitude: Aptitude) -> f64 {
+    match track_aptitude {
         Aptitude::S => 1.05,
         Aptitude::A => 1.0,
         Aptitude::B => 0.9,
@@ -38,9 +38,9 @@ pub fn ground_type_proficiency_multiplier(aptitude: Aptitude) -> f64 {
     }
 }
 
-/// Calculate acceleration distance proficiency multiplier based on aptitude.
-pub fn acceleration_distance_proficiency_multiplier(aptitude: Aptitude) -> f64 {
-    match aptitude {
+/// Calculate acceleration multiplier based on distance aptitude.
+pub fn acceleration_distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f64 {
+    match distance_aptitude {
         Aptitude::S | Aptitude::A | Aptitude::B | Aptitude::C | Aptitude::D => 1.0,
         Aptitude::E => 0.6,
         Aptitude::F => 0.5,
@@ -72,9 +72,9 @@ pub fn strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
     }
 }
 
-/// Calculate ground type proficiency multiplier based on aptitude.
-pub fn distance_proficiency_multiplier(aptitude: Aptitude) -> f64 {
-    match aptitude {
+/// Calculate speed multiplier based on distance aptitude.
+pub fn distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f64 {
+    match distance_aptitude {
         Aptitude::S => 1.05,
         Aptitude::A => 1.0,
         Aptitude::B => 0.9,

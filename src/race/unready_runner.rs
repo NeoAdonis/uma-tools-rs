@@ -27,7 +27,7 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
         stamina: uma.stamina,
         power: calculate_adjusted_power(uma.power, course.surface, parameters.track_condition),
         guts: uma.guts,
-        wiz: calculate_adjusted_wiz(uma.wiz, uma.track_aptitude),
+        wiz: calculate_adjusted_wiz(uma.wiz, uma.style_aptitude),
         style: uma.style,
         distance_aptitude: uma.distance_aptitude,
         track_aptitude: uma.track_aptitude,

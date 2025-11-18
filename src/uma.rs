@@ -133,25 +133,27 @@ pub struct Uma {
     /// Stat that affects acceleration and lateral movement.
     pub power: u16,
     /// Stat that represents "the will to fight and overcome".
-    /// It affects speed and acceleration during duels and spot struggles.
+    /// Affects speed and acceleration during duels and spot struggles.
     /// Moreover, it affects HP consumption late-race and last spurt performance;
     /// in short, the higher the Guts, the better the performance on the final stretch.
     pub guts: u16,
     /// a.k.a. wit, wisdom. Stat that represents how skillful the Uma is.
-    ///
-    /// It affects skill activation rate, chance of avoiding getting rushed,
+    /// Affects skill activation rate, chance of avoiding getting rushed,
     /// position keeping, last spurt planning, and more.
     #[serde(rename = "wisdom")]
     pub wiz: u16,
-    /// Running style of the Uma.
+    /// Running style or strategy. Affects mainly positioning strategy.
     #[serde(rename = "strategy")]
     pub style: Style,
-    /// Aptitude for the current distance.
+    /// Aptitude for the current distance. Affects speed performance depending on
+    /// the course distance.
     pub distance_aptitude: Aptitude,
-    /// Aptitude for the current track surface.
+    /// Aptitude for the current track surface. Affects acceleration and power
+    /// performance depending on the track type.
     #[serde(rename = "surfaceAptitude")]
     pub track_aptitude: Aptitude,
-    /// Aptitude for the current running style.
+    /// Aptitude for the current running style. Affects wisdom performance depending
+    /// on the running style.
     #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,
 }
@@ -241,9 +243,9 @@ pub fn track_power_modifier(track: Track, track_condition: TrackCondition) -> u1
     }
 }
 
-/// Calculate wiz style multiplier based on aptitude.
-pub fn wiz_style_multiplier(aptitude: Aptitude) -> f64 {
-    match aptitude {
+/// Calculate wiz multiplier based on style aptitude.
+pub fn wiz_style_multiplier(style_aptitude: Aptitude) -> f64 {
+    match style_aptitude {
         Aptitude::S => 1.1,
         Aptitude::A => 1.0,
         Aptitude::B => 0.85,
@@ -287,8 +289,8 @@ pub fn calculate_adjusted_power(
 }
 
 /// Calculate adjusted wiz after applying style aptitude modifier.
-pub fn calculate_adjusted_wiz(base_wiz: u16, track_aptitude: Aptitude) -> u16 {
-    let aptitude_mod = wiz_style_multiplier(track_aptitude);
+pub fn calculate_adjusted_wiz(base_wiz: u16, style_aptitude: Aptitude) -> u16 {
+    let aptitude_mod = wiz_style_multiplier(style_aptitude);
     ((base_wiz as f64 * aptitude_mod) as u16).max(1)
 }
 
