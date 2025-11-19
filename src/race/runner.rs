@@ -2340,6 +2340,19 @@ impl Runner {
     pub fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
 
+        // For expiring CurrentSpeedWithNaturalDeceleration effects,
+        // compensate speed then allow natural deceleration to take effect.
+        self.active_timed_effects.iter().for_each(|effect| {
+            if effect.expires_at > elapsed_time
+                && matches!(
+                    effect.effect.skill_type,
+                    SkillType::CurrentSpeedWithNaturalDeceleration
+                )
+            {
+                self.speed += effect.effect.modifier as f64 / 10000.0;
+            }
+        });
+
         // Remove expired effects
         self.active_timed_effects
             .retain(|effect| effect.expires_at > elapsed_time);
@@ -2363,7 +2376,7 @@ impl Runner {
                 TargetSpeed => {
                     mods.target_speed += timed.effect.modifier as f64;
                 }
-                CurrentSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
+                CurrentSpeed | CurrentSpeedWithNaturalDeceleration => {
                     mods.current_speed += timed.effect.modifier as f64;
                 }
                 LaneMovementSpeed => {
