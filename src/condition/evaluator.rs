@@ -731,7 +731,10 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         IsHpEmptyOnetime => runner.hp.has_emptied as i32,
 
         // Is in last spurt mode (not the phase)
-        IsLastspurt => runner.last_spurt.is_some() as i32,
+        IsLastspurt => runner
+            .last_spurt
+            .as_ref()
+            .is_some_and(|s| runner.position >= s.target_distance) as i32,
 
         // Last spurt state:
         // 0=can't finish at base speed, 1=above base speed, 2=max speed

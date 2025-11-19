@@ -393,7 +393,7 @@ impl UnreadyRunner {
             acceleration: 0.0, // start dash acceleration is applied separately
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
-            base_target_speed: 0.85 * course.base_speed(),
+            target_speed: 0.85 * course.base_speed(),
             force_in_modifier,
             lane: LaneState::new(course.starting_lane(self.gate_roll)),
             visible_count: 0,

@@ -371,8 +371,8 @@ pub struct Runner {
     pub hp: HpState,
     /// Minimum speed in m/s. It is based on course base speed and guts stat.
     pub min_speed: f64,
-    /// Base target speed in m/s before modifiers.
-    pub base_target_speed: f64,
+    /// Target speed in m/s.
+    pub target_speed: f64,
     /// Spped modifier applied early in the race to encourage running towards the
     /// inner fence. Calculated before race begins based on running style.
     pub force_in_modifier: f64,
@@ -528,7 +528,7 @@ impl Runner {
 
     /// Update acceleration based on current speed and target speed.
     pub fn update_acceleration(&mut self) {
-        if self.speed < self.target_speed() {
+        if self.speed < self.target_speed {
             self.accelerate();
         } else {
             self.decelerate();
@@ -617,18 +617,13 @@ impl Runner {
     /// Get the effective speed including skill modifiers.
     /// This is the actual speed used for position calculations.
     fn effective_speed(&self) -> f64 {
-        self.speed + self.skill_modifiers.current_speed + self.section_speed_modifier
+        self.speed + self.skill_modifiers.current_speed
     }
 
     /// Update the runner's speed based on acceleration and constraints.
     pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
         // Update speed based on acceleration
         self.speed += self.acceleration * delta_time;
-
-        // Clamp to target speed
-        if self.speed > self.target_speed() {
-            self.speed = self.target_speed();
-        }
 
         // Handle start dash end and min speed
         if self.is_start_dash && self.speed >= 0.85 * course_base_speed {
@@ -638,23 +633,40 @@ impl Runner {
         }
     }
 
-    /// Calculate the target speed including all modifiers.
-    fn target_speed(&self) -> f64 {
-        let position_multiplier = match self.positioning_strategy {
-            PositioningStrategy::Normal => 1.0,
-            PositioningStrategy::FrontSpeedUp => 1.04,
-            PositioningStrategy::FrontOvertake => 1.05,
-            PositioningStrategy::PaceUp(_) => 1.04,
-            PositioningStrategy::PaceDown(_) => {
-                if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
-                    && self.phase >= Phase::Mid
-                {
-                    0.945
-                } else {
-                    0.915
+    /// Update target speed based on various factors.
+    pub fn update_target_speed(&mut self, course_base_speed: f64) {
+        let target_speed = if self.hp.is_empty() {
+            self.min_speed
+        } else if let Some(last_spurt) = &self.last_spurt
+            && self.position >= last_spurt.target_distance
+        {
+            last_spurt.max_speed
+        } else {
+            let position_multiplier = match self.positioning_strategy {
+                PositioningStrategy::Normal => 1.0,
+                PositioningStrategy::FrontSpeedUp => 1.04,
+                PositioningStrategy::FrontOvertake => 1.05,
+                PositioningStrategy::PaceUp(_) => 1.04,
+                PositioningStrategy::PaceDown(_) => {
+                    if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
+                        && self.phase >= Phase::Mid
+                    {
+                        0.945
+                    } else {
+                        0.915
+                    }
                 }
-            }
-            PositioningStrategy::PaceUpEx => 2.0,
+                PositioningStrategy::PaceUpEx => 2.0,
+            };
+            let base_target_speed = base_target_speed(
+                course_base_speed,
+                self.adjusted.style,
+                self.phase,
+                self.adjusted.speed,
+                self.adjusted.distance_aptitude,
+            );
+
+            base_target_speed * position_multiplier
         };
 
         // TODO: Also check if runner changed lanes on last frame
@@ -678,30 +690,16 @@ impl Runner {
             .as_ref()
             .map_or(0.0, |d| d.target_speed_modifier);
 
-        self.base_target_speed * position_multiplier
+        let struggle_modifier = self.spot_struggle.as_ref().map_or(0.0, |s| s.modifier);
+
+        self.target_speed = target_speed
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
+            + self.section_speed_modifier
             + dueling_modifier
             + move_lane_modifier
             + force_in_modifier
-    }
-
-    /// Update the base target speed based on current phase and conditions.
-    pub fn update_target_speed(&mut self, course_base_speed: f64) {
-        self.base_target_speed = if let Some(last_spurt) = &self.last_spurt
-            && self.position >= last_spurt.target_distance
-        {
-            last_spurt.max_speed
-        } else {
-            let struggle_mod = self.spot_struggle.as_ref().map_or(0.0, |s| s.modifier);
-            base_target_speed(
-                course_base_speed,
-                self.adjusted.style,
-                self.phase,
-                self.adjusted.speed,
-                self.adjusted.distance_aptitude,
-            ) + struggle_mod
-        };
+            + struggle_modifier
     }
 
     /// Update lane position towards target lane.
@@ -1276,8 +1274,8 @@ impl Runner {
             };
 
             can_catch_up
-                && ((target.base_target_speed < self.base_target_speed)
-                    || (target.is_front_blocked() && target.speed < self.base_target_speed))
+                && ((target.target_speed < self.target_speed)
+                    || (target.is_front_blocked() && target.speed < self.target_speed))
         };
 
         if !qualifies {

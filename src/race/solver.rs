@@ -212,7 +212,7 @@ impl RaceSolver<Runner> {
             runner.check_all_preconditions(&self.state); // Check every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
-            runner.update_target_speed(self.state.course.base_speed()); // TODO: review
+            runner.update_target_speed(self.state.course.base_speed());
             runner.update_acceleration();
             runner.update_phase(&mut self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
