@@ -397,7 +397,7 @@ pub struct Runner {
     /// List of indices of golden skills in `available_skills`.
     /// These skills can be activated by other skills.
     pub golden_skill_indices: Vec<usize>,
-    /// Chance of entering rush (temptation, 掛かり) state.
+    /// Chance of entering rush (temptation, 掛かり) state as a percentage.
     /// This is determined at the start of the race along with deciding whether
     /// the runner will rush or not.
     pub rush_chance: f64,

@@ -322,9 +322,9 @@ impl UnreadyRunner {
 
         // Set starting speed (done in the constructor)
         // Determine rush chance
-        let rush_chance = (0.065 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
+        let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier;
-        let can_rush = self.rng.borrow_mut().random_bool(rush_chance);
+        let can_rush = self.rng.borrow_mut().random_bool(rush_chance / 100.0);
         let rush_state = if can_rush {
             let style = match self.adjusted.style {
                 // Front-like styles (Front and Runaway) keep their style when rushing
