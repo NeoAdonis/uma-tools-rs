@@ -2371,13 +2371,13 @@ impl Runner {
         for timed in &self.active_timed_effects {
             match timed.effect.skill_type {
                 Acceleration => {
-                    mods.acceleration += timed.effect.modifier as f64;
+                    mods.acceleration += timed.effect.modifier as f64 / 10000.0;
                 }
                 TargetSpeed => {
-                    mods.target_speed += timed.effect.modifier as f64;
+                    mods.target_speed += timed.effect.modifier as f64 / 10000.0;
                 }
                 CurrentSpeed | CurrentSpeedWithNaturalDeceleration => {
-                    mods.current_speed += timed.effect.modifier as f64;
+                    mods.current_speed += timed.effect.modifier as f64 / 10000.0;
                 }
                 LaneMovementSpeed => {
                     mods.lane_speed += timed.effect.modifier as f64 / 10000.0;
