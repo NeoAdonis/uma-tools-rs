@@ -206,49 +206,61 @@ pub fn process_random_comp(
         }
 
         RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom) => {
-            // TODO: Under investigation - straight in first half of race
-            let section_len = course.section_length();
-            let halfway = section_len * 12.0;
+            // phase_first_half_straight_random==X where X is phase
+            // Picks random point during a straight in first half of specified phase
+            let phase = match comp.value {
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
+                _ => return None,
+            };
+            let (phase_start, phase_end) = phase.boundaries(course);
+            let phase_halfway = (phase_start + phase_end) / 2.0;
 
-            // Filter straights that are in first half
-            let first_half_straights: Vec<_> = course
+            // Find all straight segments that intersect with the first half of this phase
+            let straight_intervals: Vec<(f64, f64)> = course
                 .straights
                 .iter()
-                .filter(|s| s.start < halfway)
+                .filter_map(|straight| {
+                    intersect_intervals(straight.start, straight.end, phase_start, phase_halfway)
+                })
                 .collect();
 
-            if !first_half_straights.is_empty() {
-                let straight =
-                    first_half_straights[rng.random_range(0..first_half_straights.len())];
-                let end = straight.end.min(halfway);
-                let activation_distance = rng.random_range(straight.start..end);
+            if let Some(activation_distance) = random_point_in_intervals(&straight_intervals, rng) {
                 Some(vec![activation_distance])
             } else {
-                // No straights in this phase, fail the roll
+                // No straights found, fail the roll
                 None
             }
         }
 
         RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => {
-            // TODO: Under investigation - straight in second half of race
-            let section_len = course.section_length();
-            let halfway = section_len * 12.0;
+            // phase_latter_half_straight_random==X where X is phase
+            // Picks random point during a straight in second half of specified phase
+            let phase = match comp.value {
+                0 => CoursePhase::Early,
+                1 => CoursePhase::Mid,
+                2 => CoursePhase::Late,
+                3 => CoursePhase::Last,
+                _ => return None,
+            };
+            let (phase_start, phase_end) = phase.boundaries(course);
+            let phase_halfway = (phase_start + phase_end) / 2.0;
 
-            // Filter straights that are in second half
-            let second_half_straights: Vec<_> = course
+            // Find all straight segments that intersect with the second half of this phase
+            let straight_intervals: Vec<(f64, f64)> = course
                 .straights
                 .iter()
-                .filter(|s| s.end > halfway)
+                .filter_map(|straight| {
+                    intersect_intervals(straight.start, straight.end, phase_halfway, phase_end)
+                })
                 .collect();
 
-            if !second_half_straights.is_empty() {
-                let straight =
-                    second_half_straights[rng.random_range(0..second_half_straights.len())];
-                let start = straight.start.max(halfway);
-                let activation_distance = rng.random_range(start..straight.end);
+            if let Some(activation_distance) = random_point_in_intervals(&straight_intervals, rng) {
                 Some(vec![activation_distance])
             } else {
-                // No straights in this phase, fail the roll
+                // No straights found, fail the roll
                 None
             }
         }
