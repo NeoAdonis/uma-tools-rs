@@ -75,7 +75,7 @@ pub fn hp_style_multiplier(style: Style) -> f64 {
 
 /// Calculate HP consumption per second.
 ///
-/// # Arguments
+/// ## Arguments
 ///
 /// - `current_speed` - Current speed of the runner in m/s
 /// - `state` - Reference to the race state
@@ -84,10 +84,10 @@ pub fn hp_style_multiplier(style: Style) -> f64 {
 /// - `status_modifier` - Multiplicative modifier based on current status (e.g.,
 ///   rushed, pace-down, downhill). Should be 1.0 if no modifiers apply.
 ///
-/// # Returns
+/// ## Returns
 ///
-/// HP consumption per second.
-pub fn calculate_hp_consumption_per_second(
+/// HP consumed per second traveled at the given speed.
+pub fn calculate_hp_per_second(
     current_speed: f64,
     course: &Course,
     track_condition: TrackCondition,
@@ -108,29 +108,66 @@ pub fn calculate_hp_consumption_per_second(
     }
 }
 
-pub fn estimate_hp_consumption(
+/// Calculate HP consumption per meter at a given speed during last spurt.
+///
+/// This is useful for analytical calculations where you need to solve
+/// for distances based on available HP.
+///
+/// ## Arguments
+///
+/// - `speed` - Speed in m/s
+/// - `course` - Course information
+/// - `track_condition` - Track condition
+/// - `guts_stat` - Guts stat of the runner
+///
+/// ## Returns
+///
+/// HP consumed per meter traveled at the given speed.
+pub fn estimate_hp_per_meter_last_spurt(
+    speed: f64,
+    course: &Course,
+    track_condition: TrackCondition,
+    guts_stat: u16,
+) -> f64 {
+    let hp_per_second = calculate_hp_per_second(
+        speed,
+        course,
+        track_condition,
+        Phase::Late,
+        guts_stat,
+        1.0, // No special status modifier (not rushed, not pace-down, not downhill)
+    );
+    hp_per_second / speed
+}
+
+/// Estimate HP consumption at a given speed over a distance during last spurt.
+///
+/// ## Arguments
+///
+/// - `speed` - Speed in m/s
+/// - `course` - Course information
+/// - `track_condition` - Track condition
+/// - `distance` - Distance to be covered in meters
+/// - `guts_stat` - Guts stat of the runner
+///
+/// ## Returns
+///
+/// HP consumed during last spurt.
+pub fn estimate_hp_last_spurt(
     speed: f64,
     course: &Course,
     track_condition: TrackCondition,
     distance: f64,
     guts_stat: u16,
 ) -> f64 {
-    // Estimate HP consumption for running at constant speed over distance
-    // Using the HP consumption formula with Phase::Last
-
-    // Time = distance / speed
     let time = distance / speed;
-
-    // Calculate HP consumption per second at this speed
-    // Assuming no special status modifiers (not rushed, not pace-down, not downhill)
-    let hp_per_second = calculate_hp_consumption_per_second(
+    let hp_per_second = calculate_hp_per_second(
         speed,
         course,
         track_condition,
-        Phase::Last, // Last spurt phase for guts modifier
+        Phase::Late,
         guts_stat,
-        1.0, // No special status modifier
+        1.0, // No special status modifier (not rushed, not pace-down, not downhill)
     );
-
     hp_per_second * time
 }

@@ -733,15 +733,12 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
         // Is in last spurt mode (not the phase)
         IsLastspurt => runner.last_spurt.is_some() as i32,
 
-        // Last spurt state: 0=can't finish, 1=above base, 2=can finish at max
-        Lastspurt => {
-            // TODO: change logic to determine outcome of last spurt
-            if runner.last_spurt.is_some() {
-                2 // Can finish at max
-            } else {
-                0 // Not in last spurt
-            }
-        }
+        // Last spurt state:
+        // 0=can't finish at base speed, 1=above base speed, 2=max speed
+        Lastspurt => runner
+            .last_spurt
+            .as_ref()
+            .map_or(0, |spurt| spurt.category as i32),
 
         // Start is too late
         IsBadstart => matches!(runner.start_type(), StartType::Late) as i32,

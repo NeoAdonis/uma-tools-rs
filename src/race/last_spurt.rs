@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::{Course, Phase};
-use crate::race::hp::estimate_hp_consumption;
+use crate::race::hp::{estimate_hp_last_spurt, estimate_hp_per_meter_last_spurt};
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
 use crate::race::runner::Runner;
@@ -16,6 +16,19 @@ pub struct LastSpurt {
     pub max_speed: f64,
     /// Distance at which the last spurt starts (m).
     pub target_distance: f64,
+    /// Category of last spurt based on achievable speed and HP.
+    pub category: LastSpurtCategory,
+}
+
+/// Category of last spurt based on achievable speed and HP.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LastSpurtCategory {
+    /// Last spurt can not be fully carried out even at base target speed.
+    CannotFinish = 1,
+    /// Last spurt can be carried out above base target speed but not at max speed.
+    AboveBase = 2,
+    /// Last spurt can be carried out at max speed without HP issues.
+    Full = 3,
 }
 
 /// Candidate last spurt option during calculation.
@@ -33,7 +46,13 @@ fn last_spurt_speed_max(
     guts_stat: u16,
     distance_aptitude: Aptitude,
 ) -> f64 {
-    let base_target_late = base_speed * strategy_phase_multiplier(style, Phase::Late);
+    let base_target_late = base_target_speed(
+        base_speed,
+        style,
+        Phase::Late,
+        speed_stat,
+        distance_aptitude,
+    );
     let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
     let speed_component = (500.0 * speed_stat as f64).sqrt()
         * distance_proficiency_multiplier(distance_aptitude)
@@ -59,9 +78,11 @@ fn last_spurt_speed_max(
 /// from there, the total time to finish the race. A candidate is picked based on a
 /// probability influenced by the runner's wisdom stat. A higher wisdom increases the
 /// chance of picking a higher speed.
-pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, track_condition: TrackCondition) {
-    // TODO: review function
-
+pub fn calculate_last_spurt(
+    runner: &mut Runner,
+    course: &Course,
+    track_condition: TrackCondition,
+) -> LastSpurt {
     let max_last_spurt_speed = last_spurt_speed_max(
         course.base_speed(),
         runner.adjusted.style,
@@ -69,7 +90,33 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, track_conditio
         runner.adjusted.guts,
         runner.adjusted.distance_aptitude,
     );
-    let late_race_base_target_speed = base_target_speed(
+
+    // Calculate remaining distance from start of late phase until 60m before goal line
+    let max_distance = course.distance as f64 - Phase::Late.boundaries(course).0 - 60.0;
+
+    // If HP is sufficient for max speed, use it immediately
+    let max_hp_required = estimate_hp_last_spurt(
+        max_last_spurt_speed,
+        course,
+        track_condition,
+        max_distance,
+        runner.adjusted.guts,
+    );
+
+    if runner.hp.current >= max_hp_required {
+        return LastSpurt {
+            max_speed: max_last_spurt_speed,
+            target_distance: runner.position,
+            category: LastSpurtCategory::Full,
+        };
+    }
+
+    // Estimate stamina usage up to 60m before goal line
+    let remaining_distance = course.distance as f64 - runner.position;
+    let calculation_distance = remaining_distance - 60.0;
+
+    // Use late-race base target speed as minimum speed
+    let late_base_target_speed = base_target_speed(
         course.base_speed(),
         runner.adjusted.style,
         Phase::Late,
@@ -77,65 +124,73 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, track_conditio
         runner.adjusted.distance_aptitude,
     );
 
-    let remaining_distance = course.distance as f64 - runner.position;
-
-    // Estimate stamina usage up to 60m before goal line
-    let calculation_distance = remaining_distance - 60.0;
-
-    // If HP is sufficient for max speed, use it immediately
-    let max_hp_required = estimate_hp_consumption(
-        max_last_spurt_speed,
+    let hp_rate_base = estimate_hp_per_meter_last_spurt(
+        late_base_target_speed,
         course,
         track_condition,
-        calculation_distance,
         runner.adjusted.guts,
     );
 
-    if runner.hp.current >= max_hp_required {
-        runner.last_spurt = Some(LastSpurt {
-            max_speed: max_last_spurt_speed,
-            target_distance: runner.position,
-        });
+    // Numerator for last spurt distance calculation.
+    // It equals the remaining HP after running calculation distance at base speed.
+    // Thus, it can also be used to check if the runner can even finish at base speed.
+    let numerator = runner.hp.current - calculation_distance * hp_rate_base;
+    if numerator <= 0.0 {
+        return LastSpurt {
+            max_speed: late_base_target_speed,
+            target_distance: course.distance as f64 - 60.0,
+            category: LastSpurtCategory::CannotFinish,
+        };
     }
 
     // Build list of candidates by lowering speed by 0.1 m/s each step
     let mut candidates = Vec::new();
     let mut test_speed = max_last_spurt_speed;
 
-    while test_speed >= late_race_base_target_speed {
-        // Calculate distance where this speed would be used
-        // This is where HP runs out or reaches the end
-        let hp_required = estimate_hp_consumption(
+    while test_speed >= late_base_target_speed {
+        let hp_rate_spurt = estimate_hp_per_meter_last_spurt(
             test_speed,
             course,
             track_condition,
-            calculation_distance,
             runner.adjusted.guts,
         );
 
-        // Find distance we can actually run at this speed with available HP
-        let usable_distance = if hp_required <= runner.hp.current {
-            remaining_distance
+        // Find last_spurt_distance where total HP consumption
+        // (base segment + spurt segment) equals available HP.
+        //
+        // current_hp = remaining_at_base * hp_rate_base + last_spurt_distance * hp_rate_spurt
+        // calculation_distance = remaining_at_base + last_spurt_distance
+        //
+        // Solving for last_spurt_distance:
+        // last_spurt_distance =
+        //   (current_hp - calculation_distance * hp_rate_base)
+        //     / (hp_rate_spurt - hp_rate_base)
+        //
+        // Numerator is pre-calculated above; we only need to compute the rest.
+        let last_spurt_distance = if hp_rate_spurt <= hp_rate_base {
+            calculation_distance
         } else {
-            // Scale down distance based on HP available
-            let hp_ratio = runner.hp.current / hp_required;
-            (calculation_distance * hp_ratio) + 60.0
+            // numerator > 0 (checked above)
+            // hp_rate_spurt > hp_rate_base -> hp_rate_spurt - hp_rate_base > 0
+            // Thus, this value is always positive
+            let calculated = numerator / (hp_rate_spurt - hp_rate_base);
+            // Clamp to calculation distance
+            calculated.min(calculation_distance)
         };
+
+        // Add back the final 60m that we excluded from calculations
+        let last_spurt_distance_with_final = last_spurt_distance + 60.0;
 
         // Calculate time to finish (ignoring acceleration)
         // Time for last spurt portion + time for remaining at late-race base speed
-        let last_spurt_distance = usable_distance;
-        let remaining_at_base = remaining_distance - last_spurt_distance;
+        let remaining_at_base = remaining_distance - last_spurt_distance_with_final;
 
-        let time = if remaining_at_base > 0.0 {
-            last_spurt_distance / test_speed + remaining_at_base / late_race_base_target_speed
-        } else {
-            remaining_distance / test_speed
-        };
+        let time = last_spurt_distance_with_final / test_speed
+            + remaining_at_base / late_base_target_speed;
 
         candidates.push(LastSpurtCandidate {
             speed: test_speed,
-            distance: usable_distance,
+            distance: last_spurt_distance_with_final,
             time,
         });
 
@@ -143,33 +198,33 @@ pub fn calculate_last_spurt(runner: &mut Runner, course: &Course, track_conditio
     }
 
     let acceptance_chance = (15.0 + 0.05 * runner.adjusted.wiz as f64) / 100.0;
-    let rng_roll: f64 = runner.rng.borrow_mut().random();
+    let mut rng = runner.rng.borrow_mut();
 
     // Try each candidate from best to worst
     candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
-    let mut cumulative_probability = 0.0;
     for candidate in &candidates {
-        cumulative_probability += acceptance_chance;
-        if rng_roll < cumulative_probability {
-            runner.last_spurt = Some(LastSpurt {
+        if rng.random_bool(acceptance_chance) {
+            return LastSpurt {
                 max_speed: candidate.speed,
                 target_distance: course.distance as f64 - candidate.distance,
-            });
+                category: LastSpurtCategory::AboveBase,
+            };
         }
     }
 
     // If all checks fail, use the slowest (last) candidate
-    runner.last_spurt = Some(if let Some(last) = candidates.last() {
+    if let Some(last) = candidates.last() {
         LastSpurt {
             max_speed: last.speed,
             target_distance: course.distance as f64 - last.distance,
+            category: LastSpurtCategory::AboveBase,
         }
     } else {
         // Fallback: use late-race base speed for full distance
-        // TODO: ensure this case is unreachable
         LastSpurt {
-            max_speed: late_race_base_target_speed,
+            max_speed: late_base_target_speed,
             target_distance: runner.position,
+            category: LastSpurtCategory::AboveBase,
         }
-    });
+    }
 }

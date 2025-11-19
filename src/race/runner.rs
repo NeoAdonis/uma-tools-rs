@@ -990,7 +990,11 @@ impl Runner {
             if prev_phase != self.phase {
                 self.check_phase_triggers(state);
                 if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-                    calculate_last_spurt(self, &state.course, state.params.track_condition);
+                    self.last_spurt = Some(calculate_last_spurt(
+                        self,
+                        &state.course,
+                        state.params.track_condition,
+                    ));
                 }
             }
         }
@@ -1019,7 +1023,7 @@ impl Runner {
         if self.is_accelerating_downhill() {
             multiplier *= 0.4;
         }
-        self.hp.current -= calculate_hp_consumption_per_second(
+        self.hp.current -= calculate_hp_per_second(
             self.speed,
             &state.course,
             state.params.track_condition,
@@ -2278,7 +2282,7 @@ impl Runner {
 
             // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
             if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
-                calculate_last_spurt(self, course, track_condition);
+                self.last_spurt = Some(calculate_last_spurt(self, course, track_condition));
             }
         }
         // Activate random gold skill
