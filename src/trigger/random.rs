@@ -79,15 +79,12 @@ pub fn process_random_comp(
         // Random point during a phase
         RandomPhase(RandomPhaseVar::PhaseRandom) => {
             // phase_random==X where X is phase (0=Early, 1=Mid, 2=Late, 3=Last)
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries(course)
+            } else {
+                return None;
             };
 
-            let (start, end) = phase.boundaries(course);
             let activation_distance = rng.random_range(start..end);
             Some(vec![activation_distance])
         }
@@ -95,66 +92,50 @@ pub fn process_random_comp(
         RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom) => {
             // phase_firsthalf_random==X where X is phase
             // Activates at random point during first half of specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries_first_half(course)
+            } else {
+                return None;
             };
 
-            let (start, end) = phase.boundaries(course);
-            let midpoint = (start + end) / 2.0;
-            let activation_distance = rng.random_range(start..midpoint);
+            let activation_distance = rng.random_range(start..end);
             Some(vec![activation_distance])
         }
 
         RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom) => {
             // phase_firstquarter_random==X where X is phase
             // Activates at random point during first quarter of specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries_first_quarter(course)
+            } else {
+                return None;
             };
 
-            let (start, end) = phase.boundaries(course);
-            let quarter_point = start + (end - start) * 0.25;
-            let activation_distance = rng.random_range(start..quarter_point);
+            let activation_distance = rng.random_range(start..end);
             Some(vec![activation_distance])
         }
 
         RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom) => {
             // phase_laterhalf_random==X where X is phase
             // Activates at random point during second half of specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries_second_half(course)
+            } else {
+                return None;
             };
 
-            let (start, end) = phase.boundaries(course);
-            let midpoint = start + (end - start) * 0.25;
-            let activation_distance = rng.random_range(midpoint..end);
+            let activation_distance = rng.random_range(start..end);
             Some(vec![activation_distance])
         }
 
         RandomPhase(RandomPhaseVar::PhaseCornerRandom) => {
             // phase_corner_random==X where X is phase
             // Picks random point during a corner in specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries(course)
+            } else {
+                return None;
             };
-
-            let (phase_start, phase_end) = phase.boundaries(course);
 
             // Find all corner segments that intersect with this phase
             let corner_intervals: Vec<(f64, f64)> = course
@@ -163,7 +144,7 @@ pub fn process_random_comp(
                 .filter_map(|corner| {
                     let corner_start = corner.start;
                     let corner_end = corner.start + corner.length;
-                    intersect_intervals(corner_start, corner_end, phase_start, phase_end)
+                    intersect_intervals(corner_start, corner_end, start, end)
                 })
                 .collect();
 
@@ -178,22 +159,18 @@ pub fn process_random_comp(
         RandomPhase(RandomPhaseVar::PhaseStraightRandom) => {
             // phase_straight_random==X where X is phase
             // Picks random point during a straight in specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries(course)
+            } else {
+                return None;
             };
-
-            let (phase_start, phase_end) = phase.boundaries(course);
 
             // Find all straight segments that intersect with this phase
             let straight_intervals: Vec<(f64, f64)> = course
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, phase_start, phase_end)
+                    intersect_intervals(straight.start, straight.end, start, end)
                 })
                 .collect();
 
@@ -208,22 +185,18 @@ pub fn process_random_comp(
         RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom) => {
             // phase_first_half_straight_random==X where X is phase
             // Picks random point during a straight in first half of specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries_first_half(course)
+            } else {
+                return None;
             };
-            let (phase_start, phase_end) = phase.boundaries(course);
-            let phase_halfway = (phase_start + phase_end) / 2.0;
 
             // Find all straight segments that intersect with the first half of this phase
             let straight_intervals: Vec<(f64, f64)> = course
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, phase_start, phase_halfway)
+                    intersect_intervals(straight.start, straight.end, start, end)
                 })
                 .collect();
 
@@ -238,22 +211,18 @@ pub fn process_random_comp(
         RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => {
             // phase_latter_half_straight_random==X where X is phase
             // Picks random point during a straight in second half of specified phase
-            let phase = match comp.value {
-                0 => CoursePhase::Early,
-                1 => CoursePhase::Mid,
-                2 => CoursePhase::Late,
-                3 => CoursePhase::Last,
-                _ => return None,
+            let (start, end) = if let Ok(phase) = CoursePhase::try_from(comp.value as u8) {
+                phase.boundaries_second_half(course)
+            } else {
+                return None;
             };
-            let (phase_start, phase_end) = phase.boundaries(course);
-            let phase_halfway = (phase_start + phase_end) / 2.0;
 
             // Find all straight segments that intersect with the second half of this phase
             let straight_intervals: Vec<(f64, f64)> = course
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, phase_halfway, phase_end)
+                    intersect_intervals(straight.start, straight.end, start, end)
                 })
                 .collect();
 

@@ -429,9 +429,18 @@ fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
         Phase => runner.phase as i32,
 
         // Phase subdivisions
-        PhaseFirstquarter => (runner.position < course.quarterway()) as i32,
-        PhaseFirsthalf => (runner.position < course.halfway()) as i32,
-        PhaseLaterhalf => (runner.position >= course.halfway()) as i32,
+        PhaseFirstquarter => {
+            let (start, end) = runner.phase.boundaries_first_quarter(course);
+            (start..end).contains(&runner.position) as i32
+        }
+        PhaseFirsthalf => {
+            let (start, end) = runner.phase.boundaries_first_half(course);
+            (start..end).contains(&runner.position) as i32
+        }
+        PhaseLaterhalf => {
+            let (start, end) = runner.phase.boundaries_second_half(course);
+            (start..end).contains(&runner.position) as i32
+        }
     }
 }
 

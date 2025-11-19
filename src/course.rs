@@ -7,6 +7,7 @@ mod tests;
 
 use crate::course::geometry::*;
 use crate::units::course_widths_to_meters;
+use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -15,16 +16,17 @@ const TRACK_ID_OOI: u16 = 10101;
 const TRACK_ID_LONGCHAMP: u16 = 10201;
 
 /// Represents the phase of a race based on the position on the course.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Phase {
     /// Early race (sections 0-3).
-    Early,
+    Early = 0,
     /// Mid race (sections 4-15).
-    Mid,
+    Mid = 1,
     /// Late race (sections 16-19).
-    Late,
+    Late = 2,
     /// Last spurt (not to be confused with the last spurt mechanic) (sections 20-23).
-    Last,
+    Last = 3,
 }
 
 impl Phase {
@@ -43,6 +45,42 @@ impl Phase {
             Phase::Mid => (section * 4.0, section * 16.0),
             Phase::Late => (section * 16.0, section * 20.0),
             Phase::Last => (section * 20.0, course.distance as f64),
+        }
+    }
+
+    /// Get the boundaries (start, end) in meters for this phase's first quarter
+    /// on a given course.
+    pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
+        let section = course.section_length();
+        match self {
+            Phase::Early => (0.0, section * 1.0),
+            Phase::Mid => (section * 4.0, section * 7.0),
+            Phase::Late => (section * 16.0, section * 17.0),
+            Phase::Last => (section * 20.0, section * 21.0),
+        }
+    }
+
+    /// Get the boundaries (start, end) in meters for this phase's first half
+    /// on a given course.
+    pub fn boundaries_first_half(&self, course: &Course) -> (f64, f64) {
+        let section = course.section_length();
+        match self {
+            Phase::Early => (0.0, section * 2.0),
+            Phase::Mid => (section * 4.0, section * 10.0),
+            Phase::Late => (section * 16.0, section * 18.0),
+            Phase::Last => (section * 20.0, section * 22.0),
+        }
+    }
+
+    /// Get the boundaries (start, end) in meters for this phase's second half
+    /// on a given course.
+    pub fn boundaries_second_half(&self, course: &Course) -> (f64, f64) {
+        let section = course.section_length();
+        match self {
+            Phase::Early => (section * 2.0, section * 4.0),
+            Phase::Mid => (section * 10.0, section * 16.0),
+            Phase::Late => (section * 18.0, section * 20.0),
+            Phase::Last => (section * 22.0, course.distance as f64),
         }
     }
 
