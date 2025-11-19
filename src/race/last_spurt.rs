@@ -91,29 +91,30 @@ pub fn calculate_last_spurt(
         runner.adjusted.distance_aptitude,
     );
 
-    // Calculate remaining distance from start of late phase until 60m before goal line
-    let max_distance = course.distance as f64 - Phase::Late.boundaries(course).0 - 60.0;
+    // Calculate remaining distance from start of late phase (or current position)
+    // until 60m before goal line
+    let remaining_distance = (course.distance as f64 - Phase::Late.boundaries(course).0)
+        .min(course.distance as f64 - runner.position);
+
+    // Estimate stamina usage up to 60m before goal line
+    let calculation_distance = remaining_distance - 60.0;
 
     // If HP is sufficient for max speed, use it immediately
     let max_hp_required = estimate_hp_last_spurt(
         max_last_spurt_speed,
         course,
         track_condition,
-        max_distance,
+        calculation_distance,
         runner.adjusted.guts,
     );
 
     if runner.hp.current >= max_hp_required {
         return LastSpurt {
             max_speed: max_last_spurt_speed,
-            target_distance: runner.position,
+            target_distance: course.distance as f64 - remaining_distance,
             category: LastSpurtCategory::Full,
         };
     }
-
-    // Estimate stamina usage up to 60m before goal line
-    let remaining_distance = course.distance as f64 - runner.position;
-    let calculation_distance = remaining_distance - 60.0;
 
     // Use late-race base target speed as minimum speed
     let late_base_target_speed = base_target_speed(
