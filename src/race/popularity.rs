@@ -200,11 +200,10 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
     (added_speed, added_stamina, added_power)
 }
 
-/// Calculate standard deviation score (φ) for a value given mean and
-/// standard deviation. 50.0 is the mean, and each standard deviation
-/// adds/subtracts 10.0 points.
+/// Calculate standard deviation score (φ) for a value given a mean and standard
+/// deviation. Mean value scores 50; each standard deviation adds/subtracts 10 points.
 ///
-/// Returns 50.0 if std_dev is zero (all values are the same).
+/// Returns 50.0 if `std_dev` is zero (all values are the same).
 fn calculate_phi(value: f64, mean: f64, std_dev: f64) -> f64 {
     if std_dev.abs() < 1e-9 {
         // If all values are the same, return 50.0 (no deviation)

@@ -86,6 +86,7 @@ pub fn distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f64 {
     }
 }
 
+/// Calculate base target speed based on various factors.
 pub fn base_target_speed(
     base_speed: f64,
     style: Style,
@@ -107,7 +108,11 @@ pub fn base_target_speed(
 }
 
 /// Roll section speed modifier range randomly based on wiz stat.
-pub fn roll_section_speed_modifier<R: Rng + ?Sized>(rng: &mut R, wiz_stat: u16, base_speed: f64) -> f64 {
+pub fn roll_section_speed_modifier<R: Rng + ?Sized>(
+    rng: &mut R,
+    wiz_stat: u16,
+    base_speed: f64,
+) -> f64 {
     let max = wiz_stat as f64 * (wiz_stat as f64 * 0.1).log10() / 550000.0;
     let min = max - 0.0065;
     rng.random_range(min..=max) * base_speed

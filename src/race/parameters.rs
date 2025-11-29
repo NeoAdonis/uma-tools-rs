@@ -1,16 +1,16 @@
 //! Race parameters that define the conditions of a race.
 
-/// Track condition enumeration.
+/// Track condition (a.k.a. ground condition) enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TrackCondition {
     /// 良
-    Firm = -1,
+    Firm = 1,
     /// 稍重
-    Good,
+    Good = 2,
     /// 重
-    Soft,
+    Soft = 3,
     /// 不良
-    Heavy,
+    Heavy = 4,
 }
 
 /// Weather enumeration.
@@ -19,11 +19,11 @@ pub enum Weather {
     /// 晴
     Sunny = 1,
     /// 曇
-    Cloudy,
+    Cloudy = 2,
     /// 雨
-    Rainy,
+    Rainy = 3,
     /// 雪
-    Snowy,
+    Snowy = 4,
 }
 
 /// Season enumeration.
@@ -32,14 +32,15 @@ pub enum Season {
     /// 春
     Spring = 1,
     /// 夏
-    Summer,
+    Summer = 2,
     /// 秋
-    Autumn,
+    Autumn = 3,
     /// 冬
-    Winter,
-    /// 桜 - Cherry Blossom Season. As a subset of Spring, any conditions
-    /// that apply to Spring also apply to Cherry Blossom Season.
-    Sakura,
+    Winter = 4,
+    /// 桜 - Cherry Blossom (Sakura). It is considered part of Spring, therefore skills
+    /// that are supposed to activate in Spring will generally have another condition
+    /// to check for Sakura season as well.
+    Sakura = 5,
 }
 
 /// Time of day enumeration.
@@ -59,18 +60,19 @@ pub enum Time {
 /// Race grade enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Grade {
-    /// G1 races. Other important races (e.g. URA Finals, Champions Meeting, etc.)
+    /// Grade 1 races. Other important races (e.g. URA Finals, Champions Meeting, etc.)
     /// generally fall under this category as well.
     G1 = 100,
-    /// G2 races.
+    /// Grade 2 races.
     G2 = 200,
+    /// Grade 3 races.
     G3 = 300,
     /// OP races.
     OP = 400,
     /// Pre-OP races.
     PreOP = 700,
-    /// Maiden races; the only races that runners can enter before
-    /// winning their first race.
+    /// Maiden races; the only races that runners can enter before winning their
+    /// first race.
     Maiden = 800,
     /// Make Debut races.
     Debut = 900,
@@ -80,6 +82,7 @@ pub enum Grade {
 
 /// Struct representing the parameters of a race.
 pub struct RaceParameters {
+    /// Track condition. Affects speed, power and HP consumption.
     pub track_condition: TrackCondition,
     pub weather: Weather,
     pub season: Season,
