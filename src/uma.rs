@@ -108,7 +108,7 @@ pub enum Aptitude {
 }
 
 /// Motivation, mood or condition of the Uma. Affects base stat multipliers.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Motivation {
     /// 絶不調 (Very bad)
     Awful = -2,
@@ -158,12 +158,13 @@ pub struct Uma {
     pub style_aptitude: Aptitude,
 }
 
-/// Helper struct for deserializing Uma with skills from JSON.
+/// Helper struct for deserializing Uma with motivation and skills from JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
     #[serde(flatten)]
     pub uma: Uma,
+    pub motivation: Motivation,
     pub skills: Vec<u32>,
 }
 
@@ -194,6 +195,7 @@ impl UmaData {
     ///     "distanceAptitude": "S",
     ///     "surfaceAptitude": "A",
     ///     "strategyAptitude": "A",
+    ///     "motivation": "Great",
     ///     "skills": [200642]
     /// }"#;
     /// let uma_data = UmaData::from_json(json)?;

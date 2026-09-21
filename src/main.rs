@@ -5,38 +5,45 @@ use uma_tools::race::solver::*;
 use uma_tools::uma::skill::*;
 use uma_tools::uma::*;
 
-use rand::prelude::*;
+use std::path::PathBuf;
 
 fn main() {
-    // TODO: load path from args
-    let json_path = "uma_data.json";
+    let mut uma_path = PathBuf::from("uma.json");
+    let mut parameters_path = PathBuf::from("parameters.json");
 
-    // TODO: do not use RNG
-    let mut rng = rand::rng();
+    // Parse command-line arguments
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--uma" => {
+                let value = args.next().expect("--uma requires a file path");
+                uma_path = PathBuf::from(value);
+            }
+            "--parameters" => {
+                let value = args.next().expect("--parameters requires a file path");
+                parameters_path = PathBuf::from(value);
+            }
+            other => panic!("Unrecognized argument: {other}"),
+        }
+    }
 
-    let uma_data = UmaData::from_json_file(json_path).expect("Failed to parse JSON");
+    // Load Uma data from JSON file
+    let uma_data = UmaData::from_json_file(uma_path.to_str().expect("Invalid --uma path"))
+        .expect("Failed to parse uma JSON");
     let uma = uma_data.uma;
+    let motivation = uma_data.motivation;
     let skill_ids = uma_data.skills;
 
-    // TODO: load parameters from args
-    let params = RaceParameters {
-        track_condition: rng.random::<TrackCondition>(),
-        weather: rng.random::<Weather>(),
-        season: rng.random::<Season>(),
-        time: rng.random::<Time>(),
-        grade: rng.random::<Grade>(),
-        gates: 18,
-        rng_seed: rng.random(),
-    };
+    // Load race parameters from JSON file
+    let parameters =
+        RaceParametersData::from_json_file(parameters_path.to_str().expect("Invalid --parameters path"))
+            .expect("Failed to parse parameters JSON");
 
-    // TODO: load motivation from args
-    let motivation = rng.random::<Motivation>();
-
-    // TODO: load course ID from args
-    let course_id = "10913";
+    let race_parameters = parameters.race;
+    let course_id = parameters.course_id;
 
     // Load course data from JSON file
-    let course = Course::from_json_file("data/course_data.json", course_id)
+    let course = Course::from_json_file("data/course_data.json", &course_id)
         .expect("Failed to load course data");
 
     println!("Loaded course:");
@@ -67,7 +74,7 @@ fn main() {
     }
 
     // Initialize the race state
-    let mut solver = RaceSolver::new(course, params);
+    let mut solver = RaceSolver::new(course, race_parameters);
     solver.add_runner(uma, motivation, skills);
 
     // Initialize runners

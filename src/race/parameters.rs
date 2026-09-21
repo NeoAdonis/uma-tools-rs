@@ -1,7 +1,9 @@
 //! Race parameters that define the conditions of a race.
 
+use serde::Deserialize;
+
 /// Track condition (a.k.a. ground condition) enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum TrackCondition {
     /// 良
     Firm = 1,
@@ -14,7 +16,7 @@ pub enum TrackCondition {
 }
 
 /// Weather enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Weather {
     /// 晴
     Sunny = 1,
@@ -27,7 +29,7 @@ pub enum Weather {
 }
 
 /// Season enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Season {
     /// 春
     Spring = 1,
@@ -44,7 +46,7 @@ pub enum Season {
 }
 
 /// Time of day enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Time {
     None,
     /// 午前
@@ -58,7 +60,7 @@ pub enum Time {
 }
 
 /// Race grade enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Grade {
     /// Grade 1 races. Other important races (e.g. URA Finals, Champions Meeting, etc.)
     /// generally fall under this category as well.
@@ -81,6 +83,8 @@ pub enum Grade {
 }
 
 /// Struct representing the parameters of a race.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RaceParameters {
     /// Track condition. Affects speed, power and HP consumption.
     pub track_condition: TrackCondition,
@@ -92,6 +96,48 @@ pub struct RaceParameters {
     pub gates: u8,
     /// Seed for pseudo-random number generation. Ensures reproducibility.
     pub rng_seed: u64,
+}
+
+/// On-disk representation of `parameters.json`.
+///
+/// Bundles `RaceParameters` together with `course_id`.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RaceParametersData {
+    #[serde(flatten)]
+    pub race: RaceParameters,
+    pub course_id: String,
+}
+
+impl RaceParametersData {
+    /// Parse `RaceParameters` from a JSON string.
+    ///
+    /// # Arguments
+    ///
+    /// - `json` - JSON string containing race parameters.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(RaceParameters)` - The parsed parameters.
+    /// - `Err` - If the JSON is invalid.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    /// Parse `RaceParameters` from a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// - `path` - Path to the JSON file.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(RaceParameters)` - The parsed parameters.
+    /// - `Err` - If the file can't be read or JSON is invalid.
+    pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        Ok(Self::from_json(&content)?)
+    }
 }
 
 // Random distribution implementations for race parameters
