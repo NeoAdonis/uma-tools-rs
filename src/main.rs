@@ -114,6 +114,11 @@ fn main() {
             solver.scoreboard_time().unwrap_or_default()
         );
         println!("Final HP: {:.2}", runner.hp.current);
+        println!(
+            "Last spurt started at {:.2} meters ({:?})",
+            runner.last_spurt.as_ref().unwrap().target_distance,
+            runner.last_spurt.as_ref().unwrap().category
+        );
         println!("Activated skills:");
         for skill in &runner.activated_skills {
             println!(
