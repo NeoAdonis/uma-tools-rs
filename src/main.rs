@@ -1,11 +1,11 @@
+use std::path::PathBuf;
+
 use uma_tools::configuration::Language;
 use uma_tools::course::*;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;
 use uma_tools::uma::skill::*;
 use uma_tools::uma::*;
-
-use std::path::PathBuf;
 
 fn main() {
     let mut uma_path = PathBuf::from("uma.json");
@@ -35,9 +35,10 @@ fn main() {
     let skill_ids = uma_data.skills;
 
     // Load race parameters from JSON file
-    let parameters =
-        RaceParametersData::from_json_file(parameters_path.to_str().expect("Invalid --parameters path"))
-            .expect("Failed to parse parameters JSON");
+    let parameters = RaceParametersData::from_json_file(
+        parameters_path.to_str().expect("Invalid --parameters path"),
+    )
+    .expect("Failed to parse parameters JSON");
 
     let race_parameters = parameters.race;
     let course_id = parameters.course_id;
