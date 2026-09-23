@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};

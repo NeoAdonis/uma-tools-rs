@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::{Rng, RngExt};
 
 use crate::course::Phase;
 use crate::uma::{Aptitude, Style};

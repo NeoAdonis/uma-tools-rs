@@ -1,6 +1,6 @@
 //! Last spurt calculation logic.
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::{Course, Phase};
