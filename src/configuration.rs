@@ -7,9 +7,11 @@ pub enum GameBehavior {
     FirstAnniversary,
     /// After the 1.5 anniversary update in Japan
     OnePointFiveAnniversary,
+    /// After the 5th anniversary update in Japan
+    FifthAnniversary,
 }
 
-pub static GAME_BEHAVIOR: GameBehavior = GameBehavior::FirstAnniversary;
+pub static GAME_BEHAVIOR: GameBehavior = GameBehavior::OnePointFiveAnniversary;
 
 /// Supported languages for track names, skill names, etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
