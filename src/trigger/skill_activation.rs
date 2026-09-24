@@ -630,7 +630,7 @@ fn try_promote_single_monotonic_to_window(
     }
 
     // Sort by priority (highest first)
-    monotonic_candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    monotonic_candidates.sort_by_key(|a| std::cmp::Reverse(a.0));
 
     // Take the highest priority candidate
     let (_priority, best_comp) = &monotonic_candidates[0];
