@@ -1995,6 +1995,9 @@ impl Runner {
         self.nearby.count = 0;
         self.nearby.ahead_count = 0;
         self.nearby.behind_in = false;
+        self.nearby.ahead_same_lane_count = 0;
+        self.nearby.behind_same_lane_count = 0;
+        self.nearby.behind_set1_count = 0;
         self.blocked.speed_limit = None;
         self.blocked.side = false;
         self.surrounded = SurroundState::default();

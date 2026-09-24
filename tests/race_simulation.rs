@@ -2,7 +2,9 @@
 //!
 //! These tests verify the public API of the race simulation system.
 
+use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
+use uma_tools::race::solver::RaceSolver;
 use uma_tools::uma::*;
 
 #[test]
@@ -35,6 +37,53 @@ fn test_basic_race_simulation() {
     // For now, we'll skip the full course loading and just verify the API works
 
     // This test verifies that the public API is accessible and compiles correctly
+}
+
+#[test]
+fn test_multi_runner_race_simulation() {
+    let course = Course::from_json_file("data/course_data.json", "10101")
+        .expect("Failed to load course data");
+    let styles = [
+        Style::Runaway,
+        Style::Front,
+        Style::Front,
+        Style::Pace,
+        Style::Pace,
+        Style::Late,
+        Style::Late,
+        Style::End,
+        Style::End,
+    ];
+
+    for seed in 0..5 {
+        let params = RaceParameters {
+            track_condition: TrackCondition::Firm,
+            weather: Weather::Sunny,
+            season: Season::Spring,
+            time: Time::None,
+            grade: Grade::G1,
+            gates: styles.len() as u8,
+            rng_seed: seed,
+        };
+        let mut solver = RaceSolver::new(course.clone(), params);
+        for style in styles {
+            let uma = Uma {
+                speed: 1200,
+                stamina: 1000,
+                power: 1000,
+                guts: 800,
+                wiz: 1000,
+                style,
+                distance_aptitude: Aptitude::A,
+                track_aptitude: Aptitude::A,
+                style_aptitude: Aptitude::A,
+            };
+            solver.add_runner(uma, Motivation::Normal, vec![]);
+        }
+        let mut solver = solver.ready_runners();
+        solver.run();
+        assert!(solver.state.finish_time.is_some(), "seed {seed}");
+    }
 }
 
 #[test]
