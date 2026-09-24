@@ -10,6 +10,7 @@ use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::{Course, Phase};
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::Runner;
+use crate::race::secure_lead;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::uma::skill::*;
 use crate::uma::*;
@@ -247,6 +248,7 @@ impl RaceSolver<Runner> {
         self.update_order_values();
         self.update_blocking_status(delta_time);
         self.update_positioning_strategy();
+        self.update_secure_lead();
     }
 
     /// Update order (rank) and distance differences for all runners.
@@ -478,6 +480,46 @@ impl RaceSolver<Runner> {
         }
 
         // TODO: implement PaceUpEx strategy
+    }
+
+    /// Update secure lead (リード確保) state for all runners.
+    fn update_secure_lead(&mut self) {
+        let elapsed_time = self.state.elapsed_time;
+        let course_distance = self.state.course.distance as f64;
+
+        for i in 0..self.runners.len() {
+            self.runners[i].expire_secure_lead(elapsed_time);
+            if !self.runners[i].is_secure_lead_check_due(elapsed_time) {
+                continue;
+            }
+
+            let runner = &self.runners[i];
+            let style = runner.adjusted.style;
+            let mut lead_insufficient = false;
+            let mut is_alone = true;
+            for (j, other) in self.runners.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                let lead = runner.position - other.position;
+                if let Some(desirable) =
+                    secure_lead::desirable_lead(style, other.adjusted.style, course_distance)
+                    && lead < desirable
+                {
+                    lead_insufficient = true;
+                }
+                if other.adjusted.style == style && lead.abs() <= 10.0 {
+                    is_alone = false;
+                }
+            }
+
+            self.runners[i].try_secure_lead(
+                elapsed_time,
+                lead_insufficient,
+                is_alone,
+                &self.state.course,
+            );
+        }
     }
 
     #[inline]

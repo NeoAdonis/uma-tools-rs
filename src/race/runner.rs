@@ -14,6 +14,7 @@ use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::parameters::TrackCondition;
 use crate::race::popularity::JudgeScores;
+use crate::race::secure_lead;
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
@@ -140,6 +141,12 @@ pub struct RushState {
 pub struct StruggleState {
     modifier: f64,
     expires_at: f64,
+}
+
+/// Speed boost applied while securing the lead (リード確保) and its expiration time.
+pub struct SecureLeadState {
+    pub modifier: f64,
+    pub expires_at: f64,
 }
 
 /// Modifiers applied during dueling.
@@ -410,6 +417,10 @@ pub struct Runner {
     pub spot_struggle: Option<StruggleState>,
     /// State related to dueling. If `None`, the runner is not currently dueling.
     pub dueling: Option<DuelingState>,
+    /// State related to secure lead. If `None`, the runner is not securing the lead.
+    pub secure_lead: Option<SecureLeadState>,
+    /// Time of the next secure lead check in seconds.
+    pub next_secure_lead_check: f64,
     /// Duel targets being tracked for potential dueling. Gate number is used as key.
     pub duel_targets: HashMap<u8, DuelTarget>,
     /// Count of duels the runner has engaged in.
@@ -709,6 +720,8 @@ impl Runner {
 
         let struggle_modifier = self.spot_struggle.as_ref().map_or(0.0, |s| s.modifier);
 
+        let secure_lead_modifier = self.secure_lead.as_ref().map_or(0.0, |s| s.modifier);
+
         self.target_speed = target_speed
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
@@ -717,6 +730,7 @@ impl Runner {
             + move_lane_modifier
             + force_in_modifier
             + struggle_modifier
+            + secure_lead_modifier
             + self.stamina_limit_break
     }
 
@@ -1192,6 +1206,60 @@ impl Runner {
     /// Check if the runner is currently in a spot struggle (位置取り争い).
     pub fn is_spot_struggling(&self) -> bool {
         self.spot_struggle.is_some()
+    }
+
+    /// End the secure lead (リード確保) speed boost once it expires.
+    pub fn expire_secure_lead(&mut self, elapsed_time: f64) {
+        if self
+            .secure_lead
+            .as_ref()
+            .is_some_and(|s| elapsed_time >= s.expires_at)
+        {
+            self.secure_lead = None;
+        }
+    }
+
+    /// Check if the runner should check whether to secure the lead (リード確保)
+    /// on this frame.
+    pub fn is_secure_lead_check_due(&self, elapsed_time: f64) -> bool {
+        secure_lead::is_enabled()
+            && self.adjusted.style != Style::End
+            && !self.has_finished()
+            && !self.hp.is_empty()
+            && secure_lead::SECTIONS.contains(&self.section)
+            && self.secure_lead.is_none()
+            && elapsed_time >= self.next_secure_lead_check
+    }
+
+    /// Attempt to secure the lead (リード確保).
+    ///
+    /// If the lead over another runner with a later strategy is less than desirable,
+    /// there is a chance for the runner to speed up for a short time at the cost
+    /// of HP, followed by a cooldown.
+    ///
+    /// `is_alone` is whether no other runner with the same style is within 10m.
+    pub fn try_secure_lead(
+        &mut self,
+        elapsed_time: f64,
+        lead_insufficient: bool,
+        is_alone: bool,
+        course: &Course,
+    ) {
+        self.next_secure_lead_check = elapsed_time + secure_lead::CHECK_INTERVAL;
+        if !lead_insufficient || !self.rng.borrow_mut().random_bool(secure_lead::CHANCE) {
+            return;
+        }
+
+        let style = self.adjusted.style;
+        self.secure_lead = Some(SecureLeadState {
+            modifier: secure_lead::target_speed_bonus(style, self.adjusted.guts, is_alone),
+            expires_at: elapsed_time + secure_lead::DURATION,
+        });
+        self.hp.current -= secure_lead::hp_cost(style, course.distance);
+        if self.hp.is_empty() {
+            self.hp.has_emptied = true;
+        }
+        self.next_secure_lead_check = elapsed_time + secure_lead::DURATION + secure_lead::COOLDOWN;
     }
 
     /// Uncheck all duel targets at the start of an update cycle.

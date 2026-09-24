@@ -1,0 +1,86 @@
+//! Secure lead (リード確保) formulas.
+//!
+//! Between sections 11 and 15, a runner whose lead over another runner with a
+//! later strategy is less than desirable may speed up for a short time at the
+//! cost of HP.
+
+use std::ops::RangeInclusive;
+
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::uma::Style;
+
+/// Sections (0-indexed) in which secure lead can be attempted.
+pub const SECTIONS: RangeInclusive<u8> = 10..=14;
+/// Interval between secure lead checks in seconds.
+pub const CHECK_INTERVAL: f64 = 2.0;
+/// Duration of the secure lead speed boost in seconds.
+pub const DURATION: f64 = 2.0;
+/// Cooldown after the speed boost ends in seconds.
+pub const COOLDOWN: f64 = 1.0;
+/// Chance of attempting to secure the lead on each check.
+/// ? Should scale with wiz, but the formula is unknown.
+pub const CHANCE: f64 = 0.2;
+
+/// Check if secure lead is enabled for the current game behavior.
+#[inline]
+pub fn is_enabled() -> bool {
+    GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary
+}
+
+/// Desirable lead (in meters) of a runner with `style` over a runner with `other`
+/// style, or `None` if `other` should not be behind `style` by strategy.
+pub fn desirable_lead(style: Style, other: Style, course_distance: f64) -> Option<f64> {
+    use Style::*;
+    let coef = match (style, other) {
+        (Runaway, Front) => 2.0,
+        (Runaway, Pace) => 7.0,
+        (Runaway, Late | End) => 8.0,
+        (Front, Pace) => 4.0,
+        (Front, Late | End) => 8.0,
+        (Pace, Late) => 5.0,
+        (Pace, End) => 6.0,
+        (Late, End) => 3.0,
+        _ => return None,
+    };
+    Some(coef + 0.0003 * (course_distance + 1000.0))
+}
+
+/// Target speed increase (m/s) while securing the lead.
+///
+/// `is_alone` is whether no other runner with the same style is within 10m.
+/// It only has an effect on front-like runners.
+// ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
+pub fn target_speed_bonus(style: Style, guts: u16, is_alone: bool) -> f64 {
+    let style_coef = match style {
+        Style::Runaway => 0.2,
+        Style::Front | Style::Pace => 1.0,
+        Style::Late => 0.8,
+        Style::End => 0.0,
+    };
+    let alone_coef = match (style, is_alone) {
+        (Style::Runaway, true) => 7.0,
+        (Style::Front, true) if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary => 4.0,
+        (Style::Front, true) => 2.0,
+        _ => 1.0,
+    };
+    (guts as f64 / 2000.0).sqrt() * 0.3 * style_coef * alone_coef
+}
+
+/// HP consumed upon securing the lead.
+pub fn hp_cost(style: Style, course_distance: i32) -> f64 {
+    let style_coef = match style {
+        Style::Runaway => 1.2,
+        Style::Front => 1.0,
+        Style::Pace | Style::Late => 0.8,
+        Style::End => 0.0,
+    };
+    let distance_coef = match course_distance {
+        ..=1800 => 0.3,
+        1801..=2100 => 0.5,
+        2101..=2200 => 0.8,
+        2201..=2400 => 1.0,
+        2401..=2600 => 1.1,
+        _ => 1.2,
+    };
+    20.0 * style_coef * distance_coef
+}

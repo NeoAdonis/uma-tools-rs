@@ -429,6 +429,8 @@ impl UnreadyRunner {
             finish_time: None,
             spot_struggle: None,
             dueling: None,
+            secure_lead: None,
+            next_secure_lead_check: 0.0,
             duel_targets: HashMap::new(),
             duel_count: 0,
             overtake_state: None,
