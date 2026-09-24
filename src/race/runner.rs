@@ -2162,6 +2162,16 @@ impl Runner {
         let base_duration = alternative.base_duration as f64 / 10000.0; // Convert from 10000ths of a second
         let scaled_duration = base_duration * self.skill_modifiers.duration_scaling;
 
+        // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward)
+        let wiz_bonus = if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary
+            && self.available_skills[skill_index].is_wiz_limit_break_eligible()
+        {
+            wiz_limit_break_phase_coefficient(self.adjusted.style, self.phase)
+                * wiz_limit_break_multiplier(self.adjusted.wiz)
+        } else {
+            0.0
+        };
+
         // Apply each effect in the alternative
         for effect in &alternative.effects {
             match effect.target {
@@ -2169,6 +2179,7 @@ impl Runner {
                     effect,
                     elapsed_time,
                     scaled_duration,
+                    wiz_bonus,
                     course,
                     track_condition,
                 ),
@@ -2255,6 +2266,7 @@ impl Runner {
         effect: &SkillEffect,
         elapsed_time: f64,
         scaled_duration: f64,
+        wiz_bonus: f64,
         course: &Course,
         track_condition: TrackCondition,
     ) {
@@ -2266,8 +2278,16 @@ impl Runner {
         // Timed effects (tracked in active_timed_effects)
         if is_timed_effect(effect_type) {
             let expires_at = elapsed_time + scaled_duration;
+            // Apply Wiz Limit Break bonus to target speed and current speed effects
+            let bonus = match effect_type {
+                SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
+                    wiz_bonus
+                }
+                _ => 0.0,
+            };
             self.active_timed_effects.push(ActiveTimedEffect {
                 effect: effect.clone(),
+                value: effect.modifier as f64 / 10000.0 * (1.0 + bonus),
                 expires_at,
             });
         }
@@ -2349,7 +2369,7 @@ impl Runner {
                     SkillType::CurrentSpeedWithNaturalDeceleration
                 )
             {
-                self.speed += effect.effect.modifier as f64 / 10000.0;
+                self.speed += effect.value;
             }
         });
 
@@ -2371,26 +2391,26 @@ impl Runner {
         for timed in &self.active_timed_effects {
             match timed.effect.skill_type {
                 Acceleration => {
-                    mods.acceleration += timed.effect.modifier as f64 / 10000.0;
+                    mods.acceleration += timed.value;
                 }
                 TargetSpeed => {
-                    mods.target_speed += timed.effect.modifier as f64 / 10000.0;
+                    mods.target_speed += timed.value;
                 }
                 CurrentSpeed | CurrentSpeedWithNaturalDeceleration => {
-                    mods.current_speed += timed.effect.modifier as f64 / 10000.0;
+                    mods.current_speed += timed.value;
                 }
                 LaneMovementSpeed => {
-                    mods.lane_speed += timed.effect.modifier as f64 / 10000.0;
+                    mods.lane_speed += timed.value;
                 }
                 Fov => {
-                    mods.visible_distance += timed.effect.modifier as f64 / 10000.0;
+                    mods.visible_distance += timed.value;
                 }
                 LaneChange => {
-                    mods.target_lane = Some(timed.effect.modifier as f64 / 10000.0);
+                    mods.target_lane = Some(timed.value);
                 }
                 ExtendEvolvedDuration => {
                     // Duration scaling is multiplicative
-                    mods.duration_scaling *= timed.effect.modifier as f64 / 10000.0;
+                    mods.duration_scaling *= timed.value;
                 }
                 _ => {}
             }

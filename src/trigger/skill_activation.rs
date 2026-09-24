@@ -190,6 +190,9 @@ pub enum TriggerCondition {
 pub struct ActiveTimedEffect {
     /// Skill effect being applied.
     pub effect: SkillEffect,
+    /// Final modifier value (already divided by 10000 and including any
+    /// activation-time bonus such as the Wiz Limit Break buff).
+    pub value: f64,
     /// Race time in seconds when effect expires.
     pub expires_at: f64,
 }

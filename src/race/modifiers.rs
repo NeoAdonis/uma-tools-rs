@@ -24,6 +24,39 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
     }
 }
 
+/// Wiz multiplier for the Wiz Limit Break buff (5th Anniv. onward).
+///
+/// Zero at 1200 wiz or below; it then grows in brackets up to a maximum of 1.12.
+pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
+    let brackets = |from: u16, step: f64| ((wiz - from) as f64 / step).ceil();
+    match wiz {
+        0..=1200 => 0.0,
+        1201..=1400 => brackets(1200, 20.0) * 0.02,
+        1401..=1600 => 0.2 + brackets(1400, 20.0) * 0.06,
+        1601..=2000 => 0.8 + brackets(1600, 20.0) * 0.01,
+        _ => (1.0 + brackets(2000, 100.0) * 0.01).min(1.12),
+    }
+}
+
+/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniv. onward).
+pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
+    match (style, phase) {
+        (Style::Front | Style::Runaway, Phase::Early) => 0.26,
+        (Style::Front | Style::Runaway, Phase::Mid) => 0.23,
+        (Style::Front | Style::Runaway, Phase::Late) => 0.19,
+        (Style::Front | Style::Runaway, Phase::Last) => 0.16,
+        (Style::Pace, _) => 0.21,
+        (Style::Late, Phase::Early) => 0.19,
+        (Style::Late, Phase::Mid) => 0.18,
+        (Style::Late, Phase::Late) => 0.23,
+        (Style::Late, Phase::Last) => 0.24,
+        (Style::End, Phase::Early) => 0.15,
+        (Style::End, Phase::Mid) => 0.17,
+        (Style::End, Phase::Late) => 0.25,
+        (Style::End, Phase::Last) => 0.27,
+    }
+}
+
 /// Calculate acceleration multiplier based on track aptitude.
 pub fn ground_type_proficiency_multiplier(track_aptitude: Aptitude) -> f64 {
     match track_aptitude {

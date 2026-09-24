@@ -246,6 +246,14 @@ impl Skill {
         )
     }
 
+    /// Check if this skill benefits from the Wiz Limit Break buff (5th Anniv. onward).
+    ///
+    /// Only unique, evolved and gold skills are affected. Inherited uniques are
+    /// stored as white skills, so they are excluded as well.
+    pub fn is_wiz_limit_break_eligible(&self) -> bool {
+        !matches!(self.rarity, SkillRarity::White)
+    }
+
     /// Chance that this skill passes its pre-race activation check.
     ///
     /// Skills that don't require a wisdom check always pass; otherwise the chance

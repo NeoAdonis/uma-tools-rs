@@ -41,3 +41,23 @@ fn test_activation_chance_with_wisdom_check() {
     assert_eq!(skill.activation_chance(100), 0.2);
     assert_eq!(skill.activation_chance(0), 0.2);
 }
+
+#[test]
+fn test_wiz_limit_break_eligibility() {
+    let skill = |rarity| {
+        Skill::new(
+            "test".to_string(),
+            SkillData {
+                rarity,
+                alternatives: vec![],
+                wisdom_check: true,
+            },
+        )
+    };
+    assert!(!skill(SkillRarity::White).is_wiz_limit_break_eligible());
+    assert!(skill(SkillRarity::Gold).is_wiz_limit_break_eligible());
+    assert!(skill(SkillRarity::Unique).is_wiz_limit_break_eligible());
+    assert!(skill(SkillRarity::UniqueUpgraded).is_wiz_limit_break_eligible());
+    assert!(skill(SkillRarity::UniqueNatural).is_wiz_limit_break_eligible());
+    assert!(skill(SkillRarity::Evolution).is_wiz_limit_break_eligible());
+}
