@@ -1,4 +1,4 @@
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::{Configuration, GameBehavior};
 use crate::course::Course;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
@@ -54,30 +54,25 @@ fn test_desirable_lead_distance_term() {
 #[test]
 fn test_target_speed_bonus() {
     let base = 0.3; // guts 2000 -> sqrt(1) * 0.3
-    let front_alone = if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary {
-        4.0
-    } else {
-        2.0
-    };
     let cases = [
         (Style::Runaway, false, base * 0.2),
         (Style::Runaway, true, base * 0.2 * 7.0),
         (Style::Front, false, base),
-        (Style::Front, true, base * front_alone),
+        (Style::Front, true, base * 4.0),
         (Style::Pace, false, base),
         (Style::Pace, true, base),
         (Style::Late, false, base * 0.8),
         (Style::Late, true, base * 0.8),
     ];
     for (style, is_alone, expected) in cases {
-        let actual = target_speed_bonus(style, 2000, is_alone);
+        let actual = target_speed_bonus(style, 2000, is_alone, GameBehavior::LATEST);
         assert!(
             (actual - expected).abs() < EPSILON,
             "{style:?} (alone: {is_alone}): expected {expected}, got {actual}"
         );
     }
 
-    let actual = target_speed_bonus(Style::Pace, 500, false);
+    let actual = target_speed_bonus(Style::Pace, 500, false, GameBehavior::LATEST);
     assert!((actual - 0.5 * 0.3).abs() < EPSILON);
 }
 
@@ -146,7 +141,11 @@ fn ready_runner(style: Style) -> (Runner, RaceState) {
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
     };
-    let mut solver = RaceSolver::new(course, params);
+    let config = Configuration {
+        game_behavior: GameBehavior::LATEST,
+        ..Default::default()
+    };
+    let mut solver = RaceSolver::new(course, params, &config);
     solver.add_runner(uma, Motivation::Normal, vec![]);
     let solver = solver.ready_runners();
     let runner = solver.runners.into_iter().next().unwrap();
@@ -155,31 +154,33 @@ fn ready_runner(style: Style) -> (Runner, RaceState) {
 
 #[test]
 fn test_secure_lead_check_window() {
-    let (mut runner, _) = ready_runner(Style::Front);
+    let (mut runner, mut state) = ready_runner(Style::Front);
+    state.elapsed_time = 100.0;
     for section in 0..24 {
         runner.section = section;
-        let expected = is_enabled() && SECTIONS.contains(&section);
         assert_eq!(
-            runner.is_secure_lead_check_due(100.0),
-            expected,
+            runner.is_secure_lead_check_due(&state),
+            SECTIONS.contains(&section),
             "section {section}"
         );
     }
 
-    let (mut end_closer, _) = ready_runner(Style::End);
+    let (mut end_closer, mut state) = ready_runner(Style::End);
+    state.elapsed_time = 100.0;
     end_closer.section = 12;
-    assert!(!end_closer.is_secure_lead_check_due(100.0));
+    assert!(!end_closer.is_secure_lead_check_due(&state));
 }
 
 #[test]
 fn test_secure_lead_activation_and_expiry() {
-    let (mut runner, state) = ready_runner(Style::Front);
+    let (mut runner, mut state) = ready_runner(Style::Front);
     runner.section = 12;
 
     // Sufficient lead never triggers
     for t in 0..50 {
         let elapsed = t as f64 * CHECK_INTERVAL;
-        runner.try_secure_lead(elapsed, false, false, &state.course);
+        state.elapsed_time = elapsed;
+        runner.try_secure_lead(false, false, &state);
         assert!(runner.secure_lead.is_none());
         assert!((runner.next_secure_lead_check - (elapsed + CHECK_INTERVAL)).abs() < EPSILON);
     }
@@ -189,12 +190,18 @@ fn test_secure_lead_activation_and_expiry() {
     let mut elapsed = 0.0;
     while runner.secure_lead.is_none() {
         elapsed += CHECK_INTERVAL;
-        runner.try_secure_lead(elapsed, true, false, &state.course);
+        state.elapsed_time = elapsed;
+        runner.try_secure_lead(true, false, &state);
         assert!(elapsed < 1000.0, "secure lead never triggered");
     }
 
     let secure_lead = runner.secure_lead.as_ref().unwrap();
-    let expected_modifier = target_speed_bonus(Style::Front, runner.adjusted.guts, false);
+    let expected_modifier = target_speed_bonus(
+        Style::Front,
+        runner.adjusted.guts,
+        false,
+        GameBehavior::LATEST,
+    );
     assert!((secure_lead.modifier - expected_modifier).abs() < EPSILON);
     assert!((secure_lead.expires_at - (elapsed + DURATION)).abs() < EPSILON);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
@@ -202,12 +209,12 @@ fn test_secure_lead_activation_and_expiry() {
     assert!((runner.next_secure_lead_check - (elapsed + DURATION + COOLDOWN)).abs() < EPSILON);
 
     // Boost is applied to target speed
-    runner.update_target_speed(state.course.base_speed());
+    runner.update_target_speed(&state);
     let boosted = runner.target_speed;
     runner.expire_secure_lead(elapsed + DURATION - 0.01);
     assert!(runner.secure_lead.is_some());
     runner.expire_secure_lead(elapsed + DURATION);
     assert!(runner.secure_lead.is_none());
-    runner.update_target_speed(state.course.base_speed());
+    runner.update_target_speed(&state);
     assert!((boosted - runner.target_speed - expected_modifier).abs() < EPSILON);
 }

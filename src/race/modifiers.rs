@@ -1,6 +1,6 @@
 use rand::{Rng, RngExt};
 
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::GameBehavior;
 use crate::course::Phase;
 use crate::uma::{Aptitude, Style};
 
@@ -59,8 +59,8 @@ pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
 }
 
 /// Distance factor for the Stamina Limit Break buff (2.5 Anniv. onward).
-pub fn stamina_limit_break_distance_factor(distance: i32) -> f64 {
-    let is_mecha_uma = GAME_BEHAVIOR >= GameBehavior::MechaUmaUpdate;
+pub fn stamina_limit_break_distance_factor(distance: i32, game_behavior: GameBehavior) -> f64 {
+    let is_mecha_uma = game_behavior >= GameBehavior::MechaUmaUpdate;
     match distance {
         ..=2100 => 0.0,
         2101..=2200 => 0.5,
@@ -75,11 +75,17 @@ pub fn stamina_limit_break_distance_factor(distance: i32) -> f64 {
 /// Stamina Limit Break target speed buff in m/s, without its random factor.
 ///
 /// Zero before 2.5 Anniv., at 1200 stamina or below, or on courses up to 2100m.
-pub fn stamina_limit_break_base_buff(stamina: u16, distance: i32) -> f64 {
-    if GAME_BEHAVIOR < GameBehavior::TwoPointFiveAnniversary || stamina <= 1200 {
+pub fn stamina_limit_break_base_buff(
+    stamina: u16,
+    distance: i32,
+    game_behavior: GameBehavior,
+) -> f64 {
+    if game_behavior < GameBehavior::TwoPointFiveAnniversary || stamina <= 1200 {
         return 0.0;
     }
-    ((stamina - 1200) as f64).sqrt() * 0.0085 * stamina_limit_break_distance_factor(distance)
+    ((stamina - 1200) as f64).sqrt()
+        * 0.0085
+        * stamina_limit_break_distance_factor(distance, game_behavior)
 }
 
 /// Random factor of the Stamina Limit Break buff.

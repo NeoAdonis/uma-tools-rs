@@ -1,5 +1,5 @@
 use super::super::modifiers::*;
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::{Configuration, GameBehavior};
 use crate::course::{Course, Phase};
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
@@ -102,14 +102,18 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
         style_aptitude: Aptitude::A,
     };
 
-    let mut solver = RaceSolver::new(course, params);
+    let config = Configuration {
+        game_behavior: GameBehavior::LATEST,
+        ..Default::default()
+    };
+    let mut solver = RaceSolver::new(course, params, &config);
     solver.add_runner(uma, Motivation::Normal, vec![skill]);
     let mut solver = solver.ready_runners();
     let runner = &mut solver.runners[0];
 
     let bonus = wiz_limit_break_phase_coefficient(runner.adjusted.style, runner.phase)
         * wiz_limit_break_multiplier(runner.adjusted.wiz);
-    runner.activate_skill(0, 0, 0.0, &solver.state.course, TrackCondition::Firm);
+    runner.activate_skill(0, 0, &solver.state);
     (
         runner.skill_modifiers.target_speed,
         runner.skill_modifiers.current_speed,
@@ -118,11 +122,7 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
 }
 
 fn boosted(bonus: f64) -> f64 {
-    if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary {
-        0.35 * (1.0 + bonus)
-    } else {
-        0.35
-    }
+    0.35 * (1.0 + bonus)
 }
 
 #[test]
@@ -158,19 +158,16 @@ fn test_wiz_limit_break_ignores_plain_current_speed() {
 
 #[test]
 fn test_stamina_limit_break_distance_factor() {
-    let is_mecha_uma = GAME_BEHAVIOR >= GameBehavior::MechaUmaUpdate;
     for distance in (1000..=3600).step_by(100) {
         let expected = match distance {
             ..=2100 => 0.0,
             2200 => 0.5,
             2300..=2400 => 1.0,
-            2500..=2600 if is_mecha_uma => 1.5,
-            2500..=2600 => 1.2,
-            _ if is_mecha_uma => 1.8,
-            _ => 1.5,
+            2500..=2600 => 1.5,
+            _ => 1.8,
         };
         assert_eq!(
-            stamina_limit_break_distance_factor(distance),
+            stamina_limit_break_distance_factor(distance, GameBehavior::LATEST),
             expected,
             "distance {distance}"
         );
@@ -179,12 +176,12 @@ fn test_stamina_limit_break_distance_factor() {
 
 #[test]
 fn test_stamina_limit_break_base_buff() {
-    let enabled = GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary;
-    assert_eq!(stamina_limit_break_base_buff(1000, 2400), 0.0);
-    assert_eq!(stamina_limit_break_base_buff(1200, 2400), 0.0);
-    assert_eq!(stamina_limit_break_base_buff(1600, 2100), 0.0);
-    let expected = if enabled { 10.0 * 0.0085 } else { 0.0 };
-    assert!((stamina_limit_break_base_buff(1300, 2400) - expected).abs() < EPSILON);
+    let buff =
+        |stamina, distance| stamina_limit_break_base_buff(stamina, distance, GameBehavior::LATEST);
+    assert_eq!(buff(1000, 2400), 0.0);
+    assert_eq!(buff(1200, 2400), 0.0);
+    assert_eq!(buff(1600, 2100), 0.0);
+    assert!((buff(1300, 2400) - 10.0 * 0.0085).abs() < EPSILON);
 }
 
 /// Build a single high-stamina runner on a long course, in its last spurt with
@@ -213,10 +210,13 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
         style_aptitude: Aptitude::A,
     };
 
-    let mut solver = RaceSolver::new(course, params);
+    let config = Configuration {
+        game_behavior: GameBehavior::LATEST,
+        ..Default::default()
+    };
+    let mut solver = RaceSolver::new(course, params, &config);
     solver.add_runner(uma, Motivation::Normal, vec![]);
     let mut solver = solver.ready_runners();
-    let base_speed = solver.state.course.base_speed();
     let runner = &mut solver.runners[0];
 
     runner.position = 2000.0;
@@ -226,12 +226,12 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
         target_distance: 1950.0,
         category: LastSpurtCategory::Full,
     });
-    runner.update_target_speed(base_speed);
+    runner.update_target_speed(&solver.state);
     let buff = runner.stamina_limit_break;
 
     // Buff must persist even if the last spurt is gone (e.g. HP recalculation)
     runner.last_spurt = None;
-    runner.update_target_speed(base_speed);
+    runner.update_target_speed(&solver.state);
     assert_eq!(runner.stamina_limit_break, buff);
 
     (buff, runner.stamina_limit_break_base)
@@ -240,13 +240,8 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
 #[test]
 fn test_stamina_limit_break_activates_at_last_spurt_speed() {
     let (buff, base) = run_stamina_limit_break_runner(20.0);
-    if GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary {
-        assert!(base > 0.0);
-        assert_eq!(buff, base);
-    } else {
-        assert_eq!(base, 0.0);
-        assert_eq!(buff, 0.0);
-    }
+    assert!(base > 0.0);
+    assert_eq!(buff, base);
 }
 
 #[test]

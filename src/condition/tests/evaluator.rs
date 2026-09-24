@@ -1,6 +1,7 @@
 use super::super::evaluator::*;
 use super::super::parser::*;
 use super::super::variables::*;
+use crate::configuration::Configuration;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
@@ -51,7 +52,7 @@ fn create_test_race_solver() -> RaceSolver<Runner> {
 
     let skills = vec![];
 
-    let mut solver = RaceSolver::new(course, params);
+    let mut solver = RaceSolver::new(course, params, &Configuration::default());
     solver.add_runner(uma, Motivation::Good, skills);
     solver.ready_runners()
 }
@@ -184,7 +185,7 @@ fn test_is_exist_skill_id_in_available_skills() {
 
     let skills = vec![skill];
 
-    let mut solver = RaceSolver::new(course, params);
+    let mut solver = RaceSolver::new(course, params, &Configuration::default());
     solver.add_runner(uma, Motivation::Good, skills);
     let solver = solver.ready_runners();
 

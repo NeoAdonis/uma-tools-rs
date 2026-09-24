@@ -6,7 +6,7 @@ use std::vec;
 
 use rand::prelude::*;
 
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::{Configuration, GameBehavior};
 use crate::course::{Course, Phase};
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::Runner;
@@ -18,6 +18,9 @@ use crate::uma::*;
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
+    /// Runtime configuration. Shared by all runners so that they all follow the
+    /// same game behavior.
+    pub config: Configuration,
     /// Random number generator shared by all runners.
     /// It is initialized with a seed to ensure reproducibility.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
@@ -56,14 +59,15 @@ pub struct RaceSolver<T> {
 /// Methods available BEFORE runners are ready, i.e., before their stats have been
 /// calculated and out-of-gate skills have been applied.
 impl RaceSolver<UnreadyRunner> {
-    /// Create a new RaceSolver with the given course and race parameters.
-    pub fn new(course: Course, params: RaceParameters) -> Self {
+    /// Create a new RaceSolver with the given course, race parameters and configuration.
+    pub fn new(course: Course, params: RaceParameters, config: &Configuration) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
 
         let state = RaceState {
             course,
             params,
+            config: *config,
             rng,
             elapsed_time: 0.0,
             finish_time: None,
@@ -110,15 +114,7 @@ impl RaceSolver<UnreadyRunner> {
         };
 
         // Create builder
-        let builder = UnreadyRunner::new(
-            uma,
-            gate_roll,
-            motivation,
-            &self.state.course,
-            &self.state.params,
-            skills,
-            Rc::clone(&self.state.rng),
-        );
+        let builder = UnreadyRunner::new(uma, gate_roll, motivation, &self.state, skills);
 
         // Update runnners-by-style count before moving builder
         *self
@@ -213,7 +209,7 @@ impl RaceSolver<Runner> {
             runner.check_all_preconditions(&self.state); // Check every frame
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
-            runner.update_target_speed(self.state.course.base_speed());
+            runner.update_target_speed(&self.state);
             runner.update_acceleration();
             runner.update_phase(&mut self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
@@ -360,7 +356,7 @@ impl RaceSolver<Runner> {
                 }
 
                 // Update spot struggle and dueling status
-                if matches!(GAME_BEHAVIOR, GameBehavior::FirstAnniversary) {
+                if self.state.config.game_behavior >= GameBehavior::FirstAnniversary {
                     if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
                     {
                         runner_i.start_spot_struggle(self.state.elapsed_time);
@@ -463,19 +459,15 @@ impl RaceSolver<Runner> {
                 };
                 let runner = &mut self.runners[i];
                 runner.update_positioning_front(
-                    self.state.elapsed_time,
                     distance_ahead,
                     front_runner_count == 1,
+                    &self.state,
                 )
             } else {
                 // Determine distance behind pacemaker
                 let distance_behind = pacemaker_position - runner.position;
                 let runner = &mut self.runners[i];
-                runner.update_positioning_non_front(
-                    self.state.elapsed_time,
-                    self.state.course.distance as f64,
-                    distance_behind,
-                )
+                runner.update_positioning_non_front(distance_behind, &self.state)
             }
         }
 
@@ -489,7 +481,7 @@ impl RaceSolver<Runner> {
 
         for i in 0..self.runners.len() {
             self.runners[i].expire_secure_lead(elapsed_time);
-            if !self.runners[i].is_secure_lead_check_due(elapsed_time) {
+            if !self.runners[i].is_secure_lead_check_due(&self.state) {
                 continue;
             }
 
@@ -513,12 +505,7 @@ impl RaceSolver<Runner> {
                 }
             }
 
-            self.runners[i].try_secure_lead(
-                elapsed_time,
-                lead_insufficient,
-                is_alone,
-                &self.state.course,
-            );
+            self.runners[i].try_secure_lead(lead_insufficient, is_alone, &self.state);
         }
     }
 

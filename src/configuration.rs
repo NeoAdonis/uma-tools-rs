@@ -15,11 +15,30 @@ pub enum GameBehavior {
     FifthAnniversary,
 }
 
-pub static GAME_BEHAVIOR: GameBehavior = GameBehavior::OnePointFiveAnniversary;
+impl GameBehavior {
+    /// The most recent game behavior.
+    pub const LATEST: GameBehavior = GameBehavior::FifthAnniversary;
+}
 
 /// Supported languages for track names, skill names, etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
     Japanese,
     English,
+}
+
+/// Runtime configuration shared by everything in a race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Configuration {
+    pub game_behavior: GameBehavior,
+    pub language: Language,
+}
+
+impl Default for Configuration {
+    fn default() -> Self {
+        Configuration {
+            game_behavior: GameBehavior::LATEST,
+            language: Language::English,
+        }
+    }
 }

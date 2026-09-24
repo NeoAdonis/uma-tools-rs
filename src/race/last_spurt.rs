@@ -2,12 +2,12 @@
 
 use rand::RngExt;
 
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
-use crate::course::{Course, Phase};
+use crate::configuration::GameBehavior;
+use crate::course::Phase;
 use crate::race::hp::{estimate_hp_last_spurt, estimate_hp_per_meter_last_spurt};
 use crate::race::modifiers::*;
-use crate::race::parameters::TrackCondition;
 use crate::race::runner::Runner;
+use crate::race::solver::RaceState;
 use crate::uma::{Aptitude, Style};
 
 /// Parameters defining the last spurt behavior of a runner.
@@ -45,6 +45,7 @@ fn last_spurt_speed_max(
     speed_stat: u16,
     guts_stat: u16,
     distance_aptitude: Aptitude,
+    game_behavior: GameBehavior,
 ) -> f64 {
     let base_target_late = base_target_speed(
         base_speed,
@@ -57,7 +58,7 @@ fn last_spurt_speed_max(
     let speed_component = (500.0 * speed_stat as f64).sqrt()
         * distance_proficiency_multiplier(distance_aptitude)
         * 0.002;
-    let guts_component = if matches!(GAME_BEHAVIOR, GameBehavior::Original) {
+    let guts_component = if game_behavior < GameBehavior::FirstAnniversary {
         0.0
     } else {
         (450.0 * guts_stat as f64).powf(0.597) * 0.0001
@@ -78,17 +79,16 @@ fn last_spurt_speed_max(
 /// from there, the total time to finish the race. A candidate is picked based on a
 /// probability influenced by the runner's wisdom stat. A higher wisdom increases the
 /// chance of picking a higher speed.
-pub fn calculate_last_spurt(
-    runner: &mut Runner,
-    course: &Course,
-    track_condition: TrackCondition,
-) -> LastSpurt {
+pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt {
+    let course = &state.course;
+    let track_condition = state.params.track_condition;
     let max_last_spurt_speed = last_spurt_speed_max(
         course.base_speed(),
         runner.adjusted.style,
         runner.adjusted.speed,
         runner.adjusted.guts,
         runner.adjusted.distance_aptitude,
+        state.config.game_behavior,
     );
 
     // Calculate remaining distance from start of late phase (or current position)

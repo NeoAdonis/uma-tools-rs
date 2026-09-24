@@ -6,7 +6,7 @@
 
 use std::ops::RangeInclusive;
 
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::GameBehavior;
 use crate::uma::Style;
 
 /// Sections (0-indexed) in which secure lead can be attempted.
@@ -20,12 +20,6 @@ pub const COOLDOWN: f64 = 1.0;
 /// Chance of attempting to secure the lead on each check.
 /// ? Should scale with wiz, but the formula is unknown.
 pub const CHANCE: f64 = 0.2;
-
-/// Check if secure lead is enabled for the current game behavior.
-#[inline]
-pub fn is_enabled() -> bool {
-    GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary
-}
 
 /// Desirable lead (in meters) of a runner with `style` over a runner with `other`
 /// style, or `None` if `other` should not be behind `style` by strategy.
@@ -50,7 +44,12 @@ pub fn desirable_lead(style: Style, other: Style, course_distance: f64) -> Optio
 /// `is_alone` is whether no other runner with the same style is within 10m.
 /// It only has an effect on front-like runners.
 // ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
-pub fn target_speed_bonus(style: Style, guts: u16, is_alone: bool) -> f64 {
+pub fn target_speed_bonus(
+    style: Style,
+    guts: u16,
+    is_alone: bool,
+    game_behavior: GameBehavior,
+) -> f64 {
     let style_coef = match style {
         Style::Runaway => 0.2,
         Style::Front | Style::Pace => 1.0,
@@ -59,7 +58,7 @@ pub fn target_speed_bonus(style: Style, guts: u16, is_alone: bool) -> f64 {
     };
     let alone_coef = match (style, is_alone) {
         (Style::Runaway, true) => 7.0,
-        (Style::Front, true) if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary => 4.0,
+        (Style::Front, true) if game_behavior >= GameBehavior::FifthAnniversary => 4.0,
         (Style::Front, true) => 2.0,
         _ => 1.0,
     };

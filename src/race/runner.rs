@@ -6,13 +6,12 @@ use rand::prelude::*;
 
 use crate::condition::evaluator::{EvaluatorFull, evaluate_comparison_list, evaluate_condition};
 use crate::condition::parser::CompOp;
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::GameBehavior;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
-use crate::race::parameters::TrackCondition;
 use crate::race::popularity::JudgeScores;
 use crate::race::secure_lead;
 use crate::race::solver::RaceState;
@@ -498,12 +497,12 @@ pub enum StartType {
 
 impl Runner {
     /// Create a new Runner from an UnreadyRunner and RaceState.
-    pub fn new(mut builder: UnreadyRunner, state: &RaceState) -> Self {
+    pub(crate) fn new(mut builder: UnreadyRunner, state: &RaceState) -> Self {
         // Apply out-of-gate skills with proper activation tracking
         builder.apply_out_of_gate_skills(state);
 
         // Build final Runner with all modifications applied
-        builder.build(&state.course)
+        builder.build(state)
     }
 
     /// Get the base style, treating Runaway as a variant of Front.
@@ -651,7 +650,8 @@ impl Runner {
     }
 
     /// Update target speed based on various factors.
-    pub fn update_target_speed(&mut self, course_base_speed: f64) {
+    pub fn update_target_speed(&mut self, state: &RaceState) {
+        let game_behavior = state.config.game_behavior;
         let target_speed = if self.hp.is_empty() {
             self.min_speed
         } else if let Some(last_spurt) = &self.last_spurt
@@ -665,7 +665,7 @@ impl Runner {
                 PositioningStrategy::FrontOvertake => 1.05,
                 PositioningStrategy::PaceUp(_) => 1.04,
                 PositioningStrategy::PaceDown(_) => {
-                    if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
+                    if game_behavior >= GameBehavior::OnePointFiveAnniversary
                         && self.phase >= Phase::Mid
                     {
                         0.945
@@ -676,7 +676,7 @@ impl Runner {
                 PositioningStrategy::PaceUpEx => 2.0,
             };
             let base_target_speed = base_target_speed(
-                course_base_speed,
+                state.course.base_speed(),
                 self.adjusted.style,
                 self.phase,
                 self.adjusted.speed,
@@ -698,7 +698,7 @@ impl Runner {
         }
 
         // TODO: Also check if runner changed lanes on last frame
-        let move_lane_modifier = if GAME_BEHAVIOR >= GameBehavior::FirstAnniversary
+        let move_lane_modifier = if game_behavior >= GameBehavior::FirstAnniversary
             && self.skill_modifiers.lane_speed > 0.0
         {
             (0.0002 * self.adjusted.power as f64).sqrt()
@@ -790,10 +790,15 @@ impl Runner {
     }
 
     /// Criteria for front-runners to speed up to stay ahead or catch up.
-    fn can_speed_up_to_front(&self, distance_ahead: f64, is_single_front_runner: bool) -> bool {
+    fn can_speed_up_to_front(
+        &self,
+        distance_ahead: f64,
+        is_single_front_runner: bool,
+        game_behavior: GameBehavior,
+    ) -> bool {
         let distance_threshold = if self.positioning_style() == Style::Runaway {
             17.5
-        } else if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary && is_single_front_runner {
+        } else if game_behavior >= GameBehavior::OnePointFiveAnniversary && is_single_front_runner {
             12.5
         } else {
             4.5
@@ -811,10 +816,12 @@ impl Runner {
     /// or 0 otherwise.
     pub fn update_positioning_front(
         &mut self,
-        elapsed_time: f64,
         distance_ahead: f64,
         is_single_front_runner: bool,
+        state: &RaceState,
     ) {
+        let elapsed_time = state.elapsed_time;
+        let game_behavior = state.config.game_behavior;
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
@@ -837,7 +844,11 @@ impl Runner {
                 }
 
                 if distance_ahead >= 0.0 {
-                    if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner) {
+                    if !self.can_speed_up_to_front(
+                        distance_ahead,
+                        is_single_front_runner,
+                        game_behavior,
+                    ) {
                         return;
                     }
                     // Try to stay ahead
@@ -849,7 +860,11 @@ impl Runner {
             }
             PositioningStrategy::FrontSpeedUp => {
                 // Exit if sufficiently ahead
-                if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner) {
+                if !self.can_speed_up_to_front(
+                    distance_ahead,
+                    is_single_front_runner,
+                    game_behavior,
+                ) {
                     self.positioning_strategy = PositioningStrategy::Normal;
                 }
             }
@@ -877,12 +892,9 @@ impl Runner {
     ///
     /// `distance_behind` is the distance from the pacemaker in meters
     /// (0 if we are the pacemaker).
-    pub fn update_positioning_non_front(
-        &mut self,
-        elapsed_time: f64,
-        course_length: f64,
-        distance_behind: f64,
-    ) {
+    pub fn update_positioning_non_front(&mut self, distance_behind: f64, state: &RaceState) {
+        let elapsed_time = state.elapsed_time;
+        let course_length = state.course.distance as f64;
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
@@ -921,7 +933,8 @@ impl Runner {
                     // (unless affected by speed-increasing skills)
                     // 1.5 anniv. patch: if in mid-race, the maximum distance is
                     // replaced with the midpoint between min and max before rolling
-                    let threshold = if GAME_BEHAVIOR >= GameBehavior::OnePointFiveAnniversary
+                    let threshold = if state.config.game_behavior
+                        >= GameBehavior::OnePointFiveAnniversary
                         && self.phase >= Phase::Mid
                     {
                         let min = range.start;
@@ -1020,11 +1033,7 @@ impl Runner {
             if prev_phase != self.phase {
                 self.check_phase_triggers(state);
                 if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-                    self.last_spurt = Some(calculate_last_spurt(
-                        self,
-                        &state.course,
-                        state.params.track_condition,
-                    ));
+                    self.last_spurt = Some(calculate_last_spurt(self, state));
                 }
             }
         }
@@ -1221,14 +1230,14 @@ impl Runner {
 
     /// Check if the runner should check whether to secure the lead (リード確保)
     /// on this frame.
-    pub fn is_secure_lead_check_due(&self, elapsed_time: f64) -> bool {
-        secure_lead::is_enabled()
+    pub fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
+        state.config.game_behavior >= GameBehavior::TwoPointFiveAnniversary
             && self.adjusted.style != Style::End
             && !self.has_finished()
             && !self.hp.is_empty()
             && secure_lead::SECTIONS.contains(&self.section)
             && self.secure_lead.is_none()
-            && elapsed_time >= self.next_secure_lead_check
+            && state.elapsed_time >= self.next_secure_lead_check
     }
 
     /// Attempt to secure the lead (リード確保).
@@ -1238,13 +1247,8 @@ impl Runner {
     /// of HP, followed by a cooldown.
     ///
     /// `is_alone` is whether no other runner with the same style is within 10m.
-    pub fn try_secure_lead(
-        &mut self,
-        elapsed_time: f64,
-        lead_insufficient: bool,
-        is_alone: bool,
-        course: &Course,
-    ) {
+    pub fn try_secure_lead(&mut self, lead_insufficient: bool, is_alone: bool, state: &RaceState) {
+        let elapsed_time = state.elapsed_time;
         self.next_secure_lead_check = elapsed_time + secure_lead::CHECK_INTERVAL;
         if !lead_insufficient || !self.rng.borrow_mut().random_bool(secure_lead::CHANCE) {
             return;
@@ -1252,10 +1256,15 @@ impl Runner {
 
         let style = self.adjusted.style;
         self.secure_lead = Some(SecureLeadState {
-            modifier: secure_lead::target_speed_bonus(style, self.adjusted.guts, is_alone),
+            modifier: secure_lead::target_speed_bonus(
+                style,
+                self.adjusted.guts,
+                is_alone,
+                state.config.game_behavior,
+            ),
             expires_at: elapsed_time + secure_lead::DURATION,
         });
-        self.hp.current -= secure_lead::hp_cost(style, course.distance);
+        self.hp.current -= secure_lead::hp_cost(style, state.course.distance);
         if self.hp.is_empty() {
             self.hp.has_emptied = true;
         }
@@ -2238,9 +2247,7 @@ impl Runner {
         &mut self,
         skill_index: usize,
         alternative_index: usize,
-        elapsed_time: f64,
-        course: &Course,
-        track_condition: TrackCondition,
+        state: &RaceState,
     ) {
         // Clone the skill data we need to avoid borrow checker issues
         let skill_id = self.available_skills[skill_index].id.clone();
@@ -2252,7 +2259,7 @@ impl Runner {
         let scaled_duration = base_duration * self.skill_modifiers.duration_scaling;
 
         // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward)
-        let wiz_bonus = if GAME_BEHAVIOR >= GameBehavior::FifthAnniversary
+        let wiz_bonus = if state.config.game_behavior >= GameBehavior::FifthAnniversary
             && self.available_skills[skill_index].is_wiz_limit_break_eligible()
         {
             wiz_limit_break_phase_coefficient(self.adjusted.style, self.phase)
@@ -2264,14 +2271,9 @@ impl Runner {
         // Apply each effect in the alternative
         for effect in &alternative.effects {
             match effect.target {
-                SkillTarget::Oneself => self.apply_skill_effect(
-                    effect,
-                    elapsed_time,
-                    scaled_duration,
-                    wiz_bonus,
-                    course,
-                    track_condition,
-                ),
+                SkillTarget::Oneself => {
+                    self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state)
+                }
                 _ => continue, // TODO: Handle other targets
             }
         }
@@ -2289,7 +2291,7 @@ impl Runner {
         });
 
         // Increment activation counts for condition evaluation
-        let section_length = course.distance as f64 / 24.0;
+        let section_length = state.course.distance as f64 / 24.0;
         self.trigger_scheduler.activation_counts.increment(
             self.phase,
             self.position,
@@ -2328,13 +2330,7 @@ impl Runner {
         };
 
         if should_activate {
-            self.activate_skill(
-                skill_index,
-                alternative_index,
-                state.elapsed_time,
-                &state.course,
-                state.params.track_condition,
-            );
+            self.activate_skill(skill_index, alternative_index, state);
             self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
         } else if is_onetime {
             // Onetime trigger that failed guards - mark attempted so we don't retry
@@ -2353,11 +2349,9 @@ impl Runner {
     pub fn apply_skill_effect(
         &mut self,
         effect: &SkillEffect,
-        elapsed_time: f64,
         scaled_duration: f64,
         wiz_bonus: f64,
-        course: &Course,
-        track_condition: TrackCondition,
+        state: &RaceState,
     ) {
         let effect_type = &effect.skill_type;
 
@@ -2366,7 +2360,7 @@ impl Runner {
 
         // Timed effects (tracked in active_timed_effects)
         if is_timed_effect(effect_type) {
-            let expires_at = elapsed_time + scaled_duration;
+            let expires_at = state.elapsed_time + scaled_duration;
             // Apply Wiz Limit Break bonus to target speed and current speed effects
             let bonus = match effect_type {
                 SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
@@ -2387,9 +2381,11 @@ impl Runner {
             // Increment heal skill count
             self.trigger_scheduler.activation_counts.increment_heal();
 
-            // Recalculate last spurt if in Mid phase or later (FirstAnniversary behavior)
-            if !matches!(GAME_BEHAVIOR, GameBehavior::Original) && self.phase >= Phase::Mid {
-                self.last_spurt = Some(calculate_last_spurt(self, course, track_condition));
+            // Recalculate last spurt if in Mid phase or later (1st Anniv. onward)
+            if state.config.game_behavior >= GameBehavior::FirstAnniversary
+                && self.phase >= Phase::Mid
+            {
+                self.last_spurt = Some(calculate_last_spurt(self, state));
             }
         }
         // Activate random gold skill
@@ -2401,7 +2397,7 @@ impl Runner {
                     .random_range(0..self.golden_skill_indices.len());
                 let golden_skill_idx = self.golden_skill_indices[idx];
                 // Recursively activate the golden skill (use first alternative)
-                self.activate_skill(golden_skill_idx, 0, elapsed_time, course, track_condition);
+                self.activate_skill(golden_skill_idx, 0, state);
             }
         }
         // Style change
@@ -2425,7 +2421,7 @@ impl Runner {
                 .enumerate()
                 .find(|(_, skill)| skill.id == "201631")
             {
-                self.activate_skill(skill_index, 0, elapsed_time, course, track_condition);
+                self.activate_skill(skill_index, 0, state);
             }
         }
 

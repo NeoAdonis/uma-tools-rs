@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use uma_tools::configuration::Language;
+use uma_tools::configuration::{Configuration, GameBehavior, Language};
 use uma_tools::course::*;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;
@@ -8,6 +8,12 @@ use uma_tools::uma::skill::*;
 use uma_tools::uma::*;
 
 fn main() {
+    // TODO: Load configuration from a config file or command-line arguments
+    let config = Configuration {
+        game_behavior: GameBehavior::OnePointFiveAnniversary,
+        language: Language::English,
+    };
+
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
 
@@ -51,7 +57,7 @@ fn main() {
     println!("  ID: {}", course.id);
     println!(
         "  Name: {}",
-        course.track_name(Language::English).unwrap_or("Unknown")
+        course.track_name(config.language).unwrap_or("Unknown")
     );
     println!("  Distance: {}m", course.distance);
     println!("  Surface: {:?}", course.surface);
@@ -75,7 +81,7 @@ fn main() {
     }
 
     // Initialize the race state
-    let mut solver = RaceSolver::new(course, race_parameters);
+    let mut solver = RaceSolver::new(course, race_parameters, &config);
     solver.add_runner(uma, motivation, skills);
 
     // Initialize runners

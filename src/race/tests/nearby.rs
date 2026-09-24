@@ -1,3 +1,4 @@
+use crate::configuration::Configuration;
 use crate::course::Course;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
@@ -29,7 +30,7 @@ fn ready_runners(count: usize) -> Vec<Runner> {
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
     };
-    let mut solver = RaceSolver::new(course, params);
+    let mut solver = RaceSolver::new(course, params, &Configuration::default());
     for _ in 0..count {
         solver.add_runner(uma, Motivation::Normal, vec![]);
     }

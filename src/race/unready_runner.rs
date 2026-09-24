@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use rand::RngExt;
 
-use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
+use crate::configuration::GameBehavior;
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::hp::{HpState, hp_style_multiplier};
@@ -136,15 +136,17 @@ pub struct UnreadyRunner {
 
 impl UnreadyRunner {
     /// Create a new RunnerBuilder with initial values
-    pub fn new(
+    pub(crate) fn new(
         uma: Uma,
         gate_roll: u8,
         motivation: Motivation,
-        course: &Course,
-        params: &RaceParameters,
+        state: &RaceState,
         skills: Vec<Skill>,
-        rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     ) -> Self {
+        let course = &state.course;
+        let params = &state.params;
+        let rng = Rc::clone(&state.rng);
+
         // Calculate base stats
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
@@ -309,7 +311,10 @@ impl UnreadyRunner {
     }
 
     /// Build the final Runner with all modifications applied
-    pub fn build(self, course: &Course) -> Runner {
+    pub(crate) fn build(self, state: &RaceState) -> Runner {
+        let course = &state.course;
+        let game_behavior = state.config.game_behavior;
+
         // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
         let max_hp =
             0.8 * hp_style_multiplier(self.adjusted.style) * (self.adjusted.stamina as f64)
@@ -367,7 +372,7 @@ impl UnreadyRunner {
         );
 
         // Calculate force-in modifier based on style and randomness
-        let force_in_modifier = if matches!(GAME_BEHAVIOR, GameBehavior::Original) {
+        let force_in_modifier = if game_behavior < GameBehavior::FirstAnniversary {
             0.0
         } else {
             self.rng.borrow_mut().random_range(0.0..0.1)
@@ -419,6 +424,7 @@ impl UnreadyRunner {
             stamina_limit_break_base: stamina_limit_break_base_buff(
                 self.adjusted.stamina,
                 course.distance,
+                game_behavior,
             ),
             stamina_limit_break: 0.0,
             rng: self.rng,

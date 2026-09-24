@@ -2,6 +2,7 @@
 //!
 //! These tests verify the public API of the race simulation system.
 
+use uma_tools::configuration::{Configuration, GameBehavior};
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::RaceSolver;
@@ -55,7 +56,24 @@ fn test_multi_runner_race_simulation() {
         Style::End,
     ];
 
-    for seed in 0..5 {
+    // Every game behavior toggles different components during a full race
+    let behaviors = [
+        GameBehavior::Original,
+        GameBehavior::FirstAnniversary,
+        GameBehavior::OnePointFiveAnniversary,
+        GameBehavior::TwoPointFiveAnniversary,
+        GameBehavior::MechaUmaUpdate,
+        GameBehavior::FifthAnniversary,
+    ];
+
+    for (game_behavior, seed) in behaviors
+        .into_iter()
+        .flat_map(|b| (0..5).map(move |s| (b, s)))
+    {
+        let config = Configuration {
+            game_behavior,
+            ..Default::default()
+        };
         let params = RaceParameters {
             track_condition: TrackCondition::Firm,
             weather: Weather::Sunny,
@@ -65,7 +83,7 @@ fn test_multi_runner_race_simulation() {
             gates: styles.len() as u8,
             rng_seed: seed,
         };
-        let mut solver = RaceSolver::new(course.clone(), params);
+        let mut solver = RaceSolver::new(course.clone(), params, &config);
         for style in styles {
             let uma = Uma {
                 speed: 1200,
@@ -82,7 +100,10 @@ fn test_multi_runner_race_simulation() {
         }
         let mut solver = solver.ready_runners();
         solver.run();
-        assert!(solver.state.finish_time.is_some(), "seed {seed}");
+        assert!(
+            solver.state.finish_time.is_some(),
+            "{game_behavior:?}, seed {seed}"
+        );
     }
 }
 
