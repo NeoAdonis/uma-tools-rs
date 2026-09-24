@@ -1,5 +1,6 @@
 use rand::{Rng, RngExt};
 
+use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::Phase;
 use crate::uma::{Aptitude, Style};
 
@@ -55,6 +56,41 @@ pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
         (Style::End, Phase::Late) => 0.25,
         (Style::End, Phase::Last) => 0.27,
     }
+}
+
+/// Distance factor for the Stamina Limit Break buff (2.5 Anniv. onward).
+pub fn stamina_limit_break_distance_factor(distance: i32) -> f64 {
+    let is_mecha_uma = GAME_BEHAVIOR >= GameBehavior::MechaUmaUpdate;
+    match distance {
+        ..=2100 => 0.0,
+        2101..=2200 => 0.5,
+        2201..=2400 => 1.0,
+        2401..=2600 if is_mecha_uma => 1.5,
+        2401..=2600 => 1.2,
+        _ if is_mecha_uma => 1.8,
+        _ => 1.5,
+    }
+}
+
+/// Stamina Limit Break target speed buff in m/s, without its random factor.
+///
+/// Zero before 2.5 Anniv., at 1200 stamina or below, or on courses up to 2100m.
+pub fn stamina_limit_break_base_buff(stamina: u16, distance: i32) -> f64 {
+    if GAME_BEHAVIOR < GameBehavior::TwoPointFiveAnniversary || stamina <= 1200 {
+        return 0.0;
+    }
+    ((stamina - 1200) as f64).sqrt() * 0.0085 * stamina_limit_break_distance_factor(distance)
+}
+
+/// Random factor of the Stamina Limit Break buff.
+///
+/// The game's parameter file lists a weighted random table and a parameter that
+/// suggests power is involved, but observed values stay between 0.98 and
+/// 1.02. The variation is small enough that other simulators and sources treat
+/// the coefficient as always 1.0, so the same is done here. The RNG is still
+/// taken so call sites stay the same if the roll is modeled in the future.
+pub fn stamina_limit_break_random_factor<R: Rng + ?Sized>(_rng: &mut R) -> f64 {
+    1.0
 }
 
 /// Calculate acceleration multiplier based on track aptitude.

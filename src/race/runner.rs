@@ -453,6 +453,12 @@ pub struct Runner {
     /// Information about the last spurt phase. It is calculated when entering the
     /// Mid phase. It indicates when the last spurt can start and its max speed.
     pub last_spurt: Option<LastSpurt>,
+    /// Stamina Limit Break (スタミナ勝負) buff before its random factor, in m/s.
+    /// Calculated before race begins; zero if the runner is not eligible.
+    pub stamina_limit_break_base: f64,
+    /// Active Stamina Limit Break target speed buff in m/s. It is set once the
+    /// runner reaches its last spurt speed and lasts until the end of the race.
+    pub stamina_limit_break: f64,
     /// Reference to a `RaceSolver`'s Random Number Generator.
     /// It is shared with other runners.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
@@ -669,6 +675,17 @@ impl Runner {
             base_target_speed * position_multiplier
         };
 
+        // Stamina Limit Break is activated upon reaching last spurt speed (2.5 Anniv. onward)
+        if self.stamina_limit_break == 0.0
+            && self.stamina_limit_break_base > 0.0
+            && self.last_spurt.as_ref().is_some_and(|last_spurt| {
+                self.position >= last_spurt.target_distance && self.speed >= last_spurt.max_speed
+            })
+        {
+            self.stamina_limit_break = self.stamina_limit_break_base
+                * stamina_limit_break_random_factor(&mut *self.rng.borrow_mut());
+        }
+
         // TODO: Also check if runner changed lanes on last frame
         let move_lane_modifier = if GAME_BEHAVIOR >= GameBehavior::FirstAnniversary
             && self.skill_modifiers.lane_speed > 0.0
@@ -700,6 +717,7 @@ impl Runner {
             + move_lane_modifier
             + force_in_modifier
             + struggle_modifier
+            + self.stamina_limit_break
     }
 
     /// Update lane position towards target lane.

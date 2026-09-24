@@ -8,7 +8,7 @@ use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::hp::{HpState, hp_style_multiplier};
-use crate::race::modifiers::roll_section_speed_modifier;
+use crate::race::modifiers::{roll_section_speed_modifier, stamina_limit_break_base_buff};
 use crate::race::popularity::JudgeScores;
 use crate::race::runner::*;
 use crate::race::transitions::*;
@@ -416,6 +416,11 @@ impl UnreadyRunner {
             slope_acceleration: None,
             downhill_time: 0.0,
             last_spurt: None,
+            stamina_limit_break_base: stamina_limit_break_base_buff(
+                self.adjusted.stamina,
+                course.distance,
+            ),
+            stamina_limit_break: 0.0,
             rng: self.rng,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),

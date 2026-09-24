@@ -1,6 +1,7 @@
 use super::super::modifiers::*;
 use crate::configuration::{GAME_BEHAVIOR, GameBehavior};
 use crate::course::{Course, Phase};
+use crate::race::last_spurt::*;
 use crate::race::parameters::*;
 use crate::race::solver::RaceSolver;
 use crate::uma::skill::*;
@@ -153,4 +154,103 @@ fn test_wiz_limit_break_ignores_plain_current_speed() {
     let (_, current_speed, _) =
         activate_on_high_wiz_runner(speed_skill(SkillRarity::Gold, SkillType::CurrentSpeed));
     assert!((current_speed - 0.35).abs() < EPSILON);
+}
+
+#[test]
+fn test_stamina_limit_break_distance_factor() {
+    let is_mecha_uma = GAME_BEHAVIOR >= GameBehavior::MechaUmaUpdate;
+    for distance in (1000..=3600).step_by(100) {
+        let expected = match distance {
+            ..=2100 => 0.0,
+            2200 => 0.5,
+            2300..=2400 => 1.0,
+            2500..=2600 if is_mecha_uma => 1.5,
+            2500..=2600 => 1.2,
+            _ if is_mecha_uma => 1.8,
+            _ => 1.5,
+        };
+        assert_eq!(
+            stamina_limit_break_distance_factor(distance),
+            expected,
+            "distance {distance}"
+        );
+    }
+}
+
+#[test]
+fn test_stamina_limit_break_base_buff() {
+    let enabled = GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary;
+    assert_eq!(stamina_limit_break_base_buff(1000, 2400), 0.0);
+    assert_eq!(stamina_limit_break_base_buff(1200, 2400), 0.0);
+    assert_eq!(stamina_limit_break_base_buff(1600, 2100), 0.0);
+    let expected = if enabled { 10.0 * 0.0085 } else { 0.0 };
+    assert!((stamina_limit_break_base_buff(1300, 2400) - expected).abs() < EPSILON);
+}
+
+/// Build a single high-stamina runner on a long course, in its last spurt with
+/// the given current speed and a last spurt speed of 20 m/s.
+fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
+    let course = Course::from_json_file("data/course_data.json", "10105")
+        .expect("Failed to load course data");
+    let params = RaceParameters {
+        track_condition: TrackCondition::Firm,
+        weather: Weather::Sunny,
+        season: Season::Spring,
+        time: Time::None,
+        grade: Grade::G1,
+        gates: 9,
+        rng_seed: 42,
+    };
+    let uma = Uma {
+        speed: 1200,
+        stamina: 1600,
+        power: 1000,
+        guts: 800,
+        wiz: 1000,
+        style: Style::Pace,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    };
+
+    let mut solver = RaceSolver::new(course, params);
+    solver.add_runner(uma, Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    let base_speed = solver.state.course.base_speed();
+    let runner = &mut solver.runners[0];
+
+    runner.position = 2000.0;
+    runner.speed = speed;
+    runner.last_spurt = Some(LastSpurt {
+        max_speed: 20.0,
+        target_distance: 1950.0,
+        category: LastSpurtCategory::Full,
+    });
+    runner.update_target_speed(base_speed);
+    let buff = runner.stamina_limit_break;
+
+    // Buff must persist even if the last spurt is gone (e.g. HP recalculation)
+    runner.last_spurt = None;
+    runner.update_target_speed(base_speed);
+    assert_eq!(runner.stamina_limit_break, buff);
+
+    (buff, runner.stamina_limit_break_base)
+}
+
+#[test]
+fn test_stamina_limit_break_activates_at_last_spurt_speed() {
+    let (buff, base) = run_stamina_limit_break_runner(20.0);
+    if GAME_BEHAVIOR >= GameBehavior::TwoPointFiveAnniversary {
+        assert!(base > 0.0);
+        assert_eq!(buff, base);
+    } else {
+        assert_eq!(base, 0.0);
+        assert_eq!(buff, 0.0);
+    }
+}
+
+#[test]
+fn test_stamina_limit_break_waits_for_last_spurt_speed() {
+    let (buff, _) = run_stamina_limit_break_runner(19.9);
+    assert_eq!(buff, 0.0);
 }

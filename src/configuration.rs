@@ -7,6 +7,10 @@ pub enum GameBehavior {
     FirstAnniversary,
     /// After the 1.5 anniversary update in Japan
     OnePointFiveAnniversary,
+    /// After the 2.5 anniversary update in Japan
+    TwoPointFiveAnniversary,
+    /// After the Mecha Umamusume scenario release in Japan (2024-10-29)
+    MechaUmaUpdate,
     /// After the 5th anniversary update in Japan
     FifthAnniversary,
 }
