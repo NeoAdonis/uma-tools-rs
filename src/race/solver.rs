@@ -223,7 +223,11 @@ impl RaceSolver<Runner> {
             }
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, &self.state);
-            runner.update_slope(&self.state.course.slopes, delta_time, &mut *self.state.rng.borrow_mut());
+            runner.update_slope(
+                &self.state.course.slopes,
+                delta_time,
+                &mut *self.state.rng.borrow_mut(),
+            );
             runner.check_window_triggers(&self.state); // Distance, time, HP windows
             runner.check_activation_dependent_triggers(&self.state);
             runner.extract_buff_activations(&mut self.state);

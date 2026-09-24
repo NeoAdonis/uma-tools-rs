@@ -365,11 +365,15 @@ impl VarType {
 
             // Random Phase
             "phase_corner_random" => RandomPhase(RandomPhaseVar::PhaseCornerRandom),
-            "phase_first_half_straight_random" => RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom),
+            "phase_first_half_straight_random" => {
+                RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom)
+            }
             "phase_firsthalf_random" => RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom),
             "phase_firstquarter_random" => RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom),
             "phase_laterhalf_random" => RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom),
-            "phase_latter_half_straight_random" => RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom),
+            "phase_latter_half_straight_random" => {
+                RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom)
+            }
             "phase_random" => RandomPhase(RandomPhaseVar::PhaseRandom),
             "phase_straight_random" => RandomPhase(RandomPhaseVar::PhaseStraightRandom),
 

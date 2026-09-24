@@ -4,9 +4,9 @@ pub mod modifiers;
 pub mod parameters;
 pub mod popularity;
 pub mod runner;
-pub mod unready_runner;
 pub mod solver;
 pub mod transitions;
+pub mod unready_runner;
 
 #[cfg(test)]
 mod tests;
