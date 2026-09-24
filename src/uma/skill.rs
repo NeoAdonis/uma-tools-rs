@@ -52,7 +52,7 @@ pub enum SkillType {
     ActivateSympathy = 41,
     /// Extend evolved skill duration.
     ExtendEvolvedDuration = 42,
-    /// Modify acceleration during Full-throttle spurt (5th Anniv. onward).
+    /// Modify acceleration during Full-throttle spurt (5th Anniversary onward).
     AccelerationFullThrottle = 48,
 }
 
@@ -120,9 +120,13 @@ pub struct SkillEffect {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
+    /// Base duration before any modifiers in 10000ths of a second.
     pub base_duration: i32,
+    /// Condition string that determines when this alternative can be triggered.
     pub condition: String,
+    /// List of effects that this alternative applies when triggered.
     pub effects: Vec<SkillEffect>,
+    /// Precondition that must be satisfied before this alternative can be considered.
     pub precondition: String,
 }
 
@@ -146,8 +150,11 @@ impl std::ops::Deref for Skill {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillData {
+    /// Skill rarity.
     pub rarity: SkillRarity,
+    /// Skill alternatives, each with its own conditions and effects.
     pub alternatives: Vec<SkillAlternative>,
+    /// Whether this skill requires a wisdom check to activate.
     #[serde_as(as = "BoolFromInt")]
     pub wisdom_check: bool,
 }

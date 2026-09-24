@@ -4,7 +4,7 @@ use crate::trigger::skill_activation::{SkillActivationLogic, WindowVariable};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-/// Main scheduler coordinating all trigger types
+/// Main scheduler coordinating all trigger types.
 ///
 /// This scheduler stores `SkillActivationLogic` which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
@@ -68,7 +68,7 @@ impl Default for TriggerScheduler {
 
 // ========== MONOTONIC TRIGGERS (Priority Queue Based) ==========
 
-/// Triggers based on elapsed time (monotonic increasing)
+/// Trigger based on elapsed time (monotonic increasing).
 #[derive(Clone, Debug)]
 pub struct TimeTrigger {
     pub threshold_seconds: f64,
@@ -100,7 +100,7 @@ impl PartialEq for TimeTrigger {
 
 impl Eq for TimeTrigger {}
 
-/// Triggers based on distance (both remaining and covered)
+/// Trigger based on distance (both remaining and covered).
 #[derive(Clone, Debug)]
 pub struct DistanceTrigger {
     pub threshold_meters: f64,
@@ -156,7 +156,7 @@ impl PartialEq for DistanceTrigger {
 
 impl Eq for DistanceTrigger {}
 
-/// Triggers based on HP percentage (generally decreasing)
+/// Trigger based on HP percentage (generally decreasing).
 #[derive(Clone, Debug)]
 pub struct HpTrigger {
     pub threshold_percent: f64,
@@ -187,7 +187,7 @@ impl PartialEq for HpTrigger {
 
 impl Eq for HpTrigger {}
 
-/// Triggers based on phase transitions (monotonic increasing)
+/// Trigger based on phase transitions (monotonic increasing).
 #[derive(Clone, Debug)]
 pub struct PhaseTransitionTrigger {
     pub phase: Phase,
@@ -221,9 +221,9 @@ impl Eq for PhaseTransitionTrigger {}
 
 // ========== WINDOW TRIGGERS (Continuous Checking Within Range) ==========
 
-/// Window trigger: continuously checks skill within a value range
-/// Pattern: variable>=min & variable<=max
-/// More efficient than continuous triggers when we know the valid range
+/// Trigger that signals a continuous skill check within a value range
+/// (`variable>=min & variable<=max`).
+/// More efficient than continuous triggers when we know the valid range in advance.
 #[derive(Clone, Debug)]
 pub struct WindowTrigger {
     pub logic_idx: usize,
@@ -234,9 +234,10 @@ pub struct WindowTrigger {
 
 // ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
 
-/// Triggers when on specific straights
-/// Note: Only used for is_last_straight_onetime (one-time event trigger)
-/// Other spatial features (corners, slopes, regular straights) use Window triggers
+/// Triggers on specific straights.
+///
+/// Note: Only used for `is_last_straight_onetime` (one-time event trigger).
+/// Other spatial features (corners, slopes, regular straights) use [`WindowTrigger`]s.
 #[derive(Clone, Debug)]
 pub struct StraightTrigger {
     pub straight_index: usize,
@@ -258,7 +259,7 @@ pub struct ActivationCounts {
 }
 
 impl ActivationCounts {
-    /// Increment activation counts based on current phase and position
+    /// Increment activation counts based on current phase and position.
     pub fn increment(&mut self, phase: Phase, position: f64, section_length: f64) {
         self.all += 1;
 
@@ -278,12 +279,12 @@ impl ActivationCounts {
         }
     }
 
-    /// Increment heal skill count
+    /// Increment heal skill count.
     pub fn increment_heal(&mut self) {
         self.heal += 1;
     }
 
-    /// Increment team skill count (multi-uma stub)
+    /// Increment team skill count (multi-uma stub).
     pub fn _increment_team(&mut self) {
         // TODO: update when multi-uma is implemented
         self._all_team += 1;

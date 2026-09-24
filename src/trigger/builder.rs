@@ -11,8 +11,8 @@
 //! 1. **Parse condition** - Parse condition string into AST.
 //! 2. **Parse precondition** - Parse precondition string (if present).
 //! 3. **Pre-roll random triggers** - Determine random activation points.
-//! 4. **Split condition** - Separate triggers from guards using `split_condition()`.
-//! 5. **Create SkillActivationLogic** - Store triggers + guards + precondition.
+//! 4. **Split condition** - Separate triggers from guards using [`split_condition()`].
+//! 5. **Create [`SkillActivationLogic`]** - Store triggers + guards + precondition.
 //! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
 //! ## Example
@@ -53,14 +53,14 @@ use crate::uma::skill::*;
 use crate::units::furlongs_to_meters;
 use rand::Rng;
 
-/// Build a complete TriggerScheduler from a list of skills
+/// Build a complete TriggerScheduler from a list of skills.
 ///
 /// This uses trigger-guard separation. For each skill:
 ///
 /// 1. Pre-roll random triggers.
 /// 2. Parse precondition (if present).
 /// 3. Split condition into triggers + guards.
-/// 4. Create SkillActivationLogic (triggers + guards + precondition).
+/// 4. Create [`SkillActivationLogic`] (triggers + guards + precondition).
 /// 5. Index triggers into scheduler queues.
 /// 6. Initialize precondition tracking (locked/unlocked state).
 pub fn build_trigger_scheduler(
@@ -139,9 +139,9 @@ pub fn build_trigger_scheduler(
     scheduler
 }
 
-/// Index a trigger into the appropriate scheduler structure
+/// Index a trigger into the appropriate scheduler structure.
 ///
-/// Takes a trigger from SkillActivationLogic and adds it to the correct queue/list.
+/// Takes a trigger from [`SkillActivationLogic`] and adds it to the correct queue/list.
 /// The `logic_idx` is the index into `scheduler.skill_logics`.
 fn index_trigger(
     trigger: &TriggerCondition,

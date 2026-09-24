@@ -21,10 +21,10 @@
 //!
 //! **Guards** are evaluated ONLY when trigger fires.
 //!
-//!    - Represented as a flat list (`Vec<Comparison>`) - all of these must be true
+//!    - Represented as a flat list (`Vec<`[`Comparison``]`>`) - all of these must be true
 //!      for a skill to activate.
 //!    - OR operations are handled by splitting condition trees into separate
-//!      list (branches).
+//!      lists (branches).
 //!    - Can contain static guards - conditions that never change and can be
 //!      pre-evaluated before the race starts (e.g, ground type, running style).
 //!    - It can also contain dynamic guards - conditions to be evaluated at activation
@@ -489,7 +489,7 @@ fn split_comp_tree(
     }
 }
 
-/// Apply `MonotonicGuard` promotion rules:
+/// Apply monotonic guard promotion rules:
 ///
 /// 1. If there are explicit triggers (Random/Spatial/Window), keep them regardless
 ///    of guards.
@@ -574,16 +574,15 @@ fn promote_monotonic_guards(guards: &ComparisonList) -> (Vec<TriggerCondition>, 
     (promoted_triggers, remaining_guards)
 }
 
-/// Get the promotion priority for a monotonic variable.
+/// Get the promotion priority for a monotonic variable as follows:
+///
+/// - [`DistanceRate`](SpatialVar::DistanceRate): 3 (highest - most commonly used spatial trigger)
+/// - [`AccumulateTime`](VarType::AccumulateTime): 2 (medium - time-based progression)
+/// - [`HpPer`](StatusVar::HpPer): 1 (lowest - less predictable due to recovery)
+/// - Others: 0 (not promotable)
 ///
 /// Higher priority variables are preferred when promoting a single monotonic
 /// guard to a window trigger in the presence of dynamic guards.
-///
-/// Priority order:
-/// - DistanceRate: 3 (highest - most commonly used spatial trigger)
-/// - AccumulateTime: 2 (medium - time-based progression)
-/// - HpPercent: 1 (lowest - less predictable due to recovery)
-/// - Others: 0 (not promotable)
 fn get_promotion_priority(var: &VarType) -> i32 {
     use VarType::*;
     match var {
@@ -704,9 +703,9 @@ fn contains_dynamic_guard_in_list(guards: &ComparisonList) -> bool {
 
 /// Split a single comparison into trigger and guard.
 ///
-/// This function does NOT make promotion decisions for MonotonicGuard.
+/// This function does NOT make promotion decisions for monotonic guards.
 /// It treats them as guards by default. Promotion happens at a higher level
-/// in `split_comp_tree()` after analyzing all conditions together.
+/// in [`split_comp_tree()`] after analyzing all conditions together.
 fn split_single_comp(
     comp: &Comparison,
     random_activation: &[f64],

@@ -35,7 +35,7 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
     }
 }
 
-/// Apply stat boost effects to Uma stats
+/// Apply stat boost effects to an [`Uma`]'s stats.
 fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
     match effect_type {
         SkillType::SpeedUp => modify_stat(&mut uma.speed, modifier),
@@ -54,7 +54,7 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
     }
 }
 
-/// Apply start delay modification effects
+/// Apply start delay modification effects.
 fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType, modifier: i32) {
     match effect_type {
         SkillType::MultiplyStartDelay => {
@@ -67,7 +67,7 @@ fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType
     }
 }
 
-/// Modify a stat value, ensuring it doesn't go below 1
+/// Modify a stat value, ensuring it doesn't go below 1.
 fn modify_stat(stat: &mut u16, modifier: i32) {
     *stat = if modifier >= 0 {
         stat.saturating_add(modifier as u16)
@@ -76,13 +76,13 @@ fn modify_stat(stat: &mut u16, modifier: i32) {
     };
 }
 
-/// Check if an effect type is a rush chance effect
+/// Check if an effect type is a rush chance effect.
 #[inline]
 pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
     matches!(effect_type, SkillType::RushChanceUp)
 }
 
-/// A data structure that holds all information needed to initialize a Runner.
+/// A data structure that holds all information needed to initialize a [`Runner`].
 /// It allows for proper activation of out-of-gate skills that can take into
 /// account the runner's base stats, race parameters, and most importantly,
 /// data about other runners.
@@ -135,7 +135,7 @@ pub struct UnreadyRunner {
 }
 
 impl UnreadyRunner {
-    /// Create a new RunnerBuilder with initial values
+    /// Create a new runner with initial values not yet ready for simulation.
     pub(crate) fn new(
         uma: Uma,
         gate_roll: u8,
@@ -151,7 +151,7 @@ impl UnreadyRunner {
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
 
-        // Calculate skill activation chance and determine whether skills can activate
+        // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills activate.
         // Thus, out-of-gate skills don't affect skill activation chance.
         let available_skills = skills
@@ -211,7 +211,7 @@ impl UnreadyRunner {
         }
     }
 
-    /// Apply a single out-of-gate skill's effects
+    /// Apply a single out-of-gate skill's effects.
     fn apply_out_of_gate_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
         let skill_id = skill.id.clone();
         let alternative = &skill.alternatives[alt_index];
@@ -297,7 +297,7 @@ impl UnreadyRunner {
         gate_roll + 1
     }
 
-    /// Apply all out-of-gate skills
+    /// Apply all out-of-gate skills.
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
         for (alt_index, skill) in skills.iter().enumerate() {
@@ -310,7 +310,7 @@ impl UnreadyRunner {
         }
     }
 
-    /// Build the final Runner with all modifications applied
+    /// Build the final [`Runner`] with all modifications applied.
     pub(crate) fn build(self, state: &RaceState) -> Runner {
         let course = &state.course;
         let game_behavior = state.config.game_behavior;

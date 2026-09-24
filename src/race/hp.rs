@@ -8,7 +8,7 @@ use crate::uma::Style;
 /// if it reaches 0.
 /// It's also used to get the distance at which her last spurt can start.
 pub struct HpState {
-    /// Current HP. It is set to `max_hp` at the start of the race and decreases
+    /// Current HP. It's set to `max_hp` at the start of the race and decreases
     /// over time. It can be restored by skills but cannot exceed `max_hp`.
     ///
     /// If HP reaches 0, the runner's maximum speed is greatly reduced.
@@ -75,18 +75,10 @@ pub fn hp_style_multiplier(style: Style) -> f64 {
 
 /// Calculate HP consumption per second.
 ///
-/// ## Arguments
+/// `status_modifier` is a multiplicative coefficient based on current status
+/// (e.g., rushed, pace-down, downhill). Should be 1.0 if no modifiers apply.
 ///
-/// - `current_speed` - Current speed of the runner in m/s
-/// - `state` - Reference to the race state
-/// - `phase` - Current phase of the race
-/// - `guts_stat` - Guts stat of the runner
-/// - `status_modifier` - Multiplicative modifier based on current status (e.g.,
-///   rushed, pace-down, downhill). Should be 1.0 if no modifiers apply.
-///
-/// ## Returns
-///
-/// HP consumed per second traveled at the given speed.
+/// Returns the HP consumed per second traveled at the given speed.
 pub fn calculate_hp_per_second(
     current_speed: f64,
     course: &Course,
@@ -110,19 +102,10 @@ pub fn calculate_hp_per_second(
 
 /// Calculate HP consumption per meter at a given speed during last spurt.
 ///
-/// This is useful for analytical calculations where you need to solve
-/// for distances based on available HP.
+/// This is useful for analytical calculations where you need to solve for
+/// distances based on available HP.
 ///
-/// ## Arguments
-///
-/// - `speed` - Speed in m/s
-/// - `course` - Course information
-/// - `track_condition` - Track condition
-/// - `guts_stat` - Guts stat of the runner
-///
-/// ## Returns
-///
-/// HP consumed per meter traveled at the given speed.
+/// Returns the HP consumed per meter traveled at the given speed.
 pub fn estimate_hp_per_meter_last_spurt(
     speed: f64,
     course: &Course,
@@ -142,17 +125,7 @@ pub fn estimate_hp_per_meter_last_spurt(
 
 /// Estimate HP consumption at a given speed over a distance during last spurt.
 ///
-/// ## Arguments
-///
-/// - `speed` - Speed in m/s
-/// - `course` - Course information
-/// - `track_condition` - Track condition
-/// - `distance` - Distance to be covered in meters
-/// - `guts_stat` - Guts stat of the runner
-///
-/// ## Returns
-///
-/// HP consumed during last spurt.
+/// Returns the HP consumed during last spurt.
 pub fn estimate_hp_last_spurt(
     speed: f64,
     course: &Course,

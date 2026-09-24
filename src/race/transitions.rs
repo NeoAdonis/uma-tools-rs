@@ -1,6 +1,6 @@
 use crate::course::geometry::*;
 
-/// Manages corner entry/exit detection
+/// Structure used for corner entry/exit operations.
 pub struct CornerManager {
     current_corner: Option<usize>,
 }
@@ -12,7 +12,7 @@ impl CornerManager {
         }
     }
 
-    /// Check for corner entry, returns corner index if entered
+    /// Check for corner entry, returns corner index if entered.
     pub fn check_entry(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
         if self.current_corner.is_some() {
             return None; // Already in a corner
@@ -27,7 +27,7 @@ impl CornerManager {
         None
     }
 
-    /// Check for corner exit, returns corner index if exited
+    /// Check for corner exit, returns corner index if exited.
     pub fn check_exit(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
         if let Some(idx) = self.current_corner {
             let corner = &corners[idx];
@@ -39,7 +39,7 @@ impl CornerManager {
         None
     }
 
-    /// Get the current corner index if in a corner
+    /// Get the current corner index if in a corner.
     pub fn current_corner(&self) -> Option<usize> {
         self.current_corner
     }
@@ -51,7 +51,7 @@ impl Default for CornerManager {
     }
 }
 
-/// Manages slope entry/exit detection
+/// Structure used for slope entry/exit operations.
 pub struct SlopeManager {
     current_slope: Option<usize>,
 }
@@ -63,7 +63,7 @@ impl SlopeManager {
         }
     }
 
-    /// Check for slope entry, returns (slope index, slope type) if entered
+    /// Check for slope entry, returns (slope index, slope type) if entered.
     pub fn check_entry(&mut self, position: f64, slopes: &[Slope]) -> Option<(usize, SlopeType)> {
         if self.current_slope.is_some() {
             return None; // Already on a slope
@@ -79,7 +79,7 @@ impl SlopeManager {
         None
     }
 
-    /// Check for slope exit, returns slope index if exited
+    /// Check for slope exit, returns slope index if exited.
     pub fn check_exit(&mut self, position: f64, slopes: &[Slope]) -> Option<usize> {
         if let Some(idx) = self.current_slope {
             let slope = &slopes[idx];
@@ -91,7 +91,7 @@ impl SlopeManager {
         None
     }
 
-    /// Get the current slope index if on a slope
+    /// Get the current slope index if on a slope.
     pub fn current_slope(&self) -> Option<usize> {
         self.current_slope
     }
@@ -103,7 +103,7 @@ impl Default for SlopeManager {
     }
 }
 
-/// Manages straight entry/exit detection
+/// Structure used for straight entry/exit operations.
 pub struct StraightManager {
     current_straight: Option<usize>,
 }
@@ -115,7 +115,7 @@ impl StraightManager {
         }
     }
 
-    /// Check for straight entry, returns straight index if entered
+    /// Check for straight entry, returns straight index if entered.
     pub fn check_entry(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
         if self.current_straight.is_some() {
             return None; // Already in a straight
@@ -130,7 +130,7 @@ impl StraightManager {
         None
     }
 
-    /// Check for straight exit, returns straight index if exited
+    /// Check for straight exit, returns straight index if exited.
     pub fn check_exit(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
         if let Some(idx) = self.current_straight {
             let straight = &straights[idx];
@@ -142,7 +142,7 @@ impl StraightManager {
         None
     }
 
-    /// Get the current straight index if in a straight
+    /// Get the current straight index if in a straight.
     pub fn current_straight(&self) -> Option<usize> {
         self.current_straight
     }

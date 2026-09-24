@@ -8,18 +8,18 @@
 //!
 //! ## Architecture
 //!
-//! Conditions are parsed into tree structures (`Condition` -> `ComparisonTree` ->
-//! `Comparison`) and evaluated recursively:
+//! Conditions are parsed into tree structures ([`Condition`] -> [`ComparisonTree`] ->
+//! [`Comparison`]) and evaluated recursively:
 //!
 //! - **Binary operators**: AND (&) and OR (@) with short-circuit evaluation.
 //! - **Leaf comparisons**: Variable operator value (e.g., `hp_per <= 50`).
 //!
-//! The `CompEvaluator` trait abstracts the evaluation context, allowing different
-//! implementations for various scenarios. For instance, `EvaluatorFull` uses
-//! actual race state and runner data, while `EvaluatorOutOfGate` uses only
+//! The [`CompEvaluator`] trait abstracts the evaluation context, allowing different
+//! implementations for various scenarios. For instance, [`EvaluatorFull`] uses
+//! actual race state and runner data, while [`EvaluatorOutOfGate`] uses only
 //! data available before the race starts to evaluate out-of-gate conditions.
 //!
-//! Each `Comparison` is evaluated separately, allowing an evaluator to
+//! Each [`Comparison`] is evaluated separately, allowing an evaluator to
 //! either fetch real-time values, simulate expected values, or even override
 //! certain comparison results for hypothetical scenarios. The latter two might be
 //! required if, for some reason, all variables needed for a condition are not
@@ -29,11 +29,11 @@
 //! ## Variable Access
 //!
 //! It's up to the evaluator implementation to fetch/provide variable values.
-//! However, common variable retrieval logic is provided via the `get_variable_value()`
+//! However, common variable retrieval logic is provided via the [`get_variable_value()`]
 //! function.
 //!
-//! `get_variable_value()` maps ~150+ condition variables to their current runtime
-//! values from `RaceState` or `Runner`. Variables are grouped by categories, each with
+//! [`get_variable_value()`] maps ~150+ condition variables to their current runtime
+//! values from [`RaceState`] or [`Runner`]. Variables are grouped by categories, each with
 //! their own set of parameters required for evaluation. To mention a few:
 //!
 //! - **Race-level**: elapsed time, course properties, race parameters.
@@ -42,13 +42,13 @@
 //!   during race updates, then stored either as race-level or runner-level values
 //!   depending on their nature.
 //!
-//! A similar function, `get_variable_value_out_of_gate()`, is provided for
-//! out-of-gate evaluations, which only uses data available before the race starts.
+//! A similar function, [`get_variable_value_out_of_gate()`], is provided for
+//! out-of-gate evaluations, which only uses data available before a race starts.
 //!
 //! ## Float Handling
 //!
 //! All comparisons use integer values. Float variables (HP, position, percentages)
-//! are converted using `.floor()` for consistent rounding behavior.
+//! are converted using [`f64::floor()`] for consistent rounding behavior.
 //!
 //! ## Unimplemented Variables
 //!
@@ -76,7 +76,7 @@ use crate::units::*;
 /// Evaluate a guard condition (tree structure) against current race state.
 ///
 /// **IMPORTANT**: This should ONLY be called with preconditions that may contain OR.
-/// For guards (which are flat AND conjunctions), use `evaluate_comparison_list()` instead.
+/// For guards (which are flat AND conjunctions), use [`evaluate_comparison_list()`] instead.
 ///
 /// Trigger variables (random gates, monotonic triggers, onetime events) will
 /// cause a panic if they reach this evaluator.
@@ -198,10 +198,10 @@ where
 ///
 /// # Examples
 ///
-/// - `EvaluatorFull`: Uses actual race state and runner data as defined by `RaceState`
-///   and `Runner`.
-/// - `EvaluatorOutOfGate`: Uses only data available before a race starts as defined by
-///   `RaceState` and `RunnerBuilder`.
+/// - [`EvaluatorFull`]: Uses actual race state and runner data as defined by [`RaceState`]
+///   and [`Runner`].
+/// - [`EvaluatorOutOfGate`]: Uses only data available before a race starts as defined by
+///   [`RaceState`] and [`UnreadyRunner`].
 pub trait CompEvaluator {
     type State;
     type Context;
@@ -292,7 +292,7 @@ impl CompEvaluator for EvaluatorFull {
     }
 }
 
-/// Evaluator for out-of-gate context (before race starts).
+/// Evaluator for out-of-gate context (before a race starts).
 pub struct EvaluatorOutOfGate;
 impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
@@ -344,7 +344,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
     }
 }
 
-/// Get current integer value for any variable type
+/// Get current integer value for any variable type.
 fn get_variable_value(
     var: &VarType,
     state: &RaceState,
@@ -378,7 +378,7 @@ fn get_variable_value(
     }
 }
 
-/// Get current integer value for any variable type in out-of-gate context
+/// Get current integer value for any variable type in out-of-gate context.
 fn get_variable_value_out_of_gate(
     var: &VarType,
     state: &RaceState,
@@ -396,7 +396,7 @@ fn get_variable_value_out_of_gate(
     }
 }
 
-/// Get base stat value
+/// Get base stat value.
 fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
     use StatKind::*;
     match stat {
@@ -408,7 +408,7 @@ fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
     }
 }
 
-/// Get values related to distance between runners
+/// Get values related to distance between runners.
 fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
     use DistanceVar::*;
     match var {
@@ -420,7 +420,7 @@ fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get phase-related values
+/// Get phase-related values.
 fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     use PhaseVar::*;
 
@@ -456,7 +456,7 @@ fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     }
 }
 
-/// Get course-related values
+/// Get course-related values.
 fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
     use CourseVar::*;
 
@@ -487,7 +487,7 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
     }
 }
 
-/// Get location-related values
+/// Get location-related values.
 fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
     use SpatialVar::*;
 
@@ -593,7 +593,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
     }
 }
 
-/// Get race parameter values
+/// Get race parameter values.
 fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     use RaceParamVar::*;
 
@@ -628,7 +628,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     }
 }
 
-/// Get activation counter values
+/// Get activation counter values.
 fn get_activation_value(
     var: &ActivationVar,
     runner: &Runner,
@@ -685,7 +685,7 @@ fn get_activation_value(
     }
 }
 
-/// Get running style values
+/// Get running style values.
 fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
     use RunningStyleVar::*;
     let my_style = my_style.base_style();
@@ -724,7 +724,7 @@ fn get_style_temptation_opponent_count(state: &RaceState, style: Style, my_style
     get_style_temptation_count(state, style) - (my_style == style) as i32
 }
 
-/// Get initial state values
+/// Get initial state values.
 fn get_initial_state_value(var: &InitialStateVar, state: &InitialState) -> i32 {
     use InitialStateVar::*;
 
@@ -740,7 +740,7 @@ fn get_initial_state_value(var: &InitialStateVar, state: &InitialState) -> i32 {
     }
 }
 
-/// Get status values (HP, last spurt, continuous checks)
+/// Get status values (HP, last spurt, continuous checks).
 fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     use StatusVar::*;
 
@@ -787,7 +787,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get rank-related values
+/// Get rank-related values.
 fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     use OrderVar::*;
 
@@ -814,7 +814,7 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get blocking values
+/// Get blocking values.
 fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     use BlockingVar::*;
 
@@ -843,7 +843,7 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get temptation/rush values of other umas
+/// Get temptation/rush values of other umas.
 fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     use TemptationVar::*;
 
@@ -904,12 +904,14 @@ pub fn check_static_guards(
 /// Evaluate a single comparison for static guard checking.
 ///
 /// Returns true if:
-/// - The variable is runtime-only (assumed possible to satisfy)
-/// - The variable is static and the comparison evaluates to true
-/// - The variable is popularity (special case to avoid circular dependency)
+///
+/// - The variable is runtime-only (assumed possible to satisfy).
+/// - The variable is static and the comparison evaluates to true.
+/// - The variable is popularity (special case to avoid circular dependency).
 ///
 /// Returns false if:
-/// - The variable is static and the comparison evaluates to false
+///
+/// - The variable is static and the comparison evaluates to false.
 pub fn evaluate_static_comparison(
     comp: &Comparison,
     state: &RaceState,

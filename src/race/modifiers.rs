@@ -25,7 +25,7 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
     }
 }
 
-/// Wiz multiplier for the Wiz Limit Break buff (5th Anniv. onward).
+/// Wiz multiplier for the Wiz Limit Break buff (5th Anniversary onward).
 ///
 /// Zero at 1200 wiz or below; it then grows in brackets up to a maximum of 1.12.
 pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
@@ -39,7 +39,7 @@ pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
     }
 }
 
-/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniv. onward).
+/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniversary onward).
 pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         (Style::Front | Style::Runaway, Phase::Early) => 0.26,
@@ -58,7 +58,7 @@ pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     }
 }
 
-/// Distance factor for the Stamina Limit Break buff (2.5 Anniv. onward).
+/// Distance factor for the Stamina Limit Break buff (2.5 Anniversary onward).
 pub fn stamina_limit_break_distance_factor(distance: i32, game_behavior: GameBehavior) -> f64 {
     let is_mecha_uma = game_behavior >= GameBehavior::MechaUmaUpdate;
     match distance {
@@ -72,9 +72,10 @@ pub fn stamina_limit_break_distance_factor(distance: i32, game_behavior: GameBeh
     }
 }
 
-/// Stamina Limit Break target speed buff in m/s, without its random factor.
+/// Stamina Limit Break target speed buff in m/s, without its random factor
+/// (2.5 Anniversary onward).
 ///
-/// Zero before 2.5 Anniv., at 1200 stamina or below, or on courses up to 2100m.
+/// Zero at 1200 stamina or below, or on courses up to 2100m.
 pub fn stamina_limit_break_base_buff(
     stamina: u16,
     distance: i32,

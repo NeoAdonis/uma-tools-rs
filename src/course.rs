@@ -199,7 +199,7 @@ impl Course {
     }
 
     /// Get the length of a single section in meters.
-    /// There are 24 sections in a course.
+    /// There are 24 equally-sized sections in a course.
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / 24.0
     }
@@ -281,16 +281,8 @@ impl Course {
         self.width() / 18.0
     }
 
-    /// Get the track name in the specified language.
-    ///
-    /// # Arguments
-    ///
-    /// - `language` - Desired language.
-    ///
-    /// # Returns
-    ///
-    /// - `Some(&'static str)` - The track name if available in the specified language.
-    /// - `None` - If the track name is not available in the specified language.
+    /// Get the track name in the specified language, or `None` if the track name is not
+    /// available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         get_track_name(self.race_track_id, language)
     }

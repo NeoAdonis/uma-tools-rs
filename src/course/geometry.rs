@@ -31,7 +31,7 @@ pub struct Slope {
 }
 
 impl Slope {
-    /// Create a new Slope for testing purposes
+    /// Create a new Slope for testing purposes.
     #[cfg(test)]
     pub fn new(start: f64, length: f64, slope: i32) -> Self {
         Slope {

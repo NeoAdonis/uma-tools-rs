@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Variable types used in conditions
+/// Variable types used in conditions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VarType {
     /// Variable representing accumulated (elapsed) time.
@@ -37,7 +37,7 @@ pub enum VarType {
     Blocking(BlockingVar),
     /// Variables related to Rush (Temptation) mechanics.
     Temptation(TemptationVar),
-    /// Special constant that is always true.
+    /// Special value that is always true.
     Always,
     /// Fallback type for unknown variables.
     Unknown(String),
@@ -315,6 +315,7 @@ impl_display_snake_case!(BlockingVar);
 impl_display_snake_case!(TemptationVar);
 
 impl VarType {
+    /// Parse a variable name string into a [`VarType`].
     pub fn parse(s: &str) -> Self {
         use VarType::*;
 
@@ -553,7 +554,7 @@ pub enum VariableRole {
     /// A trigger that fires at a random location. The activation point should be
     /// pre-determined before race start.
     ///
-    /// Examples: phase_random==1, is_finalcorner_random==1, corner_random==2
+    /// Examples: `phase_random==1`, `is_finalcorner_random==1`, `corner_random==2`
     RandomTrigger,
 
     /// A variable whose value can only increase OR decrease, but not both.
@@ -566,39 +567,39 @@ pub enum VariableRole {
     ///   opposite (e.g. distance_rate<=50), it acts as CONTINUOUS, meaning that the
     ///   underlying condition must be continuously checked.
     ///
-    /// Examples: hp_per<=50, accumulatetime>=5, distance_rate>=50
+    /// Examples: `hp_per<=50`, `accumulatetime>=5`, `distance_rate>=50`
     MonotonicGuard,
 
     /// Phase transition trigger - fires when entering new phase.
     ///
-    /// Example: phase>=2
+    /// Example: `phase>=2`
     PhaseTrigger,
 
     /// Spatial trigger - fires when entering/exiting course features.
     ///
-    /// Examples: corner!=0, slope==1, is_last_straight==1
+    /// Examples: `corner!=0`, `slope==1`, `is_last_straight==1`
     SpatialTrigger,
 
     /// Activation trigger - fires when a skill is activated.
     ///
-    /// Examples: is_activate_any_skill==1, is_heal_skill_activated==1
+    /// Examples: `is_activate_any_skill==1`, `is_heal_skill_activated==1`
     ActivationTrigger,
 
     /// A variable whose value never changes during race. Therefore,
     /// it can be evaluated just once at race start.
     ///
-    /// Examples: ground_type==2, running_style==1, motivation>=4
+    /// Examples: `ground_type==2`, `running_style==1`, `motivation>=4`
     StaticGuard,
 
     /// A variable whose value can change during race.
     /// Must be checked when a trigger fires.
     ///
-    /// Examples: order<=3, is_lastspurt==1, blocked_side_continuetime>=2
+    /// Examples: `order<=3`, `is_lastspurt==1`, `blocked_side_continuetime>=2`
     DynamicGuard,
 }
 
 impl VarType {
-    /// Classify variable role for trigger-guard separation
+    /// Classify variable role for trigger-guard separation.
     pub fn variable_role(&self) -> VariableRole {
         use VarType::*;
         use VariableRole::*;

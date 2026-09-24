@@ -6,7 +6,7 @@ use crate::course::Course;
 use crate::course::Phase as CoursePhase;
 use rand::prelude::*;
 
-/// Evaluate all random variables in a condition
+/// Evaluate all random variables in a condition.
 pub fn roll_condition(
     condition: &Condition,
     course: &Course,
@@ -15,10 +15,10 @@ pub fn roll_condition(
     visit_comps(&condition.comp_tree, course, rng)
 }
 
-/// Visit all comparisons in a list and process random variables
+/// Visit all comparisons in a list and process random variables.
 ///
-/// Returns Some(activation_distances) indicating where the skill should activate,
-/// or None if a random lot roll failed or a condition within the list is invalid
+/// Returns `Some(activation_distances)` indicating where the skill should activate,
+/// or `None` if a random lot roll failed or a condition within the list is invalid.
 fn visit_comps(
     comp_tree: &ComparisonTree,
     course: &Course,
@@ -53,10 +53,10 @@ fn visit_comps(
     }
 }
 
-/// Process a single comparison that might contain a random variable
+/// Process a single comparison that might contain a random variable.
 ///
-/// Returns Some(activation_distances) indicating where the skill should activate,
-/// or None if a random lot roll failed or a condition is invalid
+/// Returns `Some(activation_distances)` indicating where the skill should activate,
+/// or `None` if a random lot roll failed or a condition is invalid.
 pub fn process_random_comp(
     comp: &Comparison,
     course: &Course,
@@ -312,24 +312,28 @@ pub fn process_random_comp(
     }
 }
 
-/// Calculate intersection of two intervals [a_start, a_end] and [b_start, b_end]
-/// Returns Some((start, end)) if there's an intersection, None otherwise
+/// Calculate intersection of two intervals `[a_start, a_end]` and `[b_start, b_end]`.
+/// Returns `Some((start, end))` if there's an intersection, `None` otherwise.
 fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Option<(f64, f64)> {
     let intersection_start = a_start.max(b_start);
     let intersection_end = a_end.min(b_end);
 
-    if intersection_start < intersection_end {
-        Some((intersection_start, intersection_end))
-    } else {
-        None
-    }
+    (intersection_start < intersection_end).then_some((intersection_start, intersection_end))
 }
 
-/// Pick a random point from a collection of intervals
-/// Returns the random point if intervals is non-empty
+/// Pick a random point from a collection of intervals. Intervals distances must be
+/// positive (i.e., `start < end`), otherwise the behavior is undefined.
+/// Returns `None` if the intervals are empty.
 fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Option<f64> {
     if intervals.is_empty() {
         return None;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        for &(start, end) in intervals {
+            assert!(start < end, "Interval start must be less than end");
+        }
     }
 
     // Calculate total length of all intervals
@@ -349,5 +353,5 @@ fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Op
         accumulated += interval_length;
     }
 
-    None
+    unreachable!("random_offset < total_length, so some interval must contain it");
 }
