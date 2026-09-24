@@ -1,6 +1,7 @@
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
+use serde_with::{BoolFromInt, serde_as};
 use std::collections::HashMap;
 
 /// Represents the type of skill effect.
@@ -51,6 +52,8 @@ pub enum SkillType {
     ActivateSympathy = 41,
     /// Extend evolved skill duration.
     ExtendEvolvedDuration = 42,
+    /// Modify acceleration during Full-throttle spurt (5th Anniv. onward).
+    AccelerationFullThrottle = 48,
 }
 
 /// Represents the rarity of a skill.
@@ -139,11 +142,14 @@ impl std::ops::Deref for Skill {
 }
 
 /// Represents the data of a skill.
+#[serde_as]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillData {
     pub rarity: SkillRarity,
     pub alternatives: Vec<SkillAlternative>,
+    #[serde_as(as = "BoolFromInt")]
+    pub wisdom_check: bool,
 }
 
 impl Skill {
@@ -238,6 +244,17 @@ impl Skill {
             self.rarity,
             SkillRarity::Unique | SkillRarity::UniqueUpgraded | SkillRarity::UniqueNatural
         )
+    }
+
+    /// Chance that this skill passes its pre-race activation check.
+    ///
+    /// Skills that don't require a wisdom check always pass; otherwise the chance
+    /// depends on the runner's base wisdom (minimum 20%).
+    pub fn activation_chance(&self, base_wiz: u16) -> f64 {
+        if !self.wisdom_check {
+            return 1.0;
+        }
+        (1.0 - 90.0 / base_wiz as f64).max(0.2)
     }
 
     /// Check if this skill should activate out of gate (before race begins).

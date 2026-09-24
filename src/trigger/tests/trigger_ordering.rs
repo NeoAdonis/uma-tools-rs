@@ -27,6 +27,7 @@ fn create_skill(id: &str, condition: &str, precondition: &str) -> Skill {
                     modifier: 4000,
                 }],
             }],
+            wisdom_check: true,
         },
     )
 }

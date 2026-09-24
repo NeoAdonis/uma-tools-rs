@@ -29,6 +29,7 @@ fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str)
                     modifier: 4000,
                 }],
             }],
+            wisdom_check: true,
         },
     )
 }
@@ -196,6 +197,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     }],
                 },
             ],
+            wisdom_check: true,
         },
     );
 

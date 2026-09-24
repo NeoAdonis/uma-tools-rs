@@ -29,6 +29,7 @@ fn create_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -> 
                     }],
                 })
                 .collect(),
+            wisdom_check: true,
         },
     )
 }

@@ -152,16 +152,11 @@ impl UnreadyRunner {
         // Calculate skill activation chance and determine whether skills can activate
         // N.B. As observed, skill activation update happens before out-of-gate skills activate.
         // Thus, out-of-gate skills don't affect skill activation chance.
-        let skill_chance = (1.0 - 90.0 / base_uma.wiz as f64).max(0.2);
         let available_skills = skills
             .into_iter()
             .filter(|skill| {
-                // Unique and green skills always activate
-                if skill.is_unique() || skill.is_green() {
-                    return true;
-                }
-                // Other skills activate based on chance
-                rng.borrow_mut().random_bool(skill_chance)
+                rng.borrow_mut()
+                    .random_bool(skill.activation_chance(base_uma.wiz))
             })
             .collect::<Vec<Skill>>();
 

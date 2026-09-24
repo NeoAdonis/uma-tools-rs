@@ -159,9 +159,6 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
         .chain(runner.runtime_skills.iter())
         .collect();
 
-    // Calculate activation chance based on base wisdom
-    let activation_chance = (1.0 - 90.0 / runner.base.wiz as f64).max(0.2);
-
     for skill in all_skills {
         // Skip skills that can't activate on this course
         if !skill.is_activable_on_course(state, runner) {
@@ -174,18 +171,11 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
             _ => 20.0,
         };
 
-        // Green and unique skills always activate (100% chance)
-        let skill_activation_chance = if skill.is_green() || skill.is_unique() {
-            1.0
-        } else {
-            activation_chance
-        };
-
         // Determine which stats this skill contributes to
         let contributions = categorize_skill_effects(skill);
 
-        // Add weighted points to each applicable stat
-        let weighted_points = base_points * skill_activation_chance;
+        // Add points to each applicable stat, weighted by activation chance
+        let weighted_points = base_points * skill.activation_chance(runner.base.wiz);
         if contributions.speed {
             added_speed += weighted_points;
         }
@@ -471,6 +461,7 @@ mod tests {
                         modifier: 100,
                     }],
                 }],
+                wisdom_check: true,
             },
         );
 
@@ -494,6 +485,7 @@ mod tests {
                         modifier: 50,
                     }],
                 }],
+                wisdom_check: true,
             },
         );
 
