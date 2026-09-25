@@ -17,10 +17,10 @@ fn load_course(course_id: u32) -> Course {
     let course_str = course_id.to_string();
     let _course_json = courses
         .get(&course_str)
-        .expect(&format!("Course {} not found", course_id));
+        .unwrap_or_else(|| panic!("Course {} not found", course_id));
 
     Course::from_json_str(&course_data, &course_str)
-        .expect(&format!("Failed to parse course {}", course_id))
+        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
 }
 
 // ============================================================================

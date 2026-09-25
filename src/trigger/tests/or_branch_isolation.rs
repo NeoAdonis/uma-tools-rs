@@ -42,10 +42,10 @@ fn load_course(course_id: u32) -> Course {
     let course_str = course_id.to_string();
     let _course_json = courses
         .get(&course_str)
-        .expect(&format!("Course {} not found", course_id));
+        .unwrap_or_else(|| panic!("Course {} not found", course_id));
 
     Course::from_json_str(&course_data, &course_str)
-        .expect(&format!("Failed to parse course {}", course_id))
+        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
 }
 
 // ============================================================================
@@ -218,8 +218,8 @@ fn test_or_branches_independent_activation_tracking() {
     );
 
     // But they are different objects with independent state tracking
-    assert_eq!(scheduler.skill_logics[0].state.has_activated, false);
-    assert_eq!(scheduler.skill_logics[1].state.has_activated, false);
+    assert!(!scheduler.skill_logics[0].state.has_activated);
+    assert!(!scheduler.skill_logics[1].state.has_activated);
 }
 
 // ============================================================================

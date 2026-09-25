@@ -49,10 +49,10 @@ fn load_course(course_id: u32) -> Course {
     let course_str = course_id.to_string();
     let _course_json = courses
         .get(&course_str)
-        .expect(&format!("Course {} not found", course_id));
+        .unwrap_or_else(|| panic!("Course {} not found", course_id));
 
     Course::from_json_str(&course_data, &course_str)
-        .expect(&format!("Failed to parse course {}", course_id))
+        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
 }
 
 // ============================================================================
@@ -144,8 +144,8 @@ fn test_heal_skill_activation_dependency() {
         );
 
         // Both should start locked (precondition not satisfied)
-        assert_eq!(
-            scheduler.precondition_satisfied[idx], false,
+        assert!(
+            !scheduler.precondition_satisfied[idx],
             "Alternative {} should start locked",
             idx
         );
@@ -469,8 +469,8 @@ fn test_activation_dependency_with_precondition() {
     );
 
     // Should start locked
-    assert_eq!(
-        scheduler.precondition_satisfied[0], false,
+    assert!(
+        !scheduler.precondition_satisfied[0],
         "Should start with precondition locked"
     );
 

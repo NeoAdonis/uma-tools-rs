@@ -44,10 +44,10 @@ fn load_course(course_id: u32) -> Course {
     let course_str = course_id.to_string();
     let _course_json = courses
         .get(&course_str)
-        .expect(&format!("Course {} not found", course_id));
+        .unwrap_or_else(|| panic!("Course {} not found", course_id));
 
     Course::from_json_str(&course_data, &course_str)
-        .expect(&format!("Failed to parse course {}", course_id))
+        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
 }
 
 // ============================================================================
@@ -104,8 +104,8 @@ fn test_precondition_with_window_trigger() {
         scheduler.precondition_satisfied.len(),
         scheduler.skill_logics.len()
     );
-    assert_eq!(
-        scheduler.precondition_satisfied[0], false,
+    assert!(
+        !scheduler.precondition_satisfied[0],
         "Skill with precondition should start locked"
     );
 }
@@ -141,8 +141,8 @@ fn test_precondition_with_or_condition() {
         );
 
         // All should start locked (precondition not satisfied)
-        assert_eq!(
-            scheduler.precondition_satisfied[idx], false,
+        assert!(
+            !scheduler.precondition_satisfied[idx],
             "Branch {} should start locked",
             idx
         );
@@ -213,8 +213,8 @@ fn test_multiple_alternatives_precondition_independence() {
         scheduler.skill_logics[0].precondition.is_some(),
         "First alternative should have precondition"
     );
-    assert_eq!(
-        scheduler.precondition_satisfied[0], false,
+    assert!(
+        !scheduler.precondition_satisfied[0],
         "First alternative should start locked"
     );
 
@@ -223,8 +223,8 @@ fn test_multiple_alternatives_precondition_independence() {
         scheduler.skill_logics[1].precondition.is_some(),
         "Second alternative should have precondition"
     );
-    assert_eq!(
-        scheduler.precondition_satisfied[1], false,
+    assert!(
+        !scheduler.precondition_satisfied[1],
         "Second alternative should start locked"
     );
 
@@ -233,8 +233,8 @@ fn test_multiple_alternatives_precondition_independence() {
         scheduler.skill_logics[2].precondition.is_none(),
         "Third alternative should not have precondition"
     );
-    assert_eq!(
-        scheduler.precondition_satisfied[2], true,
+    assert!(
+        scheduler.precondition_satisfied[2],
         "Third alternative should start unlocked"
     );
 

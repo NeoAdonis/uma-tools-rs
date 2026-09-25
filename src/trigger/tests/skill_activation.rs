@@ -910,15 +910,15 @@ fn test_or_branches_share_same_precondition() {
 
     // Verify both have phase>=2
     for (idx, logic) in [logic1, logic2].iter().enumerate() {
-        if let Some(precond) = &logic.precondition {
-            if let crate::parser::ComparisonTree::Single(comp) = &precond.comp_tree {
-                assert!(
-                    matches!(comp.var, crate::condition::variables::VarType::Phase(_)),
-                    "Branch {} should have phase precondition",
-                    idx
-                );
-                assert_eq!(comp.value, 2, "Branch {} should have phase>=2", idx);
-            }
+        if let Some(precond) = &logic.precondition
+            && let crate::parser::ComparisonTree::Single(comp) = &precond.comp_tree
+        {
+            assert!(
+                matches!(comp.var, crate::condition::variables::VarType::Phase(_)),
+                "Branch {} should have phase precondition",
+                idx
+            );
+            assert_eq!(comp.value, 2, "Branch {} should have phase>=2", idx);
         }
     }
 }
@@ -1005,20 +1005,20 @@ fn test_precondition_satisfied_array_initialization() {
 
     // Verify initialization values
     // skill1: has precondition → should start as false (locked)
-    assert_eq!(
-        scheduler.precondition_satisfied[0], false,
+    assert!(
+        !scheduler.precondition_satisfied[0],
         "Skill with precondition should start locked"
     );
 
     // skill2: no precondition → should start as true (unlocked)
-    assert_eq!(
-        scheduler.precondition_satisfied[1], true,
+    assert!(
+        scheduler.precondition_satisfied[1],
         "Skill without precondition should start unlocked"
     );
 
     // skill3: has precondition → should start as false (locked)
-    assert_eq!(
-        scheduler.precondition_satisfied[2], false,
+    assert!(
+        !scheduler.precondition_satisfied[2],
         "Skill with precondition should start locked"
     );
 }

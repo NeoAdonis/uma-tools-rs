@@ -125,14 +125,14 @@ fn test_phase_corner_random() {
 
         // Should be in Mid phase (400-1600)
         assert!(
-            dist >= 400.0 && dist <= 1600.0,
+            (400.0..=1600.0).contains(&dist),
             "Distance {} not in Mid phase range [400, 1600]",
             dist
         );
 
         // Should be in corner2 (500-650), which is the only corner overlapping with Mid
         assert!(
-            dist >= 500.0 && dist <= 650.0,
+            (500.0..=650.0).contains(&dist),
             "Distance {} not in corner2 segment [500, 650]",
             dist
         );
@@ -158,14 +158,14 @@ fn test_phase_straight_random() {
 
         // Should be in Early phase (0-400)
         assert!(
-            dist >= 0.0 && dist <= 400.0,
+            (0.0..=400.0).contains(&dist),
             "Distance {} not in Early phase range [0, 400]",
             dist
         );
 
         // Should be in straight segment [0-100] ∩ [0-400] = [0-100]
         assert!(
-            dist >= 0.0 && dist <= 100.0,
+            (0.0..=100.0).contains(&dist),
             "Distance {} not in straight segment [0, 100]",
             dist
         );
