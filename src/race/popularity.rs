@@ -129,7 +129,10 @@ fn categorize_skill_effects(skill: &Skill) -> StatContributions {
                     contributions.stamina = true;
                 }
                 // Power-altering skills (including Acceleration and FoV)
-                SkillType::PowerUp | SkillType::Acceleration | SkillType::Fov => {
+                SkillType::PowerUp
+                | SkillType::Acceleration
+                | SkillType::AccelerationFullThrottle
+                | SkillType::Fov => {
                     contributions.power = true;
                 }
                 // All stats up

@@ -130,6 +130,8 @@ pub enum RandomSpatialVar {
     DownSlopeRandom,
     IsFinalcornerRandom,
     LastStraightRandom,
+    /// Random point after Full-Throttle Sprint starts. Rolled during the race.
+    RunAtFullSpeedRandom,
     StraightRandom,
     UpSlopeRandom,
     UpSlopeRandomLaterHalf,
@@ -411,6 +413,7 @@ impl VarType {
             "down_slope_random" => RandomSpatial(RandomSpatialVar::DownSlopeRandom),
             "is_finalcorner_random" => RandomSpatial(RandomSpatialVar::IsFinalcornerRandom),
             "last_straight_random" => RandomSpatial(RandomSpatialVar::LastStraightRandom),
+            "run_at_full_speed_random" => RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom),
             "straight_random" => RandomSpatial(RandomSpatialVar::StraightRandom),
             "up_slope_random" => RandomSpatial(RandomSpatialVar::UpSlopeRandom),
             "up_slope_random_later_half" => RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf),
@@ -557,6 +560,12 @@ pub enum VariableRole {
     /// Examples: `phase_random==1`, `is_finalcorner_random==1`, `corner_random==2`
     RandomTrigger,
 
+    /// A trigger that fires at a random location which can only be determined
+    /// during the race.
+    ///
+    /// Example: `run_at_full_speed_random==1` (rolled when Full-Throttle Sprint starts)
+    DeferredRandomTrigger,
+
     /// A variable whose value can only increase OR decrease, but not both.
     /// In most cases, it should be treated as a guard, but it can act as a trigger
     /// depending on context.
@@ -608,6 +617,7 @@ impl VarType {
             // RANDOM GATES - Activate at pre-rolled location, check guards there
             Random(_) => RandomTrigger,
             RandomPhase(_) => RandomTrigger,
+            RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => DeferredRandomTrigger,
             RandomSpatial(_) => RandomTrigger,
 
             // MONOTONIC GUARDS - Can act as trigger or guard depending on context

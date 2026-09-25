@@ -202,6 +202,12 @@ pub fn process_random_comp(
                 .map(|activation_distance| vec![activation_distance])
         }
 
+        RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
+            // run_at_full_speed_random==1
+            // Rolled when Full-Throttle Sprint starts, since that can't be known in advance
+            Some(vec![])
+        }
+
         RandomSpatial(RandomSpatialVar::IsFinalcornerRandom) => {
             // is_finalcorner_random==1
             // Picks random point on final corner

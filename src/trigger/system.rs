@@ -31,6 +31,10 @@ pub struct TriggerScheduler {
     // Continuous triggers - checked every step (minimized)
     pub continuous_triggers: Vec<usize>,
 
+    // Deferred random triggers - scheduled as distance triggers once
+    // Full-Throttle Sprint starts
+    pub full_throttle_triggers: Vec<usize>,
+
     // Activation-dependent triggers - checked when skills activate
     pub any_activation_triggers: Vec<usize>,
     pub buff_activation_triggers: Vec<usize>,
@@ -52,6 +56,7 @@ impl TriggerScheduler {
             window_triggers: Vec::new(),
             straight_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
+            full_throttle_triggers: Vec::new(),
             any_activation_triggers: Vec::new(),
             buff_activation_triggers: Vec::new(),
             heal_activation_triggers: Vec::new(),

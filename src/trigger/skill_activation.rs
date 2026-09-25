@@ -166,6 +166,12 @@ pub enum TriggerCondition {
         is_onetime: bool, // true = one-time event
     },
 
+    // ========== DEFERRED RANDOM TRIGGERS ==========
+    /// Random point after Full-Throttle Sprint starts. The point is rolled when
+    /// the sprint starts and scheduled as a distance trigger.
+    /// Used for `run_at_full_speed_random==1` conditions.
+    FullThrottleStart,
+
     // ========== CONTINUOUS ==========
     /// Must be checked every frame.
     /// Used for conditions that can't be efficiently triggered.
@@ -732,6 +738,8 @@ fn split_single_comp(
                 (vec![trigger], vec![])
             }
         }
+
+        DeferredRandomTrigger => (vec![TriggerCondition::FullThrottleStart], vec![]),
 
         MonotonicGuard => {
             // MonotonicGuard: can be trigger OR guard depending on context

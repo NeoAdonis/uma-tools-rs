@@ -369,6 +369,10 @@ fn get_variable_value(
         AccumulateTime => state.elapsed_time.floor() as i32,
         Always => 1,     // Always returns 1 (true)
         Unknown(_) => 0, // Default to 0
+        // Normally a trigger; evaluates to whether Full-Throttle Sprint is active
+        RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
+            runner.full_throttle.is_active() as i32
+        }
         Random(_) | RandomSpatial(_) | RandomPhase(_) => {
             panic!(
                 "BUG: Random variable {:?} should not be evaluated - it's a trigger variable!",

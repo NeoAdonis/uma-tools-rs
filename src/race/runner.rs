@@ -9,6 +9,7 @@ use crate::condition::parser::CompOp;
 use crate::configuration::GameBehavior;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
+use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
@@ -18,7 +19,7 @@ use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::trigger::skill_activation::{ActiveTimedEffect, SkillActivationRecord, WindowVariable};
-use crate::trigger::system::TriggerScheduler;
+use crate::trigger::system::{DistanceTrigger, DistanceTriggerType, TriggerScheduler};
 use crate::uma::skill::*;
 use crate::uma::*;
 
@@ -31,6 +32,8 @@ pub struct SkillModifiers {
     pub current_speed: f64,
     /// Modifies acceleration. Positive values increase it.
     pub acceleration: f64,
+    /// Modifies Full-Throttle Sprint acceleration (listed value, before scaling).
+    pub full_throttle_acceleration: f64,
     /// Modifies lane movement speed. Positive values increase lane change speed.
     pub lane_speed: f64,
     /// Modifies visible distance. Positive values increase it.
@@ -48,6 +51,7 @@ impl Default for SkillModifiers {
             target_speed: 0.0,
             current_speed: 0.0,
             acceleration: 0.0,
+            full_throttle_acceleration: 0.0,
             lane_speed: 0.0,
             visible_distance: 0.0,
             target_lane: None,
@@ -55,6 +59,9 @@ impl Default for SkillModifiers {
         }
     }
 }
+
+/// Maximum speed a runner can reach in m/s.
+pub const MAX_SPEED: f64 = 30.0;
 
 /// Apply style change effects.
 #[inline]
@@ -104,6 +111,7 @@ pub fn is_timed_effect(effect_type: &SkillType) -> bool {
     matches!(
         effect_type,
         Acceleration
+            | AccelerationFullThrottle
             | TargetSpeed
             | CurrentSpeed
             | CurrentSpeedWithNaturalDeceleration
@@ -469,6 +477,12 @@ pub struct Runner {
     /// Active Stamina Limit Break target speed buff in m/s. It is set once the
     /// runner reaches its last spurt speed and lasts until the end of the race.
     pub stamina_limit_break: f64,
+    /// Full-Throttle Sprint (全開スパート) acceleration in m/s² before skill modifiers.
+    /// Calculated before race begins; zero if the runner is not eligible.
+    pub full_throttle_base: f64,
+    /// Full-Throttle Sprint state. It is activated once the runner reaches its
+    /// last spurt speed, and keeps increasing target speed until the end of the race.
+    pub full_throttle: FullThrottle,
     /// Reference to a `RaceSolver`'s Random Number Generator.
     /// It is shared with other runners.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
@@ -647,6 +661,22 @@ impl Runner {
         } else if !self.is_start_dash && self.speed < self.min_speed {
             self.speed = self.min_speed;
         }
+        self.speed = self.speed.min(MAX_SPEED);
+
+        // Full-Throttle Sprint keeps increasing target speed.
+        // It ignores the usual acceleration formula and acceleration skills.
+        if let FullThrottle::Active { speed_bonus } = &mut self.full_throttle {
+            let acceleration = self.full_throttle_base
+                + full_throttle::SKILL_SCALE * self.skill_modifiers.full_throttle_acceleration;
+            *speed_bonus += acceleration * delta_time;
+        }
+    }
+
+    /// Check if the runner is in her last spurt and has reached its speed.
+    fn has_reached_last_spurt_speed(&self) -> bool {
+        self.last_spurt.as_ref().is_some_and(|last_spurt| {
+            self.position >= last_spurt.target_distance && self.speed >= last_spurt.max_speed
+        })
     }
 
     /// Update target speed based on various factors.
@@ -689,12 +719,20 @@ impl Runner {
         // Stamina Limit Break is activated upon reaching last spurt speed (2.5 Anniv. onward)
         if self.stamina_limit_break == 0.0
             && self.stamina_limit_break_base > 0.0
-            && self.last_spurt.as_ref().is_some_and(|last_spurt| {
-                self.position >= last_spurt.target_distance && self.speed >= last_spurt.max_speed
-            })
+            && self.has_reached_last_spurt_speed()
         {
             self.stamina_limit_break = self.stamina_limit_break_base
                 * stamina_limit_break_random_factor(&mut *self.rng.borrow_mut());
+        }
+
+        // Full-Throttle Sprint is activated upon reaching last spurt speed (5th Anniv. onward)
+        if self.full_throttle == FullThrottle::Pending
+            && self.full_throttle_base > 0.0
+            && !self.hp.is_empty()
+            && self.has_reached_last_spurt_speed()
+        {
+            self.full_throttle = FullThrottle::Active { speed_bonus: 0.0 };
+            self.schedule_full_throttle_triggers(state);
         }
 
         // TODO: Also check if runner changed lanes on last frame
@@ -732,6 +770,30 @@ impl Runner {
             + struggle_modifier
             + secure_lead_modifier
             + self.stamina_limit_break
+            + self.full_throttle.speed_bonus()
+    }
+
+    /// Schedule skills triggered at a random point after the Full-Throttle Sprint
+    /// starts (`run_at_full_speed_random`). The point is picked between the
+    /// current position and the goal.
+    fn schedule_full_throttle_triggers(&mut self, state: &RaceState) {
+        let course_distance = state.course.distance as f64;
+        let mut rng = self.rng.borrow_mut();
+        for logic_idx in self.trigger_scheduler.full_throttle_triggers.drain(..) {
+            let threshold_meters = if self.position < course_distance {
+                rng.random_range(self.position..course_distance)
+            } else {
+                self.position
+            };
+            self.trigger_scheduler
+                .distance_triggers
+                .push(DistanceTrigger {
+                    threshold_meters,
+                    logic_idx,
+                    operator: CompOp::GreaterEqual,
+                    trigger_type: DistanceTriggerType::DistanceRate,
+                });
+        }
     }
 
     /// Update lane position towards target lane.
@@ -1072,6 +1134,12 @@ impl Runner {
         ) * delta_time;
         if self.hp.is_empty() {
             self.hp.has_emptied = true;
+            // Running out of HP during Full-Throttle Sprint drops speed to minimum
+            // immediately instead of decelerating (confirmed game bug)
+            if self.full_throttle.is_active() {
+                self.speed = self.min_speed;
+                self.full_throttle = FullThrottle::Ended;
+            }
         }
         // Exit dueling state if HP is below 5%
         if self.hp.percent() < 5.0 {
@@ -2477,6 +2545,9 @@ impl Runner {
             match timed.effect.skill_type {
                 Acceleration => {
                     mods.acceleration += timed.value;
+                }
+                AccelerationFullThrottle => {
+                    mods.full_throttle_acceleration += timed.value;
                 }
                 TargetSpeed => {
                     mods.target_speed += timed.value;

@@ -7,6 +7,7 @@ use rand::RngExt;
 use crate::configuration::GameBehavior;
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
+use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, hp_style_multiplier};
 use crate::race::modifiers::{roll_section_speed_modifier, stamina_limit_break_base_buff};
 use crate::race::popularity::JudgeScores;
@@ -427,6 +428,13 @@ impl UnreadyRunner {
                 game_behavior,
             ),
             stamina_limit_break: 0.0,
+            full_throttle_base: full_throttle::base_acceleration(
+                self.adjusted.speed,
+                self.adjusted.power,
+                course.distance,
+                game_behavior,
+            ),
+            full_throttle: FullThrottle::Pending,
             rng: self.rng,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),

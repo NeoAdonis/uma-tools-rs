@@ -273,6 +273,10 @@ fn index_trigger(
             }
         }
 
+        FullThrottleStart => {
+            scheduler.full_throttle_triggers.push(logic_idx);
+        }
+
         // Activation-dependent triggers
         AnySkillActivation => {
             if !scheduler.any_activation_triggers.contains(&logic_idx) {
