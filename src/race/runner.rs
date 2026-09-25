@@ -60,8 +60,8 @@ impl Default for SkillModifiers {
     }
 }
 
-/// Maximum speed a runner can reach in m/s.
-pub const MAX_SPEED: f64 = 30.0;
+/// Maximum target speed a runner can reach in m/s.
+pub const MAX_TARGET_SPEED: f64 = 30.0;
 
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
@@ -664,7 +664,9 @@ impl Runner {
         } else if !self.is_start_dash && self.speed < self.min_speed {
             self.speed = self.min_speed;
         }
-        self.speed = self.speed.min(MAX_SPEED);
+        // Cap speed along with target speed to avoid overshooting due to acceleration.
+        // ? Is overshooting allowed? Cap it for now to avoid spikes.
+        self.speed = self.speed.min(MAX_TARGET_SPEED);
 
         // Full-Throttle Sprint keeps increasing target speed.
         // It ignores the usual acceleration formula and acceleration skills.
@@ -763,7 +765,7 @@ impl Runner {
 
         let secure_lead_modifier = self.secure_lead.as_ref().map_or(0.0, |s| s.modifier);
 
-        self.target_speed = target_speed
+        self.target_speed = (target_speed
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
             + self.section_speed_modifier
@@ -773,7 +775,8 @@ impl Runner {
             + struggle_modifier
             + secure_lead_modifier
             + self.stamina_limit_break
-            + self.full_throttle.speed_bonus()
+            + self.full_throttle.speed_bonus())
+        .min(MAX_TARGET_SPEED)
     }
 
     /// Schedule skills triggered at a random point after the Full-Throttle Sprint

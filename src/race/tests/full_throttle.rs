@@ -3,7 +3,7 @@ use crate::course::Course;
 use crate::race::full_throttle::*;
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
-use crate::race::runner::{MAX_SPEED, Runner};
+use crate::race::runner::{MAX_TARGET_SPEED, Runner};
 use crate::race::solver::RaceSolver;
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::skill::*;
@@ -179,10 +179,10 @@ fn test_speed_is_capped() {
     let mut solver = solver(2500, GameBehavior::LATEST, vec![], 42);
     let runner = &mut solver.runners[0];
     runner.is_start_dash = false;
-    runner.speed = MAX_SPEED - 0.01;
+    runner.speed = MAX_TARGET_SPEED - 0.01;
     runner.acceleration = 1.0;
     runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
-    assert_eq!(runner.speed, MAX_SPEED);
+    assert_eq!(runner.speed, MAX_TARGET_SPEED);
 }
 
 #[test]
