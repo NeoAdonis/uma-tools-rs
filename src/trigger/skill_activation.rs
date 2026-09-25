@@ -378,125 +378,106 @@ pub fn split_condition(
         .collect()
 }
 
-/// Try to detect a window pattern: `variable>=min & variable<=max`.
-/// Returns `Some((window_trigger, remaining_guards))` if detected, `None` otherwise.
-fn try_detect_window(
-    left: &ComparisonTree,
-    right: &ComparisonTree,
-) -> Option<(TriggerCondition, ComparisonList)> {
+/// Try to detect a window pattern on two comparisons: `variable>=min & variable<=max`
+/// (in either order).
+/// Returns `Some(window_trigger)` if detected, `None` otherwise.
+fn detect_window(left: &Comparison, right: &Comparison) -> Option<TriggerCondition> {
     use VarType::*;
 
-    // We're looking for single comparisons on both sides
-    if let (ComparisonTree::Single(left_comp), ComparisonTree::Single(right_comp)) = (left, right) {
-        // Check if both comparisons use the same variable
-        let window_variable = |var: &VarType| match var {
-            AccumulateTime => Some(WindowVariable::AccumulateTime),
-            Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
-            Spatial(SpatialVar::RemainDistance) => Some(WindowVariable::RemainDistance),
-            Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
-            _ => None,
-        };
-        let left_var = window_variable(&left_comp.var);
-        let right_var = window_variable(&right_comp.var);
+    let window_variable = |var: &VarType| match var {
+        AccumulateTime => Some(WindowVariable::AccumulateTime),
+        Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+        Spatial(SpatialVar::RemainDistance) => Some(WindowVariable::RemainDistance),
+        Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
+        _ => None,
+    };
 
-        // Check if same variable with >= and <= operators
-        if let (Some(var), Some(right_var_check)) = (left_var, right_var)
-            && var == right_var_check
-        {
-            // Check for pattern: left>=X & right<=Y
-            if left_comp.op == CompOp::GreaterEqual && right_comp.op == CompOp::LessEqual {
-                return Some((
-                    TriggerCondition::Window {
-                        variable: var,
-                        min_threshold: left_comp.value as f64,
-                        max_threshold: right_comp.value as f64,
-                    },
-                    vec![], // No remaining guards
-                ));
-            }
-            // Check for pattern: left<=Y & right>=X (reversed order)
-            if left_comp.op == CompOp::LessEqual && right_comp.op == CompOp::GreaterEqual {
-                return Some((
-                    TriggerCondition::Window {
-                        variable: var,
-                        min_threshold: right_comp.value as f64,
-                        max_threshold: left_comp.value as f64,
-                    },
-                    vec![], // No remaining guards
-                ));
-            }
-        }
+    // Both comparisons must use the same window variable
+    let variable = window_variable(&left.var)?;
+    if window_variable(&right.var)? != variable {
+        return None;
     }
 
-    None
+    let (min, max) = match (left.op, right.op) {
+        (CompOp::GreaterEqual, CompOp::LessEqual) => (left, right),
+        (CompOp::LessEqual, CompOp::GreaterEqual) => (right, left),
+        _ => return None,
+    };
+    Some(TriggerCondition::Window {
+        variable,
+        min_threshold: min.value as f64,
+        max_threshold: max.value as f64,
+    })
+}
+
+/// Collect the comparisons of an AND chain from left to right.
+///
+/// The condition grammar has no parentheses, so an AND chain never contains an OR.
+fn flatten_and_chain(comp_tree: &ComparisonTree) -> Vec<&Comparison> {
+    match comp_tree {
+        ComparisonTree::Single(comp) => vec![comp],
+        ComparisonTree::Binary {
+            left,
+            op: BinOp::And,
+            right,
+        } => {
+            let mut comps = flatten_and_chain(left);
+            comps.extend(flatten_and_chain(right));
+            comps
+        }
+        ComparisonTree::Binary { op: BinOp::Or, .. } => {
+            unreachable!("BUG: OR inside an AND chain can't be parsed")
+        }
+    }
 }
 
 /// Recursively split a `ComparisonTree`, handling OR branches.
 /// Returns a list of (triggers, guards) where guards is a flat list of comparisons.
+///
+/// Each OR branch is a flat AND chain. Neighboring comparisons in a chain that form
+/// a range (e.g. `remain_distance<=401&remain_distance>=399`) become a single
+/// window trigger.
 fn split_comp_tree(
     comp_tree: &ComparisonTree,
-    random_activation: &Vec<f64>,
+    random_activation: &[f64],
     course: &Course,
 ) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
     match comp_tree {
-        ComparisonTree::Single(comp) => {
-            // Base case: single comparison
-            // DON'T apply promotion here - it will be done after combining
-            vec![split_single_comp(comp, random_activation, course)]
+        ComparisonTree::Binary {
+            left,
+            op: BinOp::Or,
+            right,
+        } => {
+            // OR: Create separate branches
+            let mut results = split_comp_tree(left, random_activation, course);
+            results.extend(split_comp_tree(right, random_activation, course));
+            results
         }
 
-        ComparisonTree::Binary { left, op, right } => match op {
-            BinOp::And => {
-                // Try to detect window pattern first (before splitting further)
-                // Note: try_detect_window only matches direct AND of two comparisons
-                // If there are additional conditions, they'll be handled below
-                if let Some((window_trigger, guards)) = try_detect_window(left, right) {
-                    // Window detected! Return it as a single trigger with no guards
-                    // (Additional guards would require more complex pattern like: (A>=X & A<=Y) & B
-                    // which isn't matched by our simple pattern detector)
-                    return vec![(vec![window_trigger], guards)];
+        // Single comparison or AND chain
+        // DON'T apply promotion here - it will be done at top level
+        _ => {
+            let comps = flatten_and_chain(comp_tree);
+            let mut triggers = Vec::new();
+            let mut guards = Vec::new();
+            let mut i = 0;
+            while i < comps.len() {
+                if let Some(window) = comps
+                    .get(i + 1)
+                    .and_then(|next| detect_window(comps[i], next))
+                {
+                    triggers.push(window);
+                    i += 2;
+                } else {
+                    let (comp_triggers, comp_guards) =
+                        split_single_comp(comps[i], random_activation, course);
+                    triggers.extend(comp_triggers);
+                    guards.extend(comp_guards);
+                    i += 1;
                 }
-
-                // Not a simple window, proceed with normal AND processing
-                // AND: Combine triggers and guards from both sides
-                let left_splits = split_comp_tree(left, random_activation, course);
-                let right_splits = split_comp_tree(right, random_activation, course);
-
-                // For AND, we should have exactly one split on each side
-                // (unless there are nested ORs, which we'll handle recursively)
-                let mut results = Vec::new();
-
-                for (left_triggers, left_guards) in left_splits {
-                    for (right_triggers, right_guards) in &right_splits {
-                        // Combine triggers
-                        let mut combined_triggers = left_triggers.clone();
-                        combined_triggers.extend(right_triggers.clone());
-
-                        // Combine guards by concatenating the lists (all must be true)
-                        let mut combined_guards = left_guards.clone();
-                        combined_guards.extend(right_guards.clone());
-
-                        // Promotion will be applied at top level
-                        results.push((combined_triggers, combined_guards));
-                    }
-                }
-
-                results
             }
-
-            BinOp::Or => {
-                // OR: Create separate branches
-                let mut results = Vec::new();
-
-                // Add all branches from left side
-                results.extend(split_comp_tree(left, random_activation, course));
-
-                // Add all branches from right side
-                results.extend(split_comp_tree(right, random_activation, course));
-
-                results
-            }
-        },
+            vec![(triggers, guards)]
+        }
     }
 }
 
@@ -559,8 +540,8 @@ fn apply_monotonic_promotion(
 ///
 /// Promoted comparisons are also kept as guards: triggers only decide WHEN to
 /// check, so a condition with several monotonic comparisons (e.g.
-/// `remain_distance<=401&remain_distance>=399`) activates only once all of them
-/// hold, not as soon as any one of its triggers fires.
+/// `distance_rate>=50&hp_per<=30`) activates only once all of them hold, not as
+/// soon as any one of its triggers fires.
 ///
 /// Returns: `(promoted triggers, guards)`
 fn promote_monotonic_guards(guards: &ComparisonList) -> (Vec<TriggerCondition>, ComparisonList) {

@@ -82,6 +82,93 @@ fn test_remain_distance_narrow_window_boundaries() {
     assert!(!guards.is_empty());
 }
 
+#[test]
+fn test_window_detected_later_in_chain() {
+    // Skill 101151: the range isn't at the start of the chain
+    let condition =
+        parse_condition("running_style==4&remain_distance>=999&remain_distance<=1001").unwrap();
+    let branches = split_condition(&condition, vec![], &load_course(10104));
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::RemainDistance,
+            min_threshold: 999.0,
+            max_threshold: 1001.0,
+        }
+    ));
+    assert_eq!(guards, &[parse_single("running_style==4")]);
+}
+
+#[test]
+fn test_window_detected_at_end_of_chain_with_dynamic_guards() {
+    // Skill 100061: dynamic guards would otherwise force a Continuous trigger
+    let condition = parse_condition(
+        "order>=2&order<=5&order_rate<=50&remain_distance<=201&remain_distance>=199",
+    )
+    .unwrap();
+    let branches = split_condition(&condition, vec![], &load_course(10104));
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+    assert_eq!(triggers.len(), 1);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::RemainDistance,
+            min_threshold: 199.0,
+            max_threshold: 201.0,
+        }
+    ));
+    assert_eq!(
+        guards,
+        &[
+            parse_single("order>=2"),
+            parse_single("order<=5"),
+            parse_single("order_rate<=50"),
+        ]
+    );
+}
+
+#[test]
+fn test_multiple_windows_in_chain() {
+    let condition =
+        parse_condition("distance_rate>=50&distance_rate<=60&hp_per>=20&hp_per<=80").unwrap();
+    let branches = split_condition(&condition, vec![], &load_course(10104));
+
+    assert_eq!(branches.len(), 1);
+    let (triggers, guards) = &branches[0];
+    assert!(guards.is_empty());
+    assert_eq!(triggers.len(), 2);
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::DistanceRate,
+            min_threshold: 50.0,
+            max_threshold: 60.0,
+        }
+    ));
+    assert!(matches!(
+        triggers[1],
+        TriggerCondition::Window {
+            variable: WindowVariable::HpPercent,
+            min_threshold: 20.0,
+            max_threshold: 80.0,
+        }
+    ));
+}
+
+/// Parse a single comparison.
+fn parse_single(input: &str) -> crate::parser::Comparison {
+    match parse_condition(input).unwrap().comp_tree {
+        crate::parser::ComparisonTree::Single(comp) => comp,
+        _ => panic!("Not a single comparison: {input}"),
+    }
+}
+
 // ============================================================================
 // MULTIPLE WINDOW TYPES
 // ============================================================================

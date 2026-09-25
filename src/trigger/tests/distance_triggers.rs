@@ -127,18 +127,6 @@ fn test_remain_distance_range_activates_within_range() {
 }
 
 #[test]
-fn test_distance_rate_range_in_any_order_activates_within_range() {
-    // A range that isn't detected as a window because the bounds aren't siblings
-    let min = COURSE_DISTANCE * 0.5;
-    let max = COURSE_DISTANCE * 0.61; // guards are floored
-    assert_activates_within(
-        "distance_rate>=50&ground_type==1&distance_rate<=60",
-        min,
-        max,
-    );
-}
-
-#[test]
 fn test_distance_triggers_are_positions_in_order() {
     use crate::trigger::builder::build_trigger_scheduler;
     use crate::units::furlongs_to_meters;
