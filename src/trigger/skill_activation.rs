@@ -880,7 +880,8 @@ fn extract_monotonic_trigger(comp: &Comparison) -> TriggerCondition {
             }
         }
 
-        Activation(_) => {
+        // Rush happens at an unknown time; rely on the comparison kept as guard
+        Activation(_) | Status(StatusVar::TemptationCount) => {
             // Treat as continuous trigger
             TriggerCondition::Continuous {}
         }
