@@ -67,13 +67,16 @@ fn test_remain_distance_narrow_window_boundaries() {
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
 
-    // remain_distance is not a WindowVariable, but the condition should still be parsed
-    // Note: remain_distance uses Continuous trigger (since conditions are complex)
+    // remain_distance pair is detected as a window (converted to positions when indexed)
     assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::Continuous),
-        "Complex condition with remain_distance should use Continuous trigger"
-    );
+    assert!(matches!(
+        triggers[0],
+        TriggerCondition::Window {
+            variable: WindowVariable::RemainDistance,
+            min_threshold: 295.0,
+            max_threshold: 299.0,
+        }
+    ));
 
     // order and slope should be guards
     assert!(!guards.is_empty());
@@ -354,5 +357,6 @@ fn test_single_sided_window_conversion() {
         }
     ));
 
-    assert!(guards.is_empty());
+    // Promoted comparisons are also kept as guards
+    assert_eq!(guards.len(), 1);
 }

@@ -19,7 +19,7 @@ use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::trigger::skill_activation::{ActiveTimedEffect, SkillActivationRecord, WindowVariable};
-use crate::trigger::system::{DistanceTrigger, DistanceTriggerType, TriggerScheduler};
+use crate::trigger::system::{DistanceTrigger, TriggerScheduler};
 use crate::uma::skill::*;
 use crate::uma::*;
 
@@ -62,6 +62,9 @@ impl Default for SkillModifiers {
 
 /// Maximum speed a runner can reach in m/s.
 pub const MAX_SPEED: f64 = 30.0;
+
+/// Tolerance for floating-point comparisons in skill triggers.
+const EPSILON: f64 = 0.0001;
 
 /// Apply style change effects.
 #[inline]
@@ -790,8 +793,6 @@ impl Runner {
                 .push(DistanceTrigger {
                     threshold_meters,
                     logic_idx,
-                    operator: CompOp::GreaterEqual,
-                    trigger_type: DistanceTriggerType::DistanceRate,
                 });
         }
     }
@@ -2213,8 +2214,7 @@ impl Runner {
 
     pub fn check_distance_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.distance_triggers.peek() {
-            if !Self::should_fire_trigger(self.position, trigger.threshold_meters, trigger.operator)
-            {
+            if self.position < trigger.threshold_meters {
                 break; // Threshold not reached yet, this and all subsequent triggers require further distance
             }
 
@@ -2265,13 +2265,16 @@ impl Runner {
             // Get current value for the window variable
             let current_value = match trigger.variable {
                 WindowVariable::AccumulateTime => state.elapsed_time,
-                WindowVariable::DistanceRate => self.position, // Already in meters (converted at build time)
+                // Already converted to meters at build time
+                WindowVariable::DistanceRate | WindowVariable::RemainDistance => self.position,
                 WindowVariable::HpPercent => self.hp.percent(),
                 WindowVariable::SpatialPosition => self.position, // Spatial features use position directly
             };
 
             // Check if we're within the window
-            if current_value >= trigger.min_threshold && current_value <= trigger.max_threshold {
+            if current_value >= trigger.min_threshold - EPSILON
+                && current_value <= trigger.max_threshold + EPSILON
+            {
                 // Within window - try activation
                 triggers_to_pull.push(trigger.logic_idx);
             } else if current_value > trigger.max_threshold {
@@ -2297,7 +2300,6 @@ impl Runner {
 
     /// Check if a monotonic trigger should fire based on operator.
     fn should_fire_trigger(current_value: f64, threshold: f64, operator: CompOp) -> bool {
-        const EPSILON: f64 = 0.0001; // Tolerance for equality comparisons
         match operator {
             CompOp::GreaterEqual => current_value >= threshold,
             CompOp::LessEqual => current_value <= threshold,

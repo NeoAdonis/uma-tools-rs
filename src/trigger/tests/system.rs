@@ -88,25 +88,18 @@ fn test_time_trigger_ordering() {
 }
 
 #[test]
-fn test_distance_trigger_ordering_remain() {
-    let trigger1 = DistanceTrigger {
-        threshold_meters: 200.0,
-        logic_idx: 0,
-        operator: CompOp::LessEqual,
-        trigger_type: DistanceTriggerType::RemainDistance,
-    };
-    let trigger2 = DistanceTrigger {
-        threshold_meters: 500.0,
-        logic_idx: 1,
-        operator: CompOp::LessEqual,
-        trigger_type: DistanceTriggerType::RemainDistance,
-    };
-
+fn test_distance_trigger_ordering() {
     let mut heap = BinaryHeap::new();
-    heap.push(trigger1);
-    heap.push(trigger2);
+    for (logic_idx, threshold_meters) in [1700.0, 200.0, 1000.0].into_iter().enumerate() {
+        heap.push(DistanceTrigger {
+            threshold_meters,
+            logic_idx,
+        });
+    }
 
-    // Should pop trigger2 first (500.0m remaining happens BEFORE 200.0m remaining)
-    let first = heap.pop().unwrap();
-    assert_eq!(first.threshold_meters, 500.0);
+    // Should pop in increasing position order
+    let order: Vec<f64> = std::iter::from_fn(|| heap.pop())
+        .map(|t| t.threshold_meters)
+        .collect();
+    assert_eq!(order, vec![200.0, 1000.0, 1700.0]);
 }

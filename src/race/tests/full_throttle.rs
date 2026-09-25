@@ -6,7 +6,6 @@ use crate::race::parameters::*;
 use crate::race::runner::{MAX_SPEED, Runner};
 use crate::race::solver::RaceSolver;
 use crate::trigger::skill_activation::TriggerCondition;
-use crate::trigger::system::DistanceTriggerType;
 use crate::uma::skill::*;
 use crate::uma::*;
 
@@ -208,7 +207,6 @@ fn test_random_trigger_scheduled_on_activation() {
     assert!(scheduler.full_throttle_triggers.is_empty());
     let trigger = scheduler.distance_triggers.peek().unwrap();
     assert_eq!(trigger.logic_idx, 0);
-    assert_eq!(trigger.trigger_type, DistanceTriggerType::DistanceRate);
     assert!((1500.0..2000.0).contains(&trigger.threshold_meters));
 }
 

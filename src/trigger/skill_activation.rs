@@ -67,6 +67,7 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::*;
 use crate::uma::skill::SkillEffect;
+use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.
 ///
@@ -119,6 +120,8 @@ pub enum WindowVariable {
     DistanceRate,
     /// HP percentage (0-100).
     HpPercent,
+    /// Remaining distance (meters to the goal).
+    RemainDistance,
     /// Spatial position (meters from start).
     /// Used for corners, slopes, straights.
     SpatialPosition,
@@ -131,17 +134,23 @@ pub enum TriggerCondition {
     /// Time elapsed since race start.
     Time { threshold: f64, operator: CompOp },
 
+    // Distance triggers fire once the runner reaches the threshold, regardless
+    // of the original comparison operator. Reversed comparisons (e.g.
+    // `remain_distance>=X`) are converted to window triggers instead.
     /// Distance covered (as percentage 0-100).
-    DistanceCovered { threshold: f64, operator: CompOp },
+    DistanceCovered { threshold: f64 },
 
     /// Distance remaining (in meters).
-    DistanceRemaining { threshold: f64, operator: CompOp },
+    DistanceRemaining { threshold: f64 },
 
     /// HP percentage (0-100).
     HpPercent { threshold: f64, operator: CompOp },
 
     /// Furlong crossed (distance in furlongs)
-    FurlongCrossed { threshold: f64, operator: CompOp },
+    FurlongCrossed { threshold: f64 },
+
+    /// Position from the start (in meters). Used for random points.
+    Position { meters: f64 },
 
     // ========== WINDOW TRIGGERS ==========
     /// Window trigger: skill can activate within [min, max] range.
@@ -298,8 +307,8 @@ impl SkillActivationLogic {
 ///
 /// Output (2 branches):
 ///
-/// - Branch 1: triggers=[DistanceCovered], guards=[hp_per>=20]
-/// - Branch 2: triggers=[DistanceCovered], guards=[ground_type==1]
+/// - Branch 1: triggers=[Position], guards=[hp_per>=20]
+/// - Branch 2: triggers=[Position], guards=[ground_type==1]
 ///
 /// # Simple Example
 ///
@@ -307,7 +316,7 @@ impl SkillActivationLogic {
 ///
 /// Output (1 branch):
 ///
-/// - Triggers: `[DistanceCovered { distance==1850m }]`
+/// - Triggers: `[Position { meters: 1850 }]`
 /// - Guards: `[hp_per>=20, ground_type==2]`
 pub fn split_condition(
     condition: &Condition,
@@ -380,19 +389,15 @@ fn try_detect_window(
     // We're looking for single comparisons on both sides
     if let (ComparisonTree::Single(left_comp), ComparisonTree::Single(right_comp)) = (left, right) {
         // Check if both comparisons use the same variable
-        let left_var = match &left_comp.var {
+        let window_variable = |var: &VarType| match var {
             AccumulateTime => Some(WindowVariable::AccumulateTime),
             Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
+            Spatial(SpatialVar::RemainDistance) => Some(WindowVariable::RemainDistance),
             Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
             _ => None,
         };
-
-        let right_var = match &right_comp.var {
-            AccumulateTime => Some(WindowVariable::AccumulateTime),
-            Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
-            Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
-            _ => None,
-        };
+        let left_var = window_variable(&left_comp.var);
+        let right_var = window_variable(&right_comp.var);
 
         // Check if same variable with >= and <= operators
         if let (Some(var), Some(right_var_check)) = (left_var, right_var)
@@ -550,34 +555,22 @@ fn apply_monotonic_promotion(
     }
 }
 
-/// Extract `MonotonicGuard`s from guard list and promote them to triggers.
+/// Extract monotonic guards from guard list and promote them to triggers.
 ///
-/// Returns: `(promoted triggers, remaining guards)`
+/// Promoted comparisons are also kept as guards: triggers only decide WHEN to
+/// check, so a condition with several monotonic comparisons (e.g.
+/// `remain_distance<=401&remain_distance>=399`) activates only once all of them
+/// hold, not as soon as any one of its triggers fires.
+///
+/// Returns: `(promoted triggers, guards)`
 fn promote_monotonic_guards(guards: &ComparisonList) -> (Vec<TriggerCondition>, ComparisonList) {
-    let mut promoted_triggers = Vec::new();
-    let mut remaining_guards = Vec::new();
+    let promoted_triggers = guards
+        .iter()
+        .filter(|comp| comp.var.variable_role() == VariableRole::MonotonicGuard)
+        .map(extract_monotonic_trigger)
+        .collect();
 
-    // Classify each comparison
-    for comp in guards {
-        let role = comp.var.variable_role();
-        if matches!(role, VariableRole::MonotonicGuard) {
-            // Promote to trigger
-            let trigger = extract_monotonic_trigger(comp);
-            promoted_triggers.push(trigger);
-
-            // For activate_count_* variables (and other activation counters),
-            // keep the comparison as a guard because they promote to Continuous
-            // triggers that must check the guard condition every frame
-            if matches!(comp.var, VarType::Activation(_)) {
-                remaining_guards.push(comp.clone());
-            }
-        } else {
-            // Keep as guard
-            remaining_guards.push(comp.clone());
-        }
-    }
-
-    (promoted_triggers, remaining_guards)
+    (promoted_triggers, guards.clone())
 }
 
 /// Get the promotion priority for a monotonic variable as follows:
@@ -730,9 +723,8 @@ fn split_single_comp(
                 (vec![], vec![])
             } else {
                 // Create trigger based on random activation distance
-                let trigger = TriggerCondition::DistanceCovered {
-                    threshold: random_activation[0],
-                    operator: comp.op,
+                let trigger = TriggerCondition::Position {
+                    meters: random_activation[0],
                 };
                 // TODO: remove the used activation distance
                 (vec![trigger], vec![])
@@ -847,7 +839,6 @@ fn extract_monotonic_trigger(comp: &Comparison) -> TriggerCondition {
             } else {
                 TriggerCondition::DistanceCovered {
                     threshold: comp.value as f64,
-                    operator: comp.op,
                 }
             }
         }
@@ -856,18 +847,16 @@ fn extract_monotonic_trigger(comp: &Comparison) -> TriggerCondition {
             // RemainDistance is monotonically decreasing
             // Note: <= is normal direction for decreasing, >= is reversed
             if needs_window_conversion(false, comp.op) {
-                // This case is rare: remain_distance>=X means "while still far from finish"
-                // Window from threshold to infinity (represented as course length)
-                // Convert to distance rate for window
+                // remain_distance>=X means "while still far from finish"
+                // Window from threshold to infinity (clamped to course length when indexed)
                 TriggerCondition::Window {
-                    variable: WindowVariable::DistanceRate,
-                    min_threshold: 0.0,
-                    max_threshold: 100.0 - (comp.value as f64),
+                    variable: WindowVariable::RemainDistance,
+                    min_threshold: comp.value as f64,
+                    max_threshold: f64::INFINITY,
                 }
             } else {
                 TriggerCondition::DistanceRemaining {
                     threshold: comp.value as f64,
-                    operator: comp.op,
                 }
             }
         }
@@ -898,16 +887,14 @@ fn extract_monotonic_trigger(comp: &Comparison) -> TriggerCondition {
             // Furlong is monotonically increasing
             if needs_window_conversion(true, comp.op) {
                 // furlong<=N means "activate while in first N furlongs"
-                // We don't have a furlong window type, so fall back to continuous
-                // (This is rare enough that it doesn't warrant a new window type)
-                TriggerCondition::FurlongCrossed {
-                    threshold: comp.value as f64,
-                    operator: comp.op,
+                TriggerCondition::Window {
+                    variable: WindowVariable::SpatialPosition,
+                    min_threshold: 0.0,
+                    max_threshold: furlongs_to_meters(comp.value as f64),
                 }
             } else {
                 TriggerCondition::FurlongCrossed {
                     threshold: comp.value as f64,
-                    operator: comp.op,
                 }
             }
         }

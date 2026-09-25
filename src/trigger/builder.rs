@@ -26,9 +26,8 @@
 //!
 //! ```rust,ignore
 //! SkillActivationLogic {
-//!   triggers: [DistanceCovered {
-//!     distance: 1850, // random point in final corner
-//!     operator: GreaterEqual,
+//!   triggers: [Position {
+//!     meters: 1850, // random point in final corner
 //!   }],
 //!   guard_condition: Some(Condition), // hp_per>=20 & ground_type==2
 //!   precondition: Some(Condition), // change_order_onetime<0
@@ -163,29 +162,32 @@ fn index_trigger(
             });
         }
 
-        DistanceCovered {
-            threshold,
-            operator,
-        } => {
-            // Convert percentage to meters
-            let threshold_meters = threshold / 100.0 * course.distance as f64;
+        // Distance triggers are converted to a position from the start (in meters)
+        DistanceCovered { threshold } => {
             scheduler.distance_triggers.push(DistanceTrigger {
-                threshold_meters,
+                threshold_meters: threshold / 100.0 * course.distance as f64,
                 logic_idx,
-                operator: *operator,
-                trigger_type: DistanceTriggerType::DistanceRate,
             });
         }
 
-        DistanceRemaining {
-            threshold,
-            operator,
-        } => {
+        DistanceRemaining { threshold } => {
             scheduler.distance_triggers.push(DistanceTrigger {
-                threshold_meters: *threshold,
+                threshold_meters: course.distance as f64 - threshold,
                 logic_idx,
-                operator: *operator,
-                trigger_type: DistanceTriggerType::RemainDistance,
+            });
+        }
+
+        FurlongCrossed { threshold } => {
+            scheduler.distance_triggers.push(DistanceTrigger {
+                threshold_meters: furlongs_to_meters(*threshold),
+                logic_idx,
+            });
+        }
+
+        Position { meters } => {
+            scheduler.distance_triggers.push(DistanceTrigger {
+                threshold_meters: *meters,
+                logic_idx,
             });
         }
 
@@ -198,19 +200,6 @@ fn index_trigger(
                 threshold_percent: *threshold,
                 logic_idx,
                 operator: *operator,
-            });
-        }
-
-        FurlongCrossed {
-            threshold,
-            operator,
-        } => {
-            let threshold_meters = furlongs_to_meters(*threshold);
-            scheduler.distance_triggers.push(DistanceTrigger {
-                threshold_meters,
-                logic_idx,
-                operator: *operator,
-                trigger_type: DistanceTriggerType::Furlong,
             });
         }
 
@@ -248,14 +237,18 @@ fn index_trigger(
             min_threshold,
             max_threshold,
         } => {
-            // Convert distance_rate percentage to meters if needed
+            // Convert distance-based windows to positions from the start (in meters)
+            let course_distance = course.distance as f64;
             let (min_value, max_value) = match variable {
-                WindowVariable::DistanceRate => {
-                    // Convert percentage to meters
-                    let min_meters = min_threshold / 100.0 * course.distance as f64;
-                    let max_meters = max_threshold / 100.0 * course.distance as f64;
-                    (min_meters, max_meters)
-                }
+                WindowVariable::DistanceRate => (
+                    min_threshold / 100.0 * course_distance,
+                    max_threshold / 100.0 * course_distance,
+                ),
+                // Remaining distance decreases, so the bounds are swapped
+                WindowVariable::RemainDistance => (
+                    (course_distance - max_threshold).max(0.0),
+                    course_distance - min_threshold,
+                ),
                 _ => (*min_threshold, *max_threshold),
             };
 

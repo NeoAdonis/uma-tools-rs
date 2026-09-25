@@ -1,6 +1,7 @@
 //! Tests for the trigger module
 
 mod activation_dependent;
+mod distance_triggers;
 mod or_branch_isolation;
 mod preconditions;
 mod random;

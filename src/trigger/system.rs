@@ -105,45 +105,25 @@ impl PartialEq for TimeTrigger {
 
 impl Eq for TimeTrigger {}
 
-/// Trigger based on distance (both remaining and covered).
+/// Trigger based on distance. It fires once the runner's position reaches
+/// `threshold_meters`.
+///
+/// All distance-based conditions (distance rate, remaining distance, furlongs,
+/// random points) are converted to a position from the start when indexed.
 #[derive(Clone, Debug)]
 pub struct DistanceTrigger {
+    /// Position from the start in meters.
     pub threshold_meters: f64,
     pub logic_idx: usize,
-    pub operator: CompOp,
-    pub trigger_type: DistanceTriggerType,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DistanceTriggerType {
-    RemainDistance, // Decreasing: triggers when remain_distance <= threshold
-    DistanceRate,   // Increasing: triggers when position >= threshold
-    Furlong,        // Increasing: triggers when position >= threshold (in furlongs)
 }
 
 impl Ord for DistanceTrigger {
     fn cmp(&self, other: &Self) -> Ordering {
-        match (self.trigger_type, other.trigger_type) {
-            (DistanceTriggerType::RemainDistance, DistanceTriggerType::RemainDistance) => {
-                // For remaining distance, LARGER values happen earlier in race
-                // 500m remaining happens BEFORE 200m remaining
-                // BinaryHeap is max-heap, so we want normal ordering (larger pops first)
-                self.threshold_meters
-                    .partial_cmp(&other.threshold_meters)
-                    .unwrap_or(Ordering::Equal)
-            }
-            (DistanceTriggerType::DistanceRate, DistanceTriggerType::DistanceRate)
-            | (DistanceTriggerType::Furlong, DistanceTriggerType::Furlong) => {
-                // For distance covered, SMALLER values happen earlier in race
-                // 100m covered happens BEFORE 500m covered
-                // BinaryHeap is max-heap, so we want reverse ordering (smaller pops first)
-                other
-                    .threshold_meters
-                    .partial_cmp(&self.threshold_meters)
-                    .unwrap_or(Ordering::Equal)
-            }
-            _ => Ordering::Equal,
-        }
+        // Min-heap: trigger earliest position first
+        other
+            .threshold_meters
+            .partial_cmp(&self.threshold_meters)
+            .unwrap_or(Ordering::Equal)
     }
 }
 
@@ -155,7 +135,7 @@ impl PartialOrd for DistanceTrigger {
 
 impl PartialEq for DistanceTrigger {
     fn eq(&self, other: &Self) -> bool {
-        self.threshold_meters == other.threshold_meters && self.trigger_type == other.trigger_type
+        self.threshold_meters == other.threshold_meters
     }
 }
 

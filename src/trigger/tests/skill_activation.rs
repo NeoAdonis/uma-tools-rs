@@ -118,10 +118,7 @@ fn test_split_random_gate_with_guards() {
 
     // Should have random gate trigger
     assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::DistanceCovered { .. }
-    ));
+    assert!(matches!(triggers[0], TriggerCondition::Position { .. }));
 
     // Should have hp_per guard (NOT phase_random)
     assert!(!guards.is_empty());
@@ -171,7 +168,7 @@ fn test_split_or_condition() {
     assert!(
         triggers1
             .iter()
-            .any(|t| matches!(t, TriggerCondition::DistanceCovered { .. }))
+            .any(|t| matches!(t, TriggerCondition::Position { .. }))
     );
     assert!(!guards1.is_empty());
 
@@ -227,10 +224,7 @@ fn test_distance_rate_greater_than_stays_trigger() {
     assert_eq!(triggers.len(), 1);
     assert!(matches!(
         triggers[0],
-        TriggerCondition::DistanceCovered {
-            threshold: 50.0,
-            operator: CompOp::GreaterEqual,
-        }
+        TriggerCondition::DistanceCovered { threshold: 50.0 }
     ));
 
     // ground_type should remain as guard
