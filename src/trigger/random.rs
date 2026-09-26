@@ -274,20 +274,21 @@ pub fn process_random_comp(
         RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
             // up_slope_random_later_half==1
             // Picks random point on any uphill in second half of race
-            let section_len = course.section_length();
-            let halfway = section_len * 12.0;
-
+            // Uphills crossing the halfway point only count from there onwards
+            let halfway = course.halfway();
             let late_uphills: Vec<_> = course
                 .slopes
                 .iter()
-                .filter(|s| s.is_uphill() && s.start >= halfway)
+                .filter(|s| s.is_uphill())
+                .filter_map(|s| {
+                    intersect_intervals(s.start, s.start + s.length, halfway, course.distance as f64)
+                })
                 .collect();
 
             // No uphills after halfway on course fails the roll
-            late_uphills.choose(rng).map(|slope| {
-                let offset: f64 = rng.random();
-                vec![slope.start + offset * slope.length]
-            })
+            late_uphills
+                .choose(rng)
+                .map(|&(start, end)| vec![rng.random_range(start..end)])
         }
 
         RandomSpatial(RandomSpatialVar::DownSlopeRandom) => {

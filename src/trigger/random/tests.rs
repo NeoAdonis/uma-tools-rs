@@ -14,6 +14,7 @@ fn create_test_course() -> Course {
                 length: 150.0,
             },
         ],
+        vec![Slope::new(800.0, 100.0, 500)],
         vec![Straight {
             start: 0.0,
             end: 100.0,
@@ -23,10 +24,20 @@ fn create_test_course() -> Course {
 }
 
 fn create_test_course_with_straights(straights: Vec<Straight>) -> Course {
-    create_test_course_with(create_test_course().corners.clone(), straights)
+    let course = create_test_course();
+    create_test_course_with(course.corners.clone(), course.slopes.clone(), straights)
 }
 
-fn create_test_course_with(corners: Vec<Corner>, straights: Vec<Straight>) -> Course {
+fn create_test_course_with_slopes(slopes: Vec<Slope>) -> Course {
+    let course = create_test_course();
+    create_test_course_with(course.corners.clone(), slopes, course.straights.clone())
+}
+
+fn create_test_course_with(
+    corners: Vec<Corner>,
+    slopes: Vec<Slope>,
+    straights: Vec<Straight>,
+) -> Course {
     Course::new_test(
         10001,
         CourseData {
@@ -38,7 +49,7 @@ fn create_test_course_with(corners: Vec<Corner>, straights: Vec<Straight>) -> Co
             finish_time_min: 140000,
             finish_time_max: 160000,
             corners,
-            slopes: vec![Slope::new(800.0, 100.0, 500)],
+            slopes,
             straights,
             race_track_id: 1,
             lane_max: 10000,
@@ -316,6 +327,7 @@ fn test_phase_corner_random_partial_overlap() {
             length: 400.0,
         }],
         vec![],
+        vec![],
     );
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
@@ -408,5 +420,67 @@ fn test_phase_latter_half_straight_random() {
     // Only straight in Early is [0-100], which isn't in its second half (200-400)
     let course = create_test_course();
     let condition = parse_condition("phase_latter_half_straight_random==0").unwrap();
+    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+}
+
+#[test]
+fn test_up_slope_random() {
+    // Uphills [800-900] and [1500-1550], downhill [1000-1200] (never picked)
+    let course = create_test_course_with_slopes(vec![
+        Slope::new(800.0, 100.0, 500),
+        Slope::new(1000.0, 200.0, -500),
+        Slope::new(1500.0, 50.0, 200),
+    ]);
+    let condition = parse_condition("up_slope_random==1").unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let (mut hit_first, mut hit_second) = (false, false);
+
+    for _ in 0..200 {
+        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        if (800.0..=900.0).contains(&dist) {
+            hit_first = true;
+        } else if (1500.0..=1550.0).contains(&dist) {
+            hit_second = true;
+        } else {
+            panic!("Distance {dist} not in [800, 900] or [1500, 1550]");
+        }
+    }
+    assert!(hit_first && hit_second);
+
+    // Only downhills on course fails the roll
+    let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, -500)]);
+    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+}
+
+#[test]
+fn test_up_slope_random_later_half() {
+    // Course has 2400m, halfway = 1200m
+    // Uphills: [800-900] (first half), [1100-1300] (crosses halfway), [1800-1900]
+    // Downhill [2000-2100] is never picked
+    // Valid points: [1200-1300] and [1800-1900]
+    let course = create_test_course_with_slopes(vec![
+        Slope::new(800.0, 100.0, 500),
+        Slope::new(1100.0, 200.0, 300),
+        Slope::new(1800.0, 100.0, 500),
+        Slope::new(2000.0, 100.0, -500),
+    ]);
+    let condition = parse_condition("up_slope_random_later_half==1").unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let (mut hit_crossing, mut hit_late) = (false, false);
+
+    for _ in 0..200 {
+        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        if (1200.0..=1300.0).contains(&dist) {
+            hit_crossing = true;
+        } else if (1800.0..=1900.0).contains(&dist) {
+            hit_late = true;
+        } else {
+            panic!("Distance {dist} not in [1200, 1300] or [1800, 1900]");
+        }
+    }
+    assert!(hit_crossing && hit_late);
+
+    // Only uphill [800-900] is in the first half, which fails the roll
+    let course = create_test_course();
     assert!(roll_condition(&condition, &course, &mut rng).is_none());
 }
