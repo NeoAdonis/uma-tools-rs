@@ -8,7 +8,7 @@ pub mod uma;
 pub mod units;
 
 #[cfg(test)]
-mod tests;
+mod test_utils;
 
 // Re-export commonly used types for convenience
 pub use condition::*;

@@ -361,3 +361,6 @@ fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Op
 
     unreachable!("random_offset < total_length, so some interval must contain it");
 }
+
+#[cfg(test)]
+mod tests;

@@ -303,3 +303,6 @@ fn threshold_stat_bonus(stat_value: u16) -> f64 {
         0.2
     }
 }
+
+#[cfg(test)]
+mod tests;

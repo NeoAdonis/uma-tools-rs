@@ -3,50 +3,12 @@
 //! These tests verify that OR branches properly isolate from each other,
 //! ensuring only one branch can activate per skill (mutual exclusion).
 
-use super::super::skill_activation::*;
-use crate::course::*;
-use crate::parser::parse_condition;
-use crate::skill::*;
-use crate::trigger::builder::build_trigger_scheduler;
+use crate::common::{load_course, make_skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-
-/// Helper function to create a skill with given condition
-fn create_test_skill(id: &str, condition: &str) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                condition: condition.to_string(),
-                precondition: String::new(),
-                base_duration: 40000,
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 4000,
-                }],
-            }],
-            wisdom_check: true,
-        },
-    )
-}
-
-/// Load a real course from course_data.json
-fn load_course(course_id: u32) -> Course {
-    let course_data =
-        std::fs::read_to_string("data/course_data.json").expect("Failed to read course_data.json");
-    let courses: std::collections::HashMap<String, serde_json::Value> =
-        serde_json::from_str(&course_data).expect("Failed to parse course_data.json");
-
-    let course_str = course_id.to_string();
-    let _course_json = courses
-        .get(&course_str)
-        .unwrap_or_else(|| panic!("Course {} not found", course_id));
-
-    Course::from_json_str(&course_data, &course_str)
-        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
-}
+use uma_tools::condition::parser::parse_condition;
+use uma_tools::trigger::builder::build_trigger_scheduler;
+use uma_tools::trigger::skill_activation::*;
 
 // ============================================================================
 // MUTUAL EXCLUSION VERIFICATION
@@ -158,9 +120,10 @@ fn test_or_branch_skill_id_uniqueness() {
     // Test: Each OR branch gets unique skill_id
     // Tests: OR branches are treated as separate skills in the scheduler
 
-    let skill = create_test_skill(
+    let skill = make_skill(
         "test_unique_ids",
         "distance_rate>=50@hp_per<=50@accumulatetime>=10",
+        "",
     );
 
     let course = load_course(10104);
@@ -196,7 +159,11 @@ fn test_or_branches_independent_activation_tracking() {
     // Test: Each OR branch tracks activation independently
     // Tests: has_activated flag is per branch, not shared
 
-    let skill = create_test_skill("test_independent_tracking", "distance_rate>=50@hp_per<=50");
+    let skill = make_skill(
+        "test_independent_tracking",
+        "distance_rate>=50@hp_per<=50",
+        "",
+    );
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);

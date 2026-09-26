@@ -3,25 +3,8 @@
 //! These tests verify that window triggers properly detect entry/exit conditions
 //! and handle activation attempts correctly during runtime.
 
-use super::super::skill_activation::*;
-use crate::course::*;
 use crate::parser::parse_condition;
-
-/// Load a real course from course_data.json for testing
-fn load_course(course_id: u32) -> Course {
-    let course_data =
-        std::fs::read_to_string("data/course_data.json").expect("Failed to read course_data.json");
-    let courses: std::collections::HashMap<String, serde_json::Value> =
-        serde_json::from_str(&course_data).expect("Failed to parse course_data.json");
-
-    let course_str = course_id.to_string();
-    let _course_json = courses
-        .get(&course_str)
-        .unwrap_or_else(|| panic!("Course {} not found", course_id));
-
-    Course::from_json_str(&course_data, &course_str)
-        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
-}
+use crate::trigger::skill_activation::*;
 
 // ============================================================================
 // BASIC WINDOW FUNCTIONALITY
@@ -33,7 +16,7 @@ fn test_distance_rate_window_detection() {
     // Tests: Window pattern detection for distance_rate 50-60%
 
     let condition = parse_condition("distance_rate>=50&distance_rate<=60&order_rate>50").unwrap();
-    let course = load_course(10104); // 2000m course
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -61,7 +44,7 @@ fn test_remain_distance_narrow_window_boundaries() {
 
     let condition =
         parse_condition("remain_distance<=299&remain_distance>=295&order<=2&slope==0").unwrap();
-    let course = load_course(10104); // 2000m course
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -87,7 +70,11 @@ fn test_window_detected_later_in_chain() {
     // Skill 101151: the range isn't at the start of the chain
     let condition =
         parse_condition("running_style==4&remain_distance>=999&remain_distance<=1001").unwrap();
-    let branches = split_condition(&condition, vec![], &load_course(10104));
+    let branches = split_condition(
+        &condition,
+        vec![],
+        &Course::from_json_file("data/course_data.json", "10104").unwrap(),
+    );
 
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
@@ -110,7 +97,11 @@ fn test_window_detected_at_end_of_chain_with_dynamic_guards() {
         "order>=2&order<=5&order_rate<=50&remain_distance<=201&remain_distance>=199",
     )
     .unwrap();
-    let branches = split_condition(&condition, vec![], &load_course(10104));
+    let branches = split_condition(
+        &condition,
+        vec![],
+        &Course::from_json_file("data/course_data.json", "10104").unwrap(),
+    );
 
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
@@ -137,7 +128,11 @@ fn test_window_detected_at_end_of_chain_with_dynamic_guards() {
 fn test_multiple_windows_in_chain() {
     let condition =
         parse_condition("distance_rate>=50&distance_rate<=60&hp_per>=20&hp_per<=80").unwrap();
-    let branches = split_condition(&condition, vec![], &load_course(10104));
+    let branches = split_condition(
+        &condition,
+        vec![],
+        &Course::from_json_file("data/course_data.json", "10104").unwrap(),
+    );
 
     assert_eq!(branches.len(), 1);
     let (triggers, guards) = &branches[0];
@@ -179,7 +174,7 @@ fn test_hp_percent_window() {
     // Tests: HP-based window variable (hp_per>=30 creates window [30, 100])
 
     let condition = parse_condition("is_last_straight==1&hp_per>=30&order<=2").unwrap();
-    let course = load_course(10104); // 2000m course
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -206,7 +201,7 @@ fn test_accumulate_time_window() {
     // Tests: AccumulateTime window combined with other windows
 
     let condition = parse_condition("distance_rate<=50&order_rate>=40&order_rate<=80&infront_near_lane_time>=3&accumulatetime>=10").unwrap();
-    let course = load_course(10104);
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap();
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -235,7 +230,7 @@ fn test_spatial_position_last_straight() {
     // Tests: Spatial position window for last straight
 
     let condition = parse_condition("is_last_straight==1").unwrap();
-    let course = load_course(10104); // 2000m course (last straight: 1734-2000m)
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course (last straight: 1734-2000m)
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -272,7 +267,7 @@ fn test_spatial_position_corner() {
     // Tests: Corner-based spatial positioning
 
     let condition = parse_condition("corner==0").unwrap();
-    let course = load_course(10104); // 2000m course
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -289,7 +284,7 @@ fn test_spatial_position_specific_corner() {
     // Tests: Spatial window for a specific corner
 
     let condition = parse_condition("corner==2").unwrap();
-    let course = load_course(10104); // 2000m course (has 4 corners)
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap(); // 2000m course (has 4 corners)
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -334,7 +329,7 @@ fn test_order_rate_multiple_windows_or_branches() {
     let condition = parse_condition(
         "distance_rate>=50&corner==0&order_rate>=70&order_rate<=75&is_overtake==1@distance_rate>=50&corner==0&order_rate<=30&order_rate>=20"
     ).unwrap();
-    let course = load_course(10104);
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap();
     let branches = split_condition(&condition, vec![], &course);
 
     // Should create 2 branches (OR condition)
@@ -367,7 +362,7 @@ fn test_window_with_multiple_guards() {
     let condition =
         parse_condition("distance_rate>=50&distance_rate<=60&order_rate>50&ground_type==1")
             .unwrap();
-    let course = load_course(10104);
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap();
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -401,7 +396,7 @@ fn test_window_reversed_order_detection() {
     // Tests: Window detection works regardless of comparison order
 
     let condition = parse_condition("distance_rate<=60&distance_rate>=50").unwrap();
-    let course = load_course(10104);
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap();
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);
@@ -427,7 +422,7 @@ fn test_single_sided_window_conversion() {
     // Tests: Single-sided comparison converts to window for increasing variables
 
     let condition = parse_condition("distance_rate<=50").unwrap();
-    let course = load_course(10104);
+    let course = Course::from_json_file("data/course_data.json", "10104").unwrap();
     let branches = split_condition(&condition, vec![], &course);
 
     assert_eq!(branches.len(), 1);

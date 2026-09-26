@@ -1,5 +1,4 @@
-use super::super::random::*;
-use crate::condition::parser::*;
+use super::*;
 use crate::course::geometry::*;
 use crate::course::*;
 

@@ -1,12 +1,12 @@
 //! Runtime tests for distance-based triggers (random points, remaining distance,
 //! and ranges made of monotonic comparisons).
 
-use crate::configuration::{Configuration, GameVersion};
-use crate::course::{Course, Phase};
-use crate::race::parameters::*;
-use crate::race::solver::RaceSolver;
-use crate::skill::*;
-use crate::uma::*;
+use crate::common::{load_course, race_params};
+use uma_tools::configuration::{Configuration, GameVersion};
+use uma_tools::course::Phase;
+use uma_tools::race::solver::RaceSolver;
+use uma_tools::skill::*;
+use uma_tools::uma::*;
 
 /// Length of the test course (10104) in meters.
 const COURSE_DISTANCE: f64 = 2000.0;
@@ -33,22 +33,10 @@ fn skill(condition: &str) -> Skill {
     )
 }
 
-fn course() -> Course {
-    Course::from_json_file("data/course_data.json", "10104").expect("Failed to load course data")
-}
-
 /// Run a single-runner race with the given skill condition and return the
 /// positions at which the skill activated.
 fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
-    let params = RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed,
-    };
+    let params = race_params(rng_seed);
     let uma = Uma {
         speed: 1200,
         stamina: 1200,
@@ -64,7 +52,7 @@ fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
         game_version: GameVersion::LATEST,
         ..Default::default()
     };
-    let mut solver = RaceSolver::new(course(), params, &config);
+    let mut solver = RaceSolver::new(load_course(10104), params, &config);
     solver.add_runner(uma, Motivation::Normal, vec![skill(condition)]);
     let mut solver = solver.ready_runners();
     solver.run();
@@ -97,7 +85,7 @@ const FRAME_DISTANCE: f64 = 30.0 / 15.0;
 
 #[test]
 fn test_random_point_activates_within_phase() {
-    let (start, end) = Phase::Mid.boundaries(&course());
+    let (start, end) = Phase::Mid.boundaries(&load_course(10104));
     assert_activates_within("phase_random==1", start, end + FRAME_DISTANCE);
 }
 
@@ -128,9 +116,9 @@ fn test_remain_distance_range_activates_within_range() {
 
 #[test]
 fn test_distance_triggers_are_positions_in_order() {
-    use crate::trigger::builder::build_trigger_scheduler;
-    use crate::units::furlongs_to_meters;
     use rand::SeedableRng;
+    use uma_tools::trigger::builder::build_trigger_scheduler;
+    use uma_tools::units::furlongs_to_meters;
 
     let skills = [
         skill("remain_distance<=300"), // 1700m
@@ -138,7 +126,7 @@ fn test_distance_triggers_are_positions_in_order() {
         skill("furlong>=3"),           // 3 furlongs
     ];
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let mut scheduler = build_trigger_scheduler(&skills, &course(), &mut rng);
+    let mut scheduler = build_trigger_scheduler(&skills, &load_course(10104), &mut rng);
 
     let order: Vec<(usize, f64)> = std::iter::from_fn(|| scheduler.distance_triggers.pop())
         .map(|t| (t.logic_idx, t.threshold_meters))
@@ -155,11 +143,15 @@ fn test_distance_triggers_are_positions_in_order() {
 
 #[test]
 fn test_reversed_remain_distance_window_range() {
-    use crate::trigger::builder::build_trigger_scheduler;
     use rand::SeedableRng;
+    use uma_tools::trigger::builder::build_trigger_scheduler;
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill("remain_distance>=350")], &course(), &mut rng);
+    let scheduler = build_trigger_scheduler(
+        &[skill("remain_distance>=350")],
+        &load_course(10104),
+        &mut rng,
+    );
 
     assert_eq!(scheduler.window_triggers.len(), 1);
     let window = &scheduler.window_triggers[0];
@@ -169,13 +161,13 @@ fn test_reversed_remain_distance_window_range() {
 
 #[test]
 fn test_remain_distance_pair_window_range() {
-    use crate::trigger::builder::build_trigger_scheduler;
     use rand::SeedableRng;
+    use uma_tools::trigger::builder::build_trigger_scheduler;
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(
         &[skill("remain_distance<=401&remain_distance>=399")],
-        &course(),
+        &load_course(10104),
         &mut rng,
     );
 

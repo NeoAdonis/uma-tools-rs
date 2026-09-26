@@ -411,3 +411,6 @@ pub fn parse_condition(input: &str) -> Result<Condition, Box<dyn std::error::Err
     let condition = parser.parse()?;
     Ok(condition)
 }
+
+#[cfg(test)]
+mod tests;

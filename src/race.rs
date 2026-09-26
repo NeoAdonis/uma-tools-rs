@@ -9,6 +9,3 @@ pub mod secure_lead;
 pub mod solver;
 pub mod transitions;
 pub mod unready_runner;
-
-#[cfg(test)]
-mod tests;

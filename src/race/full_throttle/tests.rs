@@ -1,11 +1,11 @@
+use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::Course;
-use crate::race::full_throttle::*;
 use crate::race::last_spurt::*;
-use crate::race::parameters::*;
 use crate::race::runner::{MAX_TARGET_SPEED, Runner};
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
+use crate::test_utils::race_params;
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 
@@ -32,18 +32,6 @@ fn full_throttle_skill() -> Skill {
             wisdom_check: false,
         },
     )
-}
-
-fn params(rng_seed: u64) -> RaceParameters {
-    RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed,
-    }
 }
 
 fn uma(speed: u16) -> Uma {
@@ -74,7 +62,7 @@ fn solver(
         game_version,
         ..Default::default()
     };
-    let mut solver = RaceSolver::new(course, params(rng_seed), &config);
+    let mut solver = RaceSolver::new(course, race_params(rng_seed), &config);
     solver.add_runner(uma(speed), Motivation::Normal, skills);
     solver.ready_runners()
 }

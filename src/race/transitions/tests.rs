@@ -1,5 +1,4 @@
-use super::super::transitions::*;
-use crate::course::geometry::*;
+use super::*;
 
 fn create_test_corner(start: f64, length: f64) -> Corner {
     Corner { start, length }

@@ -83,3 +83,6 @@ pub fn hp_cost(style: Style, course_distance: i32) -> f64 {
     };
     20.0 * style_coef * distance_coef
 }
+
+#[cfg(test)]
+mod tests;

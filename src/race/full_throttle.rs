@@ -56,3 +56,6 @@ pub fn base_acceleration(
     let acceleration_from_power = 0.0006 * (500.0 * power as f64).sqrt();
     0.068 * acceleration_from_power / (course_distance as f64 / 1000.0).powf(1.5)
 }
+
+#[cfg(test)]
+mod tests;

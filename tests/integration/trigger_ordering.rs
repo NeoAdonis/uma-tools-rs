@@ -4,49 +4,11 @@
 //! simultaneously are properly handled, and that trigger priority/ordering
 //! works correctly.
 
-use super::super::skill_activation::*;
-use crate::course::*;
-use crate::skill::*;
-use crate::trigger::builder::build_trigger_scheduler;
+use crate::common::{load_course, make_skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-
-/// Helper function to create a skill with given condition and optional precondition
-fn create_skill(id: &str, condition: &str, precondition: &str) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                condition: condition.to_string(),
-                precondition: precondition.to_string(),
-                base_duration: 40000,
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 4000,
-                }],
-            }],
-            wisdom_check: true,
-        },
-    )
-}
-
-/// Load a real course from course_data.json
-fn load_course(course_id: u32) -> Course {
-    let course_data =
-        std::fs::read_to_string("data/course_data.json").expect("Failed to read course_data.json");
-    let courses: std::collections::HashMap<String, serde_json::Value> =
-        serde_json::from_str(&course_data).expect("Failed to parse course_data.json");
-
-    let course_str = course_id.to_string();
-    let _course_json = courses
-        .get(&course_str)
-        .unwrap_or_else(|| panic!("Course {} not found", course_id));
-
-    Course::from_json_str(&course_data, &course_str)
-        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
-}
+use uma_tools::trigger::builder::build_trigger_scheduler;
+use uma_tools::trigger::skill_activation::*;
 
 // ============================================================================
 // PHASE + DISTANCE COLLISION
@@ -58,7 +20,7 @@ fn test_phase_transition_and_distance_threshold() {
     // Tests: Phase boundary (phase==1) and distance trigger align
     // When entering Mid phase (phase 1) at distance_rate=50%, both conditions fire
 
-    let skill = create_skill(
+    let skill = make_skill(
         "100621",
         "distance_rate>=50&phase==1&order>=3&order_rate<=70",
         "",
@@ -101,7 +63,7 @@ fn test_multiple_conditions_align_at_phase_boundary() {
     // Precondition: change_order_up_middle>=3
     // Tests: Multiple conditions must all be true at phase 1 entry
 
-    let skill = create_skill(
+    let skill = make_skill(
         "110121",
         "distance_rate>=60&phase==1&slope==2&order_rate>=50",
         "change_order_up_middle>=3",
@@ -144,7 +106,7 @@ fn test_six_conditions_simultaneous() {
     // Skill 110591: distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500
     // Tests: Six conditions must all align when trigger fires
 
-    let skill = create_skill(
+    let skill = make_skill(
         "110591",
         "distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500",
         "",
@@ -189,7 +151,7 @@ fn test_distance_rate_and_remain_distance_alignment() {
     // Skill 101191: distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500
     // Tests: Two distance measurements must align simultaneously
 
-    let skill = create_skill(
+    let skill = make_skill(
         "101191",
         "distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500",
         "",
@@ -241,7 +203,7 @@ fn test_hp_trigger_during_distance_window() {
     // Skill 200761: distance_type==4&hp_per<=30
     // Tests: HP trigger fires independently of distance progression
 
-    let skill = create_skill("200761", "distance_type==4&hp_per<=30", "");
+    let skill = make_skill("200761", "distance_type==4&hp_per<=30", "");
 
     let course = load_course(10105); // 2600m course (distance_type 4)
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -284,7 +246,7 @@ fn test_continuous_trigger_with_multiple_dynamic_guards() {
     // Test: Skill with continuous trigger checking multiple dynamic conditions
     // Tests: Continuous triggers re-evaluate every frame, handling dynamic state
 
-    let skill = create_skill(
+    let skill = make_skill(
         "test_continuous",
         "accumulatetime>=5&blocked_front_continuetime>=1&order_rate<=50&overtake_target_time>=2",
         "",
@@ -325,7 +287,7 @@ fn test_explicit_trigger_takes_precedence_over_dynamic_guards() {
     // Test: When explicit trigger exists, it takes precedence even with dynamic guards
     // Tests: Trigger selection priority system
 
-    let skill = create_skill(
+    let skill = make_skill(
         "test_precedence",
         "phase==2&blocked_front_continuetime>=1&order_rate<=50",
         "",

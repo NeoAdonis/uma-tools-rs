@@ -271,4 +271,49 @@ impl Distribution<Motivation> for StandardUniform {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_motivation_multiplier() {
+        // Normal = 0; multiplier should be 1.0
+        assert_eq!(motivation_multiplier(Motivation::Normal), 1.0);
+
+        // Great = +2; multiplier should be 1.04
+        assert!((motivation_multiplier(Motivation::Great) - 1.04).abs() < 0.001);
+
+        // Awful = -2; multiplier should be 0.96
+        assert!((motivation_multiplier(Motivation::Awful) - 0.96).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_uma_stat_calculations() {
+        let raw_uma = Uma {
+            speed: 1500,
+            stamina: 800,
+            power: 1200,
+            guts: 700,
+            wiz: 1200,
+            style: Style::End,
+            distance_aptitude: Aptitude::S,
+            track_aptitude: Aptitude::A,
+            style_aptitude: Aptitude::A,
+        };
+
+        // Test motivation effects
+        let base_uma = Uma::raw_to_base(raw_uma, Motivation::Normal);
+
+        // Normal motivation should not change stats significantly
+        // (motivation multiplier is 1.0 for Normal)
+        assert!(base_uma.speed > 0);
+        assert!(base_uma.stamina > 0);
+
+        // Test Great motivation (positive boost)
+        let great_uma = Uma::raw_to_base(raw_uma, Motivation::Great);
+        assert!(great_uma.speed > base_uma.speed);
+
+        // Test Awful motivation (negative impact)
+        let awful_uma = Uma::raw_to_base(raw_uma, Motivation::Awful);
+        assert!(awful_uma.speed < base_uma.speed);
+    }
+}

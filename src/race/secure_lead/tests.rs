@@ -1,9 +1,9 @@
+use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::Course;
-use crate::race::parameters::*;
 use crate::race::runner::Runner;
-use crate::race::secure_lead::*;
 use crate::race::solver::{RaceSolver, RaceState};
+use crate::test_utils::race_params;
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
@@ -121,15 +121,7 @@ fn test_hp_cost_style_coefficients() {
 fn ready_runner(style: Style) -> (Runner, RaceState) {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let params = RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed: 42,
-    };
+    let params = race_params(42);
     let uma = Uma {
         speed: 1200,
         stamina: 1000,

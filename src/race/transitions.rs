@@ -153,3 +153,6 @@ impl Default for StraightManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests;

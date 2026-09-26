@@ -6,49 +6,12 @@
 //! Note: Runtime precondition tests (unlock mechanics, per-frame checking) are
 //! deferred to integration tests.
 
-use super::super::skill_activation::*;
-use crate::course::*;
-use crate::skill::*;
-use crate::trigger::builder::build_trigger_scheduler;
+use crate::common::{load_course, make_skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-
-/// Helper function to create a skill with precondition
-fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                condition: condition.to_string(),
-                precondition: precondition.to_string(),
-                base_duration: 40000,
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 4000,
-                }],
-            }],
-            wisdom_check: true,
-        },
-    )
-}
-
-/// Load a real course from course_data.json for testing
-fn load_course(course_id: u32) -> Course {
-    let course_data =
-        std::fs::read_to_string("data/course_data.json").expect("Failed to read course_data.json");
-    let courses: std::collections::HashMap<String, serde_json::Value> =
-        serde_json::from_str(&course_data).expect("Failed to parse course_data.json");
-
-    let course_str = course_id.to_string();
-    let _course_json = courses
-        .get(&course_str)
-        .unwrap_or_else(|| panic!("Course {} not found", course_id));
-
-    Course::from_json_str(&course_data, &course_str)
-        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
-}
+use uma_tools::skill::*;
+use uma_tools::trigger::builder::build_trigger_scheduler;
+use uma_tools::trigger::skill_activation::*;
 
 // ============================================================================
 // PRECONDITION-TRIGGER INTERACTION (BUILD-TIME)
@@ -61,7 +24,7 @@ fn test_precondition_with_window_trigger() {
     // Condition: is_last_straight==1
     // Tests: Complex precondition properly separated from spatial window trigger
 
-    let skill = create_skill_with_precondition(
+    let skill = make_skill(
         "100031",
         "is_last_straight==1",
         "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
@@ -115,7 +78,7 @@ fn test_precondition_with_or_condition() {
     // Test: Precondition applies to all OR branches equally
     // Tests: Each OR branch inherits the same precondition
 
-    let skill = create_skill_with_precondition(
+    let skill = make_skill(
         "test_or_precond",
         "distance_rate>=80@hp_per<=50@accumulatetime>=10", // 3 OR branches
         "phase>=2&ground_type==1",                         // Shared precondition

@@ -1,13 +1,10 @@
-use super::super::evaluator::*;
-use super::super::parser::*;
-use super::super::variables::*;
+use super::*;
 use crate::configuration::Configuration;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
-use crate::uma::*;
 
 /// Helper to create a minimal test race state
 fn create_test_race_solver() -> RaceSolver<Runner> {

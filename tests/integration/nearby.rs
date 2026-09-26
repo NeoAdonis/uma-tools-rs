@@ -1,24 +1,14 @@
-use crate::configuration::Configuration;
-use crate::course::Course;
-use crate::race::parameters::*;
-use crate::race::runner::Runner;
-use crate::race::solver::RaceSolver;
-use crate::uma::*;
+use crate::common::{load_course, race_params};
+use uma_tools::configuration::Configuration;
+use uma_tools::race::runner::Runner;
+use uma_tools::race::solver::RaceSolver;
+use uma_tools::uma::*;
 
 const DELTA_TIME: f64 = 1.0 / 15.0;
 
 fn ready_runners(count: usize) -> Vec<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let params = RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed: 42,
-    };
+    let course = load_course(10101);
+    let params = race_params(42);
     let uma = Uma {
         speed: 1200,
         stamina: 1000,

@@ -1,10 +1,11 @@
-use super::super::modifiers::*;
+use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
+use crate::test_utils::race_params;
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
@@ -81,15 +82,7 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
 fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let params = RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed: 42,
-    };
+    let params = race_params(42);
     let uma = Uma {
         speed: 1200,
         stamina: 1000,
@@ -189,15 +182,7 @@ fn test_stamina_limit_break_base_buff() {
 fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
     let course = Course::from_json_file("data/course_data.json", "10105")
         .expect("Failed to load course data");
-    let params = RaceParameters {
-        track_condition: TrackCondition::Firm,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::None,
-        grade: Grade::G1,
-        gates: 9,
-        rng_seed: 42,
-    };
+    let params = race_params(42);
     let uma = Uma {
         speed: 1200,
         stamina: 1600,
@@ -248,4 +233,27 @@ fn test_stamina_limit_break_activates_at_last_spurt_speed() {
 fn test_stamina_limit_break_waits_for_last_spurt_speed() {
     let (buff, _) = run_stamina_limit_break_runner(19.9);
     assert_eq!(buff, 0.0);
+}
+
+#[test]
+fn test_aptitude_multipliers() {
+    // Test that aptitude multipliers are ordered correctly
+    let s_coef = wiz_style_multiplier(Aptitude::S);
+    let a_coef = wiz_style_multiplier(Aptitude::A);
+    let b_coef = wiz_style_multiplier(Aptitude::B);
+    let c_coef = wiz_style_multiplier(Aptitude::C);
+
+    assert!(s_coef > a_coef);
+    assert!(a_coef > b_coef);
+    assert!(b_coef > c_coef);
+}
+
+#[test]
+fn test_track_condition_modifiers() {
+    // Test that track conditions apply appropriate modifiers
+    let heavy_modifier = track_speed_modifier(TrackCondition::Heavy);
+    let firm_modifier = track_speed_modifier(TrackCondition::Firm);
+
+    // Heavy track should have more penalty than firm
+    assert!(heavy_modifier > firm_modifier);
 }

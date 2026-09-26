@@ -3,57 +3,11 @@
 //! These tests verify that skills with conditions depending on other skill
 //! activations are properly detected and configured at build-time.
 
-use super::super::skill_activation::*;
-use crate::course::*;
-use crate::skill::*;
-use crate::trigger::builder::build_trigger_scheduler;
+use crate::common::{load_course, make_skill, make_skill_with_alternatives};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-
-/// Helper function to create a skill with multiple alternatives
-fn create_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: alternatives
-                .iter()
-                .map(|(condition, precondition)| SkillAlternative {
-                    condition: condition.to_string(),
-                    precondition: precondition.to_string(),
-                    base_duration: 40000,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 4000,
-                    }],
-                })
-                .collect(),
-            wisdom_check: true,
-        },
-    )
-}
-
-/// Helper function to create a simple skill
-fn create_skill(id: &str, condition: &str, precondition: &str) -> Skill {
-    create_skill_with_alternatives(id, vec![(condition, precondition)])
-}
-
-/// Load a real course from course_data.json
-fn load_course(course_id: u32) -> Course {
-    let course_data =
-        std::fs::read_to_string("data/course_data.json").expect("Failed to read course_data.json");
-    let courses: std::collections::HashMap<String, serde_json::Value> =
-        serde_json::from_str(&course_data).expect("Failed to parse course_data.json");
-
-    let course_str = course_id.to_string();
-    let _course_json = courses
-        .get(&course_str)
-        .unwrap_or_else(|| panic!("Course {} not found", course_id));
-
-    Course::from_json_str(&course_data, &course_str)
-        .unwrap_or_else(|_| panic!("Failed to parse course {}", course_id))
-}
+use uma_tools::trigger::builder::build_trigger_scheduler;
+use uma_tools::trigger::skill_activation::*;
 
 // ============================================================================
 // BASIC ACTIVATION DEPENDENCY
@@ -64,7 +18,7 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
     // Skill 100661 (Alt 2): phase==3&is_activate_other_skill_detail==1
     // Tests: Skill that requires another skill to have activated first
 
-    let skill = create_skill_with_alternatives(
+    let skill = make_skill_with_alternatives(
         "100661",
         vec![
             (
@@ -114,7 +68,7 @@ fn test_heal_skill_activation_dependency() {
     // Precondition: phase_firsthalf==1&is_activate_heal_skill==1
     // Tests: Heal-specific activation tracking
 
-    let skill = create_skill_with_alternatives(
+    let skill = make_skill_with_alternatives(
         "110771",
         vec![
             (
@@ -167,7 +121,7 @@ fn test_activation_dependent_or_branches() {
     // Branch 2: is_activate_other_skill_detail==1&...&distance_type==3
     // Tests: Activation dependency combined with OR mutual exclusion
 
-    let skill = create_skill_with_alternatives(
+    let skill = make_skill_with_alternatives(
         "100901",
         vec![
             (
@@ -235,7 +189,7 @@ fn test_alternative_with_and_without_dependency() {
     // Alt 2: Requires is_activate_other_skill_detail==1
     // Tests: Alternative prioritization with activation dependency
 
-    let skill = create_skill_with_alternatives(
+    let skill = make_skill_with_alternatives(
         "101021",
         vec![
             (
@@ -314,7 +268,7 @@ fn test_other_character_skill_activation() {
     // is_other_character_activate_advantage_skill==27 or ==22
     // Tests: External (other character) activation tracking
 
-    let skill = create_skill(
+    let skill = make_skill(
         "101103211",
         "distance_type==3&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==27@distance_type==4&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==27@distance_type==3&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==22@distance_type==4&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==22",
         "",
@@ -371,7 +325,7 @@ fn test_activation_dependency_variable_detection() {
 
     // Test 1: is_activate_other_skill_detail (DynamicGuard → Continuous trigger with guard)
     {
-        let skill = create_skill("test_dep1", "is_activate_other_skill_detail==1", "");
+        let skill = make_skill("test_dep1", "is_activate_other_skill_detail==1", "");
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
@@ -393,7 +347,7 @@ fn test_activation_dependency_variable_detection() {
 
     // Test 2: is_activate_heal_skill (ActivationTrigger → specific trigger, no guard)
     {
-        let skill = create_skill("test_dep2", "is_activate_heal_skill==1", "");
+        let skill = make_skill("test_dep2", "is_activate_heal_skill==1", "");
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
@@ -415,7 +369,7 @@ fn test_activation_dependency_variable_detection() {
 
     // Test 3: is_other_character_activate_advantage_skill (DynamicGuard → Continuous with guard)
     {
-        let skill = create_skill(
+        let skill = make_skill(
             "test_dep3",
             "is_other_character_activate_advantage_skill==27",
             "",
@@ -449,7 +403,7 @@ fn test_activation_dependency_with_precondition() {
     // Test: Skill with both precondition and activation dependency in condition
     // Tests: Layered dependency checking (precondition → trigger → guard with activation)
 
-    let skill = create_skill(
+    let skill = make_skill(
         "test_combined",
         "is_activate_other_skill_detail==1&distance_rate>=50",
         "phase>=2",

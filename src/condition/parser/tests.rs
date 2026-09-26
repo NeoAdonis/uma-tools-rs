@@ -1,5 +1,5 @@
-use super::super::parser::*;
-use super::super::variables::*;
+use super::*;
+use crate::condition::variables::*;
 
 #[test]
 fn test_simple_condition() {

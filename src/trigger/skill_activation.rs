@@ -1038,3 +1038,6 @@ fn extract_spatial_trigger(comp: &Comparison, course: &Course) -> Option<Trigger
         None
     }
 }
+
+#[cfg(test)]
+mod tests;
