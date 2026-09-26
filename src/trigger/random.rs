@@ -83,7 +83,7 @@ pub fn process_random_comp(
                 .ok()?
                 .boundaries(course);
 
-            Some(vec![rng.random_range(start..end)])
+            Some(vec![random_segment(start, end, rng)])
         }
 
         RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom) => {
@@ -93,7 +93,7 @@ pub fn process_random_comp(
                 .ok()?
                 .boundaries_first_half(course);
 
-            Some(vec![rng.random_range(start..end)])
+            Some(vec![random_segment(start, end, rng)])
         }
 
         RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom) => {
@@ -103,7 +103,7 @@ pub fn process_random_comp(
                 .ok()?
                 .boundaries_first_quarter(course);
 
-            Some(vec![rng.random_range(start..end)])
+            Some(vec![random_segment(start, end, rng)])
         }
 
         RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom) => {
@@ -113,7 +113,7 @@ pub fn process_random_comp(
                 .ok()?
                 .boundaries_second_half(course);
 
-            Some(vec![rng.random_range(start..end)])
+            Some(vec![random_segment(start, end, rng)])
         }
 
         RandomPhase(RandomPhaseVar::PhaseCornerRandom) => {
@@ -135,7 +135,7 @@ pub fn process_random_comp(
                 .collect();
 
             // No corners in this phase fails the roll
-            random_point_in_intervals(&corner_intervals, rng)
+            random_segment_in_intervals(&corner_intervals, rng)
                 .map(|activation_distance| vec![activation_distance])
         }
 
@@ -156,7 +156,7 @@ pub fn process_random_comp(
                 .collect();
 
             // No straights in this phase fails the roll
-            random_point_in_intervals(&straight_intervals, rng)
+            random_segment_in_intervals(&straight_intervals, rng)
                 .map(|activation_distance| vec![activation_distance])
         }
 
@@ -177,7 +177,7 @@ pub fn process_random_comp(
                 .collect();
 
             // No straights found fails the roll
-            random_point_in_intervals(&straight_intervals, rng)
+            random_segment_in_intervals(&straight_intervals, rng)
                 .map(|activation_distance| vec![activation_distance])
         }
 
@@ -198,7 +198,7 @@ pub fn process_random_comp(
                 .collect();
 
             // No straights found fails the roll
-            random_point_in_intervals(&straight_intervals, rng)
+            random_segment_in_intervals(&straight_intervals, rng)
                 .map(|activation_distance| vec![activation_distance])
         }
 
@@ -210,22 +210,25 @@ pub fn process_random_comp(
 
         RandomSpatial(RandomSpatialVar::IsFinalcornerRandom) => {
             // is_finalcorner_random==1
-            // Picks random point on final corner
+            // Picks random segment on final corner
             // No corners on course fails the roll
             course.corners.last().map(|last_corner| {
-                let offset: f64 = rng.random();
-                vec![last_corner.start + offset * last_corner.length]
+                vec![random_segment(last_corner.start, last_corner.start + last_corner.length, rng)]
             })
         }
 
         RandomSpatial(RandomSpatialVar::CornerRandom) => {
-            // corner_random==X where X is corner number (1-indexed)
-            let corner_idx = (comp.value - 1) as usize;
-            // Invalid corner index fails the roll
-            course.corners.get(corner_idx).map(|corner| {
-                let offset: f64 = rng.random();
-                vec![corner.start + offset * corner.length]
-            })
+            // corner_random==X where X is corner number (1-4)
+            // Corners are numbered backwards from the final corner, which is always
+            // the fourth. If the race goes through corner X multiple times, only the
+            // last occurrence counts.
+            // Invalid corner number or corner not on course fails the roll
+            if !(1..=4).contains(&comp.value) {
+                return None;
+            }
+            let corner_idx = (course.corners.len() + comp.value as usize).checked_sub(5)?;
+            let corner = &course.corners[corner_idx];
+            Some(vec![random_segment(corner.start, corner.start + corner.length, rng)])
         }
 
         RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
@@ -241,39 +244,41 @@ pub fn process_random_comp(
 
         RandomSpatial(RandomSpatialVar::StraightRandom) => {
             // straight_random==1
-            // Picks random straight, then random point on it
+            // Picks random straight, then random segment on it
+            // All straights have the same chance to be picked regardless of length
             // No straights on course fails the roll (this should be rare/unlikely)
             course
                 .straights
                 .choose(rng)
-                .map(|straight| vec![rng.random_range(straight.start..straight.end)])
+                .map(|straight| vec![random_segment(straight.start, straight.end, rng)])
         }
 
         RandomSpatial(RandomSpatialVar::LastStraightRandom) => {
             // last_straight_random==1
-            // Picks random point on final straight
+            // Picks random segment on final straight
             // No straights on course fails the roll (this should be rare/unlikely)
             course
                 .straights
                 .last()
-                .map(|last_straight| vec![rng.random_range(last_straight.start..last_straight.end)])
+                .map(|last_straight| {
+                    vec![random_segment(last_straight.start, last_straight.end, rng)]
+                })
         }
 
         RandomSpatial(RandomSpatialVar::UpSlopeRandom) => {
             // up_slope_random==1
-            // Picks random point on any uphill
+            // Picks random segment on any uphill
             let uphills: Vec<_> = course.slopes.iter().filter(|s| s.is_uphill()).collect();
 
             // No uphills on course fails the roll
-            uphills.choose(rng).map(|slope| {
-                let offset: f64 = rng.random();
-                vec![slope.start + offset * slope.length]
-            })
+            uphills
+                .choose(rng)
+                .map(|slope| vec![random_segment(slope.start, slope.start + slope.length, rng)])
         }
 
         RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
             // up_slope_random_later_half==1
-            // Picks random point on any uphill in second half of race
+            // Picks random segment on any uphill in second half of race
             // Uphills crossing the halfway point only count from there onwards
             let halfway = course.halfway();
             let late_uphills: Vec<_> = course
@@ -288,28 +293,26 @@ pub fn process_random_comp(
             // No uphills after halfway on course fails the roll
             late_uphills
                 .choose(rng)
-                .map(|&(start, end)| vec![rng.random_range(start..end)])
+                .map(|&(start, end)| vec![random_segment(start, end, rng)])
         }
 
         RandomSpatial(RandomSpatialVar::DownSlopeRandom) => {
             // down_slope_random==1
-            // Picks random point on any downhill
+            // Picks random segment on any downhill
             let downhills: Vec<_> = course.slopes.iter().filter(|s| s.is_downhill()).collect();
 
             // No downhills on course fails the roll
-            downhills.choose(rng).map(|slope| {
-                let offset: f64 = rng.random();
-                vec![slope.start + offset * slope.length]
-            })
+            downhills
+                .choose(rng)
+                .map(|slope| vec![random_segment(slope.start, slope.start + slope.length, rng)])
         }
 
         RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom) => {
             // distance_rate_after_random==X where X is percentage
-            // Picks random point after X% of the race
+            // Picks random segment after X% of the race
             let threshold_distance = (comp.value as f64 / 100.0) * course.distance as f64;
             let end_distance = course.distance as f64;
-            let activation_distance = rng.random_range(threshold_distance..end_distance);
-            Some(vec![activation_distance])
+            Some(vec![random_segment(threshold_distance, end_distance, rng)])
         }
 
         _ => {
@@ -328,14 +331,25 @@ fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Op
     (intersection_start < intersection_end).then_some((intersection_start, intersection_end))
 }
 
-/// Pick a random point from a collection of intervals. Intervals distances must be
-/// positive (i.e., `start < end`), otherwise the behavior is undefined.
-/// Returns `None` if the intervals are empty.
-fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Option<f64> {
-    if intervals.is_empty() {
-        return None;
-    }
+/// Pick a random 10m segment in `[start, end)` and return its start. The last
+/// segment may be shorter than 10m.
+///
+/// TODO: Random conditions pick a whole 10m segment, and the skill can activate
+/// anywhere in it as long as the other conditions are met. For now, only the start
+/// of the segment is used as a single activation point. Supporting activation
+/// windows requires refactoring the trigger system.
+pub fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
+    const SEGMENT_LENGTH: f64 = 10.0;
 
+    let count = ((end - start) / SEGMENT_LENGTH).ceil().max(1.0) as u32;
+    start + rng.random_range(0..count) as f64 * SEGMENT_LENGTH
+}
+
+/// Pick a random 10m segment from a collection of intervals stitched together end
+/// to end, and return its start (see [`random_segment`]). Intervals distances must
+/// be positive (i.e., `start < end`), otherwise the behavior is undefined.
+/// Returns `None` if the intervals are empty.
+fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Option<f64> {
     #[cfg(debug_assertions)]
     {
         for &(start, end) in intervals {
@@ -343,24 +357,18 @@ fn random_point_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Op
         }
     }
 
-    // Calculate total length of all intervals
+    let (last, rest) = intervals.split_last()?;
     let total_length: f64 = intervals.iter().map(|(start, end)| end - start).sum();
-
-    // Pick a random offset within the total length
-    let random_offset: f64 = rng.random_range(0.0..total_length);
+    let mut offset = random_segment(0.0, total_length, rng);
 
     // Find which interval contains this offset
-    let mut accumulated = 0.0;
-    for &(interval_start, interval_end) in intervals {
-        let interval_length = interval_end - interval_start;
-        if accumulated + interval_length >= random_offset {
-            let offset_in_interval = random_offset - accumulated;
-            return Some(interval_start + offset_in_interval);
+    for &(start, end) in rest {
+        if offset < end - start {
+            return Some(start + offset);
         }
-        accumulated += interval_length;
+        offset -= end - start;
     }
-
-    unreachable!("random_offset < total_length, so some interval must contain it");
+    Some(last.0 + offset)
 }
 
 #[cfg(test)]

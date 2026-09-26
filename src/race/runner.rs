@@ -20,6 +20,7 @@ use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
+use crate::trigger::random::random_segment;
 use crate::trigger::skill_activation::{ActiveTimedEffect, LogicAction, SkillActivationRecord};
 use crate::trigger::system::{DistanceTrigger, TriggerScheduler};
 use crate::uma::*;
@@ -804,14 +805,14 @@ impl Runner {
     }
 
     /// Schedule skills triggered at a random point after the Full-Throttle Sprint
-    /// starts (`run_at_full_speed_random`). The point is picked between the
-    /// current position and the goal.
+    /// starts (`run_at_full_speed_random`). The point is picked from the 10m
+    /// segments between the current position and the goal.
     fn schedule_full_throttle_triggers(&mut self, state: &RaceState) {
         let course_distance = state.course.distance as f64;
         let mut rng = self.rng.borrow_mut();
         for logic_idx in self.trigger_scheduler.full_throttle_triggers.drain(..) {
             let threshold_meters = if self.position < course_distance {
-                rng.random_range(self.position..course_distance)
+                random_segment(self.position, course_distance, &mut *rng)
             } else {
                 self.position
             };
