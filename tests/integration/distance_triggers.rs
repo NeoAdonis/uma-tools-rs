@@ -183,3 +183,26 @@ fn test_remain_distance_pair_window_range() {
     assert_eq!(window.min_threshold, COURSE_DISTANCE - 402.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }
+
+#[test]
+fn test_all_corner_random_activates_at_later_segment() {
+    // Up to 4 segments are picked on corners, but the skill can only activate on the
+    // fourth corner (1475-1734m). Earlier segments fail the guard, so it activates
+    // at the first segment on the fourth corner, if there's any.
+    let condition = "all_corner_random==1&corner==4";
+    let mut activated = 0;
+    for seed in 0..20 {
+        let positions = activation_positions(condition, seed);
+        assert!(positions.len() <= 1, "seed {seed}: {positions:?}");
+        if let Some(&position) = positions.first() {
+            assert!(
+                (1475.0..=1734.0).contains(&position),
+                "seed {seed}: activated at {position}"
+            );
+            activated += 1;
+        }
+    }
+
+    // With a single segment, it would only activate a quarter of the time
+    assert!(activated >= 12, "activated in {activated} of 20 races");
+}

@@ -57,13 +57,20 @@ fn create_test_course_with(
     )
 }
 
+/// Roll a single-branch condition.
+fn roll(condition: &Condition, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
+    let mut rolls = roll_condition(condition, course, rng);
+    assert_eq!(rolls.len(), 1, "expected a single-branch condition");
+    rolls.remove(0)
+}
+
 #[test]
 fn test_random_lot_success() {
     let course = create_test_course();
     let condition = parse_condition("random_lot==100").unwrap(); // 100% chance
 
     let mut rng = rand::rng();
-    let result = roll_condition(&condition, &course, &mut rng);
+    let result = roll(&condition, &course, &mut rng);
 
     assert!(result.is_some());
 }
@@ -74,7 +81,7 @@ fn test_phase_random() {
     let condition = parse_condition("phase_random==1").unwrap(); // Mid phase
 
     let mut rng = rand::rng();
-    let result = roll_condition(&condition, &course, &mut rng);
+    let result = roll(&condition, &course, &mut rng);
 
     assert!(result.is_some());
     let activation = result.unwrap();
@@ -85,43 +92,56 @@ fn test_phase_random() {
     assert!(activation[0] < section * 16.0);
 }
 
-/// Roll `condition` many times and collect the distinct first activation points.
+/// Roll a single-branch `condition` many times and return the first points rolled.
 fn rolled_points(condition: &str, course: &Course) -> Vec<f64> {
     let condition = parse_condition(condition).unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let mut points: Vec<f64> = (0..500)
-        .map(|_| roll_condition(&condition, course, &mut rng).unwrap()[0])
-        .collect();
-    points.sort_by(f64::total_cmp);
-    points.dedup();
-    points
+    (0..500)
+        .map(|_| roll(&condition, course, &mut rng).unwrap()[0])
+        .collect()
+}
+
+/// Assert that all `points` are within `[min, max]`, and that they cover it
+/// (some are within 5% of the range from both ends).
+fn assert_covers(points: &[f64], min: f64, max: f64, context: &str) {
+    let lowest = points.iter().copied().fold(f64::INFINITY, f64::min);
+    let highest = points.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let tolerance = (max - min) * 0.05;
+    assert!(
+        lowest >= min && highest <= max,
+        "{context}: [{lowest}, {highest}] not in [{min}, {max}]"
+    );
+    assert!(
+        lowest < min + tolerance && highest > max - tolerance,
+        "{context}: [{lowest}, {highest}] doesn't cover [{min}, {max}]"
+    );
 }
 
 #[test]
 fn test_random_segment() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let mut points: Vec<f64> = (0..200).map(|_| random_segment(100.0, 125.0, &mut rng)).collect();
-    points.sort_by(f64::total_cmp);
-    points.dedup();
-    // Segments [100-110], [110-120] and [120-125] (shorter last segment)
-    assert_eq!(points, [100.0, 110.0, 120.0]);
+    // Segment must fit: starts from 100 to 115
+    let points: Vec<f64> = (0..500)
+        .map(|_| random_segment(100.0, 125.0, &mut rng))
+        .collect();
+    assert_covers(&points, 100.0, 115.0, "[100-125]");
 
-    // Intervals shorter than a segment only have one
+    // Intervals of 10m or less only have one segment
+    assert_eq!(random_segment(100.0, 110.0, &mut rng), 100.0);
     assert_eq!(random_segment(100.0, 105.0, &mut rng), 100.0);
 }
 
 #[test]
 fn test_random_segment_in_intervals() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    // Stitched together: [0-15] + [100-125] = 40m, so 4 segments starting at
-    // offsets 0, 10, 20 and 30, which fall on 0, 10, 105 and 115
+    // Stitched together: [0-15] + [100-125] = 40m, so offsets 0 to 30, which fall
+    // on [0-15) and [100-115]
     let intervals = [(0.0, 15.0), (100.0, 125.0)];
-    let mut points: Vec<f64> = (0..200)
+    let (first, second): (Vec<f64>, Vec<f64>) = (0..500)
         .map(|_| random_segment_in_intervals(&intervals, &mut rng).unwrap())
-        .collect();
-    points.sort_by(f64::total_cmp);
-    points.dedup();
-    assert_eq!(points, [0.0, 10.0, 105.0, 115.0]);
+        .partition(|&point| point < 15.0);
+    assert_covers(&first, 0.0, 15.0, "first interval");
+    assert_covers(&second, 100.0, 115.0, "second interval");
 
     assert!(random_segment_in_intervals(&[], &mut rng).is_none());
 }
@@ -130,20 +150,25 @@ fn test_random_segment_in_intervals() {
 fn test_corner_random() {
     // Two corners on course, which are the third and fourth
     let course = create_test_course();
-    let points = rolled_points("corner_random==3", &course);
-    let expected: Vec<f64> = (0..20).map(|i| 100.0 + i as f64 * 10.0).collect();
-    assert_eq!(points, expected);
-
-    let points = rolled_points("corner_random==4", &course);
-    let expected: Vec<f64> = (0..15).map(|i| 500.0 + i as f64 * 10.0).collect();
-    assert_eq!(points, expected);
+    assert_covers(
+        &rolled_points("corner_random==3", &course),
+        100.0,
+        290.0,
+        "corner 3",
+    );
+    assert_covers(
+        &rolled_points("corner_random==4", &course),
+        500.0,
+        640.0,
+        "corner 4",
+    );
 
     // First and second corners, and invalid corner numbers fail the roll
     let mut rng = rand::rng();
     for value in [0, 1, 2, 5] {
         let condition = parse_condition(&format!("corner_random=={value}")).unwrap();
         assert!(
-            roll_condition(&condition, &course, &mut rng).is_none(),
+            roll(&condition, &course, &mut rng).is_none(),
             "corner_random=={value}"
         );
     }
@@ -164,32 +189,35 @@ fn test_corner_random_last_lap() {
         // Only the last lap's corner counts
         let start = 800.0 + (number - 1) as f64 * 200.0;
         let points = rolled_points(&format!("corner_random=={number}"), &course);
-        let expected: Vec<f64> = (0..10).map(|i| start + i as f64 * 10.0).collect();
-        assert_eq!(points, expected, "corner_random=={number}");
+        assert_covers(
+            &points,
+            start,
+            start + 90.0,
+            &format!("corner_random=={number}"),
+        );
     }
 }
 
 #[test]
-fn test_corner_random_multiple() {
+fn test_corner_random_per_branch() {
     let course = create_test_course();
     let condition =
         parse_condition("corner_random==1@corner_random==2@corner_random==3@corner_random==4")
             .unwrap();
 
     let mut rng = rand::rng();
-    let result = roll_condition(&condition, &course, &mut rng);
+    let rolls = roll_condition(&condition, &course, &mut rng);
 
-    // Even though corner 1 and 2 don't exist, the others should still roll successfully
-    assert!(result.is_some());
-    let activation = result.unwrap();
-
-    // Check activation distance is within third corner
-    assert!(activation[0] >= 100.0);
-    assert!(activation[0] <= 300.0);
-
-    // Check activation distance is within fourth corner
-    assert!(activation[1] >= 500.0);
-    assert!(activation[1] <= 650.0);
+    // Corners 1 and 2 don't exist, so only the last two branches roll successfully,
+    // each with its own point
+    assert_eq!(rolls.len(), 4);
+    assert!(rolls[0].is_none() && rolls[1].is_none());
+    let third = rolls[2].as_ref().unwrap();
+    let fourth = rolls[3].as_ref().unwrap();
+    assert_eq!(third.len(), 1);
+    assert!((100.0..=290.0).contains(&third[0]));
+    assert_eq!(fourth.len(), 1);
+    assert!((500.0..=640.0).contains(&fourth[0]));
 }
 
 #[test]
@@ -207,23 +235,18 @@ fn test_straight_random() {
             front_type: FrontType::Opposite,
         },
     ]);
-    let condition = parse_condition("straight_random==1").unwrap();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let mut short_count = 0;
+    let (short, long): (Vec<f64>, Vec<f64>) = rolled_points("straight_random==1", &course)
+        .into_iter()
+        .partition(|&point| point < 20.0);
 
-    for _ in 0..1000 {
-        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
-        if dist < 20.0 {
-            assert!(dist == 0.0 || dist == 10.0, "Distance {dist} not a segment start");
-            short_count += 1;
-        } else {
-            assert!((100.0..1100.0).contains(&dist), "Distance {dist} not on a straight");
-            assert_eq!(dist % 10.0, 0.0, "Distance {dist} not a segment start");
-        }
-    }
-
+    assert_covers(&short, 0.0, 10.0, "short straight");
+    assert_covers(&long, 100.0, 1090.0, "long straight");
     // Both straights have the same chance regardless of length
-    assert!((400..=600).contains(&short_count), "short straight picked {short_count} times");
+    assert!(
+        (200..=300).contains(&short.len()),
+        "short straight picked {} times",
+        short.len()
+    );
 }
 
 #[test]
@@ -240,7 +263,7 @@ fn test_phase_corner_random() {
 
     // Run multiple times to ensure it's in valid range
     for _ in 0..20 {
-        let result = roll_condition(&condition, &course, &mut rng);
+        let result = roll(&condition, &course, &mut rng);
         assert!(result.is_some());
 
         let activation = result.unwrap();
@@ -273,7 +296,7 @@ fn test_phase_straight_random() {
     let mut rng = rand::rng();
 
     for _ in 0..20 {
-        let result = roll_condition(&condition, &course, &mut rng);
+        let result = roll(&condition, &course, &mut rng);
         assert!(result.is_some());
 
         let activation = result.unwrap();
@@ -319,7 +342,7 @@ fn test_phase_first_half_straight_random() {
     let (mut hit_first, mut hit_second) = (false, false);
 
     for _ in 0..200 {
-        let activation = roll_condition(&condition, &course, &mut rng).unwrap();
+        let activation = roll(&condition, &course, &mut rng).unwrap();
         let dist = activation[0];
 
         if (1600.0..=1700.0).contains(&dist) {
@@ -342,7 +365,7 @@ fn test_phase_first_half_straight_random_no_straight() {
     let condition = parse_condition("phase_first_half_straight_random==2").unwrap();
     let mut rng = rand::rng();
 
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -351,7 +374,7 @@ fn test_phase_first_half_straight_random_invalid_phase() {
     let condition = parse_condition("phase_first_half_straight_random==4").unwrap();
     let mut rng = rand::rng();
 
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -403,7 +426,7 @@ fn test_phase_subdivision_random_all_phases() {
         for (phase, (start, end)) in ranges.into_iter().enumerate() {
             let condition = parse_condition(&format!("{var}=={phase}")).unwrap();
             for _ in 0..50 {
-                let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+                let dist = roll(&condition, &course, &mut rng).unwrap()[0];
                 assert!(
                     (start..end).contains(&dist),
                     "{var}=={phase}: distance {dist} not in [{start}, {end})"
@@ -413,10 +436,7 @@ fn test_phase_subdivision_random_all_phases() {
 
         // Invalid phase fails the roll
         let condition = parse_condition(&format!("{var}==4")).unwrap();
-        assert!(
-            roll_condition(&condition, &course, &mut rng).is_none(),
-            "{var}==4"
-        );
+        assert!(roll(&condition, &course, &mut rng).is_none(), "{var}==4");
     }
 }
 
@@ -436,7 +456,7 @@ fn test_phase_corner_random_partial_overlap() {
     for (phase, (start, end)) in [(0, (300.0, 400.0)), (1, (400.0, 700.0))] {
         let condition = parse_condition(&format!("phase_corner_random=={phase}")).unwrap();
         for _ in 0..50 {
-            let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+            let dist = roll(&condition, &course, &mut rng).unwrap()[0];
             assert!(
                 (start..=end).contains(&dist),
                 "phase {phase}: distance {dist} not in [{start}, {end}]"
@@ -446,7 +466,7 @@ fn test_phase_corner_random_partial_overlap() {
 
     // No corner in Late phase fails the roll
     let condition = parse_condition("phase_corner_random==2").unwrap();
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -470,7 +490,7 @@ fn test_phase_straight_random_multiple_straights() {
     let (mut hit_first, mut hit_second) = (false, false);
 
     for _ in 0..200 {
-        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        let dist = roll(&condition, &course, &mut rng).unwrap()[0];
         if (400.0..=500.0).contains(&dist) {
             hit_first = true;
         } else if (1500.0..=1600.0).contains(&dist) {
@@ -483,7 +503,7 @@ fn test_phase_straight_random_multiple_straights() {
 
     // No straight in Last phase fails the roll
     let condition = parse_condition("phase_straight_random==3").unwrap();
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -508,7 +528,7 @@ fn test_phase_latter_half_straight_random() {
     let (mut hit_first, mut hit_second) = (false, false);
 
     for _ in 0..200 {
-        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        let dist = roll(&condition, &course, &mut rng).unwrap()[0];
         if (1000.0..=1100.0).contains(&dist) {
             hit_first = true;
         } else if (1500.0..=1600.0).contains(&dist) {
@@ -522,7 +542,7 @@ fn test_phase_latter_half_straight_random() {
     // Only straight in Early is [0-100], which isn't in its second half (200-400)
     let course = create_test_course();
     let condition = parse_condition("phase_latter_half_straight_random==0").unwrap();
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -538,7 +558,7 @@ fn test_up_slope_random() {
     let (mut hit_first, mut hit_second) = (false, false);
 
     for _ in 0..200 {
-        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        let dist = roll(&condition, &course, &mut rng).unwrap()[0];
         if (800.0..=900.0).contains(&dist) {
             hit_first = true;
         } else if (1500.0..=1550.0).contains(&dist) {
@@ -551,7 +571,7 @@ fn test_up_slope_random() {
 
     // Only downhills on course fails the roll
     let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, -500)]);
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
@@ -571,7 +591,7 @@ fn test_up_slope_random_later_half() {
     let (mut hit_crossing, mut hit_late) = (false, false);
 
     for _ in 0..200 {
-        let dist = roll_condition(&condition, &course, &mut rng).unwrap()[0];
+        let dist = roll(&condition, &course, &mut rng).unwrap()[0];
         if (1200.0..=1300.0).contains(&dist) {
             hit_crossing = true;
         } else if (1800.0..=1900.0).contains(&dist) {
@@ -584,15 +604,15 @@ fn test_up_slope_random_later_half() {
 
     // Only uphill [800-900] is in the first half, which fails the roll
     let course = create_test_course();
-    assert!(roll_condition(&condition, &course, &mut rng).is_none());
+    assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
 #[test]
 fn test_phase_corner_random_stitched_segments() {
     // Mid phase is 400m to 1600m
     // Corners [390-425] and [500-530] clipped to Mid: [400-425] and [500-530]
-    // Stitched together: 55m, so segments at offsets 0, 10, 20, 30, 40 and 50,
-    // which fall on 400, 410, 420, 505, 515 and 525
+    // Stitched together: 55m, so offsets 0 to 45, which fall on [400-425) and
+    // [500-520]
     let course = create_test_course_with(
         vec![
             Corner {
@@ -607,6 +627,127 @@ fn test_phase_corner_random_stitched_segments() {
         vec![],
         vec![],
     );
-    let points = rolled_points("phase_corner_random==1", &course);
-    assert_eq!(points, [400.0, 410.0, 420.0, 505.0, 515.0, 525.0]);
+    let (first, second): (Vec<f64>, Vec<f64>) = rolled_points("phase_corner_random==1", &course)
+        .into_iter()
+        .partition(|&point| point < 425.0);
+    assert_covers(&first, 400.0, 425.0, "first corner");
+    assert_covers(&second, 500.0, 520.0, "second corner");
+}
+
+#[test]
+fn test_all_corner_random() {
+    // Corners [100-300] and [500-650]
+    let course = create_test_course();
+    let condition = parse_condition("all_corner_random==1").unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let mut counts = [0; 5];
+
+    for _ in 0..500 {
+        let points = roll(&condition, &course, &mut rng).unwrap();
+        counts[points.len()] += 1;
+
+        for point in &points {
+            assert!(
+                (100.0..=290.0).contains(point) || (500.0..=640.0).contains(point),
+                "{point} not a segment on a corner: {points:?}"
+            );
+        }
+        // In race order, and segments never overlap
+        for pair in points.windows(2) {
+            assert!(
+                pair[1] >= pair[0] + 10.0,
+                "overlapping or unordered: {points:?}"
+            );
+        }
+    }
+
+    // Always at least one segment, and up to 4
+    assert_eq!(counts[0], 0);
+    assert!(
+        counts[1..].iter().all(|&count| count > 0),
+        "segment counts: {counts:?}"
+    );
+}
+
+#[test]
+fn test_all_corner_random_short_corners() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let condition = parse_condition("all_corner_random==1").unwrap();
+
+    // A 10m corner only fits one segment
+    let course = create_test_course_with(
+        vec![Corner {
+            start: 500.0,
+            length: 10.0,
+        }],
+        vec![],
+        vec![],
+    );
+    assert_eq!(roll(&condition, &course, &mut rng), Some(vec![500.0]));
+
+    // A 25m corner fits a second segment only if the first one starts within 5m
+    // of the corner start, leaving at least 10m after it
+    let course = create_test_course_with(
+        vec![Corner {
+            start: 500.0,
+            length: 25.0,
+        }],
+        vec![],
+        vec![],
+    );
+    let (mut one, mut two) = (0, 0);
+    for _ in 0..500 {
+        let points = roll(&condition, &course, &mut rng).unwrap();
+        match points[..] {
+            [first] => {
+                assert!(first > 505.0 && first <= 515.0, "{points:?}");
+                one += 1;
+            }
+            [first, second] => {
+                assert!((500.0..=505.0).contains(&first), "{points:?}");
+                assert!(second >= first + 10.0 && second <= 515.0, "{points:?}");
+                two += 1;
+            }
+            _ => panic!("unexpected segments: {points:?}"),
+        }
+    }
+    // First segment starts uniformly in [500-515], so a third of the time within 5m
+    assert!((100..=230).contains(&two), "one: {one}, two: {two}");
+}
+
+#[test]
+fn test_all_corner_random_no_corners() {
+    let course = create_test_course_with(vec![], vec![], vec![]);
+    let condition = parse_condition("all_corner_random==1").unwrap();
+    assert!(roll(&condition, &course, &mut rand::rng()).is_none());
+}
+
+#[test]
+fn test_all_corner_random_per_branch() {
+    // Each branch gets its own segments, never more than 4
+    let course = create_test_course();
+    let condition = parse_condition(
+        "distance_type==1&all_corner_random==1@distance_type==2&all_corner_random==1",
+    )
+    .unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+    for _ in 0..100 {
+        let rolls = roll_condition(&condition, &course, &mut rng);
+        assert_eq!(rolls.len(), 2);
+        for points in rolls {
+            assert!((1..=4).contains(&points.unwrap().len()));
+        }
+    }
+}
+
+#[test]
+fn test_random_lot_has_no_points() {
+    let course = create_test_course();
+    let condition = parse_condition("random_lot==100&phase_random==1").unwrap();
+    let points = roll(&condition, &course, &mut rand::rng()).unwrap();
+
+    // Only the phase point, nothing for the random lot
+    assert_eq!(points.len(), 1);
+    assert!((400.0..1600.0).contains(&points[0]));
 }

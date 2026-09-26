@@ -382,7 +382,10 @@ fn test_start_delay_longer_than_a_frame_skips_whole_frames() {
 
     // First frame is entirely within the start delay: nothing happens
     delayed.step(FRAME);
-    assert_eq!(runner_state(&delayed), (start_position, start_speed, start_hp));
+    assert_eq!(
+        runner_state(&delayed),
+        (start_position, start_speed, start_hp)
+    );
 
     // Second frame: full acceleration and HP consumption, prorated distance
     delayed.step(FRAME);

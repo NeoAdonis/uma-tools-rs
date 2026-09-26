@@ -51,13 +51,12 @@ fn create_test_course() -> Course {
     )
 }
 
-/// Compile a condition on the test course, with a single random point at 1000m.
+/// Compile a condition on the test course, with a single random point at 1000m
+/// for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
-    compile_condition(
-        &parse_condition(condition).unwrap(),
-        &[1000.0],
-        &create_test_course(),
-    )
+    let condition = parse_condition(condition).unwrap();
+    let rolls = vec![Some(vec![1000.0]); condition.comp_tree.or_branches().len()];
+    compile_condition(&condition, &rolls, &create_test_course())
 }
 
 /// Compile a single-branch condition.
@@ -130,7 +129,7 @@ fn test_unevaluable_comparisons_are_not_guards() {
 #[test]
 fn test_events_are_the_trigger() {
     let cases = [
-        ("phase_random==1&order<=3", "Position { meters: 1000.0 }"),
+        ("phase_random==1&order<=3", "Position { meters: [1000.0] }"),
         ("run_at_full_speed_random==1", "FullThrottleStart"),
         ("is_last_straight_onetime==1", "LastStraightEntry"),
         ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
@@ -486,4 +485,35 @@ fn test_precondition_event_is_indexed_before_skill() {
     assert!(scheduler.precondition_windows.is_empty());
     assert_eq!(scheduler.last_straight_triggers, vec![0, 1]);
     assert_eq!(scheduler.skill_logics[0].action, LogicAction::Unlock(0));
+}
+
+#[test]
+fn test_branches_use_their_own_rolls() {
+    let condition = parse_condition(
+        "distance_type==1&all_corner_random==1@distance_type==2&all_corner_random==1",
+    )
+    .unwrap();
+    let course = create_test_course();
+
+    let rolls = [Some(vec![100.0, 200.0]), Some(vec![500.0])];
+    let triggers: Vec<String> = compile_condition(&condition, &rolls, &course)
+        .iter()
+        .map(|branch| format!("{:?}", branch.trigger))
+        .collect();
+    assert_eq!(
+        triggers,
+        [
+            "Position { meters: [100.0, 200.0] }",
+            "Position { meters: [500.0] }"
+        ]
+    );
+
+    // Branches whose roll failed are dropped
+    let rolls = [None, Some(vec![500.0])];
+    let branches = compile_condition(&condition, &rolls, &course);
+    assert_eq!(branches.len(), 1);
+    assert_eq!(guards(&branches[0]), vec!["distance_type == 2"]);
+
+    // Branches without a roll (preconditions) can't be triggered by random points
+    assert!(compile_condition(&condition, &[], &course).is_empty());
 }

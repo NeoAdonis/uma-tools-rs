@@ -91,8 +91,8 @@ fn test_complex_three_branch_distance_ranges() {
     let course = load_course(10104); // 2000m course
 
     // Need to provide random activation for phase_firsthalf_random
-    let activation = vec![500.0]; // Random activation at 500m
-    let branches = compile_condition(&condition, &activation, &course);
+    let rolls = vec![Some(vec![500.0]); 3]; // Random activation at 500m for each branch
+    let branches = compile_condition(&condition, &rolls, &course);
 
     // Should create 3 branches
     assert_eq!(
@@ -104,7 +104,7 @@ fn test_complex_three_branch_distance_ranges() {
     // All branches should trigger at the random point
     for (idx, branch) in branches.iter().enumerate() {
         assert!(
-            matches!(branch.trigger, TriggerCondition::Position { meters: 500.0 }),
+            matches!(&branch.trigger, TriggerCondition::Position { meters } if meters == &[500.0]),
             "Branch {} should trigger at the random point",
             idx
         );

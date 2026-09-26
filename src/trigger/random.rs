@@ -6,62 +6,41 @@ use crate::course::Course;
 use crate::course::Phase as CoursePhase;
 use rand::prelude::*;
 
-/// Evaluate all random variables in a condition.
+/// Roll the random variables of every OR branch of a condition.
+///
+/// Returns one entry per branch (in the order of [`ComparisonTree::or_branches`]),
+/// holding the points where the branch should be checked, or `None` if a roll
+/// failed and the branch can never be satisfied.
 pub fn roll_condition(
     condition: &Condition,
     course: &Course,
     rng: &mut impl Rng,
-) -> Option<Vec<f64>> {
-    visit_comps(&condition.comp_tree, course, rng)
+) -> Vec<Option<Vec<f64>>> {
+    condition
+        .comp_tree
+        .or_branches()
+        .iter()
+        .map(|comps| roll_branch(comps, course, rng))
+        .collect()
 }
 
-/// Visit all comparisons in a list and process random variables.
+/// Roll the random variables of an AND chain.
 ///
-/// Returns `Some(activation_distances)` indicating where the skill should activate,
-/// or `None` if a random lot roll failed or a condition within the list is invalid.
-fn visit_comps(
-    comp_tree: &ComparisonTree,
-    course: &Course,
-    rng: &mut impl Rng,
-) -> Option<Vec<f64>> {
-    match comp_tree {
-        ComparisonTree::Single(comp) => process_random_comp(comp, course, rng),
-        ComparisonTree::Binary { left, op, right } => {
-            match op {
-                BinOp::And => {
-                    // All comparisons must succeed
-                    let mut left_vals = visit_comps(left, course, rng)?;
-                    let right_vals = visit_comps(right, course, rng)?;
-                    left_vals.extend(right_vals);
-                    Some(left_vals)
-                }
-                BinOp::Or => {
-                    // Will fail only if both comparisons fail
-                    match visit_comps(left, course, rng) {
-                        Some(mut left_vals) => match visit_comps(right, course, rng) {
-                            Some(right_vals) => {
-                                left_vals.extend(right_vals);
-                                Some(left_vals)
-                            }
-                            None => Some(left_vals),
-                        },
-                        None => visit_comps(right, course, rng),
-                    }
-                }
-            }
-        }
+/// Returns the points where the branch should be checked, or `None` if a roll
+/// failed (e.g. a random lot, or no corners for `corner_random`).
+fn roll_branch(comps: &[&Comparison], course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
+    let mut points = Vec::new();
+    for comp in comps {
+        points.extend(process_random_comp(comp, course, rng)?);
     }
+    Some(points)
 }
 
 /// Process a single comparison that might contain a random variable.
 ///
-/// Returns `Some(activation_distances)` indicating where the skill should activate,
-/// or `None` if a random lot roll failed or a condition is invalid.
-pub fn process_random_comp(
-    comp: &Comparison,
-    course: &Course,
-    rng: &mut impl Rng,
-) -> Option<Vec<f64>> {
+/// Returns `Some(points)` with the points where the skill should be checked (empty
+/// for non-positional rolls), or `None` if the roll failed or the condition is invalid.
+fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
     use VarType::*;
 
     match &comp.var {
@@ -70,7 +49,7 @@ pub fn process_random_comp(
             // random_lot==X means X% chance of activation
             let chance = comp.value as f64 / 100.0;
             if rng.random_bool(chance) {
-                Some(vec![0.0]) // Success, activation distance is 0 (immediate)
+                Some(vec![]) // Success, no activation point
             } else {
                 None // Failed roll
             }
@@ -213,7 +192,11 @@ pub fn process_random_comp(
             // Picks random segment on final corner
             // No corners on course fails the roll
             course.corners.last().map(|last_corner| {
-                vec![random_segment(last_corner.start, last_corner.start + last_corner.length, rng)]
+                vec![random_segment(
+                    last_corner.start,
+                    last_corner.start + last_corner.length,
+                    rng,
+                )]
             })
         }
 
@@ -226,18 +209,22 @@ pub fn process_random_comp(
                 .rev()
                 .find(|&idx| course.corner_number(idx) as i32 == comp.value)?;
             let corner = &course.corners[corner_idx];
-            Some(vec![random_segment(corner.start, corner.start + corner.length, rng)])
+            Some(vec![random_segment(
+                corner.start,
+                corner.start + corner.length,
+                rng,
+            )])
         }
 
         RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
             // all_corner_random==1
-            // Picks 4 random points (roll random corner, then random point on it, 4 times)
-            // TODO: extend to multiple activations
+            // Picks up to 4 random segments on corners (see `random_all_corner_segments`)
+            // TODO: The skill can activate at each of them if it's off cooldown, but
+            // cooldowns aren't implemented yet, so it only activates at the first one
+            // where the other conditions are met.
             // No corners on course fails the roll
-            course.corners.choose(rng).map(|corner| {
-                let offset: f64 = rng.random();
-                vec![corner.start + offset * corner.length]
-            })
+            let points = random_all_corner_segments(course, rng);
+            (!points.is_empty()).then_some(points)
         }
 
         RandomSpatial(RandomSpatialVar::StraightRandom) => {
@@ -255,12 +242,9 @@ pub fn process_random_comp(
             // last_straight_random==1
             // Picks random segment on final straight
             // No straights on course fails the roll (this should be rare/unlikely)
-            course
-                .straights
-                .last()
-                .map(|last_straight| {
-                    vec![random_segment(last_straight.start, last_straight.end, rng)]
-                })
+            course.straights.last().map(|last_straight| {
+                vec![random_segment(last_straight.start, last_straight.end, rng)]
+            })
         }
 
         RandomSpatial(RandomSpatialVar::UpSlopeRandom) => {
@@ -284,7 +268,12 @@ pub fn process_random_comp(
                 .iter()
                 .filter(|s| s.is_uphill())
                 .filter_map(|s| {
-                    intersect_intervals(s.start, s.start + s.length, halfway, course.distance as f64)
+                    intersect_intervals(
+                        s.start,
+                        s.start + s.length,
+                        halfway,
+                        course.distance as f64,
+                    )
                 })
                 .collect();
 
@@ -329,18 +318,24 @@ fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Op
     (intersection_start < intersection_end).then_some((intersection_start, intersection_end))
 }
 
-/// Pick a random 10m segment in `[start, end)` and return its start. The last
-/// segment may be shorter than 10m.
+/// Length in meters of the segments picked by random conditions.
+const SEGMENT_LENGTH: f64 = 10.0;
+
+/// Pick a random 10m segment within `[start, end]` and return its start. The start
+/// is uniform in `[start, end - 10]`, so the segment always fits. Intervals shorter
+/// than 10m only have one segment, starting at `start`.
 ///
 /// TODO: Random conditions pick a whole 10m segment, and the skill can activate
 /// anywhere in it as long as the other conditions are met. For now, only the start
 /// of the segment is used as a single activation point. Supporting activation
 /// windows requires refactoring the trigger system.
 pub fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
-    const SEGMENT_LENGTH: f64 = 10.0;
-
-    let count = ((end - start) / SEGMENT_LENGTH).ceil().max(1.0) as u32;
-    start + rng.random_range(0..count) as f64 * SEGMENT_LENGTH
+    let latest_start = end - SEGMENT_LENGTH;
+    if latest_start <= start {
+        start
+    } else {
+        rng.random_range(start..=latest_start)
+    }
 }
 
 /// Pick a random 10m segment from a collection of intervals stitched together end
@@ -367,6 +362,46 @@ fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> 
         offset -= end - start;
     }
     Some(last.0 + offset)
+}
+
+/// Pick the segments of `all_corner_random`, in race order. Returns up to 4 points,
+/// or none if the course has no corners.
+///
+/// 1. All corners start as candidates.
+/// 2. Pick a candidate, all with the same chance regardless of their length.
+/// 3. Pick a random 10m segment on it (see [`random_segment`]).
+/// 4. If at least 10m remain from the end of the segment to the end of the
+///    candidate, the candidate is replaced by that remaining part. Otherwise, it's
+///    discarded.
+/// 5. Discard all candidates before the picked one.
+/// 6. Repeat from 2 until 4 segments are picked or no candidates remain.
+fn random_all_corner_segments(course: &Course, rng: &mut impl Rng) -> Vec<f64> {
+    const MAX_SEGMENTS: usize = 4;
+
+    let mut candidates: Vec<(f64, f64)> = course
+        .corners
+        .iter()
+        .map(|corner| (corner.start, corner.start + corner.length))
+        .collect();
+    let mut points = Vec::with_capacity(MAX_SEGMENTS);
+
+    while points.len() < MAX_SEGMENTS && !candidates.is_empty() {
+        let idx = rng.random_range(0..candidates.len());
+        let (start, end) = candidates[idx];
+        let point = random_segment(start, end, rng);
+        points.push(point);
+
+        // The picked candidate is now the first one
+        candidates.drain(..idx);
+        let remaining_start = point + SEGMENT_LENGTH;
+        if end - remaining_start >= SEGMENT_LENGTH {
+            candidates[0] = (remaining_start, end);
+        } else {
+            candidates.remove(0);
+        }
+    }
+
+    points
 }
 
 #[cfg(test)]

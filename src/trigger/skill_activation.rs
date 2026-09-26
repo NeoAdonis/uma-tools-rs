@@ -24,7 +24,7 @@
 //!
 //! Condition `hp_per>=20 & is_finalcorner_random==1`:
 //!
-//! - **Trigger**: `Position { meters: 1850 }` (random point rolled on the final
+//! - **Trigger**: `Position { meters: [1850] }` (random point rolled on the final
 //!   corner).
 //! - **Guards**: `[hp_per>=20]`.
 //!
@@ -94,9 +94,9 @@ pub enum WindowVariable {
 /// A trigger condition that determines WHEN to check a skill.
 #[derive(Clone, Debug)]
 pub enum TriggerCondition {
-    /// Checked once, when reaching a position (in meters).
+    /// Checked once when reaching each position (in meters).
     /// Used for random points.
-    Position { meters: f64 },
+    Position { meters: Vec<f64> },
 
     /// Checked every frame while the variable is within `[min, max]`.
     Window {
@@ -181,12 +181,14 @@ pub struct CompiledBranch {
 
 /// Compile a condition into one [`CompiledBranch`] per OR branch.
 ///
-/// `random_activation` holds the points rolled for the condition's random variables
-/// (see [`roll_condition`](crate::trigger::random::roll_condition)).
+/// `rolls` holds the points rolled for the random variables of each branch, or
+/// `None` if its roll failed (see
+/// [`roll_condition`](crate::trigger::random::roll_condition)). Branches without an
+/// entry (e.g. preconditions, which aren't rolled) have no random points.
 ///
 /// Branches that can never be true on this course (e.g. `slope==2` without
-/// downhills) are dropped, so the result is empty if the condition can never be
-/// satisfied.
+/// downhills, or a failed roll) are dropped, so the result is empty if the condition
+/// can never be satisfied.
 ///
 /// # Example
 ///
@@ -198,21 +200,29 @@ pub struct CompiledBranch {
 /// - Branch 2: trigger `Window` (corner 2), guards `[corner==2, ground_type==1]`
 pub fn compile_condition(
     condition: &Condition,
-    random_activation: &[f64],
+    rolls: &[Option<Vec<f64>>],
     course: &Course,
 ) -> Vec<CompiledBranch> {
     condition
         .comp_tree
         .or_branches()
         .into_iter()
-        .filter_map(|comps| compile_branch(&comps, random_activation, course))
+        .enumerate()
+        .filter_map(|(idx, comps)| {
+            let points = match rolls.get(idx) {
+                Some(roll) => roll.as_deref()?, // Failed roll: never satisfied
+                None => &[],
+            };
+            compile_branch(&comps, points, course)
+        })
         .collect()
 }
 
-/// Compile an AND chain. Returns `None` if it can never be true on this course.
+/// Compile an AND chain, with the `points` rolled for its random variables.
+/// Returns `None` if it can never be true on this course.
 fn compile_branch(
     comps: &[&Comparison],
-    random_activation: &[f64],
+    points: &[f64],
     course: &Course,
 ) -> Option<CompiledBranch> {
     use VarType::*;
@@ -235,8 +245,12 @@ fn compile_branch(
             }
             RandomSpatial(_) | RandomPhase(_) => {
                 // Not rolled (e.g. in a precondition): the branch can't be triggered
-                let meters = *random_activation.first()?;
-                event.get_or_insert(TriggerCondition::Position { meters });
+                if points.is_empty() {
+                    return None;
+                }
+                event.get_or_insert(TriggerCondition::Position {
+                    meters: points.to_vec(),
+                });
             }
 
             // Only true on the frame the last straight is entered

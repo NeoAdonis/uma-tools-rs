@@ -37,7 +37,7 @@
 //! }
 //!
 //! SkillActivationLogic {
-//!   trigger: Position { meters: 1850 }, // random point in final corner
+//!   trigger: Position { meters: [1850] }, // random point in final corner
 //!   guards: [hp_per>=20, ground_type==2],
 //!   precondition: Some(0), // unlocked by the logic above
 //!   action: Activate,
@@ -88,13 +88,9 @@ pub fn build_trigger_scheduler(
                 Err(_) => continue, // Skip unparseable conditions
             };
 
-            let random_activations = match roll_condition(&condition, course, rng) {
-                Some(activations) => activations,
-                None => continue, // Random roll failed, skill never activates
-            };
-
-            // One logic per OR branch
-            let branches = compile_condition(&condition, &random_activations, course);
+            // One logic per OR branch, except the ones whose random roll failed
+            let rolls = roll_condition(&condition, course, rng);
+            let branches = compile_condition(&condition, &rolls, course);
             if branches.is_empty() {
                 continue; // Condition can't be satisfied, skill never activates
             }
@@ -208,10 +204,14 @@ fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut T
     use TriggerCondition::*;
 
     match trigger {
-        Position { meters } => scheduler.distance_triggers.push(DistanceTrigger {
-            threshold_meters: *meters,
-            logic_idx,
-        }),
+        Position { meters } => {
+            for &threshold_meters in meters {
+                scheduler.distance_triggers.push(DistanceTrigger {
+                    threshold_meters,
+                    logic_idx,
+                });
+            }
+        }
 
         Window {
             variable,
