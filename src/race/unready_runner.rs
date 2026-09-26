@@ -5,7 +5,7 @@ use std::rc::Rc;
 use rand::RngExt;
 
 use crate::configuration::GameVersion;
-use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
+use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::parser::parse_condition;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, hp_style_multiplier};
@@ -40,7 +40,9 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
 }
 
 /// Apply stat boost effects to an [`Uma`]'s stats.
+/// Apply a stat boost effect. `modifier` is in 10000ths of a stat point.
 fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
+    let modifier = modifier / 10000;
     match effect_type {
         SkillType::SpeedUp => modify_stat(&mut uma.speed, modifier),
         SkillType::StaminaUp => modify_stat(&mut uma.stamina, modifier),
@@ -166,14 +168,15 @@ impl UnreadyRunner {
             })
             .collect::<Vec<Skill>>();
 
-        // Build trigger scheduler from the available skills (after filtering)
-        let trigger_scheduler =
-            build_trigger_scheduler(&available_skills, course, &mut *rng.borrow_mut());
-
         // Partition skills into out-of-gate and runtime skills
         let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
             .into_iter()
             .partition(|skill| skill.should_activate_out_of_gate());
+
+        // Build trigger scheduler from the runtime skills, as its skill indices
+        // refer to them
+        let trigger_scheduler =
+            build_trigger_scheduler(&runtime_skills, course, &mut *rng.borrow_mut());
 
         // Calculate adjusted stats (before out-of-gate skills)
         let adjusted_uma = adjust_stats(&base_uma, course, params);
@@ -304,13 +307,25 @@ impl UnreadyRunner {
     /// Apply all out-of-gate skills.
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
-        for (alt_index, skill) in skills.iter().enumerate() {
+        for skill in &skills {
             // Update count (same_skill_horse_count)
             self.same_skill_count = state.existing_skills.get(&skill.id).cloned().unwrap_or(0);
 
-            let result = parse_condition(&skill.alternatives.first().unwrap().condition);
-            evaluate_condition(&result.unwrap(), &EvaluatorOutOfGate, None, state, self);
-            self.apply_out_of_gate_skill_effect(skill, alt_index);
+            // Apply the first alternative whose condition is satisfied, if any
+            let alt_index = skill.alternatives.iter().position(|alternative| {
+                let Ok(condition) = parse_condition(&alternative.condition) else {
+                    return false; // Skip unparseable conditions
+                };
+                // Satisfied if all comparisons of any OR branch are true
+                condition.comp_tree.or_branches().iter().any(|branch| {
+                    branch
+                        .iter()
+                        .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
+                })
+            });
+            if let Some(alt_index) = alt_index {
+                self.apply_out_of_gate_skill_effect(skill, alt_index);
+            }
         }
     }
 
@@ -461,3 +476,6 @@ impl UnreadyRunner {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -153,8 +153,8 @@ fn test_reversed_remain_distance_window_range() {
         &mut rng,
     );
 
-    assert_eq!(scheduler.window_triggers.len(), 1);
-    let window = &scheduler.window_triggers[0];
+    assert_eq!(scheduler.position_windows.len(), 1);
+    let window = scheduler.position_windows.iter().next().unwrap();
     assert_eq!(window.min_threshold, 0.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 350.0);
 }
@@ -174,8 +174,8 @@ fn test_remain_distance_pair_window_range() {
     // A single window, no distance triggers or guards
     assert!(scheduler.distance_triggers.is_empty());
     assert!(scheduler.skill_logics[0].guards.is_empty());
-    assert_eq!(scheduler.window_triggers.len(), 1);
-    let window = &scheduler.window_triggers[0];
+    assert_eq!(scheduler.position_windows.len(), 1);
+    let window = scheduler.position_windows.iter().next().unwrap();
     assert_eq!(window.min_threshold, COURSE_DISTANCE - 401.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }

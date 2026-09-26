@@ -31,13 +31,16 @@
 //!      time (e.g., HP, rush status). Some of these can be promoted to triggers if
 //!      they are monotonic.
 //!
-//! **Preconditions** unlock skills permanently (evaluated every frame).
+//! **Preconditions** unlock skills permanently.
 //!
 //!    - Allows event-based activation gates (e.g., "activate after overtaking
 //!      someone").
 //!    - Checked before triggers/guards can be evaluated.
 //!    - Once satisfied, skill remains unlocked for the rest of the race for
 //!      activation attempts.
+//!    - Compiled into their own logics (see [`compile_precondition`]) whose
+//!      action is to unlock the skill. They are only checked within the part of
+//!      the course where they can be true, or when their event happens.
 //!
 //! **Activation State** tracks whether skill has fired.
 //!
@@ -59,7 +62,8 @@
 //!
 //! Now consider a skill with **precondition**: `change_order_onetime<0`
 //!
-//! - **Every frame**: Check if overtaken anyone. Once true, skill unlocked.
+//! - **Every frame** (the precondition can be true anywhere): Check if overtaken
+//!   anyone. Once true, skill unlocked.
 //! - **At trigger time** (e.g., 1850m): If unlocked, evaluate guards → activate.
 //! - **If never unlocked**: Trigger fires but skill never activates.
 
@@ -88,14 +92,25 @@ pub struct SkillActivationLogic {
     /// Empty list means no guard checks needed (always activates when trigger fires).
     pub guards: ComparisonList,
 
-    /// Precondition that unlocks the skill (permanent one-time gate).
-    /// Checked every frame until satisfied; once true, skill remains unlocked for
-    /// the race.
+    /// Precondition that must be satisfied before this logic can succeed, as an
+    /// index into `scheduler.precondition_satisfied`.
     /// Enables event-based activation (e.g., "activate after overtaking someone").
-    pub precondition: Option<Condition>,
+    pub precondition: Option<usize>,
+
+    /// What happens when the triggers fire and the guards pass.
+    pub action: LogicAction,
 
     /// Activation state tracking.
     pub state: ActivationState,
+}
+
+/// What a [`SkillActivationLogic`] does when it succeeds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogicAction {
+    /// Activate the skill alternative.
+    Activate,
+    /// Mark the given precondition as satisfied (see [`compile_precondition`]).
+    Unlock(usize),
 }
 
 /// Tracks whether this skill has been checked/activated.
@@ -239,7 +254,8 @@ impl SkillActivationLogic {
         alternative_index: usize,
         triggers: Vec<TriggerCondition>,
         guards: ComparisonList,
-        precondition: Option<Condition>,
+        precondition: Option<usize>,
+        action: LogicAction,
     ) -> Self {
         SkillActivationLogic {
             skill_index,
@@ -247,6 +263,7 @@ impl SkillActivationLogic {
             triggers,
             guards,
             precondition,
+            action,
             state: ActivationState::default(),
         }
     }
@@ -378,6 +395,192 @@ pub fn split_condition(
         .collect()
 }
 
+/// Extra margin (in meters) added to both ends of a precondition window.
+///
+/// Some variables lag behind the position (e.g. the phase is updated once per
+/// frame), so the exact bounds could miss a frame where the precondition holds.
+/// Since the comparisons are still checked as guards, a wider window only costs a
+/// few extra checks.
+const PRECONDITION_WINDOW_MARGIN: f64 = 10.0;
+
+/// One OR branch of a compiled precondition.
+#[derive(Clone, Debug)]
+pub struct PreconditionBranch {
+    /// When to check the branch: a position window
+    /// (`Window { variable: SpatialPosition, .. }`) outside of which the branch
+    /// can't be true, or an event trigger if the branch waits for an event
+    /// (e.g. `is_activate_heal_skill==1`).
+    pub trigger: TriggerCondition,
+    /// Comparisons that must all be true when checked.
+    pub guards: ComparisonList,
+}
+
+/// Compile a precondition into branches that unlock the skill when any of them
+/// passes. Returns an empty list if the precondition can never be satisfied on
+/// this course.
+///
+/// Instead of checking a precondition every frame, each OR branch is only checked
+/// within the part of the course where it can be true. That part is found by
+/// intersecting the ranges of its position-based comparisons (distance, phase,
+/// corners, slopes). All comparisons are kept as guards, so ranges only need to
+/// contain every position where the branch could be true.
+///
+/// Branches containing an event (e.g. `is_activate_heal_skill==1`) are checked
+/// when the event happens instead, as such variables are only true for a moment.
+///
+/// # Example
+///
+/// Input: `phase==1&blocked_side_continuetime>=2` (on a 2400m course)
+///
+/// Output (1 branch):
+///
+/// - Trigger: `Window { SpatialPosition, 390, 1610 }` (Mid phase plus margins)
+/// - Guards: `[phase==1, blocked_side_continuetime>=2]`
+pub fn compile_precondition(condition: &Condition, course: &Course) -> Vec<PreconditionBranch> {
+    condition
+        .comp_tree
+        .or_branches()
+        .into_iter()
+        .filter_map(|comps| {
+            let (mut min, mut max) = (0.0, f64::INFINITY);
+            for comp in &comps {
+                if let Some((start, end)) = position_range(comp, course) {
+                    min = f64::max(min, start);
+                    max = f64::min(max, end);
+                }
+            }
+            if min > max {
+                return None; // The branch can't be true anywhere on this course
+            }
+
+            let event = comps.iter().find_map(|comp| precondition_event(comp));
+            let guards = comps
+                .into_iter()
+                .filter(|comp| precondition_event(comp).is_none())
+                .cloned()
+                .collect();
+            let trigger = event.unwrap_or(TriggerCondition::Window {
+                variable: WindowVariable::SpatialPosition,
+                min_threshold: (min - PRECONDITION_WINDOW_MARGIN).max(0.0),
+                max_threshold: max + PRECONDITION_WINDOW_MARGIN,
+            });
+            Some(PreconditionBranch { trigger, guards })
+        })
+        .collect()
+}
+
+/// Get the event trigger of a precondition comparison, if any.
+///
+/// These variables are only true while their event happens, so they can't be
+/// checked at a later time.
+fn precondition_event(comp: &Comparison) -> Option<TriggerCondition> {
+    use VarType::*;
+    match (&comp.var, comp.op, comp.value) {
+        (Activation(ActivationVar::IsActivateAnySkill), CompOp::Equal, 1) => {
+            Some(TriggerCondition::AnySkillActivation)
+        }
+        (Activation(ActivationVar::IsActivateHealSkill), CompOp::Equal, 1) => {
+            Some(TriggerCondition::HealSkillActivation)
+        }
+        (Spatial(SpatialVar::IsLastStraightOnetime), CompOp::Equal, 1) => {
+            Some(TriggerCondition::StraightTransition {
+                is_last: true,
+                is_entry: true,
+                is_onetime: true,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// All race phases, in order.
+const PHASES: [Phase; 4] = [Phase::Early, Phase::Mid, Phase::Late, Phase::Last];
+
+/// Get the range of positions (in meters from the start) where a comparison can
+/// be true. The range can be empty (start > end).
+///
+/// Returns `None` if the comparison doesn't depend on the position.
+fn position_range(comp: &Comparison, course: &Course) -> Option<(f64, f64)> {
+    use VarType::*;
+
+    const EMPTY: (f64, f64) = (f64::INFINITY, f64::NEG_INFINITY);
+    let distance = course.distance as f64;
+    // Values are floored when evaluated, so `value` holds until `value + 1`
+    let at_rate = |rate: i32| rate as f64 / 100.0 * distance;
+    let at_remain = |remain: i32| distance - remain as f64;
+    // Smallest range containing all given ranges
+    let envelope = |ranges: &mut dyn Iterator<Item = (f64, f64)>| {
+        ranges.fold(EMPTY, |(min, max), (start, end)| {
+            (min.min(start), max.max(end))
+        })
+    };
+
+    match (&comp.var, comp.op, comp.value) {
+        (Spatial(SpatialVar::DistanceRate), op, rate) => match op {
+            CompOp::Greater | CompOp::GreaterEqual => Some((at_rate(rate), f64::INFINITY)),
+            CompOp::Less | CompOp::LessEqual => Some((0.0, at_rate(rate + 1))),
+            CompOp::Equal => Some((at_rate(rate), at_rate(rate + 1))),
+            CompOp::NotEqual => None,
+        },
+
+        (Spatial(SpatialVar::RemainDistance), op, remain) => match op {
+            CompOp::Less | CompOp::LessEqual => Some((at_remain(remain + 1), f64::INFINITY)),
+            CompOp::Greater | CompOp::GreaterEqual => Some((0.0, at_remain(remain))),
+            CompOp::Equal => Some((at_remain(remain + 1), at_remain(remain))),
+            CompOp::NotEqual => None,
+        },
+
+        // Union of the phases that satisfy the comparison
+        (Phase(PhaseVar::Phase), op, value) => Some(envelope(
+            &mut PHASES
+                .into_iter()
+                .filter(|phase| op.apply(*phase as i32, value))
+                .map(|phase| phase.boundaries(course)),
+        )),
+
+        (Phase(PhaseVar::PhaseFirsthalf), CompOp::Equal, value) => Some(
+            PHASES
+                .into_iter()
+                .find(|phase| *phase as i32 == value)
+                .map_or(EMPTY, |phase| phase.boundaries_first_half(course)),
+        ),
+
+        // Final corner or beyond
+        (Spatial(SpatialVar::IsFinalcorner), CompOp::Equal, 1) => Some(
+            course
+                .corners
+                .last()
+                .map_or(EMPTY, |corner| (corner.start, f64::INFINITY)),
+        ),
+
+        (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => Some(envelope(
+            &mut course
+                .corners
+                .iter()
+                .map(|corner| (corner.start, corner.start + corner.length)),
+        )),
+
+        (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => Some(
+            course
+                .corners
+                .get(n as usize - 1)
+                .map_or(EMPTY, |corner| (corner.start, corner.start + corner.length)),
+        ),
+
+        (Spatial(SpatialVar::Slope), CompOp::Equal, slope_type) if slope_type != 0 => {
+            Some(envelope(
+                &mut course
+                    .slopes
+                    .iter()
+                    .filter(|slope| slope.slope_type() as i32 == slope_type)
+                    .map(|slope| (slope.start, slope.start + slope.length)),
+            ))
+        }
+
+        _ => None,
+    }
+}
+
 /// Try to detect a window pattern on two comparisons: `variable>=min & variable<=max`
 /// (in either order).
 /// Returns `Some(window_trigger)` if detected, `None` otherwise.
@@ -410,54 +613,23 @@ fn detect_window(left: &Comparison, right: &Comparison) -> Option<TriggerConditi
     })
 }
 
-/// Collect the comparisons of an AND chain from left to right.
-///
-/// The condition grammar has no parentheses, so an AND chain never contains an OR.
-fn flatten_and_chain(comp_tree: &ComparisonTree) -> Vec<&Comparison> {
-    match comp_tree {
-        ComparisonTree::Single(comp) => vec![comp],
-        ComparisonTree::Binary {
-            left,
-            op: BinOp::And,
-            right,
-        } => {
-            let mut comps = flatten_and_chain(left);
-            comps.extend(flatten_and_chain(right));
-            comps
-        }
-        ComparisonTree::Binary { op: BinOp::Or, .. } => {
-            unreachable!("BUG: OR inside an AND chain can't be parsed")
-        }
-    }
-}
-
-/// Recursively split a `ComparisonTree`, handling OR branches.
+/// Split a `ComparisonTree` into OR branches.
 /// Returns a list of (triggers, guards) where guards is a flat list of comparisons.
 ///
 /// Each OR branch is a flat AND chain. Neighboring comparisons in a chain that form
 /// a range (e.g. `remain_distance<=401&remain_distance>=399`) become a single
 /// window trigger.
+///
+/// N.B. Promotion is NOT applied here - it will be done at top level.
 fn split_comp_tree(
     comp_tree: &ComparisonTree,
     random_activation: &[f64],
     course: &Course,
 ) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
-    match comp_tree {
-        ComparisonTree::Binary {
-            left,
-            op: BinOp::Or,
-            right,
-        } => {
-            // OR: Create separate branches
-            let mut results = split_comp_tree(left, random_activation, course);
-            results.extend(split_comp_tree(right, random_activation, course));
-            results
-        }
-
-        // Single comparison or AND chain
-        // DON'T apply promotion here - it will be done at top level
-        _ => {
-            let comps = flatten_and_chain(comp_tree);
+    comp_tree
+        .or_branches()
+        .into_iter()
+        .map(|comps| {
             let mut triggers = Vec::new();
             let mut guards = Vec::new();
             let mut i = 0;
@@ -476,9 +648,9 @@ fn split_comp_tree(
                     i += 1;
                 }
             }
-            vec![(triggers, guards)]
-        }
-    }
+            (triggers, guards)
+        })
+        .collect()
 }
 
 /// Apply monotonic guard promotion rules:

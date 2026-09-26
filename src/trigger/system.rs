@@ -1,18 +1,23 @@
 use crate::condition::parser::CompOp;
 use crate::course::Phase;
-use crate::trigger::skill_activation::{SkillActivationLogic, WindowVariable};
+use crate::trigger::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 /// Main scheduler coordinating all trigger types.
 ///
-/// This scheduler stores `SkillActivationLogic` which separates triggers
+/// This scheduler stores [`SkillActivationLogic`] which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
 pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
 
-    // Precondition tracking - one-time unlocks for skills with preconditions
+    // Precondition tracking - one-time unlocks, indexed by the precondition ID
+    // stored in `SkillActivationLogic::precondition`
     pub precondition_satisfied: Vec<bool>,
+    // Position windows of precondition logics. Kept apart from regular windows
+    // because preconditions are checked at the start of each frame, before any
+    // other trigger
+    pub precondition_windows: WindowQueue,
 
     // Monotonic triggers - use priority queues for O(log n) activation
     pub time_triggers: BinaryHeap<TimeTrigger>,
@@ -21,7 +26,11 @@ pub struct TriggerScheduler {
     pub phase_triggers: BinaryHeap<PhaseTransitionTrigger>,
 
     // Window triggers - checked every frame while within bounds
-    pub window_triggers: Vec<WindowTrigger>,
+    // Position and time only increase, so their windows are queued; HP can
+    // recover, so HP windows are scanned every frame
+    pub position_windows: WindowQueue,
+    pub time_windows: WindowQueue,
+    pub hp_windows: Vec<WindowTrigger>,
 
     // Spatial triggers - tied to course geometry
     // Note: Corners and slopes use Window triggers (SpatialPosition)
@@ -49,11 +58,14 @@ impl TriggerScheduler {
         TriggerScheduler {
             skill_logics: Vec::new(),
             precondition_satisfied: Vec::new(),
+            precondition_windows: WindowQueue::default(),
             time_triggers: BinaryHeap::new(),
             distance_triggers: BinaryHeap::new(),
             hp_triggers: BinaryHeap::new(),
             phase_triggers: BinaryHeap::new(),
-            window_triggers: Vec::new(),
+            position_windows: WindowQueue::default(),
+            time_windows: WindowQueue::default(),
+            hp_windows: Vec::new(),
             straight_triggers: Vec::new(),
             continuous_triggers: Vec::new(),
             full_throttle_triggers: Vec::new(),
@@ -209,12 +221,90 @@ impl Eq for PhaseTransitionTrigger {}
 /// Trigger that signals a continuous skill check within a value range
 /// (`variable>=min & variable<=max`).
 /// More efficient than continuous triggers when we know the valid range in advance.
+///
+/// The variable is implied by the collection holding the trigger (see
+/// [`TriggerScheduler`]).
 #[derive(Clone, Debug)]
 pub struct WindowTrigger {
     pub logic_idx: usize,
-    pub variable: WindowVariable,
     pub min_threshold: f64,
     pub max_threshold: f64,
+}
+
+/// Window triggers over a variable that never decreases (position, time).
+///
+/// Windows wait in `pending` until their range starts, stay in `active` while
+/// inside it, and are dropped once the value moves past their range. This way,
+/// windows are only looked at while they matter.
+#[derive(Clone, Debug, Default)]
+pub struct WindowQueue {
+    /// Windows that haven't started yet, sorted by `min_threshold` in descending
+    /// order (the next window to start is last).
+    pending: Vec<WindowTrigger>,
+    /// Windows whose range has started.
+    active: Vec<WindowTrigger>,
+}
+
+/// Result of advancing a [`WindowQueue`] to a new value.
+#[derive(Debug, Default)]
+pub struct WindowUpdate {
+    /// Logic indices whose window contains the current value.
+    pub inside: Vec<usize>,
+    /// Logic indices whose window was left (or skipped over) in this update.
+    pub exited: Vec<usize>,
+}
+
+impl WindowQueue {
+    /// Add a window. Intended for build time.
+    pub fn push(&mut self, trigger: WindowTrigger) {
+        let idx = self
+            .pending
+            .partition_point(|t| t.min_threshold > trigger.min_threshold);
+        self.pending.insert(idx, trigger);
+    }
+
+    /// Advance the queue to `value` and report which windows contain it and
+    /// which ones were left behind. Bounds are widened by `epsilon`.
+    pub fn advance(&mut self, value: f64, epsilon: f64) -> WindowUpdate {
+        while self
+            .pending
+            .last()
+            .is_some_and(|t| value >= t.min_threshold - epsilon)
+        {
+            self.active.push(self.pending.pop().unwrap());
+        }
+
+        let mut update = WindowUpdate::default();
+        self.active.retain(|t| {
+            if value > t.max_threshold + epsilon {
+                update.exited.push(t.logic_idx);
+                false
+            } else {
+                update.inside.push(t.logic_idx);
+                true
+            }
+        });
+        update
+    }
+
+    /// Remove every window matching `predicate`.
+    pub fn remove_if(&mut self, predicate: impl Fn(&WindowTrigger) -> bool) {
+        self.pending.retain(|t| !predicate(t));
+        self.active.retain(|t| !predicate(t));
+    }
+
+    /// Iterate over all windows still in the queue.
+    pub fn iter(&self) -> impl Iterator<Item = &WindowTrigger> {
+        self.active.iter().chain(self.pending.iter().rev())
+    }
+
+    pub fn len(&self) -> usize {
+        self.pending.len() + self.active.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 // ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
@@ -382,5 +472,71 @@ mod tests {
             .map(|t| t.threshold_meters)
             .collect();
         assert_eq!(order, vec![200.0, 1000.0, 1700.0]);
+    }
+
+    fn window(logic_idx: usize, min_threshold: f64, max_threshold: f64) -> WindowTrigger {
+        WindowTrigger {
+            logic_idx,
+            min_threshold,
+            max_threshold,
+        }
+    }
+
+    #[test]
+    fn test_window_queue_reports_windows_containing_value() {
+        let mut queue = WindowQueue::default();
+        queue.push(window(0, 100.0, 200.0));
+        queue.push(window(1, 0.0, f64::INFINITY));
+        queue.push(window(2, 150.0, 300.0));
+
+        let update = queue.advance(50.0, 0.0);
+        assert_eq!(update.inside, vec![1]);
+        assert!(update.exited.is_empty());
+
+        let mut update = queue.advance(160.0, 0.0);
+        update.inside.sort_unstable();
+        assert_eq!(update.inside, vec![0, 1, 2]);
+
+        let mut update = queue.advance(250.0, 0.0);
+        update.inside.sort_unstable();
+        assert_eq!(update.inside, vec![1, 2]);
+        assert_eq!(update.exited, vec![0]);
+
+        // Exited windows are dropped
+        assert_eq!(queue.len(), 2);
+    }
+
+    #[test]
+    fn test_window_queue_reports_skipped_windows_as_exited() {
+        let mut queue = WindowQueue::default();
+        queue.push(window(0, 100.0, 105.0));
+
+        let update = queue.advance(110.0, 0.0);
+        assert!(update.inside.is_empty());
+        assert_eq!(update.exited, vec![0]);
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn test_window_queue_widens_bounds_by_epsilon() {
+        let mut queue = WindowQueue::default();
+        queue.push(window(0, 100.0, 200.0));
+
+        assert_eq!(queue.advance(99.95, 0.1).inside, vec![0]);
+        assert_eq!(queue.advance(200.05, 0.1).inside, vec![0]);
+        assert_eq!(queue.advance(200.2, 0.1).exited, vec![0]);
+    }
+
+    #[test]
+    fn test_window_queue_remove_if() {
+        let mut queue = WindowQueue::default();
+        queue.push(window(0, 0.0, 100.0));
+        queue.push(window(1, 50.0, 100.0));
+        queue.push(window(2, 0.0, 100.0));
+        queue.advance(10.0, 0.0); // 0 and 2 active, 1 pending
+
+        queue.remove_if(|w| w.logic_idx != 2);
+        let remaining: Vec<_> = queue.iter().map(|w| w.logic_idx).collect();
+        assert_eq!(remaining, vec![2]);
     }
 }

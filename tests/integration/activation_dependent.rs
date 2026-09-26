@@ -3,7 +3,7 @@
 //! These tests verify that skills with conditions depending on other skill
 //! activations are properly detected and configured at build-time.
 
-use crate::common::{load_course, make_skill, make_skill_with_alternatives};
+use crate::common::{activation_logics, load_course, make_skill, make_skill_with_alternatives};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use uma_tools::trigger::builder::build_trigger_scheduler;
@@ -87,27 +87,25 @@ fn test_heal_skill_activation_dependency() {
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics (one per alternative)
-    assert_eq!(scheduler.skill_logics.len(), 2);
+    let logics = activation_logics(&scheduler);
+    assert_eq!(logics.len(), 2);
 
-    // Both alternatives have the same precondition
-    for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
-        assert!(
-            logic.precondition.is_some(),
+    // Each alternative has its own precondition, locked at the start
+    for (idx, logic) in logics.iter().enumerate() {
+        assert_eq!(
+            logic.precondition,
+            Some(idx),
             "Alternative {} should have precondition with heal dependency",
             idx
         );
-
-        // Both should start locked (precondition not satisfied)
-        assert!(
-            !scheduler.precondition_satisfied[idx],
-            "Alternative {} should start locked",
-            idx
-        );
     }
+    assert_eq!(scheduler.precondition_satisfied, vec![false, false]);
 
     // Key behavior: is_activate_heal_skill==1 is detected in precondition
-    // At runtime, this is checked against heal_activated_flag
+    // It's checked when a heal skill activates instead of every frame
     // Only heal skills set this flag, not general skill activations
+    assert_eq!(scheduler.heal_activation_triggers.len(), 2);
+    assert!(scheduler.precondition_windows.is_empty());
 }
 
 // ============================================================================
@@ -413,18 +411,21 @@ fn test_activation_dependency_with_precondition() {
     let mut rng = Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
+    let logics = activation_logics(&scheduler);
+    assert_eq!(logics.len(), 1);
+    let logic = logics[0];
 
     // Should have precondition
-    assert!(
-        logic.precondition.is_some(),
+    assert_eq!(
+        logic.precondition,
+        Some(0),
         "Should have precondition (phase>=2)"
     );
 
     // Should start locked
-    assert!(
-        !scheduler.precondition_satisfied[0],
+    assert_eq!(
+        scheduler.precondition_satisfied,
+        vec![false],
         "Should start with precondition locked"
     );
 

@@ -9,10 +9,10 @@
 //! ## Architecture
 //!
 //! Conditions are parsed into tree structures ([`Condition`] -> [`ComparisonTree`] ->
-//! [`Comparison`]) and evaluated recursively:
-//!
-//! - **Binary operators**: AND (&) and OR (@) with short-circuit evaluation.
-//! - **Leaf comparisons**: Variable operator value (e.g., `hp_per <= 50`).
+//! [`Comparison`]), then split into OR branches, each one being a flat list of
+//! comparisons that must all be true (see [`ComparisonTree::or_branches`]).
+//! This module evaluates those lists with [`evaluate_comparison_list`], one
+//! comparison (e.g., `hp_per <= 50`) at a time.
 //!
 //! The [`CompEvaluator`] trait abstracts the evaluation context, allowing different
 //! implementations for various scenarios. For instance, [`EvaluatorFull`] uses
@@ -73,44 +73,6 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
 
-/// Returns `true` if a condition tree is satisfied against current race state.
-///
-/// <div class="warning">
-///
-/// **WARNING**: This should ONLY be called with conditions that may contain
-/// OR. For guards (which are flat AND conjunctions), use
-/// [`evaluate_comparison_list`] instead. Trigger variables (random gates,
-/// monotonic triggers, onetime events) will cause a panic if they reach
-/// this evaluator.
-///
-/// </div>
-///
-/// This function is primarily used for evaluating preconditions. For example,
-/// [`Runner::check_precondition`] uses it as follows:
-///
-/// ```rust,ignore
-/// let satisfied = logic.precondition.as_ref().is_some_and(|precondition| {
-///     evaluate_condition(precondition, &EvaluatorFull, Some(logic), state, self)
-/// });
-/// ```
-///
-/// This function panics if the condition contains trigger variables that should
-/// have been separated during the splitting phase.
-pub fn evaluate_condition<E>(
-    condition: &Condition,
-    evaluator: &E,
-    logic_ctx: Option<&SkillActivationLogic>,
-    state: &E::State,
-    context: &E::Context,
-) -> bool
-where
-    E: CompEvaluator,
-{
-    evaluate_comp_tree(&condition.comp_tree, |comp| {
-        evaluator.evaluate(comp, logic_ctx, state, context)
-    })
-}
-
 /// Returns `true` if ALL comparisons from a list evaluate to `true`, or list
 /// is empty.
 ///
@@ -155,20 +117,6 @@ where
     comparisons
         .iter()
         .all(|comp| evaluator.evaluate(comp, logic_ctx, state, context))
-}
-
-/// Recursively evaluate condition tree (handles AND/OR logic)
-fn evaluate_comp_tree<F>(comp_tree: &ComparisonTree, eval_fn: F) -> bool
-where
-    F: Fn(&Comparison) -> bool + Copy,
-{
-    match comp_tree {
-        ComparisonTree::Single(comp) => eval_fn(comp),
-        ComparisonTree::Binary { left, op, right } => match op {
-            BinOp::And => evaluate_comp_tree(left, eval_fn) && evaluate_comp_tree(right, eval_fn),
-            BinOp::Or => evaluate_comp_tree(left, eval_fn) || evaluate_comp_tree(right, eval_fn),
-        },
-    }
 }
 
 /// Trait for evaluating a single comparison.
@@ -256,28 +204,14 @@ impl CompEvaluator for EvaluatorFull {
                     .map(|skill| skill.id.as_str())
                     .unwrap_or("");
                 let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
-                match comp.op {
-                    CompOp::Equal => count == comp.value,
-                    CompOp::NotEqual => count != comp.value,
-                    CompOp::Greater => count > comp.value,
-                    CompOp::GreaterEqual => count >= comp.value,
-                    CompOp::Less => count < comp.value,
-                    CompOp::LessEqual => count <= comp.value,
-                }
+                comp.op.apply(count, comp.value)
             }
             _ => {
                 // Normal case: get variable value and compare
                 let current_value = get_variable_value(&comp.var, state, runner, logic_ctx);
                 let threshold = comp.value;
 
-                match comp.op {
-                    CompOp::Equal => current_value == threshold,
-                    CompOp::NotEqual => current_value != threshold,
-                    CompOp::Greater => current_value > threshold,
-                    CompOp::GreaterEqual => current_value >= threshold,
-                    CompOp::Less => current_value < threshold,
-                    CompOp::LessEqual => current_value <= threshold,
-                }
+                comp.op.apply(current_value, threshold)
             }
         }
     }
@@ -309,28 +243,14 @@ impl CompEvaluator for EvaluatorOutOfGate {
                 // Count of runners with same skill
                 // In out-of-gate context, get value directly from temporary context
                 let count = context.same_skill_count as i32;
-                match comp.op {
-                    CompOp::Equal => count == comp.value,
-                    CompOp::NotEqual => count != comp.value,
-                    CompOp::Greater => count > comp.value,
-                    CompOp::GreaterEqual => count >= comp.value,
-                    CompOp::Less => count < comp.value,
-                    CompOp::LessEqual => count <= comp.value,
-                }
+                comp.op.apply(count, comp.value)
             }
             _ => {
                 // Normal case: get variable value and compare
                 let current_value = get_variable_value_out_of_gate(&comp.var, state, context);
                 let threshold = comp.value;
 
-                match comp.op {
-                    CompOp::Equal => current_value == threshold,
-                    CompOp::NotEqual => current_value != threshold,
-                    CompOp::Greater => current_value > threshold,
-                    CompOp::GreaterEqual => current_value >= threshold,
-                    CompOp::Less => current_value < threshold,
-                    CompOp::LessEqual => current_value <= threshold,
-                }
+                comp.op.apply(current_value, threshold)
             }
         }
     }

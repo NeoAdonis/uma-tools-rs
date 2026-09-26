@@ -1,17 +1,19 @@
-//! Unit tests for precondition build-time behavior
+//! Tests for precondition build-time and runtime behavior
 //!
 //! These tests complement the existing precondition tests in skill_activation.rs
-//! by focusing on precondition-trigger interaction and edge cases.
-//!
-//! Note: Runtime precondition tests (unlock mechanics, per-frame checking) are
-//! deferred to integration tests.
+//! by focusing on precondition-trigger interaction, edge cases and unlocking skills
+//! during a race.
 
-use crate::common::{load_course, make_skill};
+use crate::common::{activation_logics, load_course, make_skill, race_params};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
+use uma_tools::configuration::Configuration;
+use uma_tools::race::runner::Runner;
+use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
+use uma_tools::uma::*;
 
 // ============================================================================
 // PRECONDITION-TRIGGER INTERACTION (BUILD-TIME)
@@ -35,13 +37,15 @@ fn test_precondition_with_window_trigger() {
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
     // Should create 1 skill logic
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
+    let logics = activation_logics(&scheduler);
+    assert_eq!(logics.len(), 1);
+    let logic = logics[0];
 
     // Verify precondition exists and is separate from condition
-    assert!(
-        logic.precondition.is_some(),
-        "Precondition should be parsed and stored separately"
+    assert_eq!(
+        logic.precondition,
+        Some(0),
+        "Precondition should be compiled and stored separately"
     );
 
     // Verify trigger is spatial window (not affected by precondition)
@@ -64,11 +68,8 @@ fn test_precondition_with_window_trigger() {
 
     // Verify precondition_satisfied array is initialized correctly
     assert_eq!(
-        scheduler.precondition_satisfied.len(),
-        scheduler.skill_logics.len()
-    );
-    assert!(
-        !scheduler.precondition_satisfied[0],
+        scheduler.precondition_satisfied,
+        vec![false],
         "Skill with precondition should start locked"
     );
 }
@@ -89,34 +90,25 @@ fn test_precondition_with_or_condition() {
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
     // Should create 3 branches (OR condition)
+    let logics = activation_logics(&scheduler);
     assert_eq!(
-        scheduler.skill_logics.len(),
+        logics.len(),
         3,
         "OR condition with 3 branches should create 3 skill logics"
     );
 
-    // Verify all branches have the same precondition
-    for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
-        assert!(
-            logic.precondition.is_some(),
+    // Verify all branches share the same precondition
+    for (idx, logic) in logics.iter().enumerate() {
+        assert_eq!(
+            logic.precondition,
+            Some(0),
             "Branch {} should have precondition",
-            idx
-        );
-
-        // All should start locked (precondition not satisfied)
-        assert!(
-            !scheduler.precondition_satisfied[idx],
-            "Branch {} should start locked",
             idx
         );
     }
 
-    // Verify precondition count matches logic count
-    assert_eq!(
-        scheduler.precondition_satisfied.len(),
-        scheduler.skill_logics.len(),
-        "Precondition satisfied array should match skill logics length"
-    );
+    // A single precondition, locked at the start
+    assert_eq!(scheduler.precondition_satisfied, vec![false]);
 }
 
 #[test]
@@ -169,43 +161,209 @@ fn test_multiple_alternatives_precondition_independence() {
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
     // Should have 3 skill logics (one per alternative)
-    assert_eq!(scheduler.skill_logics.len(), 3);
+    let logics = activation_logics(&scheduler);
+    assert_eq!(logics.len(), 3);
 
     // Alternative 1: has precondition (phase>=2)
-    assert!(
-        scheduler.skill_logics[0].precondition.is_some(),
+    assert_eq!(
+        logics[0].precondition,
+        Some(0),
         "First alternative should have precondition"
-    );
-    assert!(
-        !scheduler.precondition_satisfied[0],
-        "First alternative should start locked"
     );
 
     // Alternative 2: has different precondition (accumulatetime>=10)
-    assert!(
-        scheduler.skill_logics[1].precondition.is_some(),
-        "Second alternative should have precondition"
-    );
-    assert!(
-        !scheduler.precondition_satisfied[1],
-        "Second alternative should start locked"
+    assert_eq!(
+        logics[1].precondition,
+        Some(1),
+        "Second alternative should have its own precondition"
     );
 
     // Alternative 3: no precondition
     assert!(
-        scheduler.skill_logics[2].precondition.is_none(),
+        logics[2].precondition.is_none(),
         "Third alternative should not have precondition"
     );
-    assert!(
-        scheduler.precondition_satisfied[2],
-        "Third alternative should start unlocked"
-    );
 
-    // Verify each alternative's precondition is independent
-    // (This is implicit in the data structure, but we verify the initialization is correct)
+    // Both preconditions start locked
     assert_eq!(
         scheduler.precondition_satisfied,
-        vec![false, false, true],
+        vec![false, false],
         "Precondition states should match alternative requirements"
     );
+}
+
+// ============================================================================
+// RUNTIME BEHAVIOR
+// ============================================================================
+
+/// 2000m medium turf course with 4 corners and no slopes.
+const RUNTIME_COURSE: u32 = 10104;
+
+/// Build a skill with a single alternative that always passes its wisdom check.
+fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: SkillType) -> Skill {
+    Skill::new(
+        id.to_string(),
+        SkillData {
+            rarity: SkillRarity::White,
+            alternatives: vec![SkillAlternative {
+                condition: condition.to_string(),
+                precondition: precondition.to_string(),
+                base_duration: 30000,
+                effects: vec![SkillEffect {
+                    skill_type: effect,
+                    target: SkillTarget::Oneself,
+                    modifier: 350,
+                }],
+            }],
+            wisdom_check: false,
+        },
+    )
+}
+
+/// Build a target speed skill that always passes its wisdom check.
+fn speed_skill(id: &str, condition: &str, precondition: &str) -> Skill {
+    guaranteed_skill(id, condition, precondition, SkillType::TargetSpeed)
+}
+
+/// Get a single ready runner with the given skills.
+fn ready_runner(skills: Vec<Skill>) -> (RaceSolver<Runner>, usize) {
+    let uma = Uma {
+        speed: 1200,
+        stamina: 1000,
+        power: 1000,
+        guts: 800,
+        wiz: 1000,
+        style: Style::Front,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    };
+    let mut solver = RaceSolver::new(
+        load_course(RUNTIME_COURSE),
+        race_params(42),
+        &Configuration::default(),
+    );
+    solver.add_runner(uma, Motivation::Normal, skills);
+    (solver.ready_runners(), 0)
+}
+
+/// Run a race with a single runner and return where each skill activated.
+fn activation_distances(skills: Vec<Skill>) -> Vec<(String, f64)> {
+    let (mut solver, runner) = ready_runner(skills);
+    solver.run();
+    solver.runners[runner]
+        .activated_skills
+        .iter()
+        .map(|record| (record.skill_id.clone(), record.distance))
+        .collect()
+}
+
+/// Where a skill activated, if it did.
+fn activation_distance(activations: &[(String, f64)], id: &str) -> Option<f64> {
+    activations
+        .iter()
+        .find(|(skill_id, _)| skill_id == id)
+        .map(|(_, distance)| *distance)
+}
+
+#[test]
+fn test_precondition_unlocks_skill_once_satisfied() {
+    // The condition holds from 10% on, but the skill must wait for Late phase
+    let activations = activation_distances(vec![speed_skill(
+        "late",
+        "distance_rate>=10&order<=18",
+        "phase>=2",
+    )]);
+
+    let late_start = load_course(RUNTIME_COURSE).section_length() * 16.0;
+    let distance = activation_distance(&activations, "late").expect("Skill should activate");
+    assert!(
+        (late_start..late_start + 30.0).contains(&distance),
+        "Should activate right after Late phase starts ({late_start}m), got {distance}m"
+    );
+}
+
+#[test]
+fn test_unsatisfied_precondition_blocks_skill() {
+    // Early phase and the final corner never overlap
+    let activations = activation_distances(vec![speed_skill(
+        "blocked",
+        "distance_rate>=10&order<=18",
+        "phase==0&is_finalcorner==1",
+    )]);
+
+    assert_eq!(activation_distance(&activations, "blocked"), None);
+}
+
+#[test]
+fn test_heal_precondition_unlocks_on_heal_activation() {
+    // Skill 110771 (Joy to the World) waits for a heal in the first half of
+    // Mid phase (17%-42% of the race)
+    let precondition = "phase_firsthalf==1&is_activate_heal_skill==1";
+    let joy = || speed_skill("joy", "distance_rate>=45&order<=18", precondition);
+    let heal = guaranteed_skill("heal", "distance_rate>=20", "", SkillType::Recovery);
+
+    let activations = activation_distances(vec![heal, joy()]);
+    assert!(activation_distance(&activations, "heal").is_some());
+    let distance = activation_distance(&activations, "joy").expect("Heal should unlock skill");
+    assert!(
+        (900.0..930.0).contains(&distance),
+        "Should activate at 45% (900m), got {distance}m"
+    );
+
+    // Without a heal, the skill stays locked
+    let activations = activation_distances(vec![joy()]);
+    assert_eq!(activation_distance(&activations, "joy"), None);
+}
+
+#[test]
+fn test_last_straight_onetime_precondition() {
+    // Skill 100911 has `is_last_straight_onetime==1` in its precondition, which
+    // can only be checked when entering the last straight
+    let activations = activation_distances(vec![speed_skill(
+        "straight",
+        "is_last_straight==1&order<=18",
+        "phase>=2&is_last_straight_onetime==1",
+    )]);
+
+    let straight_start = load_course(RUNTIME_COURSE).straights.last().unwrap().start;
+    let distance = activation_distance(&activations, "straight").expect("Skill should activate");
+    assert!(
+        (straight_start..straight_start + 30.0).contains(&distance),
+        "Should activate when entering the last straight ({straight_start}m), got {distance}m"
+    );
+}
+
+#[test]
+fn test_static_preconditions_resolved_at_race_start() {
+    // Course 10104 is a medium distance (distance_type==3) turf course
+    let (solver, runner) = ready_runner(vec![
+        speed_skill("medium", "distance_rate>=10&order<=18", "distance_type==3"),
+        speed_skill("short", "distance_rate>=10&order<=18", "distance_type==1"),
+        speed_skill(
+            "mixed",
+            "distance_rate>=10&order<=18",
+            "ground_type==1&order<=18",
+        ),
+    ]);
+    let scheduler = &solver.runners[runner].trigger_scheduler;
+
+    // True static comparisons are removed; unsatisfiable windows are dropped
+    let windows: Vec<_> = scheduler
+        .precondition_windows
+        .iter()
+        .map(|window| &scheduler.skill_logics[window.logic_idx])
+        .collect();
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].skill_index, 0);
+    assert!(windows[0].guards.is_empty());
+    assert_eq!(windows[1].skill_index, 2);
+    assert_eq!(windows[1].guards.len(), 1, "Only order<=18 should remain");
+
+    let activations = activation_distances(vec![
+        speed_skill("medium", "distance_rate>=10&order<=18", "distance_type==3"),
+        speed_skill("short", "distance_rate>=10&order<=18", "distance_type==1"),
+    ]);
+    assert!(activation_distance(&activations, "medium").is_some());
+    assert_eq!(activation_distance(&activations, "short"), None);
 }

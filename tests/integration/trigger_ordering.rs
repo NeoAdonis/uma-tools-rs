@@ -4,7 +4,7 @@
 //! simultaneously are properly handled, and that trigger priority/ordering
 //! works correctly.
 
-use crate::common::{load_course, make_skill};
+use crate::common::{activation_logics, load_course, make_skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use uma_tools::trigger::builder::build_trigger_scheduler;
@@ -73,11 +73,12 @@ fn test_multiple_conditions_align_at_phase_boundary() {
     let mut rng = Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
+    let logics = activation_logics(&scheduler);
+    assert_eq!(logics.len(), 1);
+    let logic = logics[0];
 
     // Should have precondition
-    assert!(logic.precondition.is_some(), "Should have precondition");
+    assert_eq!(logic.precondition, Some(0), "Should have precondition");
 
     // Should have PhaseChange trigger
     assert_eq!(1, 1);

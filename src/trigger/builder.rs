@@ -9,10 +9,11 @@
 //! For each skill alternative:
 //!
 //! 1. **Parse condition** - Parse condition string into AST.
-//! 2. **Parse precondition** - Parse precondition string (if present).
-//! 3. **Pre-roll random triggers** - Determine random activation points.
+//! 2. **Pre-roll random triggers** - Determine random activation points.
+//! 3. **Compile precondition** - Turn the precondition (if present) into logics
+//!    that unlock the skill using [`compile_precondition()`].
 //! 4. **Split condition** - Separate triggers from guards using [`split_condition()`].
-//! 5. **Create [`SkillActivationLogic`]** - Store triggers + guards + precondition.
+//! 5. **Create [`SkillActivationLogic`]** - Store triggers + guards + precondition ID.
 //! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
 //! ## Example
@@ -29,16 +30,26 @@
 //!   triggers: [Position {
 //!     meters: 1850, // random point in final corner
 //!   }],
-//!   guard_condition: Some(Condition), // hp_per>=20 & ground_type==2
-//!   precondition: Some(Condition), // change_order_onetime<0
+//!   guards: [hp_per>=20, ground_type==2],
+//!   precondition: Some(0), // unlocked by the logic below
+//!   action: Activate,
+//!   /* ... */
+//! }
+//!
+//! SkillActivationLogic {
+//!   // change_order_onetime<0 can be true anywhere
+//!   triggers: [Window { SpatialPosition, 0, inf }],
+//!   guards: [change_order_onetime<0],
+//!   precondition: None,
+//!   action: Unlock(0),
 //!   /* ... */
 //! }
 //! ```
 //!
 //! **Runtime behavior**:
 //!
-//!   - **Every frame**: Check if overtaken anyone (`change_order_onetime<0`).
-//!     Once true, skill unlocked for activation attempts.
+//!   - **Every frame** (within the precondition window): Check if overtaken anyone
+//!     (`change_order_onetime<0`). Once true, skill unlocked for activation attempts.
 //!   - **At 1850m** (if unlocked): Trigger fires, evaluate guards
 //!     `hp_per>=20 & ground_type==2`.
 //!   - **If guards pass**: Activate skill.
@@ -54,14 +65,15 @@ use rand::Rng;
 
 /// Build a complete TriggerScheduler from a list of skills.
 ///
-/// This uses trigger-guard separation. For each skill:
+/// This uses trigger-guard separation. For each skill alternative:
 ///
 /// 1. Pre-roll random triggers.
-/// 2. Parse precondition (if present).
+/// 2. Compile the precondition (if present) into logics that unlock the
+///    alternative (see [`compile_precondition()`]). If it can never be satisfied,
+///    skip the alternative.
 /// 3. Split condition into triggers + guards.
-/// 4. Create [`SkillActivationLogic`] (triggers + guards + precondition).
+/// 4. Create [`SkillActivationLogic`]s (triggers + guards + precondition ID).
 /// 5. Index triggers into scheduler queues.
-/// 6. Initialize precondition tracking (locked/unlocked state).
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -84,11 +96,24 @@ pub fn build_trigger_scheduler(
                 None => continue, // Random roll failed, skill never activates
             };
 
-            // Parse precondition (if any)
-            let precondition = if !alternative.precondition.is_empty() {
-                parse_condition(&alternative.precondition).ok()
-            } else {
+            // Compile precondition (if any)
+            let precondition = if alternative.precondition.is_empty() {
                 None
+            } else {
+                let Ok(parsed) = parse_condition(&alternative.precondition) else {
+                    continue; // Skip unparseable preconditions
+                };
+                let branches = compile_precondition(&parsed, course);
+                if branches.is_empty() {
+                    continue; // Precondition can't be satisfied, skill never activates
+                }
+                Some(add_precondition(
+                    branches,
+                    skill_idx,
+                    alt_idx,
+                    &mut scheduler,
+                    course,
+                ))
             };
 
             // Split condition into triggers and guards
@@ -101,41 +126,81 @@ pub fn build_trigger_scheduler(
                 let final_triggers = if triggers.is_empty() {
                     vec![TriggerCondition::Continuous]
                 } else {
-                    triggers.clone()
+                    triggers
                 };
 
-                // Create SkillActivationLogic
-                let logic = SkillActivationLogic::new(
-                    skill_idx,
-                    alt_idx,
-                    final_triggers.clone(),
-                    guards,
-                    precondition.clone(),
+                add_logic(
+                    SkillActivationLogic::new(
+                        skill_idx,
+                        alt_idx,
+                        final_triggers,
+                        guards,
+                        precondition,
+                        LogicAction::Activate,
+                    ),
+                    &mut scheduler,
+                    course,
                 );
-
-                // Store in scheduler
-                let logic_idx = scheduler.skill_logics.len();
-                scheduler.skill_logics.push(logic);
-
-                // Index each trigger into appropriate scheduler structure
-                for trigger in &final_triggers {
-                    index_trigger(trigger, logic_idx, &mut scheduler, course);
-                }
             }
         }
     }
 
-    // Initialize array to track precondition satisfaction (parallel to skill_logics)
-    // Preconditions are checked every frame until satisfied, unlocking the skill
-    // Skills with preconditions start "locked" (false)
-    // Skills without preconditions start "unlocked" (true)
-    scheduler.precondition_satisfied = scheduler
-        .skill_logics
-        .iter()
-        .map(|logic| logic.precondition.is_none())
-        .collect();
-
     scheduler
+}
+
+/// Add the logics unlocking a precondition, and return the precondition ID.
+///
+/// N.B. These logics are added before the logics they unlock, so that an event
+/// firing both (e.g. entering the last straight) unlocks the skill first.
+fn add_precondition(
+    branches: Vec<PreconditionBranch>,
+    skill_idx: usize,
+    alt_idx: usize,
+    scheduler: &mut TriggerScheduler,
+    course: &Course,
+) -> usize {
+    let precondition_id = scheduler.precondition_satisfied.len();
+    scheduler.precondition_satisfied.push(false);
+
+    for branch in branches {
+        let logic = SkillActivationLogic::new(
+            skill_idx,
+            alt_idx,
+            vec![branch.trigger.clone()],
+            branch.guards,
+            None,
+            LogicAction::Unlock(precondition_id),
+        );
+
+        // Position windows go to their own queue, checked at the start of each frame
+        if let TriggerCondition::Window {
+            min_threshold,
+            max_threshold,
+            ..
+        } = branch.trigger
+        {
+            let logic_idx = scheduler.skill_logics.len();
+            scheduler.skill_logics.push(logic);
+            scheduler.precondition_windows.push(WindowTrigger {
+                logic_idx,
+                min_threshold,
+                max_threshold,
+            });
+        } else {
+            add_logic(logic, scheduler, course);
+        }
+    }
+
+    precondition_id
+}
+
+/// Store a logic in the scheduler and index its triggers.
+fn add_logic(logic: SkillActivationLogic, scheduler: &mut TriggerScheduler, course: &Course) {
+    let logic_idx = scheduler.skill_logics.len();
+    for trigger in &logic.triggers {
+        index_trigger(trigger, logic_idx, scheduler, course);
+    }
+    scheduler.skill_logics.push(logic);
 }
 
 /// Index a trigger into the appropriate scheduler structure.
@@ -252,12 +317,18 @@ fn index_trigger(
                 _ => (*min_threshold, *max_threshold),
             };
 
-            scheduler.window_triggers.push(WindowTrigger {
+            let window = WindowTrigger {
                 logic_idx,
-                variable: *variable,
                 min_threshold: min_value,
                 max_threshold: max_value,
-            });
+            };
+            match variable {
+                WindowVariable::AccumulateTime => scheduler.time_windows.push(window),
+                WindowVariable::HpPercent => scheduler.hp_windows.push(window),
+                WindowVariable::DistanceRate
+                | WindowVariable::RemainDistance
+                | WindowVariable::SpatialPosition => scheduler.position_windows.push(window),
+            }
         }
 
         Continuous => {

@@ -206,7 +206,7 @@ impl RaceSolver<Runner> {
             }
             runner.reset_activation_flags();
             runner.update_rush_state(&mut self.state);
-            runner.check_all_preconditions(&self.state); // Check every frame
+            runner.check_precondition_windows(&self.state); // Before any other trigger
             runner.check_time_triggers(&self.state);
             runner.check_continuous_triggers(&self.state);
             runner.update_target_speed(&self.state);

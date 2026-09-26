@@ -3,6 +3,8 @@
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
 use uma_tools::skill::*;
+use uma_tools::trigger::skill_activation::{LogicAction, SkillActivationLogic};
+use uma_tools::trigger::system::TriggerScheduler;
 
 /// Load a course from `data/course_data.json`.
 pub fn load_course(course_id: u32) -> Course {
@@ -52,4 +54,13 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
 /// Build a white target speed skill with a single alternative.
 pub fn make_skill(id: &str, condition: &str, precondition: &str) -> Skill {
     make_skill_with_alternatives(id, vec![(condition, precondition)])
+}
+
+/// Logics that activate skills, i.e. excluding the ones that unlock preconditions.
+pub fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
+    scheduler
+        .skill_logics
+        .iter()
+        .filter(|logic| logic.action == LogicAction::Activate)
+        .collect()
 }
