@@ -89,11 +89,9 @@ use crate::units::*;
 /// [`Runner::check_precondition`] uses it as follows:
 ///
 /// ```rust,ignore
-/// if let Some(precondition) = precondition
-///     && evaluate_condition(&precondition, &EvaluatorFull, Some(logic), state, self)
-/// {
-///     self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
-/// }
+/// let satisfied = logic.precondition.as_ref().is_some_and(|precondition| {
+///     evaluate_condition(precondition, &EvaluatorFull, Some(logic), state, self)
+/// });
 /// ```
 ///
 /// This function panics if the condition contains trigger variables that should

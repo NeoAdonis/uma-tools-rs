@@ -2132,13 +2132,14 @@ impl Runner {
             return;
         }
 
-        // Evaluate precondition
+        // Evaluate precondition. The result is computed before writing so the
+        // condition can be borrowed instead of cloned every frame
         let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-        let precondition = logic.precondition.clone();
+        let satisfied = logic.precondition.as_ref().is_some_and(|precondition| {
+            evaluate_condition(precondition, &EvaluatorFull, Some(logic), state, self)
+        });
 
-        if let Some(precondition) = precondition
-            && evaluate_condition(&precondition, &EvaluatorFull, Some(logic), state, self)
-        {
+        if satisfied {
             self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
         }
     }
