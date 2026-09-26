@@ -412,13 +412,9 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
 
     match var {
         // Which corner: 0=none, 1-4=corner number
-        Corner => {
-            if let Some(idx) = runner.current_corner() {
-                (idx + 1) as i32 // 1-based index
-            } else {
-                0
-            }
-        }
+        Corner => runner
+            .current_corner()
+            .map_or(0, |idx| course.corner_number(idx) as i32),
 
         // Is on final corner or beyond
         IsFinalcorner => {

@@ -397,10 +397,15 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
         (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => {
             envelope(course.corners.iter().map(corner_range))
         }
-        (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => course
-            .corners
-            .get(n as usize - 1)
-            .map_or(EMPTY_RANGE, corner_range),
+        // Every occurrence of the corner (multiple if the race has more than one lap)
+        (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => envelope(
+            course
+                .corners
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| course.corner_number(*idx) as i32 == n)
+                .map(|(_, corner)| corner_range(corner)),
+        ),
         (Spatial(SpatialVar::Slope), CompOp::Equal, slope_type) if slope_type != 0 => envelope(
             course
                 .slopes

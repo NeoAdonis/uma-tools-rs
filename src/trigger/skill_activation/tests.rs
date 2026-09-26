@@ -182,7 +182,8 @@ fn test_position_window_ranges() {
         ("is_last_straight==1", (1380.0, f64::INFINITY)),
         // Smallest range containing all corners/slopes/straights of that type
         ("corner!=0", (100.0, 1380.0)),
-        ("corner==2", (500.0, 700.0)),
+        ("corner==2", (100.0, 250.0)),
+        ("corner==3", (500.0, 700.0)),
         ("slope==1", (800.0, 900.0)),
         ("straight_front_type==1", (0.0, 2000.0)),
         // Intersections
@@ -238,10 +239,10 @@ fn test_time_and_hp_windows() {
 
 #[test]
 fn test_unsatisfiable_branches_are_dropped() {
-    // The test course has 3 corners and no downhill slopes
+    // The test course has no downhill slopes and 3 corners (the second to the fourth)
     for condition in [
         "slope==2",
-        "corner==4",
+        "corner==1",
         "phase==0&distance_rate>=50",
         "hp_per>=50&hp_per<=30",
         "slope==2&is_activate_heal_skill==1",
@@ -444,8 +445,8 @@ fn test_precondition_ids_are_assigned_per_alternative() {
 
 #[test]
 fn test_unsatisfiable_precondition_skips_alternative() {
-    // The test course has no downhill slopes and only 3 corners
-    for precondition in ["slope==2", "corner==4", "phase==1&distance_rate>=90"] {
+    // The test course has no downhill slopes and 3 corners (the second to the fourth)
+    for precondition in ["slope==2", "corner==1", "phase==1&distance_rate>=90"] {
         let skill = create_skill_with_precondition("test", "distance_rate>=80", precondition);
         let scheduler = build_test_scheduler(&[skill]);
 

@@ -243,6 +243,15 @@ impl Course {
         self.distance as f64 / 2.0
     }
 
+    /// Get the corner number (1-4) of the corner at `idx` in the course corners.
+    ///
+    /// Corners are numbered backwards from the final corner, which is always the
+    /// fourth. If the race goes through the same corner multiple times (i.e. more
+    /// than one lap), its number is repeated.
+    pub fn corner_number(&self, idx: usize) -> u8 {
+        4 - ((self.corners.len() - 1 - idx) % 4) as u8
+    }
+
     /// Check if the course distance is a basis distance (multiple of 400m).
     pub fn is_basis_distance(&self) -> bool {
         self.distance % 400 == 0
@@ -539,6 +548,34 @@ mod tests {
                 tight.contains(&track_id),
                 "track {track_id}"
             );
+        }
+    }
+
+    #[test]
+    fn test_corner_number() {
+        let course_with_corners = |count: usize| {
+            let mut course = create_test_course(10001);
+            course.data.corners = (0..count)
+                .map(|i| Corner {
+                    start: i as f64 * 200.0,
+                    length: 100.0,
+                })
+                .collect();
+            course
+        };
+
+        // Numbered backwards from the final corner, which is always the fourth
+        for (count, expected) in [
+            (2, vec![3, 4]),
+            (3, vec![2, 3, 4]),
+            (4, vec![1, 2, 3, 4]),
+            (5, vec![4, 1, 2, 3, 4]),
+            (6, vec![3, 4, 1, 2, 3, 4]),
+            (8, vec![1, 2, 3, 4, 1, 2, 3, 4]),
+        ] {
+            let course = course_with_corners(count);
+            let numbers: Vec<u8> = (0..count).map(|idx| course.corner_number(idx)).collect();
+            assert_eq!(numbers, expected, "{count} corners");
         }
     }
 

@@ -219,14 +219,12 @@ pub fn process_random_comp(
 
         RandomSpatial(RandomSpatialVar::CornerRandom) => {
             // corner_random==X where X is corner number (1-4)
-            // Corners are numbered backwards from the final corner, which is always
-            // the fourth. If the race goes through corner X multiple times, only the
-            // last occurrence counts.
+            // If the race goes through corner X multiple times, only the last
+            // occurrence counts
             // Invalid corner number or corner not on course fails the roll
-            if !(1..=4).contains(&comp.value) {
-                return None;
-            }
-            let corner_idx = (course.corners.len() + comp.value as usize).checked_sub(5)?;
+            let corner_idx = (0..course.corners.len())
+                .rev()
+                .find(|&idx| course.corner_number(idx) as i32 == comp.value)?;
             let corner = &course.corners[corner_idx];
             Some(vec![random_segment(corner.start, corner.start + corner.length, rng)])
         }
