@@ -1134,11 +1134,10 @@ impl Runner {
                 state.course.base_speed(),
             );
 
-            // Start rush if conditions are met
-            if let Some(rush_state) = &mut self.rush_state
+            // Start rush if conditions are met (a runner can only rush once)
+            if let Some(rush_state) = &self.rush_state
                 && rush_state.section == self.section
-                && !rush_state.is_rushed
-                && rush_state.end_time < state.elapsed_time
+                && !self.has_rushed()
             {
                 self.start_rush(state);
             }

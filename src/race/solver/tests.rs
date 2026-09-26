@@ -431,3 +431,37 @@ fn test_position_never_decreases_regardless_of_start_delay() {
         }
     }
 }
+
+#[test]
+fn test_runners_bound_to_rush_do_rush() {
+    let course = Course::from_json_file("data/course_data.json", "10204")
+        .expect("Failed to load course data");
+    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    for _ in 0..9 {
+        // Low wisdom for a high rush chance
+        let uma = Uma {
+            speed: 1200,
+            stamina: 1000,
+            power: 1000,
+            guts: 800,
+            wiz: 100,
+            style: Style::Late,
+            distance_aptitude: Aptitude::A,
+            track_aptitude: Aptitude::A,
+            style_aptitude: Aptitude::A,
+        };
+        solver.add_runner(uma, Motivation::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+    solver.run();
+
+    let bound_to_rush = solver
+        .runners
+        .iter()
+        .filter(|runner| runner.rush_state.is_some())
+        .collect::<Vec<_>>();
+    assert!(!bound_to_rush.is_empty());
+    for runner in bound_to_rush {
+        assert!(runner.has_rushed(), "gate {}", runner.gate_roll);
+    }
+}

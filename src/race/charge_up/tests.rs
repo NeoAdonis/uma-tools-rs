@@ -292,9 +292,6 @@ fn test_rush_penalty() {
     let rush_section = solver.runners[0].rush_state.as_ref().unwrap().section;
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
-    // FIXME: `end_time` starts at f64::MAX, which prevents rush from ever starting
-    // in `update_phase`. Clear it until that is fixed.
-    runner.rush_state.as_mut().unwrap().end_time = 0.0;
 
     // Enter the rush section
     runner.section = rush_section - 1;
