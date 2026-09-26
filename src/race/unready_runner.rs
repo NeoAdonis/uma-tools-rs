@@ -9,7 +9,10 @@ use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, hp_style_multiplier};
-use crate::race::modifiers::{roll_section_speed_modifier, stamina_limit_break_base_buff};
+use crate::race::modifiers::{
+    calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wiz,
+    course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
+};
 use crate::race::popularity::JudgeScores;
 use crate::race::runner::*;
 use crate::race::transitions::*;

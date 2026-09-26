@@ -4,6 +4,7 @@
 
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::course::Course;
+use uma_tools::race::modifiers::{track_speed_modifier, wiz_style_multiplier};
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::uma::*;
