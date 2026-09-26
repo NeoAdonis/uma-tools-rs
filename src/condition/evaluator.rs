@@ -73,33 +73,31 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
 
-/// Evaluate a guard condition (tree structure) against current race state.
+/// Returns `true` if a condition tree is satisfied against current race state.
 ///
-/// **IMPORTANT**: This should ONLY be called with preconditions that may contain OR.
-/// For guards (which are flat AND conjunctions), use [`evaluate_comparison_list()`] instead.
+/// <div class="warning">
 ///
-/// Trigger variables (random gates, monotonic triggers, onetime events) will
-/// cause a panic if they reach this evaluator.
+/// **WARNING**: This should ONLY be called with conditions that may contain
+/// OR. For guards (which are flat AND conjunctions), use
+/// [`evaluate_comparison_list`] instead. Trigger variables (random gates,
+/// monotonic triggers, onetime events) will cause a panic if they reach
+/// this evaluator.
 ///
-/// Returns `true` if the condition is satisfied, `false` otherwise.
+/// </div>
 ///
-/// # Usage
-///
-/// This function is primarily used for evaluating preconditions:
+/// This function is primarily used for evaluating preconditions. For example,
+/// [`Runner::check_precondition`] uses it as follows:
 ///
 /// ```rust,ignore
-/// // Evaluate precondition (may contain OR)
-/// if let Some(precondition) = &skill_logic.precondition {
-///     if evaluate_condition(precondition, &EvaluatorFull, None, state, runner) {
-///         // Unlock skill permanently
-///     }
+/// if let Some(precondition) = precondition
+///     && evaluate_condition(&precondition, &EvaluatorFull, Some(logic), state, self)
+/// {
+///     self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
 /// }
 /// ```
 ///
-/// # Panics
-///
-/// Panics if the condition contains trigger variables that should have been
-/// separated during the splitting phase.
+/// This function panics if the condition contains trigger variables that should
+/// have been separated during the splitting phase.
 pub fn evaluate_condition<E>(
     condition: &Condition,
     evaluator: &E,
@@ -115,41 +113,36 @@ where
     })
 }
 
-/// Evaluate a list of guard comparisons (all must be true - AND conjunction).
+/// Returns `true` if ALL comparisons from a list evaluate to `true`, or list
+/// is empty.
 ///
 /// This is the primary function for evaluating guards after trigger-guard separation.
-/// Guards are guaranteed to be flat AND conjunctions (no OR operations).
+/// Guards are guaranteed to be a flat list of comparisons that need to be satisfied
+/// for a skill to activate.
 ///
-/// Returns `true` if ALL comparisons evaluate to true (or list is empty), `false` otherwise.
-/// Uses short-circuit evaluation: stops at the first false comparison.
+/// Short-circuit evaluation is used: it stops at the first false comparison.
 ///
-/// # Usage
+/// For example, [`Runner::try_activate_skill`] uses it to evaluate guards as
+/// follows:
 ///
 /// ```rust,ignore
-/// // When trigger fires, evaluate guards:
-/// let logic = &skill_activation_logics[trigger.skill_logic_idx];
-/// if logic.guards.is_empty() {
-///     // No guards - always activate
-///     activate_skill();
+/// let should_activate = if guards.is_empty() {
+///     true // No guards - always activate when trigger fires
 /// } else {
-///     // Check all guards (AND conjunction)
-///     if evaluate_comparison_list(&logic.guards, &EvaluatorFull, Some(logic), state, runner) {
-///         activate_skill();
-///     }
-/// }
+///     let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+///     evaluate_comparison_list(&guards, &EvaluatorFull, Some(logic), state, self)
+/// };
 /// ```
 ///
-/// # Example Guard Lists
+/// Examples of guard evaluation:
 ///
 /// - `[]` → true (no guards, always activates)
 /// - `[ground_type==2]` → true if ground is dirt
 /// - `[ground_type==2, motivation>=4]` → true if both conditions are met
 /// - `[hp_per>=20, running_style==1]` → true if HP >= 20% AND style is Front Runner
 ///
-/// # Panics
-///
-/// Panics if any comparison contains trigger variables that should have been
-/// separated during the splitting phase.
+/// This function panics if any comparison contains trigger variables that
+/// should have been separated during the splitting phase.
 pub fn evaluate_comparison_list<E>(
     comparisons: &ComparisonList,
     evaluator: &E,
@@ -182,26 +175,26 @@ where
 
 /// Trait for evaluating a single comparison.
 ///
-/// # Usage
-///
 /// Implement this trait for different evaluation contexts.
 /// `State` and `Context` associated types define the data sources used.
-/// `State` should represent the overall race state, while `Context` represents the
-/// runner data to use.
+/// `State` should represent the overall race state, while `Context` represents
+/// the runner data to use.
 ///
-/// The main use case is to get values from a provided race state and runner, then
-/// perform the comparison directly.
-/// You could also create your own race state with some of the values replaced by
-/// estimations or other expectations as needed. For instance, you could simulate
-/// best-case or worst-case scenarios by overriding certain variable values rather
-/// than having to craft a specific set of runner data to match those scenarios.
+/// The main use case is to get values from a provided race state and runner,
+/// then perform the comparison directly.
+/// You could also create your own race state with some of the values replaced
+/// by estimations or other expectations as needed. For instance, you could
+/// simulate best-case or worst-case scenarios by overriding certain variable
+/// values rather than having to craft a specific set of runner data to match
+/// those scenarios.
 ///
-/// # Examples
+/// The current implementation provides the following evaluators for different
+/// contexts:
 ///
-/// - [`EvaluatorFull`]: Uses actual race state and runner data as defined by [`RaceState`]
-///   and [`Runner`].
-/// - [`EvaluatorOutOfGate`]: Uses only data available before a race starts as defined by
-///   [`RaceState`] and [`UnreadyRunner`].
+/// - [`EvaluatorFull`]: uses actual race state ([`RaceState`]) and runner data
+///   ([`Runner`]) to evaluate conditions during a race.
+/// - [`EvaluatorOutOfGate`]: uses only data available before a race starts as
+///   defined by [`RaceState`] and [`UnreadyRunner`].
 pub trait CompEvaluator {
     type State;
     type Context;
@@ -298,7 +291,8 @@ impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
     type Context = UnreadyRunner;
 
-    /// Evaluate a single comparison in out-of-gate context, using only data available before a race starts.
+    /// Evaluate a single comparison in out-of-gate context, using only data
+    /// available before a race starts.
     fn evaluate(
         &self,
         comp: &Comparison,
@@ -905,17 +899,20 @@ pub fn check_static_guards(
     }
 }
 
-/// Evaluate a single comparison for static guard checking.
+/// Evaluates comparisons with static variables (no runtime variables).
 ///
-/// Returns true if:
+/// Runtime variables are assumed to be satisfiable and are ignored. This is
+/// used for checking if a skill can activate on a course, independent of
+/// runtime conditions like HP, order or phase.
 ///
-/// - The variable is runtime-only (assumed possible to satisfy).
-/// - The variable is static and the comparison evaluates to true.
-/// - The variable is popularity (special case to avoid circular dependency).
+/// A comparison is skipped and evaluated as `true` if:
 ///
-/// Returns false if:
+/// - Its variable is runtime-only (assumed possible to satisfy).
+/// - Its variable is related to popularity (special case to avoid circular
+///   dependency).
 ///
-/// - The variable is static and the comparison evaluates to false.
+/// Otherwise, if its variable is static, the comparison is evaluated and the
+/// result is returned.
 pub fn evaluate_static_comparison(
     comp: &Comparison,
     state: &RaceState,

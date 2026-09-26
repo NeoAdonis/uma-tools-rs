@@ -2136,8 +2136,8 @@ impl Runner {
         let logic = &self.trigger_scheduler.skill_logics[trigger_index];
         let precondition = logic.precondition.clone();
 
-        if let Some(precond) = precondition
-            && evaluate_condition(&precond, &EvaluatorFull, Some(logic), state, self)
+        if let Some(precondition) = precondition
+            && evaluate_condition(&precondition, &EvaluatorFull, Some(logic), state, self)
         {
             self.trigger_scheduler.precondition_satisfied[trigger_index] = true;
         }
