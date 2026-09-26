@@ -106,3 +106,62 @@ fn test_multi_runner_race_simulation() {
         );
     }
 }
+
+#[test]
+fn test_same_seed_gives_same_race() {
+    let styles = [
+        Style::Runaway,
+        Style::Front,
+        Style::Front,
+        Style::Pace,
+        Style::Pace,
+        Style::Late,
+        Style::Late,
+        Style::End,
+        Style::End,
+    ];
+
+    // Final position and time of every runner, in gate order
+    let race = |seed: u64| {
+        let course = Course::from_json_file("data/course_data.json", "10101")
+            .expect("Failed to load course data");
+        let params = RaceParameters {
+            track_condition: TrackCondition::Firm,
+            weather: Weather::Sunny,
+            season: Season::Spring,
+            time: Time::None,
+            grade: Grade::G1,
+            gates: styles.len() as u8,
+            rng_seed: seed,
+        };
+        let mut solver = RaceSolver::new(course, params, &Configuration::default());
+        for style in styles {
+            let uma = Uma {
+                speed: 1200,
+                stamina: 1000,
+                power: 1000,
+                guts: 800,
+                wiz: 1000,
+                style,
+                distance_aptitude: Aptitude::A,
+                track_aptitude: Aptitude::A,
+                style_aptitude: Aptitude::A,
+            };
+            solver.add_runner(uma, Motivation::Normal, vec![]);
+        }
+        let mut solver = solver.ready_runners();
+        solver.run();
+
+        let mut runners: Vec<_> = solver
+            .runners
+            .iter()
+            .map(|runner| (runner.gate_roll, runner.position))
+            .collect();
+        runners.sort_by_key(|(gate, _)| *gate);
+        (solver.state.finish_time, runners)
+    };
+
+    for seed in 0..5 {
+        assert_eq!(race(seed), race(seed), "seed {seed}");
+    }
+}

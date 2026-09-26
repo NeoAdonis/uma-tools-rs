@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::prelude::*;
@@ -188,8 +188,10 @@ pub struct OvertakeTarget {
 
 /// Overtake mode state including persistence timer.
 pub struct OvertakeState {
-    /// Map of overtake targets by gate_roll.
-    targets: HashMap<u8, OvertakeTarget>,
+    /// Ordered map of overtake targets by gate_roll.
+    ///
+    /// Lane candidates are always considered in the same order.
+    targets: BTreeMap<u8, OvertakeTarget>,
     /// Time when overtake mode should expire (None if active with targets).
     expires_at: Option<f64>,
 }
@@ -1452,7 +1454,7 @@ impl Runner {
         // Get or create overtake state
         if self.overtake_state.is_none() {
             self.overtake_state = Some(OvertakeState {
-                targets: HashMap::new(),
+                targets: BTreeMap::new(),
                 expires_at: None,
             });
         }

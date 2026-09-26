@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
@@ -51,7 +51,9 @@ pub struct RaceState {
 ///    and out-of-gate skills are applied. The simulation can begin.
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
-    builders: HashMap<u8, UnreadyRunner>,
+    // Ordered by gate so that runners are always built in the same order (which
+    // determines how the shared RNG is consumed)
+    builders: BTreeMap<u8, UnreadyRunner>,
     pub state: RaceState,
     _marker: PhantomData<T>,
 }
@@ -80,7 +82,7 @@ impl RaceSolver<UnreadyRunner> {
 
         RaceSolver {
             runners: vec![],
-            builders: HashMap::new(),
+            builders: BTreeMap::new(),
             state,
             _marker: PhantomData,
         }
@@ -155,7 +157,7 @@ impl RaceSolver<UnreadyRunner> {
 
         RaceSolver {
             runners,
-            builders: HashMap::new(),
+            builders: BTreeMap::new(),
             state,
             _marker: PhantomData,
         }
