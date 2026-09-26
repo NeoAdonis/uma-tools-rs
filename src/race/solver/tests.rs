@@ -1,5 +1,4 @@
 use super::*;
-use crate::race::runner::PositioningStrategy;
 use crate::test_utils::race_params;
 
 /// Index of the course feature containing `position`, given `(start, end)` ranges.
@@ -292,6 +291,23 @@ fn test_single_front_runner_keeps_speeding_up_with_larger_lead() {
     );
     runner_with_style(&mut solver, Style::Front).positioning_strategy =
         PositioningStrategy::FrontSpeedUp;
+    solver.update_positioning_strategy();
+    assert!(matches!(
+        runner_with_style(&mut solver, Style::Front).positioning_strategy,
+        PositioningStrategy::Normal
+    ));
+}
+
+#[test]
+fn test_positioning_ends_after_first_ten_sections() {
+    let mut solver = positioning_solver(
+        &[(Style::Front, 100.0), (Style::End, 110.0)],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Front));
+
+    runner_with_style(&mut solver, Style::Front).section = POSITIONING_END_SECTION;
     solver.update_positioning_strategy();
     assert!(matches!(
         runner_with_style(&mut solver, Style::Front).positioning_strategy,

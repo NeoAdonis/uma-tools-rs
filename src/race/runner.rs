@@ -240,6 +240,9 @@ impl Default for OrderState {
     }
 }
 
+/// First section where positioning strategies no longer apply.
+pub const POSITIONING_END_SECTION: u8 = 10;
+
 /// Positioning strategy during the first 10 sections (5/12) of the race.
 /// For front-runners, it determines the pacing behavior to stay ahead or catch up.
 /// For non-front-runners, it determines the pacing behavior to keep their

@@ -9,7 +9,7 @@ use rand::prelude::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::Runner;
+use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
@@ -466,6 +466,10 @@ impl RaceSolver<Runner> {
             let style = self.runners[i].positioning_style();
             let passive_ahead = max_style_ahead > Some(style);
             max_style_ahead = max_style_ahead.max(Some(style));
+            if self.runners[i].section >= POSITIONING_END_SECTION {
+                self.runners[i].positioning_strategy = PositioningStrategy::Normal;
+                continue;
+            }
             if has_pace_up_ex
                 && self.runners[i].update_pace_up_ex(passive_ahead, pacemaker_style, &self.state)
             {
