@@ -314,3 +314,120 @@ fn test_positioning_ends_after_first_ten_sections() {
         PositioningStrategy::Normal
     ));
 }
+
+const FRAME: f64 = 1.0 / 15.0;
+
+/// Solver with a single runner whose start delay is overridden.
+fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
+    let course = Course::from_json_file("data/course_data.json", "10101")
+        .expect("Failed to load course data");
+    let mut solver = RaceSolver::new(course, race_params(rng_seed), &Configuration::default());
+    let uma = Uma {
+        speed: 1200,
+        stamina: 1000,
+        power: 1000,
+        guts: 800,
+        wiz: 1000,
+        style: Style::Pace,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    };
+    solver.add_runner(uma, Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    solver.runners[0].start_delay = start_delay;
+    solver
+}
+
+/// `(position, speed, hp)` of the only runner.
+fn runner_state(solver: &RaceSolver<Runner>) -> (f64, f64, f64) {
+    let runner = &solver.runners[0];
+    (runner.position, runner.speed, runner.hp.current)
+}
+
+fn assert_close(actual: f64, expected: f64, context: &str) {
+    assert!(
+        (actual - expected).abs() < 1e-9,
+        "{context}: expected {expected}, got {actual}"
+    );
+}
+
+#[test]
+fn test_no_start_delay_moves_full_frame() {
+    let mut solver = start_delay_solver(0.0, 0);
+    solver.step(FRAME);
+    let (position, speed, _) = runner_state(&solver);
+    assert_close(position, speed * FRAME, "position");
+}
+
+#[test]
+fn test_start_delay_within_first_frame_prorates_distance_only() {
+    let mut delayed = start_delay_solver(0.03, 0);
+    let mut reference = start_delay_solver(0.0, 0);
+    delayed.step(FRAME);
+    reference.step(FRAME);
+
+    let (position, speed, hp) = runner_state(&delayed);
+    let (_, ref_speed, ref_hp) = runner_state(&reference);
+    // Acceleration and HP consumption are unaffected
+    assert_close(speed, ref_speed, "speed");
+    assert_close(hp, ref_hp, "hp");
+    assert_close(position, speed * (FRAME - 0.03), "position");
+}
+
+#[test]
+fn test_start_delay_longer_than_a_frame_skips_whole_frames() {
+    let mut delayed = start_delay_solver(0.09, 0);
+    let (start_position, start_speed, start_hp) = runner_state(&delayed);
+
+    // First frame is entirely within the start delay: nothing happens
+    delayed.step(FRAME);
+    assert_eq!(runner_state(&delayed), (start_position, start_speed, start_hp));
+
+    // Second frame: full acceleration and HP consumption, prorated distance
+    delayed.step(FRAME);
+    let mut reference = start_delay_solver(0.0, 0);
+    reference.step(FRAME);
+    let (position, speed, hp) = runner_state(&delayed);
+    let (_, ref_speed, ref_hp) = runner_state(&reference);
+    assert_close(speed, ref_speed, "speed");
+    assert_close(hp, ref_hp, "hp");
+    assert_close(position, speed * (2.0 * FRAME - 0.09), "position");
+    assert!(position > 0.0, "Runner must move forward, got {position}");
+}
+
+#[test]
+fn test_longer_start_delay_loses_a_frame_of_acceleration() {
+    // Both leave the gate on the second frame, but only the one that leaves on
+    // the first frame accelerates on it
+    let mut early = start_delay_solver(0.05, 0);
+    let mut late = start_delay_solver(0.09, 0);
+    for _ in 0..2 {
+        early.step(FRAME);
+        late.step(FRAME);
+    }
+    let (early_position, early_speed, _) = runner_state(&early);
+    let (late_position, late_speed, _) = runner_state(&late);
+    assert!(early_speed > late_speed);
+    assert!(early_position > late_position);
+}
+
+#[test]
+fn test_position_never_decreases_regardless_of_start_delay() {
+    for rng_seed in 0..20 {
+        for i in 0..=20 {
+            let start_delay = i as f64 * 0.01;
+            let mut solver = start_delay_solver(start_delay, rng_seed);
+            let mut prev_position = 0.0;
+            for _ in 0..30 {
+                solver.step(FRAME);
+                let position = solver.runners[0].position;
+                assert!(
+                    position >= prev_position,
+                    "seed {rng_seed}, delay {start_delay}: {prev_position} -> {position}"
+                );
+                prev_position = position;
+            }
+        }
+    }
+}
