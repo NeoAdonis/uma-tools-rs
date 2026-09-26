@@ -18,9 +18,9 @@ use crate::race::secure_lead;
 use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::skill::*;
 use crate::trigger::skill_activation::{ActiveTimedEffect, SkillActivationRecord, WindowVariable};
 use crate::trigger::system::{DistanceTrigger, TriggerScheduler};
-use crate::uma::skill::*;
 use crate::uma::*;
 
 /// Skill modifiers that are applied during race calculations.

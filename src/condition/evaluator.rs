@@ -68,8 +68,8 @@ use crate::race::runner::InitialState;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::skill::SkillType;
 use crate::trigger::skill_activation::SkillActivationLogic;
-use crate::uma::skill::SkillType;
 use crate::uma::*;
 use crate::units::*;
 

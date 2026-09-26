@@ -8,8 +8,8 @@
 
 use super::super::skill_activation::*;
 use crate::course::*;
+use crate::skill::*;
 use crate::trigger::builder::build_trigger_scheduler;
-use crate::uma::skill::*;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 

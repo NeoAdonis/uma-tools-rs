@@ -45,10 +45,10 @@
 
 use crate::condition::parser::*;
 use crate::course::{Course, Phase};
+use crate::skill::*;
 use crate::trigger::random::roll_condition;
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
-use crate::uma::skill::*;
 use crate::units::furlongs_to_meters;
 use rand::Rng;
 

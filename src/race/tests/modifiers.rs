@@ -4,7 +4,7 @@ use crate::course::{Course, Phase};
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
 use crate::race::solver::RaceSolver;
-use crate::uma::skill::*;
+use crate::skill::*;
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;

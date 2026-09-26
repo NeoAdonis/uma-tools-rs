@@ -5,7 +5,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::parameters::*;
 use crate::race::solver::RaceSolver;
-use crate::uma::skill::*;
+use crate::skill::*;
 use crate::uma::*;
 
 /// Length of the test course (10104) in meters.

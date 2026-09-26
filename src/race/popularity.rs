@@ -29,8 +29,8 @@ use std::collections::HashMap;
 use crate::race::modifiers::{distance_proficiency_multiplier, ground_type_proficiency_multiplier};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::skill::{Skill, SkillRarity, SkillType};
 use crate::uma::motivation_multiplier;
-use crate::uma::skill::{Skill, SkillRarity, SkillType};
 
 /// Popularity mark assigned by a judge
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -447,13 +447,13 @@ mod tests {
 
     #[test]
     fn test_stat_contributions() {
-        use crate::uma::skill::{Skill, SkillAlternative, SkillData, SkillEffect, SkillTarget};
+        use crate::skill::*;
 
         // Test speed skill
         let speed_skill = Skill::new(
             "test_speed".to_string(),
             SkillData {
-                rarity: crate::uma::skill::SkillRarity::White,
+                rarity: SkillRarity::White,
                 alternatives: vec![SkillAlternative {
                     base_duration: 0,
                     condition: "".to_string(),
@@ -477,7 +477,7 @@ mod tests {
         let all_stats_skill = Skill::new(
             "test_all".to_string(),
             SkillData {
-                rarity: crate::uma::skill::SkillRarity::White,
+                rarity: SkillRarity::White,
                 alternatives: vec![SkillAlternative {
                     base_duration: 0,
                     condition: "".to_string(),

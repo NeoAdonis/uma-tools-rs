@@ -5,8 +5,8 @@ use crate::race::last_spurt::*;
 use crate::race::parameters::*;
 use crate::race::runner::{MAX_TARGET_SPEED, Runner};
 use crate::race::solver::RaceSolver;
+use crate::skill::*;
 use crate::trigger::skill_activation::TriggerCondition;
-use crate::uma::skill::*;
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;

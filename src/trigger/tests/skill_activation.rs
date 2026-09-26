@@ -4,8 +4,8 @@ use super::super::skill_activation::*;
 use crate::course::geometry::*;
 use crate::course::*;
 use crate::parser::{CompOp, parse_condition};
+use crate::skill::*;
 use crate::trigger::builder::build_trigger_scheduler;
-use crate::uma::skill::*;
 
 /// Create a simple test course for testing spatial triggers
 fn create_test_course() -> Course {

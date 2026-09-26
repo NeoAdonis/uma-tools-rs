@@ -12,7 +12,7 @@ use crate::race::parameters::RaceParameters;
 use crate::race::runner::Runner;
 use crate::race::secure_lead;
 use crate::race::unready_runner::UnreadyRunner;
-use crate::uma::skill::*;
+use crate::skill::*;
 use crate::uma::*;
 
 pub struct RaceState {

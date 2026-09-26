@@ -380,3 +380,6 @@ fn can_alternative_activate(
     // Check static guards only
     check_static_guards(&condition.comp_tree, state, runner)
 }
+
+#[cfg(test)]
+mod tests;

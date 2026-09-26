@@ -3,8 +3,6 @@
 //! This module includes data structures for stats, aptitudes, running styles
 //! and motivation, as well as functions to convert raw stats into base stats.
 
-pub mod skill;
-
 use serde::Deserialize;
 
 /// Running style or strategy of an Uma. The values represent in order, from most to

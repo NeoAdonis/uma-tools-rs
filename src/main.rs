@@ -4,7 +4,7 @@ use uma_tools::configuration::{Configuration, GameVersion, Language};
 use uma_tools::course::*;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;
-use uma_tools::uma::skill::*;
+use uma_tools::skill::*;
 use uma_tools::uma::*;
 
 fn main() {

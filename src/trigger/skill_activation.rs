@@ -66,7 +66,7 @@
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::*;
-use crate::uma::skill::SkillEffect;
+use crate::skill::SkillEffect;
 use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.

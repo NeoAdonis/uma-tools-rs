@@ -6,7 +6,7 @@ use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
-use crate::uma::skill::*;
+use crate::skill::*;
 use crate::uma::*;
 
 /// Helper to create a minimal test race state
