@@ -242,8 +242,8 @@ impl Default for OrderState {
 
 /// Positioning strategy during the first 10 sections (5/12) of the race.
 /// For front-runners, it determines the pacing behavior to stay ahead or catch up.
-/// For non-front-runners, it determines the pacing behavior to keep their distance
-/// from the pacemaker.
+/// For non-front-runners, it determines the pacing behavior to keep their
+/// distance from the pacemaker.
 pub enum PositioningStrategy {
     /// Run at regular pace.
     Normal,
@@ -259,8 +259,11 @@ pub enum PositioningStrategy {
     /// *(Non-front-runners only.)*
     /// Try to fall back within a certain distance from pacemaker by pacing down.
     PaceDown(f64),
-    /// **Introduced by 1.5 Anniversary update in Japan.** Speed up if there is another
-    /// runner ahead whose strategy should actually position her behind.
+    /// *Introduced by 1.5 Anniversary update in Japan.* Speed up if there is
+    /// another runner ahead whose strategy should actually position her behind.
+    /// Front-runners enter it when any such runner is ahead; other runners
+    /// enter it when the pacemaker is such a runner. Exits once no such runner
+    /// is ahead. Takes priority over all other strategies.
     PaceUpEx,
 }
 
@@ -1044,6 +1047,40 @@ impl Runner {
                 )
             }
         }
+    }
+
+    /// Enter or exit [`PositioningStrategy::PaceUpEx`] (1.5 anniv. and later).
+    /// Returns `true` if the runner is in Pace Up Ex, in which case the regular
+    /// positioning update must be skipped.
+    ///
+    /// `passive_ahead` tells whether any runner ahead has a style that should
+    /// position her behind this runner.
+    pub fn update_pace_up_ex(
+        &mut self,
+        passive_ahead: bool,
+        pacemaker_style: Style,
+        state: &RaceState,
+    ) -> bool {
+        if matches!(self.positioning_strategy, PositioningStrategy::PaceUpEx) {
+            if !passive_ahead {
+                self.positioning_strategy = PositioningStrategy::Normal;
+                self.next_positioning_check = state.elapsed_time;
+                return false;
+            }
+            return true;
+        }
+
+        let style = self.positioning_style();
+        let should_enter = if style.is_front_like() {
+            passive_ahead
+        } else {
+            pacemaker_style > style
+        };
+        if should_enter {
+            // Overrides any other strategy
+            self.positioning_strategy = PositioningStrategy::PaceUpEx;
+        }
+        should_enter
     }
 
     /// Update the runner's position based on effective current speed.

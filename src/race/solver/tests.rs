@@ -1,4 +1,5 @@
 use super::*;
+use crate::race::runner::PositioningStrategy;
 use crate::test_utils::race_params;
 
 /// Index of the course feature containing `position`, given `(start, end)` ranges.
@@ -130,4 +131,141 @@ fn test_skills_see_state_after_the_move() {
         "Should activate right after 1600m, got {}m",
         activations[0].distance
     );
+}
+
+/// Solver with one runner per `(style, position)` pair, sorted by position and past
+/// every start delay, ready for positioning strategy updates.
+fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
+    let course = Course::from_json_file("data/course_data.json", "10101")
+        .expect("Failed to load course data");
+    let config = Configuration {
+        game_version,
+        ..Configuration::default()
+    };
+    let mut solver = RaceSolver::new(course, race_params(0), &config);
+    for &(style, _) in runners {
+        let uma = Uma {
+            speed: 1200,
+            stamina: 1000,
+            power: 1000,
+            guts: 800,
+            wiz: 1000,
+            style,
+            distance_aptitude: Aptitude::A,
+            track_aptitude: Aptitude::A,
+            style_aptitude: Aptitude::A,
+        };
+        solver.add_runner(uma, Motivation::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+    solver.state.elapsed_time = 10.0;
+    for (runner, &(_, position)) in solver.runners.iter_mut().zip(runners) {
+        runner.position = position;
+    }
+    sort_by_position(&mut solver);
+    solver
+}
+
+fn sort_by_position(solver: &mut RaceSolver<Runner>) {
+    solver
+        .runners
+        .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+}
+
+fn runner_with_style(solver: &mut RaceSolver<Runner>, style: Style) -> &mut Runner {
+    solver
+        .runners
+        .iter_mut()
+        .find(|runner| runner.base.style == style)
+        .unwrap()
+}
+
+fn is_pace_up_ex(solver: &mut RaceSolver<Runner>, style: Style) -> bool {
+    matches!(
+        runner_with_style(solver, style).positioning_strategy,
+        PositioningStrategy::PaceUpEx
+    )
+}
+
+#[test]
+fn test_pace_up_ex_front_runner_enters_and_exits() {
+    let mut solver = positioning_solver(
+        &[(Style::Front, 100.0), (Style::End, 110.0)],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Front));
+    assert!(!is_pace_up_ex(&mut solver, Style::End));
+
+    // Still behind: stays in Pace Up Ex
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Front));
+
+    runner_with_style(&mut solver, Style::Front).position = 120.0;
+    sort_by_position(&mut solver);
+    solver.update_positioning_strategy();
+    assert!(!is_pace_up_ex(&mut solver, Style::Front));
+}
+
+#[test]
+fn test_pace_up_ex_runaway_behind_front() {
+    let mut solver = positioning_solver(
+        &[(Style::Runaway, 100.0), (Style::Front, 110.0)],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Runaway));
+    assert!(!is_pace_up_ex(&mut solver, Style::Front));
+}
+
+#[test]
+fn test_pace_up_ex_non_front_depends_on_pacemaker() {
+    // End pacemaker should be behind Late
+    let mut solver = positioning_solver(
+        &[(Style::Late, 100.0), (Style::End, 110.0)],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Late));
+
+    // Pace pacemaker should be ahead of Late, even if an End runner is ahead too
+    let mut solver = positioning_solver(
+        &[
+            (Style::Late, 100.0),
+            (Style::Pace, 120.0),
+            (Style::End, 110.0),
+        ],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(!is_pace_up_ex(&mut solver, Style::Late));
+}
+
+#[test]
+fn test_pace_up_ex_overrides_other_strategies() {
+    let mut solver = positioning_solver(
+        &[(Style::Pace, 100.0), (Style::End, 110.0)],
+        GameVersion::LATEST,
+    );
+    runner_with_style(&mut solver, Style::Pace).positioning_strategy =
+        PositioningStrategy::PaceDown(3.0);
+    solver.update_positioning_strategy();
+    assert!(is_pace_up_ex(&mut solver, Style::Pace));
+}
+
+#[test]
+fn test_pace_up_ex_not_before_one_point_five_anniversary() {
+    let mut solver = positioning_solver(
+        &[
+            (Style::Front, 100.0),
+            (Style::Late, 110.0),
+            (Style::End, 120.0),
+        ],
+        GameVersion::FirstAnniversary,
+    );
+    for _ in 0..10 {
+        solver.update_positioning_strategy();
+        assert!(!is_pace_up_ex(&mut solver, Style::Front));
+        assert!(!is_pace_up_ex(&mut solver, Style::Late));
+    }
 }

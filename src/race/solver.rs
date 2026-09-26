@@ -456,9 +456,23 @@ impl RaceSolver<Runner> {
             }
         }
 
+        let has_pace_up_ex = self.state.config.game_version >= GameVersion::OnePointFiveAnniversary;
+        let pacemaker_style = self.runners[0].positioning_style();
+        // Most passive style among runners ahead of the current one
+        let mut max_style_ahead: Option<Style> = None;
+
         for i in 0..self.runners.len() {
+            let style = self.runners[i].positioning_style();
+            let passive_ahead = max_style_ahead > Some(style);
+            max_style_ahead = max_style_ahead.max(Some(style));
+            if has_pace_up_ex
+                && self.runners[i].update_pace_up_ex(passive_ahead, pacemaker_style, &self.state)
+            {
+                continue;
+            }
+
             let runner = &self.runners[i];
-            if runner.positioning_style().is_front_like() {
+            if style.is_front_like() {
                 // Determine if we are in first place, and by how much
                 let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
                     runner.position - self.runners[i + 1].position
@@ -478,8 +492,6 @@ impl RaceSolver<Runner> {
                 runner.update_positioning_non_front(distance_behind, &self.state)
             }
         }
-
-        // TODO: implement PaceUpEx strategy
     }
 
     /// Update secure lead (リード確保) state for all runners.
