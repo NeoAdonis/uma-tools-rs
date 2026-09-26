@@ -341,11 +341,10 @@ pub struct BlockedState {
 pub struct NearbyState {
     /// Total number of nearby runners.
     pub count: u8,
-    /// Number of nearby runners ahead.
-    pub ahead_count: u8,
     /// Whether the runner behind is in a lane that's closer to the center.
     pub behind_in: bool,
     /// Number of nearby runners in the same lane ahead.
+    /// Maps to variable `near_infront_count`.
     pub ahead_same_lane_count: u8,
     /// Time spent near runners in the same lane ahead in seconds.
     pub ahead_same_lane_time: f64,
@@ -2201,8 +2200,6 @@ impl Runner {
         // Both runners are near each other
         self.nearby.count += 1;
         other.nearby.count += 1;
-        // Other runner is in front of this runner
-        self.nearby.ahead_count += 1;
     }
 
     /// Check if this runner is front-blocked.
@@ -2219,7 +2216,6 @@ impl Runner {
     pub fn reset_blocking_status(&mut self) {
         self.visible_count = 0;
         self.nearby.count = 0;
-        self.nearby.ahead_count = 0;
         self.nearby.behind_in = false;
         self.nearby.ahead_same_lane_count = 0;
         self.nearby.behind_same_lane_count = 0;

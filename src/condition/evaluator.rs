@@ -750,7 +750,7 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
 
         // Near counts
         NearCount => runner.nearby.count as i32,
-        NearInfrontCount => runner.nearby.ahead_count as i32,
+        NearInfrontCount => runner.nearby.ahead_same_lane_count as i32,
         InfrontNearLaneTime => runner.nearby.ahead_same_lane_time.floor() as i32,
         BehindNearLaneTime => runner.nearby.behind_same_lane_time.floor() as i32,
         BehindNearLaneTimeSet1 => runner.nearby.behind_set1_time.floor() as i32,

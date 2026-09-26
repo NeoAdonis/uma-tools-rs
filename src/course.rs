@@ -395,7 +395,7 @@ impl Course {
         // Lane difference threshold decreases linearly with distance between runners
         // At 0m, threshold is 0.75 lanes
         // At 2m, threshold is 0.3 lanes
-        lane_diff <= (1.0 - 0.3 * distance) * 0.75 * self.lane_width()
+        lane_diff.abs() <= (1.0 - 0.3 * distance) * 0.75 * self.lane_width()
     }
 
     /// Check if a runner is blocking another runner from the side based on distance
@@ -467,10 +467,10 @@ impl Course {
         max_distance: f64,
         max_lane_diff: f64,
     ) -> bool {
-        if (0.0..max_distance).contains(&distance) {
+        if !(0.0..max_distance).contains(&distance) {
             return false;
         }
-        lane_diff < max_lane_diff * self.lane_width()
+        lane_diff.abs() < max_lane_diff * self.lane_width()
     }
 }
 
@@ -540,5 +540,31 @@ mod tests {
                 "track {track_id}"
             );
         }
+    }
+
+    #[test]
+    fn test_is_near_by() {
+        let course = create_test_course(10001);
+        let lane = course.lane_width();
+        // Within range, on either side
+        assert!(course.is_near_by(0.0, 0.0, 3.0, 3.0));
+        assert!(course.is_near_by(2.9, 2.9 * lane, 3.0, 3.0));
+        assert!(course.is_near_by(2.9, -2.9 * lane, 3.0, 3.0));
+        // Out of distance range
+        assert!(!course.is_near_by(3.0, 0.0, 3.0, 3.0));
+        assert!(!course.is_near_by(-0.1, 0.0, 3.0, 3.0));
+        // Out of lane range, on either side
+        assert!(!course.is_near_by(1.0, 3.0 * lane, 3.0, 3.0));
+        assert!(!course.is_near_by(1.0, -3.0 * lane, 3.0, 3.0));
+    }
+
+    #[test]
+    fn test_check_front_blocked_lane_side() {
+        let course = create_test_course(10001);
+        let lane = course.lane_width();
+        assert!(course.check_front_blocked(0.0, 0.7 * lane));
+        assert!(course.check_front_blocked(0.0, -0.7 * lane));
+        assert!(!course.check_front_blocked(0.0, 0.8 * lane));
+        assert!(!course.check_front_blocked(0.0, -0.8 * lane));
     }
 }
