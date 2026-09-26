@@ -926,11 +926,8 @@ impl Runner {
             }
             PositioningStrategy::FrontSpeedUp => {
                 // Exit if sufficiently ahead
-                if !self.can_speed_up_to_front(
-                    distance_ahead,
-                    is_single_front_runner,
-                    game_version,
-                ) {
+                if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner, game_version)
+                {
                     self.positioning_strategy = PositioningStrategy::Normal;
                 }
             }

@@ -214,12 +214,7 @@ fn test_random_trigger_scheduled_on_activation() {
 fn test_full_race() {
     let mut activated_any = false;
     for seed in 0..5 {
-        let mut with = solver(
-            2500,
-            GameVersion::LATEST,
-            vec![full_throttle_skill()],
-            seed,
-        );
+        let mut with = solver(2500, GameVersion::LATEST, vec![full_throttle_skill()], seed);
         with.run();
         let runner = &with.runners[0];
         assert_ne!(runner.full_throttle, FullThrottle::Pending, "seed {seed}");
