@@ -281,7 +281,6 @@ fn test_multiple_trigger_comparisons_are_combined() {
     assert_eq!(branch.guards.len(), 4);
 }
 
-
 /// Helper function to create a test skill with precondition.
 fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
     Skill::new(
