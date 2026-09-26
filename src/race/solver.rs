@@ -431,22 +431,29 @@ impl RaceSolver<Runner> {
         // runners_by_style from RaceState.
         let mut front_runner_count = 0;
 
-        // Find pacemaker (the most forward runner with the most aggressive style)
-        // TODO: fix; this is valid only before the 1.5 anniversary update
-        let mut pacemaker_style = self.runners[0].positioning_style();
+        // Find pacemaker
         let mut pacemaker_position = self.runners[0].position;
-        for i in 0..self.runners.len() {
-            let runner_i = &self.runners[i];
-            let style = runner_i.positioning_style();
-            if style < pacemaker_style {
-                pacemaker_style = style;
-                pacemaker_position = runner_i.position;
+        // After the 1.5 anniversary update, the pacemaker *seems* to be the most
+        // forward runner overall. More parameters may be involved, but they are
+        // unknown. In the meantime, this is a reasonable approximation that works
+        // for most cases.
+        if self.state.config.game_version < GameVersion::OnePointFiveAnniversary {
+            // Prior to the 1.5 anniversary update, the pacemaker was the most
+            // forward runner with the most aggressive style
+            let mut pacemaker_style = self.runners[0].positioning_style();
+            for i in 0..self.runners.len() {
+                let runner_i = &self.runners[i];
+                let style = runner_i.positioning_style();
+                if style < pacemaker_style {
+                    pacemaker_style = style;
+                    pacemaker_position = runner_i.position;
+                }
+                if style.is_front_like() {
+                    front_runner_count += 1;
+                }
+                // Because runners are sorted by position descendingly, we only
+                // need to update pacemaker when a more agressive style is found
             }
-            if style.is_front_like() {
-                front_runner_count += 1;
-            }
-            // Because runners are sorted by position descendingly, we only
-            // need to update pacemaker when a more agressive style is found
         }
 
         for i in 0..self.runners.len() {
