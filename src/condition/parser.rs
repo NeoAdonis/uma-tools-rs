@@ -25,6 +25,20 @@ pub enum BinOp {
     Or,  // "@"
 }
 
+impl CompOp {
+    /// Returns the result of `lhs <op> rhs`.
+    pub fn apply(self, lhs: i32, rhs: i32) -> bool {
+        match self {
+            CompOp::Equal => lhs == rhs,
+            CompOp::NotEqual => lhs != rhs,
+            CompOp::Greater => lhs > rhs,
+            CompOp::GreaterEqual => lhs >= rhs,
+            CompOp::Less => lhs < rhs,
+            CompOp::LessEqual => lhs <= rhs,
+        }
+    }
+}
+
 impl fmt::Display for CompOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -67,6 +81,49 @@ pub struct Comparison {
     pub var: VarType,
     pub op: CompOp,
     pub value: i32,
+}
+
+impl ComparisonTree {
+    /// Split the tree into its OR branches, each one being the list of
+    /// comparisons of an AND chain (from left to right).
+    ///
+    /// The tree is true if all comparisons of any branch are true.
+    pub fn or_branches(&self) -> Vec<Vec<&Comparison>> {
+        match self {
+            ComparisonTree::Binary {
+                left,
+                op: BinOp::Or,
+                right,
+            } => {
+                let mut branches = left.or_branches();
+                branches.extend(right.or_branches());
+                branches
+            }
+            _ => vec![self.and_chain()],
+        }
+    }
+
+    /// Collect the comparisons of an AND chain from left to right.
+    ///
+    /// The condition grammar has no parentheses, so an AND chain never contains
+    /// an OR.
+    fn and_chain(&self) -> Vec<&Comparison> {
+        match self {
+            ComparisonTree::Single(comp) => vec![comp],
+            ComparisonTree::Binary {
+                left,
+                op: BinOp::And,
+                right,
+            } => {
+                let mut comps = left.and_chain();
+                comps.extend(right.and_chain());
+                comps
+            }
+            ComparisonTree::Binary { op: BinOp::Or, .. } => {
+                unreachable!("BUG: OR inside an AND chain can't be parsed")
+            }
+        }
+    }
 }
 
 /// A flat list of comparisons that must all be true (AND conjunction).
