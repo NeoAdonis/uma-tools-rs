@@ -25,6 +25,10 @@ pub enum GameVersion {
     /// gap to the pacemaker smaller, and let a lone front runner keep speeding
     /// up to stay ahead with a larger lead.
     OnePointFiveAnniversary,
+    /// After the 2nd anniversary update in Japan.
+    ///
+    /// This update introduces charge up mechanics.
+    SecondAnniversary,
     /// After the 2.5 anniversary update in Japan.
     ///
     /// This update introduced stamina limit breaks and lead securing mechanics.

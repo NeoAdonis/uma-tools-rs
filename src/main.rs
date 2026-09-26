@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use uma_tools::configuration::{Configuration, GameVersion, Language};
 use uma_tools::course::*;
+use uma_tools::race::charge_up::ChargeUpOutcome;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;
 use uma_tools::skill::*;
@@ -126,6 +127,26 @@ fn main() {
             runner.last_spurt.as_ref().unwrap().target_distance,
             runner.last_spurt.as_ref().unwrap().category
         );
+        match &runner.charge_up {
+            None => println!("Charge up: not eligible"),
+            Some(charge_up) => match &charge_up.outcome {
+                ChargeUpOutcome::Released(release) => println!(
+                    "Charge up: conserved {:.1}, released at {:.2} meters for {:.2}s (+{:.3} m/s²)",
+                    release.conserved,
+                    release.start_position,
+                    release.duration,
+                    release.acceleration
+                ),
+                ChargeUpOutcome::Insufficient => println!(
+                    "Charge up: conserved {:.1}, not enough to release",
+                    charge_up.conserved
+                ),
+                ChargeUpOutcome::Pending => println!(
+                    "Charge up: conserved {:.1}, not released",
+                    charge_up.conserved
+                ),
+            },
+        }
         println!("Activated skills:");
         for skill in &runner.activated_skills {
             println!(

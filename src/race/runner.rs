@@ -9,6 +9,7 @@ use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
+use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
@@ -496,6 +497,10 @@ pub struct Runner {
     /// Full-Throttle Sprint state. It is activated once the runner reaches its
     /// last spurt speed, and keeps increasing target speed until the end of the race.
     pub full_throttle: FullThrottle,
+    /// Charge Up (足を貯める) state. It records the power conserved during the
+    /// first 10 sections and its release upon entering the last spurt.
+    /// `None` if the runner is not eligible.
+    pub charge_up: Option<ChargeUp>,
     /// Reference to a `RaceSolver`'s Random Number Generator.
     /// It is shared with other runners.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
@@ -574,16 +579,16 @@ impl Runner {
     }
 
     /// Update acceleration based on current speed and target speed.
-    pub fn update_acceleration(&mut self) {
+    pub fn update_acceleration(&mut self, elapsed_time: f64) {
         if self.speed < self.target_speed {
-            self.accelerate();
+            self.accelerate(elapsed_time);
         } else {
             self.decelerate();
         }
     }
 
     /// Calculate increasing acceleration.
-    fn accelerate(&mut self) {
+    fn accelerate(&mut self, elapsed_time: f64) {
         let base_accel = if self.is_going_uphill() {
             0.0004
         } else {
@@ -610,10 +615,16 @@ impl Runner {
             .as_ref()
             .map_or(0.0, |d| d.acceleration_modifier);
 
+        let charge_up_modifier = self
+            .charge_up
+            .as_ref()
+            .map_or(0.0, |c| c.acceleration(elapsed_time));
+
         self.acceleration = base_acceleration
             + self.skill_modifiers.acceleration
             + start_dash_modifier
-            + dueling_modifier;
+            + dueling_modifier
+            + charge_up_modifier;
     }
 
     /// Calculate decreasing acceleration (i.e., deceleration).
@@ -1144,6 +1155,89 @@ impl Runner {
                 self.last_spurt = Some(calculate_last_spurt(self, state));
             }
         }
+
+        self.try_release_charge_up(state);
+    }
+
+    /// Release conserved power (脚色十分) upon entering the last spurt.
+    ///
+    /// Called after the position update, so the acceleration bonus starts on
+    /// the next frame.
+    fn try_release_charge_up(&mut self, state: &RaceState) {
+        let Some(charge_up) = &self.charge_up else {
+            return;
+        };
+        if charge_up.outcome != ChargeUpOutcome::Pending
+            || !self
+                .last_spurt
+                .as_ref()
+                .is_some_and(|l| self.position >= l.target_distance)
+        {
+            return;
+        }
+
+        let course = &state.course;
+        let duration =
+            charge_up::release_duration(charge_up.conserved, course.distance, course.distance_type);
+        let outcome = if duration < charge_up::MIN_DURATION {
+            ChargeUpOutcome::Insufficient
+        } else {
+            let activity =
+                charge_up::activity_coefficient(self.spot_struggle.is_some(), self.has_rushed());
+            ChargeUpOutcome::Released(ChargeUpRelease {
+                conserved: charge_up.conserved,
+                acceleration: charge_up::release_acceleration(
+                    charge_up.power,
+                    self.adjusted.style,
+                    course.distance_type,
+                    activity,
+                ),
+                duration,
+                start_time: state.elapsed_time,
+                start_position: self.position,
+                expires_at: state.elapsed_time + duration,
+            })
+        };
+        self.charge_up.as_mut().unwrap().outcome = outcome;
+    }
+
+    /// Conserve power (足を貯める) during the first 10 sections.
+    ///
+    /// Power is conserved while keeping position calmly. Speeding up, rushing
+    /// or struggling for the lead prevent it, and impose a cooldown upon exit.
+    pub fn update_charge_up(&mut self, delta_time: f64, elapsed_time: f64) {
+        if self.section >= POSITIONING_END_SECTION {
+            return;
+        }
+        let blocked = self.is_rushed()
+            || self
+                .spot_struggle
+                .as_ref()
+                .is_some_and(|s| elapsed_time < s.expires_at)
+            || matches!(
+                self.positioning_strategy,
+                PositioningStrategy::FrontSpeedUp
+                    | PositioningStrategy::FrontOvertake
+                    | PositioningStrategy::PaceUp(_)
+                    | PositioningStrategy::PaceUpEx
+            );
+        let rate = charge_up::position_keep_coefficient(self.is_pace_down())
+            * charge_up::style_coefficient(self.adjusted.style);
+        let Some(charge_up) = &mut self.charge_up else {
+            return;
+        };
+        if blocked {
+            charge_up.cooldown_until = elapsed_time + charge_up::COOLDOWN;
+        } else if elapsed_time >= charge_up.cooldown_until {
+            charge_up.conserved += rate * delta_time;
+        }
+    }
+
+    /// Multiply the conserved power (足を貯める), if any, by `penalty`.
+    fn penalize_charge_up(&mut self, penalty: f64) {
+        if let Some(charge_up) = &mut self.charge_up {
+            charge_up.conserved *= penalty;
+        }
     }
 
     /// Update HP based on current speed, phase, and modifiers.
@@ -1217,6 +1311,7 @@ impl Runner {
             // Force positioning strategy change immediately
             self.positioning_strategy = PositioningStrategy::Normal;
             self.next_positioning_check = state.elapsed_time;
+            self.penalize_charge_up(charge_up::RUSH_PENALTY);
         }
     }
 
@@ -1315,6 +1410,7 @@ impl Runner {
             modifier,
             expires_at: elapsed_time + duration,
         });
+        self.penalize_charge_up(charge_up::STRUGGLE_PENALTY);
     }
 
     /// Stop the spot struggle (位置取り争い).

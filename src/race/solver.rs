@@ -213,7 +213,7 @@ impl RaceSolver<Runner> {
             }
             runner.update_rush_state(&mut self.state);
             runner.update_target_speed(&self.state);
-            runner.update_acceleration();
+            runner.update_acceleration(self.state.elapsed_time);
             runner.update_speed(delta_time, self.state.course.base_speed());
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
@@ -236,6 +236,7 @@ impl RaceSolver<Runner> {
 
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, &self.state);
+            runner.update_charge_up(delta_time, self.state.elapsed_time);
             runner.update_skill_durations(self.state.elapsed_time);
         }
 

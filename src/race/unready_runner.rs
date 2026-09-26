@@ -7,6 +7,7 @@ use rand::RngExt;
 use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::parser::parse_condition;
+use crate::race::charge_up::{self, ChargeUp};
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, hp_style_multiplier};
 use crate::race::modifiers::{
@@ -97,6 +98,8 @@ pub struct UnreadyRunner {
     /// Base stats before adjustments. Also used for skill conditions in
     /// out-of-gate skills.
     pub base: Uma,
+    /// Raw power stat, before halving and motivation. Used for Charge Up.
+    raw_power: u16,
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.
     pub gate_roll: u8,
@@ -111,6 +114,8 @@ pub struct UnreadyRunner {
     start_delay: f64,
     /// Rush chance modifier from out-of-gate skills.
     rush_chance_modifier: f64,
+    /// Power gained from out-of-gate skills. Used for Charge Up.
+    power_skill_bonus: i32,
 
     // === Activation tracking ===
     /// Counts of skill activations by phase and type.
@@ -155,6 +160,7 @@ impl UnreadyRunner {
 
         // Calculate base stats
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
+        let raw_power = uma.power;
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate.
@@ -196,6 +202,7 @@ impl UnreadyRunner {
 
         UnreadyRunner {
             base: base_uma,
+            raw_power,
             gate_roll,
             adjusted: adjusted_uma,
             initial_state: InitialState {
@@ -216,6 +223,7 @@ impl UnreadyRunner {
             runtime_skills,
             same_skill_count: 0,
             rush_chance_modifier: 0.0,
+            power_skill_bonus: 0,
         }
     }
 
@@ -231,6 +239,9 @@ impl UnreadyRunner {
             // Apply stat boosts
             if is_stat_boost(effect_type) {
                 apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
+                if matches!(effect_type, SkillType::PowerUp | SkillType::AllStatsUp) {
+                    self.power_skill_bonus += effect.modifier / 10000;
+                }
             }
             // Apply start delay modifications
             else if is_start_delay_modification(effect_type) {
@@ -454,6 +465,10 @@ impl UnreadyRunner {
                 game_version,
             ),
             full_throttle: FullThrottle::Pending,
+            charge_up: ChargeUp::new(
+                charge_up::charge_power(self.base.power, self.raw_power, self.power_skill_bonus),
+                game_version,
+            ),
             rng: self.rng,
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),

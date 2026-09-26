@@ -1,3 +1,4 @@
+pub mod charge_up;
 pub mod full_throttle;
 pub mod hp;
 pub mod last_spurt;
