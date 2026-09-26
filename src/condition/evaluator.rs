@@ -386,11 +386,17 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
         // Ground type: 1=turf, 2=dirt
         GroundType => course.surface as i32,
 
+        // Is held at a racetrack outside Japan: Longchamp, Santa Anita Park or Del Mar
+        IsAbroad => course.is_abroad() as i32,
+
         // Is basis distance (multiple of 400m)
         IsBasisDistance => course.is_basis_distance() as i32,
 
         // Is exchange race (dirt grade): races at Ooi, Kawasaki, Funabashi, or Morioka
         IsDirtgrade => course.is_exchange_race() as i32,
+
+        // Is held at a racetrack with tight turns
+        IsTightTrack => course.is_tight_track() as i32,
 
         // Rotation: 1=clockwise, 2=counterclockwise, 4=straight
         Rotation => course.turn as i32,

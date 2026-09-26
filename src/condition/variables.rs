@@ -101,8 +101,10 @@ pub enum CourseVar {
     CourseDistance,
     DistanceType,
     GroundType,
+    IsAbroad,
     IsBasisDistance,
     IsDirtgrade,
+    IsTightTrack,
     Rotation,
     TrackId,
 }
@@ -387,8 +389,10 @@ impl VarType {
             "course_distance" => Course(CourseVar::CourseDistance),
             "distance_type" => Course(CourseVar::DistanceType),
             "ground_type" => Course(CourseVar::GroundType),
+            "is_abroad" => Course(CourseVar::IsAbroad),
             "is_basis_distance" => Course(CourseVar::IsBasisDistance),
             "is_dirtgrade" => Course(CourseVar::IsDirtgrade),
+            "is_tight_track" => Course(CourseVar::IsTightTrack),
             "rotation" => Course(CourseVar::Rotation),
             "track_id" => Course(CourseVar::TrackId),
 

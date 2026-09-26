@@ -329,6 +329,24 @@ impl Course {
         matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
     }
 
+    /// Check if the race is held at a racetrack outside Japan.
+    ///
+    /// Abroad tracks include Longchamp, Santa Anita Park and Del Mar.
+    pub fn is_abroad(&self) -> bool {
+        matches!(self.race_track_id, 10201..=10203)
+    }
+
+    /// Check if the race is held at a racetrack with tight turns.
+    ///
+    /// Tight tracks include Sapporo, Hakodate, Fukushima, Kokura, Kawasaki or
+    /// Funabashi.
+    pub fn is_tight_track(&self) -> bool {
+        matches!(
+            self.race_track_id,
+            10001 | 10002 | 10004 | 10010 | 10103 | 10104
+        )
+    }
+
     /// Load a specific course by ID from a JSON file.
     ///
     /// Returns a `Result` containing the parsed `Course` or an error if the file
@@ -460,37 +478,67 @@ impl Course {
 mod tests {
     use super::*;
 
+    /// Create a minimal course at the given racetrack.
+    fn create_test_course(track_id: u16) -> Course {
+        let data = CourseData {
+            distance: 2000,
+            distance_type: DistanceType::Mile,
+            surface: Track::Dirt,
+            turn: Direction::Left,
+            course_set_status: vec![],
+            finish_time_min: 120000,
+            finish_time_max: 150000,
+            lane_max: 10000,
+            corners: vec![],
+            slopes: vec![],
+            straights: vec![],
+            race_track_id: track_id,
+        };
+        Course::new_test(track_id, data)
+    }
+
+    /// Racetrack IDs of every course in the course data.
+    const TRACK_IDS: [u16; 17] = [
+        10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10101, 10103, 10104,
+        10105, 10201, 10202, 10203,
+    ];
+
     #[test]
     fn test_is_exchange_race() {
-        // Create a minimal CourseData for testing
-        let create_test_course = |track_id: u16| -> Course {
-            let data = CourseData {
-                distance: 2000,
-                distance_type: DistanceType::Mile,
-                surface: Track::Dirt,
-                turn: Direction::Left,
-                course_set_status: vec![],
-                finish_time_min: 120000,
-                finish_time_max: 150000,
-                lane_max: 10000,
-                corners: vec![],
-                slopes: vec![],
-                straights: vec![],
-                race_track_id: track_id,
-            };
-            Course::new_test(track_id, data)
-        };
+        // Ooi, Kawasaki, Funabashi, Morioka
+        let exchange = [10101, 10103, 10104, 10105];
+        for track_id in TRACK_IDS {
+            assert_eq!(
+                create_test_course(track_id).is_exchange_race(),
+                exchange.contains(&track_id),
+                "track {track_id}"
+            );
+        }
+    }
 
-        // Exchange race tracks (should return true)
-        assert!(create_test_course(10101).is_exchange_race()); // Ooi
-        assert!(create_test_course(10103).is_exchange_race()); // Kawasaki
-        assert!(create_test_course(10104).is_exchange_race()); // Funabashi
-        assert!(create_test_course(10105).is_exchange_race()); // Morioka
+    #[test]
+    fn test_is_abroad() {
+        // Longchamp, Santa Anita Park, Del Mar
+        let abroad = [10201, 10202, 10203];
+        for track_id in TRACK_IDS {
+            assert_eq!(
+                create_test_course(track_id).is_abroad(),
+                abroad.contains(&track_id),
+                "track {track_id}"
+            );
+        }
+    }
 
-        // Non-exchange race tracks (should return false)
-        assert!(!create_test_course(10001).is_exchange_race()); // Sapporo
-        assert!(!create_test_course(10006).is_exchange_race()); // Tokyo
-        assert!(!create_test_course(10008).is_exchange_race()); // Kyoto
-        assert!(!create_test_course(10201).is_exchange_race()); // Longchamp
+    #[test]
+    fn test_is_tight_track() {
+        // Sapporo, Hakodate, Fukushima, Kokura, Kawasaki, Funabashi
+        let tight = [10001, 10002, 10004, 10010, 10103, 10104];
+        for track_id in TRACK_IDS {
+            assert_eq!(
+                create_test_course(track_id).is_tight_track(),
+                tight.contains(&track_id),
+                "track {track_id}"
+            );
+        }
     }
 }

@@ -34,6 +34,10 @@ pub fn get_track_name(track_id: u16, language: Language) -> Option<&'static str>
         (10105, _) => Some("Morioka"),
         (10201, Language::Japanese) => Some("ﾛﾝｼｬﾝ"),
         (10201, _) => Some("Longchamp"),
+        (10202, Language::Japanese) => Some("ｻﾝﾀｱﾆﾀﾊﾟｰｸ"),
+        (10202, _) => Some("Santa Anita Park"),
+        (10203, Language::Japanese) => Some("ﾃﾞﾙﾏｰ"),
+        (10203, _) => Some("Del Mar"),
         _ => None,
     }
 }
