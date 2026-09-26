@@ -3,7 +3,7 @@
 //! A runner with more than 2000 speed stat keeps gaining target speed after
 //! reaching her last spurt speed, until she finishes the race or runs out of HP.
 
-use crate::configuration::GameBehavior;
+use crate::configuration::GameVersion;
 
 /// Adjusted speed stat that must be exceeded to be eligible.
 pub const SPEED_THRESHOLD: u16 = 2000;
@@ -48,9 +48,9 @@ pub fn base_acceleration(
     speed: u16,
     power: u16,
     course_distance: i32,
-    game_behavior: GameBehavior,
+    game_version: GameVersion,
 ) -> f64 {
-    if game_behavior < GameBehavior::FifthAnniversary || speed <= SPEED_THRESHOLD {
+    if game_version < GameVersion::FifthAnniversary || speed <= SPEED_THRESHOLD {
         return 0.0;
     }
     let acceleration_from_power = 0.0006 * (500.0 * power as f64).sqrt();

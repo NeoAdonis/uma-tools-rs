@@ -1,4 +1,4 @@
-use crate::configuration::{Configuration, GameBehavior};
+use crate::configuration::{Configuration, GameVersion};
 use crate::course::Course;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
@@ -65,14 +65,14 @@ fn test_target_speed_bonus() {
         (Style::Late, true, base * 0.8),
     ];
     for (style, is_alone, expected) in cases {
-        let actual = target_speed_bonus(style, 2000, is_alone, GameBehavior::LATEST);
+        let actual = target_speed_bonus(style, 2000, is_alone, GameVersion::LATEST);
         assert!(
             (actual - expected).abs() < EPSILON,
             "{style:?} (alone: {is_alone}): expected {expected}, got {actual}"
         );
     }
 
-    let actual = target_speed_bonus(Style::Pace, 500, false, GameBehavior::LATEST);
+    let actual = target_speed_bonus(Style::Pace, 500, false, GameVersion::LATEST);
     assert!((actual - 0.5 * 0.3).abs() < EPSILON);
 }
 
@@ -142,7 +142,7 @@ fn ready_runner(style: Style) -> (Runner, RaceState) {
         style_aptitude: Aptitude::A,
     };
     let config = Configuration {
-        game_behavior: GameBehavior::LATEST,
+        game_version: GameVersion::LATEST,
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);
@@ -200,7 +200,7 @@ fn test_secure_lead_activation_and_expiry() {
         Style::Front,
         runner.adjusted.guts,
         false,
-        GameBehavior::LATEST,
+        GameVersion::LATEST,
     );
     assert!((secure_lead.modifier - expected_modifier).abs() < EPSILON);
     assert!((secure_lead.expires_at - (elapsed + DURATION)).abs() < EPSILON);

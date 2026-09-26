@@ -1,5 +1,5 @@
 use super::super::modifiers::*;
-use crate::configuration::{Configuration, GameBehavior};
+use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
@@ -103,7 +103,7 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
     };
 
     let config = Configuration {
-        game_behavior: GameBehavior::LATEST,
+        game_version: GameVersion::LATEST,
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);
@@ -167,7 +167,7 @@ fn test_stamina_limit_break_distance_factor() {
             _ => 1.8,
         };
         assert_eq!(
-            stamina_limit_break_distance_factor(distance, GameBehavior::LATEST),
+            stamina_limit_break_distance_factor(distance, GameVersion::LATEST),
             expected,
             "distance {distance}"
         );
@@ -177,7 +177,7 @@ fn test_stamina_limit_break_distance_factor() {
 #[test]
 fn test_stamina_limit_break_base_buff() {
     let buff =
-        |stamina, distance| stamina_limit_break_base_buff(stamina, distance, GameBehavior::LATEST);
+        |stamina, distance| stamina_limit_break_base_buff(stamina, distance, GameVersion::LATEST);
     assert_eq!(buff(1000, 2400), 0.0);
     assert_eq!(buff(1200, 2400), 0.0);
     assert_eq!(buff(1600, 2100), 0.0);
@@ -211,7 +211,7 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
     };
 
     let config = Configuration {
-        game_behavior: GameBehavior::LATEST,
+        game_version: GameVersion::LATEST,
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);

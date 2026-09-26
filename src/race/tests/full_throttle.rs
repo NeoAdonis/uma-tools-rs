@@ -1,4 +1,4 @@
-use crate::configuration::{Configuration, GameBehavior};
+use crate::configuration::{Configuration, GameVersion};
 use crate::course::Course;
 use crate::race::full_throttle::*;
 use crate::race::last_spurt::*;
@@ -64,14 +64,14 @@ fn uma(speed: u16) -> Uma {
 /// is speed. Raw speed 2500 gives an adjusted speed of 1850 * 1.2 = 2220.
 fn solver(
     speed: u16,
-    game_behavior: GameBehavior,
+    game_version: GameVersion,
     skills: Vec<Skill>,
     rng_seed: u64,
 ) -> RaceSolver<Runner> {
     let course = Course::from_json_file("data/course_data.json", "10204")
         .expect("Failed to load course data");
     let config = Configuration {
-        game_behavior,
+        game_version,
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params(rng_seed), &config);
@@ -94,10 +94,10 @@ fn enter_last_spurt(solver: &mut RaceSolver<Runner>, speed: f64) {
 
 #[test]
 fn test_base_acceleration() {
-    let latest = GameBehavior::LATEST;
+    let latest = GameVersion::LATEST;
     assert_eq!(base_acceleration(2000, 1200, 2000, latest), 0.0);
     assert_eq!(
-        base_acceleration(2200, 1200, 2000, GameBehavior::MechaUmaUpdate),
+        base_acceleration(2200, 1200, 2000, GameVersion::MechaUmaUpdate),
         0.0
     );
     // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5
@@ -110,7 +110,7 @@ fn test_base_acceleration() {
 
 #[test]
 fn test_activates_at_last_spurt_speed() {
-    let mut solver = solver(2500, GameBehavior::LATEST, vec![], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     assert_eq!(solver.runners[0].adjusted.speed, 2220);
     assert!(solver.runners[0].full_throttle_base > 0.0);
 
@@ -128,8 +128,8 @@ fn test_activates_at_last_spurt_speed() {
 fn test_ineligible_runner_never_activates() {
     for (speed, behavior) in [
         // Raw 2000 is adjusted to 1600 * 1.2 = 1920
-        (2000, GameBehavior::LATEST),
-        (2500, GameBehavior::MechaUmaUpdate),
+        (2000, GameVersion::LATEST),
+        (2500, GameVersion::MechaUmaUpdate),
     ] {
         let mut solver = solver(speed, behavior, vec![], 42);
         assert_eq!(solver.runners[0].full_throttle_base, 0.0);
@@ -140,7 +140,7 @@ fn test_ineligible_runner_never_activates() {
 
 #[test]
 fn test_speed_bonus_increases_target_speed() {
-    let mut solver = solver(2500, GameBehavior::LATEST, vec![], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     enter_last_spurt(&mut solver, 20.0);
     let target_before = solver.runners[0].target_speed;
 
@@ -157,7 +157,7 @@ fn test_speed_bonus_increases_target_speed() {
 
 #[test]
 fn test_hp_out_drops_speed_to_minimum() {
-    let mut solver = solver(2500, GameBehavior::LATEST, vec![], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     enter_last_spurt(&mut solver, 20.0);
 
     let runner = &mut solver.runners[0];
@@ -176,7 +176,7 @@ fn test_hp_out_drops_speed_to_minimum() {
 
 #[test]
 fn test_speed_is_capped() {
-    let mut solver = solver(2500, GameBehavior::LATEST, vec![], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     let runner = &mut solver.runners[0];
     runner.is_start_dash = false;
     runner.speed = MAX_TARGET_SPEED - 0.01;
@@ -187,7 +187,7 @@ fn test_speed_is_capped() {
 
 #[test]
 fn test_random_trigger_scheduled_on_activation() {
-    let mut solver = solver(2500, GameBehavior::LATEST, vec![full_throttle_skill()], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![full_throttle_skill()], 42);
     {
         let scheduler = &solver.runners[0].trigger_scheduler;
         assert_eq!(scheduler.full_throttle_triggers, vec![0]);
@@ -216,7 +216,7 @@ fn test_full_race() {
     for seed in 0..5 {
         let mut with = solver(
             2500,
-            GameBehavior::LATEST,
+            GameVersion::LATEST,
             vec![full_throttle_skill()],
             seed,
         );
@@ -233,8 +233,8 @@ fn test_full_race() {
 
         // Without Full-Throttle Sprint (and skills), the runner is slower.
         // Nothing else differs between these game behaviors for this runner.
-        let mut with = solver(2500, GameBehavior::LATEST, vec![], seed);
-        let mut without = solver(2500, GameBehavior::MechaUmaUpdate, vec![], seed);
+        let mut with = solver(2500, GameVersion::LATEST, vec![], seed);
+        let mut without = solver(2500, GameVersion::MechaUmaUpdate, vec![], seed);
         with.run();
         without.run();
         let with_time = with.runners[0].finish_time.unwrap();

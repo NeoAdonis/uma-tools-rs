@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use rand::RngExt;
 
-use crate::configuration::GameBehavior;
+use crate::configuration::GameVersion;
 use crate::evaluator::{EvaluatorOutOfGate, evaluate_condition};
 use crate::parser::parse_condition;
 use crate::race::full_throttle::{self, FullThrottle};
@@ -314,7 +314,7 @@ impl UnreadyRunner {
     /// Build the final [`Runner`] with all modifications applied.
     pub(crate) fn build(self, state: &RaceState) -> Runner {
         let course = &state.course;
-        let game_behavior = state.config.game_behavior;
+        let game_version = state.config.game_version;
 
         // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
         let max_hp =
@@ -373,7 +373,7 @@ impl UnreadyRunner {
         );
 
         // Calculate force-in modifier based on style and randomness
-        let force_in_modifier = if game_behavior < GameBehavior::FirstAnniversary {
+        let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
             0.0
         } else {
             self.rng.borrow_mut().random_range(0.0..0.1)
@@ -425,14 +425,14 @@ impl UnreadyRunner {
             stamina_limit_break_base: stamina_limit_break_base_buff(
                 self.adjusted.stamina,
                 course.distance,
-                game_behavior,
+                game_version,
             ),
             stamina_limit_break: 0.0,
             full_throttle_base: full_throttle::base_acceleration(
                 self.adjusted.speed,
                 self.adjusted.power,
                 course.distance,
-                game_behavior,
+                game_version,
             ),
             full_throttle: FullThrottle::Pending,
             rng: self.rng,

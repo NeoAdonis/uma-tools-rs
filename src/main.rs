@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use uma_tools::configuration::{Configuration, GameBehavior, Language};
+use uma_tools::configuration::{Configuration, GameVersion, Language};
 use uma_tools::course::*;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::*;
@@ -10,7 +10,7 @@ use uma_tools::uma::*;
 fn main() {
     // TODO: Load configuration from a config file or command-line arguments
     let config = Configuration {
-        game_behavior: GameBehavior::OnePointFiveAnniversary,
+        game_version: GameVersion::OnePointFiveAnniversary,
         language: Language::English,
     };
 

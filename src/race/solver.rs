@@ -6,7 +6,7 @@ use std::vec;
 
 use rand::prelude::*;
 
-use crate::configuration::{Configuration, GameBehavior};
+use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::Runner;
@@ -356,7 +356,7 @@ impl RaceSolver<Runner> {
                 }
 
                 // Update spot struggle and dueling status
-                if self.state.config.game_behavior >= GameBehavior::FirstAnniversary {
+                if self.state.config.game_version >= GameVersion::FirstAnniversary {
                     if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
                     {
                         runner_i.start_spot_struggle(self.state.elapsed_time);

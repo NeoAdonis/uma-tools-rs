@@ -2,7 +2,7 @@
 
 use rand::RngExt;
 
-use crate::configuration::GameBehavior;
+use crate::configuration::GameVersion;
 use crate::course::Phase;
 use crate::race::hp::{estimate_hp_last_spurt, estimate_hp_per_meter_last_spurt};
 use crate::race::modifiers::*;
@@ -45,7 +45,7 @@ fn last_spurt_speed_max(
     speed_stat: u16,
     guts_stat: u16,
     distance_aptitude: Aptitude,
-    game_behavior: GameBehavior,
+    game_version: GameVersion,
 ) -> f64 {
     let base_target_late = base_target_speed(
         base_speed,
@@ -58,7 +58,7 @@ fn last_spurt_speed_max(
     let speed_component = (500.0 * speed_stat as f64).sqrt()
         * distance_proficiency_multiplier(distance_aptitude)
         * 0.002;
-    let guts_component = if game_behavior < GameBehavior::FirstAnniversary {
+    let guts_component = if game_version < GameVersion::FirstAnniversary {
         0.0
     } else {
         (450.0 * guts_stat as f64).powf(0.597) * 0.0001
@@ -88,7 +88,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
         runner.adjusted.speed,
         runner.adjusted.guts,
         runner.adjusted.distance_aptitude,
-        state.config.game_behavior,
+        state.config.game_version,
     );
 
     // Calculate remaining distance from start of late phase (or current position)

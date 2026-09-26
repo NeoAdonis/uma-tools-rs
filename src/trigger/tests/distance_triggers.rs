@@ -1,7 +1,7 @@
 //! Runtime tests for distance-based triggers (random points, remaining distance,
 //! and ranges made of monotonic comparisons).
 
-use crate::configuration::{Configuration, GameBehavior};
+use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::parameters::*;
 use crate::race::solver::RaceSolver;
@@ -61,7 +61,7 @@ fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
         style_aptitude: Aptitude::A,
     };
     let config = Configuration {
-        game_behavior: GameBehavior::LATEST,
+        game_version: GameVersion::LATEST,
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course(), params, &config);

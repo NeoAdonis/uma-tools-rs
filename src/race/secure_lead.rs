@@ -6,7 +6,7 @@
 
 use std::ops::RangeInclusive;
 
-use crate::configuration::GameBehavior;
+use crate::configuration::GameVersion;
 use crate::uma::Style;
 
 /// Sections (0-indexed) in which secure lead can be attempted.
@@ -48,7 +48,7 @@ pub fn target_speed_bonus(
     style: Style,
     guts: u16,
     is_alone: bool,
-    game_behavior: GameBehavior,
+    game_version: GameVersion,
 ) -> f64 {
     let style_coef = match style {
         Style::Runaway => 0.2,
@@ -58,7 +58,7 @@ pub fn target_speed_bonus(
     };
     let alone_coef = match (style, is_alone) {
         (Style::Runaway, true) => 7.0,
-        (Style::Front, true) if game_behavior >= GameBehavior::FifthAnniversary => 4.0,
+        (Style::Front, true) if game_version >= GameVersion::FifthAnniversary => 4.0,
         (Style::Front, true) => 2.0,
         _ => 1.0,
     };
