@@ -80,3 +80,54 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
         }
     }
 }
+
+#[test]
+fn test_skills_see_state_after_the_move() {
+    // On a 2400m course, Late phase starts at 1600m, i.e. with 800m remaining.
+    // The distance trigger and the phase guard become true on the same frame, so
+    // both must be seen at once
+    let course = Course::from_json_file("data/course_data.json", "10108")
+        .expect("Failed to load course data");
+    assert_eq!(course.distance, 2400);
+    let skill = Skill::new(
+        "late".to_string(),
+        SkillData {
+            rarity: SkillRarity::White,
+            alternatives: vec![SkillAlternative {
+                base_duration: 30000,
+                condition: "remain_distance<=800&phase>=2".to_string(),
+                effects: vec![SkillEffect {
+                    skill_type: SkillType::TargetSpeed,
+                    target: SkillTarget::Oneself,
+                    modifier: 3500,
+                }],
+                precondition: String::new(),
+            }],
+            wisdom_check: false,
+        },
+    );
+
+    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    let uma = Uma {
+        speed: 1200,
+        stamina: 1200,
+        power: 1000,
+        guts: 800,
+        wiz: 1000,
+        style: Style::Pace,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    };
+    solver.add_runner(uma, Motivation::Normal, vec![skill]);
+    let mut solver = solver.ready_runners();
+    solver.run();
+
+    let activations = &solver.runners[0].activated_skills;
+    assert_eq!(activations.len(), 1, "Skill should activate");
+    assert!(
+        (1600.0..1605.0).contains(&activations[0].distance),
+        "Should activate right after 1600m, got {}m",
+        activations[0].distance
+    );
+}

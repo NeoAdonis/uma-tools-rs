@@ -956,27 +956,24 @@ fn test_unsatisfiable_precondition_skips_alternative() {
 #[test]
 fn test_precondition_window_ranges() {
     // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
-    // 1200-1380, uphill at 800-900. Windows are widened by 10m on each side.
+    // 1200-1380, uphill at 800-900
     let section = 2000.0 / 24.0;
     let cases = [
-        ("distance_rate>=50", (990.0, f64::INFINITY)),
-        ("distance_rate>=50&distance_rate<=51", (990.0, 1050.0)),
-        ("remain_distance<=600", (1389.0, f64::INFINITY)),
+        ("distance_rate>=50", (1000.0, f64::INFINITY)),
+        ("distance_rate>=50&distance_rate<=51", (1000.0, 1040.0)),
+        ("remain_distance<=600", (1399.0, f64::INFINITY)),
         (
             "remain_distance<=305&remain_distance>=300",
-            (1684.0, 1710.0),
+            (1694.0, 1700.0),
         ),
-        ("phase==1", (section * 4.0 - 10.0, section * 16.0 + 10.0)),
-        ("phase>=2", (section * 16.0 - 10.0, 2010.0)),
-        (
-            "phase_firsthalf==1",
-            (section * 4.0 - 10.0, section * 10.0 + 10.0),
-        ),
-        ("is_finalcorner==1", (1190.0, f64::INFINITY)),
-        ("is_finalcorner==1&corner!=0", (1190.0, 1390.0)),
-        ("corner==2", (490.0, 710.0)),
-        ("slope==1", (790.0, 910.0)),
-        ("phase>=1&slope==1&order_rate>=40", (790.0, 910.0)),
+        ("phase==1", (section * 4.0, section * 16.0)),
+        ("phase>=2", (section * 16.0, 2000.0)),
+        ("phase_firsthalf==1", (section * 4.0, section * 10.0)),
+        ("is_finalcorner==1", (1200.0, f64::INFINITY)),
+        ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
+        ("corner==2", (500.0, 700.0)),
+        ("slope==1", (800.0, 900.0)),
+        ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
         // Nothing position-based: window covers the whole race
         ("change_order_onetime<0", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),

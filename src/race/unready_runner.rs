@@ -457,6 +457,7 @@ impl UnreadyRunner {
             corner_manager: CornerManager::new(),
             slope_manager: SlopeManager::new(),
             straight_manager: StraightManager::new(),
+            entered_straight: None,
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
             spot_struggle: None,

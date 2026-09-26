@@ -192,19 +192,26 @@ impl RaceSolver<Runner> {
     }
 
     /// Perform a single simulation step.
+    ///
+    /// Skills are checked first, against the state reached at the end of the
+    /// previous step (including multi-runner values such as order). Then, time
+    /// advances and every runner is updated.
     fn step(&mut self, delta_time: f64) {
-        self.state.elapsed_time += delta_time;
-
         for runner in &mut self.runners {
-            // Update
+            // Runners still in the gate haven't reached any state worth checking
             if runner.start_delay > self.state.elapsed_time {
                 continue;
             }
-            runner.reset_activation_flags();
+            runner.check_skills(&mut self.state);
+        }
+
+        self.state.elapsed_time += delta_time;
+
+        for runner in &mut self.runners {
+            if runner.start_delay > self.state.elapsed_time {
+                continue;
+            }
             runner.update_rush_state(&mut self.state);
-            runner.check_precondition_windows(&self.state); // Before any other trigger
-            runner.check_time_triggers(&self.state);
-            runner.check_continuous_triggers(&self.state);
             runner.update_target_speed(&self.state);
             runner.update_acceleration();
             runner.update_speed(delta_time, self.state.course.base_speed());
@@ -214,13 +221,13 @@ impl RaceSolver<Runner> {
                 // TODO: calculate how many lenghts ahead the runner is from the next runner
             }
 
-            // Update everything derived from the new position, so that the rest of
-            // the frame (and the start of the next one) sees a consistent state
+            // Update everything derived from the new position, so that skills
+            // see a consistent state
             runner.update_phase(&mut self.state);
             runner.check_corner_end(&self.state.course.corners);
             runner.check_corner_start(&self.state.course.corners);
             runner.check_straight_end(&self.state.course.straights);
-            runner.check_straight_start(&self.state.course.straights, &self.state);
+            runner.check_straight_start(&self.state.course.straights);
             runner.update_slope(
                 &self.state.course.slopes,
                 delta_time,
@@ -229,13 +236,6 @@ impl RaceSolver<Runner> {
 
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, &self.state);
-            runner.check_window_triggers(&self.state); // Distance, time, HP windows
-            runner.check_activation_dependent_triggers(&self.state);
-            runner.extract_buff_activations(&mut self.state);
-        }
-
-        for runner in &mut self.runners {
-            runner.check_buff_dependent_triggers(&self.state);
             runner.update_skill_durations(self.state.elapsed_time);
         }
 

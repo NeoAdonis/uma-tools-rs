@@ -501,6 +501,8 @@ pub struct Runner {
     /// Structure used to determine straight entries and exits, along with skills
     /// triggered by those events.
     pub straight_manager: StraightManager,
+    /// Straight entered since skills were last checked, if any.
+    pub entered_straight: Option<usize>,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
     pub trigger_scheduler: TriggerScheduler,
@@ -1061,7 +1063,6 @@ impl Runner {
             let time_to_finish = remaining_distance / self.effective_speed();
             self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
-        self.check_distance_triggers(state);
     }
 
     /// Check if the runner has finished the race.
@@ -1098,11 +1099,8 @@ impl Runner {
             // Phase can only advance at section boundaries
             let prev_phase = self.phase;
             self.phase = Phase::from_position(self.position, &state.course);
-            if prev_phase != self.phase {
-                self.check_phase_triggers(state);
-                if self.phase >= Phase::Mid && self.last_spurt.is_none() {
-                    self.last_spurt = Some(calculate_last_spurt(self, state));
-                }
+            if prev_phase != self.phase && self.phase >= Phase::Mid && self.last_spurt.is_none() {
+                self.last_spurt = Some(calculate_last_spurt(self, state));
             }
         }
     }
@@ -1151,7 +1149,6 @@ impl Runner {
         if self.hp.percent() < 5.0 {
             self.dueling = None;
         }
-        self.check_hp_triggers(state);
     }
 
     /// Get the current style used for positioning strategy decisions.
@@ -1881,22 +1878,30 @@ impl Runner {
         self.straight_manager.current_straight()
     }
 
-    /// Check for straight entry and trigger skills if applicable.
-    pub fn check_straight_start(&mut self, straights: &[Straight], state: &RaceState) {
+    /// Check for straight entry. Skills triggered by the entry are checked on the
+    /// next skill check (see [`Self::check_straight_entry_triggers`]).
+    pub fn check_straight_start(&mut self, straights: &[Straight]) {
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
-            // Trigger straight entry skills
-            // Note: straight triggers are only for entry, not exit
-            let skill_indices: Vec<usize> = self
-                .trigger_scheduler
-                .straight_triggers
-                .iter()
-                .filter(|t| t.straight_index == straight_idx)
-                .flat_map(|t| t.logic_indices.iter().copied())
-                .collect();
+            self.entered_straight = Some(straight_idx);
+        }
+    }
 
-            for skill_index in skill_indices {
-                self.try_activate_skill(skill_index, state);
-            }
+    /// Check the skills triggered by entering a straight since the last check.
+    /// Note: straight triggers are only for entry, not exit.
+    pub fn check_straight_entry_triggers(&mut self, state: &RaceState) {
+        let Some(straight_idx) = self.entered_straight.take() else {
+            return;
+        };
+        let skill_indices: Vec<usize> = self
+            .trigger_scheduler
+            .straight_triggers
+            .iter()
+            .filter(|t| t.straight_index == straight_idx)
+            .flat_map(|t| t.logic_indices.iter().copied())
+            .collect();
+
+        for skill_index in skill_indices {
+            self.try_activate_skill(skill_index, state);
         }
     }
 
@@ -2206,7 +2211,30 @@ impl Runner {
         }
     }
 
-    /// Reset activation flags at the start of each frame.
+    /// Check every skill trigger.
+    ///
+    /// All skills are checked at once, at the start of each frame, against the
+    /// runner's state at that point. Nothing is updated in between, so every
+    /// check sees the same values.
+    pub fn check_skills(&mut self, state: &mut RaceState) {
+        self.reset_activation_flags();
+        // Preconditions go first, so that a skill can activate in the same frame
+        // its precondition is satisfied
+        self.check_precondition_windows(state);
+        self.check_time_triggers(state);
+        self.check_continuous_triggers(state);
+        self.check_phase_triggers(state);
+        self.check_distance_triggers(state);
+        self.check_hp_triggers(state);
+        self.check_window_triggers(state);
+        self.check_straight_entry_triggers(state);
+        // Depend on the activations above
+        self.check_activation_dependent_triggers(state);
+        self.check_buff_dependent_triggers(state);
+        self.extract_buff_activations(state);
+    }
+
+    /// Reset activation flags before checking skills.
     pub fn reset_activation_flags(&mut self) {
         self.activation_flags = SkillActivationFlags::default();
     }
@@ -2219,8 +2247,7 @@ impl Runner {
     }
 
     /// Check activation-dependent triggers.
-    /// This should be called at the end of each frame after all other triggers
-    /// have been checked.
+    /// This should be called after all other triggers have been checked.
     pub fn check_activation_dependent_triggers(&mut self, state: &RaceState) {
         // Pass 1: Check is_activate_any_skill triggers
         if self.activation_flags.any_activated {
@@ -2232,8 +2259,8 @@ impl Runner {
     }
 
     /// Check activation-dependent triggers.
-    /// This should be called at the end of each frame after all other triggers
-    /// (and any-skill acivation-dependent triggers) have been checked.
+    /// This should be called after all other triggers (and any-skill
+    /// activation-dependent triggers) have been checked.
     pub fn check_buff_dependent_triggers(&mut self, state: &RaceState) {
         // Pass 2: Check is_other_character_activate_advantage_skill triggers
         if self.activation_flags.heal_activated {
@@ -2252,10 +2279,11 @@ impl Runner {
         }
     }
 
+    /// Check phase triggers. They fire on the first check after entering their phase.
     pub fn check_phase_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.phase_triggers.peek() {
-            if self.phase != trigger.phase {
-                break; // Wrong phase
+            if self.phase < trigger.phase {
+                break; // Phase not reached yet
             }
 
             let trigger = self.trigger_scheduler.phase_triggers.pop().unwrap();

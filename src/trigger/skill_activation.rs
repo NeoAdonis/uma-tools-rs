@@ -395,14 +395,6 @@ pub fn split_condition(
         .collect()
 }
 
-/// Extra margin (in meters) added to both ends of a precondition window.
-///
-/// Some variables lag behind the position (e.g. the phase is updated once per
-/// frame), so the exact bounds could miss a frame where the precondition holds.
-/// Since the comparisons are still checked as guards, a wider window only costs a
-/// few extra checks.
-const PRECONDITION_WINDOW_MARGIN: f64 = 10.0;
-
 /// One OR branch of a compiled precondition.
 #[derive(Clone, Debug)]
 pub struct PreconditionBranch {
@@ -434,7 +426,7 @@ pub struct PreconditionBranch {
 ///
 /// Output (1 branch):
 ///
-/// - Trigger: `Window { SpatialPosition, 390, 1610 }` (Mid phase plus margins)
+/// - Trigger: `Window { SpatialPosition, 400, 1600 }` (Mid phase)
 /// - Guards: `[phase==1, blocked_side_continuetime>=2]`
 pub fn compile_precondition(condition: &Condition, course: &Course) -> Vec<PreconditionBranch> {
     condition
@@ -461,8 +453,8 @@ pub fn compile_precondition(condition: &Condition, course: &Course) -> Vec<Preco
                 .collect();
             let trigger = event.unwrap_or(TriggerCondition::Window {
                 variable: WindowVariable::SpatialPosition,
-                min_threshold: (min - PRECONDITION_WINDOW_MARGIN).max(0.0),
-                max_threshold: max + PRECONDITION_WINDOW_MARGIN,
+                min_threshold: min,
+                max_threshold: max,
             });
             Some(PreconditionBranch { trigger, guards })
         })
