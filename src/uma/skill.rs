@@ -1,3 +1,5 @@
+//! Skill-related data structures and logic for race simulation.
+
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
@@ -64,11 +66,13 @@ pub enum SkillRarity {
     White = 1,
     /// Non-unique gold skill; stronger than white skills.
     Gold = 2,
-    /// Skill unique to a specific Uma (1/2 stars).
+    /// Skill unique to a specific Uma (1 or 2 stars).
     Unique = 3,
-    /// Skill unique to a specific Uma (3+ stars) after upgrade from 1/2 star unique.
+    /// Skill unique to a specific Uma (3+ stars) after upgrade from a 1 or 2
+    /// stars unique skill.
     UniqueUpgraded = 4,
-    /// Skill unique to a specific Uma (3+ stars) with no 1/2 star equivalent.
+    /// Skill unique to a specific Uma (3+ stars) with no 1 or 2 stars
+    /// equivalent.
     UniqueNatural = 5,
     /// Skills evolved from gold skills.
     Evolution = 6,
@@ -110,13 +114,18 @@ pub enum SkillTarget {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillEffect {
+    /// Type of the skill effect.
     #[serde(rename = "type")]
     pub skill_type: SkillType,
+    /// Target of the skill effect.
     pub target: SkillTarget,
+    /// Modifier value for the skill effect. Interpretation depends on the skill
+    /// type.
     pub modifier: i32,
 }
 
-/// Represents an alternative version of a skill, with its own conditions and effects.
+/// Represents an alternative version of a skill, with its own conditions and
+/// effects.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
@@ -220,8 +229,8 @@ impl Skill {
 
     /// Check if a skill affects you negatively (nerf).
     ///
-    /// N.B. Because a skill can have both positive and negative effects,
-    /// a skill can be both a buff and a nerf.
+    /// N.B. Because a skill can have both positive and negative effects, a
+    /// skill can be both a buff and a nerf.
     pub fn is_nerf(self: &Skill) -> bool {
         for alternative in &self.alternatives {
             for effect in &alternative.effects {
@@ -245,7 +254,8 @@ impl Skill {
         false
     }
 
-    /// Check if this skill is a unique skill (i.e. only available to a specific Uma).
+    /// Check if this skill is a unique skill (i.e. only available to a specific
+    /// Uma).
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
             self.rarity,
@@ -253,18 +263,19 @@ impl Skill {
         )
     }
 
-    /// Check if this skill benefits from the Wiz Limit Break buff (5th Anniv. onward).
+    /// Check if this skill benefits from the Wiz Limit Break buff (5th
+    /// Anniversary onward).
     ///
-    /// Only unique, evolved and gold skills are affected. Inherited uniques are
-    /// stored as white skills, so they are excluded as well.
+    /// Only unique, evolved and gold skills are affected. Inherited uniques
+    /// are stored as white skills, so they are excluded as well.
     pub fn is_wiz_limit_break_eligible(&self) -> bool {
         !matches!(self.rarity, SkillRarity::White)
     }
 
     /// Chance that this skill passes its pre-race activation check.
     ///
-    /// Skills that don't require a wisdom check always pass; otherwise the chance
-    /// depends on the runner's base wisdom (minimum 20%).
+    /// Skills that don't require a wisdom check always pass; otherwise the
+    /// chance depends on the runner's base wisdom (minimum 20%).
     pub fn activation_chance(&self, base_wiz: u16) -> f64 {
         if !self.wisdom_check {
             return 1.0;
@@ -299,14 +310,14 @@ impl Skill {
         false
     }
 
-    /// Check if this skill can activate on a specific course (ignoring wisdom-based
-    /// activation chance).
+    /// Check if this skill can activate on a specific course (ignoring
+    /// wisdom-based activation chance).
     ///
-    /// This evaluates only course-static guards (ground_type, distance_type, etc.)
-    /// and ignores runtime guards (hp_per, phase, order, etc.) which are assumed to be
-    /// potentially satisfiable during the race.
+    /// This evaluates only course-static guards (ground type, distance type,
+    /// etc.) and ignores runtime guards (hp percentage, phase, order, etc.)
+    /// which are assumed to be potentially satisfiable during the race.
     ///
-    /// Returns true if at least one alternative can activate on this course.
+    /// Returns `true` if at least one alternative can activate on this course.
     pub fn is_activable_on_course(
         &self,
         state: &crate::race::solver::RaceState,
@@ -321,16 +332,8 @@ impl Skill {
         false
     }
 
-    /// Load all skills from a JSON file into a HashMap.
-    ///
-    /// # Arguments
-    ///
-    /// - `json_path` - Path to the JSON file containing skill data.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(HashMap<String, Skill>)` - A map of skill IDs to Skill objects.
-    /// - `Err` - If the file can't be read or JSON is invalid.
+    /// Load all skills from a JSON file into a hash map of skill ID to
+    /// [`Skill`] object.
     pub fn load_skills_from_file(
         json_path: &str,
     ) -> Result<HashMap<String, Skill>, Box<dyn std::error::Error>> {
@@ -351,7 +354,7 @@ impl Skill {
 /// Check if a specific skill alternative can activate on this course.
 ///
 /// Parses the alternative's condition and evaluates only static guards.
-/// Returns true if all static guards pass (or there are no static guards).
+/// Returns `true` if all static guards pass (or there are no static guards).
 fn can_alternative_activate(
     alternative: &SkillAlternative,
     state: &crate::race::solver::RaceState,

@@ -1,3 +1,12 @@
+//! Course-related structures and functions.
+//!
+//! This module includes data structures for representing race courses and
+//! their attributes. It also provides functions for calculating various
+//! properties of the course, such as section lengths, phase boundaries
+//! and lane widths. Additionally, it includes logic for determining the
+//! proximity of runners on the course and handling special cases for certain
+//! tracks.
+
 include!("course/track_names.rs");
 
 pub mod geometry;
@@ -25,19 +34,22 @@ pub enum Phase {
     Mid = 1,
     /// Late race (sections 16-19).
     Late = 2,
-    /// Last spurt (not to be confused with the last spurt mechanic) (sections 20-23).
+    /// Last leg (sections 20-23). Not to be confused with the last spurt
+    /// mechanic.
     Last = 3,
 }
 
 impl Phase {
-    /// Get the boundaries (start, end) in meters for this phase on a given course.
+    /// Get the boundaries `(start, end)` in meters for `self` on a given
+    /// course.
     ///
-    /// Phases are divided into 24 sections:
+    /// Phases are defined by the following section ranges:
     ///
-    /// - Early: sections 0-3 (0.0 to section_length * 4.0)
-    /// - Mid: sections 4-15 (section_length * 4.0 to section_length * 16.0)
-    /// - Late: sections 16-19 (section_length * 16.0 to section_length * 20.0)
-    /// - Last: sections 20-23 (section_length * 20.0 to course distance)
+    /// - Early: sections 0-3 (0.0 to `section_length * 4.0`)
+    /// - Mid: sections 4-15 (`section_length * 4.0` to `section_length * 16.0`)
+    /// - Late: sections 16-19 (`section_length * 16.0` to `section_length *
+    ///   20.0`)
+    /// - Last: sections 20-23 (`section_length * 20.0` to course distance)
     pub fn boundaries(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
         match self {
@@ -48,7 +60,7 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries (start, end) in meters for this phase's first quarter
+    /// Get the boundaries `(start, end)` in meters for `self`'s first quarter
     /// on a given course.
     pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
@@ -60,7 +72,7 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries (start, end) in meters for this phase's first half
+    /// Get the boundaries `(start, end)` in meters for `self`'s first half
     /// on a given course.
     pub fn boundaries_first_half(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
@@ -72,7 +84,7 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries (start, end) in meters for this phase's second half
+    /// Get the boundaries `(start, end)` in meters for `self`'s second half
     /// on a given course.
     pub fn boundaries_second_half(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
@@ -84,7 +96,7 @@ impl Phase {
         }
     }
 
-    /// Determine which phase a given position falls into
+    /// Determine which phase a given position falls into.
     pub fn from_position(position: f64, course: &Course) -> Phase {
         let section_length = course.section_length();
         if position < section_length * 4.0 {
@@ -122,18 +134,19 @@ pub enum Direction {
 }
 
 /// Course distance type.
+///
 /// N.B. Even though distance type can be inferred from distance, it is explicitly
 /// stored in the data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DistanceType {
-    /// Less than 1600m.
+    /// a.k.a Sprint. Up to 1400m.
     Short = 1,
-    /// 1600m to 2000m.
+    /// 1401m up to 1800m.
     Mile = 2,
-    /// 2000m to 2400m.
+    /// 1801m up to 2400m.
     Medium = 3,
-    /// 2400m or longer.
+    /// 2401m or longer.
     Long = 4,
 }
 
@@ -148,7 +161,9 @@ pub enum ThresholdStat {
     Wiz = 5,
 }
 
-/// Lane type an Uma is running in. Used mainly by skill conditions.
+/// Lane type an Uma is running in.
+///
+/// Used mainly by skill conditions.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LaneType {
@@ -177,17 +192,33 @@ impl std::ops::Deref for Course {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseData {
+    /// Course distance in meters.
     pub distance: i32,
+    /// Course distance type.
     pub distance_type: DistanceType,
+    /// Course track surface type.
     pub surface: Track,
+    /// Course turn direction.
     pub turn: Direction,
+    /// Stats used for course set status checks.
+    ///
+    /// If an Uma's base stat exceeds a threshold, they receive a speed bonus.
     pub course_set_status: Vec<ThresholdStat>,
+    /// Course corners.
     pub corners: Vec<Corner>,
+    /// Course slopes.
     pub slopes: Vec<Slope>,
+    /// Course straights.
     pub straights: Vec<Straight>,
+    /// Race track ID associated with this course.
     pub race_track_id: u16,
+    /// Minimum finish time that can be displayed on the scoreboard in 1000ths
+    /// of seconds.
     pub(crate) finish_time_min: u32,
+    /// Maximum finish time that can be displayed on the scoreboard in 1000ths
+    /// of seconds.
     pub(crate) finish_time_max: u32,
+    /// Course width represented in its own units (not meters).
     pub(crate) lane_max: u32,
 }
 
@@ -199,6 +230,7 @@ impl Course {
     }
 
     /// Get the length of a single section in meters.
+    ///
     /// There are 24 equally-sized sections in a course.
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / 24.0
@@ -220,17 +252,20 @@ impl Course {
     }
 
     /// Get the base speed for this course in m/s.
-    /// In essence, the longer the distance, the lower the speed an Uma should run at.
+    ///
+    /// The longer the distance, the lower the speed an Uma should run at.
     pub fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
-    /// Get the maximum finish time that can be displayed on the scoreboard in seconds.
+    /// Get the maximum finish time that can be displayed on the scoreboard in
+    /// seconds.
     pub fn finish_time_max(&self) -> f64 {
         self.finish_time_max as f64 / 10000.0
     }
 
-    /// Get the minimum finish time that can be displayed on the scoreboard in seconds.
+    /// Get the minimum finish time that can be displayed on the scoreboard in
+    /// seconds.
     pub fn finish_time_min(&self) -> f64 {
         self.finish_time_min as f64 / 10000.0
     }
@@ -240,7 +275,8 @@ impl Course {
         (self.distance as f64 - position).max(0.0)
     }
 
-    /// Get the distance rate (percentage of course completed) from a given position.
+    /// Get the distance rate (percentage of course completed) from a given
+    /// position.
     pub fn distance_rate(&self, position: f64) -> f64 {
         (position / self.distance as f64 * 100.0).floor()
     }
@@ -250,6 +286,7 @@ impl Course {
         (position / self.section_length()).floor() as u8
     }
 
+    /// Get the starting lane position in meters based on the gate roll.
     pub fn starting_lane(&self, gate_roll: u8) -> f64 {
         let adjustor = match self.id {
             TRACK_ID_OOI => 0.0,
@@ -281,30 +318,24 @@ impl Course {
         self.width() / 18.0
     }
 
-    /// Get the track name in the specified language, or `None` if the track name is not
-    /// available in that language.
+    /// Get the track name in the specified language, or `None` if the track
+    /// name is not available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         get_track_name(self.race_track_id, language)
     }
 
     /// Check if this is an exchange race (dirt grade).
-    /// Exchange races take place at Ooi (10101), Kawasaki (10103), Funabashi (10104),
-    /// or Morioka (10105).
+    ///
+    /// Exchange races take place at Ooi (10101), Kawasaki (10103), Funabashi
+    /// (10104), or Morioka (10105).
     pub fn is_exchange_race(&self) -> bool {
         matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
     }
 
     /// Load a specific course by ID from a JSON file.
     ///
-    /// # Arguments
-    ///
-    /// - `json_path` - Path to the JSON file containing course data.
-    /// - `course_id` - The course ID to look up (e.g., "10101").
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Course)` - The course data with the ID field populated.
-    /// - `Err` - If the file can't be read, JSON is invalid, or course ID not found.
+    /// Returns a `Result` containing the parsed `Course` or an error if the file
+    /// cannot be read, the JSON is invalid or the course ID is not found.
     pub fn from_json_file(
         json_path: &str,
         course_id: &str,
@@ -316,15 +347,8 @@ impl Course {
 
     /// Load a specific course by ID from a JSON string.
     ///
-    /// # Arguments
-    ///
-    /// - `json_str` - JSON string containing course data.
-    /// - `course_id` - The course ID to look up (e.g., "10101").
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Course)` - The course data with the ID field populated.
-    /// - `Err` - If the JSON is invalid or course ID not found.
+    /// Returns a `Result` containing the parsed `Course` or an error if the JSON
+    /// is invalid or the course ID is not found.
     pub fn from_json_str(
         json_str: &str,
         course_id: &str,
@@ -346,7 +370,9 @@ impl Course {
     }
 
     /// Check if a runner is blocked by another runner from the front based on distance
-    /// and lane difference. When front-blocked, the runner's speed is capped.
+    /// and lane difference.
+    ///
+    /// When front-blocked, the runner's speed is capped.
     pub fn check_front_blocked(&self, distance: f64, lane_diff: f64) -> bool {
         if !(0.0..2.0).contains(&distance) {
             return false;
@@ -358,38 +384,48 @@ impl Course {
     }
 
     /// Check if a runner is blocking another runner from the side based on distance
-    /// and lane difference. When side-blocked, the runner cannot change lanes.
+    /// and lane difference.
+    ///
+    /// When side-blocked, the runner cannot change lanes.
     pub fn check_side_blocked(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 1.05, 2.0)
     }
 
     /// Check if a runner is near another runner based on distance and lane difference.
+    ///
     /// This is checked by certain skills.
     pub fn is_near(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 3.0, 3.0)
     }
 
     /// Check if a runner is near another runner and in the same lane based on
-    /// distance and lane difference. This is checked by certain skills.
+    /// distance and lane difference.
+    ///
+    /// This is checked by certain skills.
     pub fn is_near_same_lane(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 2.5, 1.0)
     }
 
     /// Check if a runner is behind another runner within a reasonable distance
-    /// and lane difference. This is checked by certain skills.
+    /// and lane difference.
+    ///
+    /// This is checked by certain skills.
     pub fn is_near_behind_set1(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 5.0, 2.7)
     }
 
     /// Check if a runner is surrounding another runner from the front (and conversely,
     /// being surrounded by the other runner from behind) based on distance and lane
-    /// difference. This is checked by certain skills.
+    /// difference.
+    ///
+    /// This is checked by certain skills.
     pub fn is_front_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 3.0, 1.5)
     }
 
     /// Check if a runner is surrounding (and being surrounded by) another runner from
     /// the side based on distance and lane difference.
+    ///
     /// This is checked by certain skills.
     pub fn is_side_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 1.5, 3.0)

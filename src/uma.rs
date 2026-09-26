@@ -1,6 +1,7 @@
-//! Module containing core data structures to represent an Umamusume (Uma).
-//! This includes stats, aptitudes, running styles, and motivation.
-//! It also provides functions to calculate adjusted stats based on
+//! Core data structures to represent an Umamusume (Uma).
+//!
+//! This module includes data structures for stats, aptitudes, running styles
+//! and motivation, as well as functions to calculate adjusted stats based on
 //! track conditions, course modifiers, and aptitudes.
 
 pub mod skill;
@@ -26,14 +27,14 @@ use serde::Deserialize;
 /// calculations), but in specific situations (e.g., HP multipliers, phase modifiers,
 /// spot struggle), they have distinct values.
 ///
-/// When required to treat both Front and Runaway the same way, `is_front_like()` can
+/// When required to treat both Front and Runaway the same way, [`Style::is_front_like`] can
 /// be used. Otherwise, explicit matching on `Style` should be done to handle their
 /// distinct behaviors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
     /// 大逃げ, ōnige - A front runner that tries to outpace others from the start.
-    /// In many contexts, it is treated similarly to `Style::Front` (see `Style`).
+    /// In many contexts, it is treated similarly to [`Style::Front`].
     #[serde(rename = "Oonige")]
     Runaway = 0,
     /// 逃げ, nige - Aims to lead the race.
@@ -52,7 +53,8 @@ pub enum Style {
 }
 
 impl Style {
-    /// Returns `true` if this style is a front-running style (Front or Runaway).
+    /// Returns `true` if `self` is a front-running style ([`Style::Front`] or
+    /// [`Style::Runaway`]).
     ///
     /// Used when treating both Front and Runaway the same way is desired,
     /// (e.g., in positioning strategy or rush detection).
@@ -71,9 +73,9 @@ impl Style {
         matches!(self, Style::Front | Style::Runaway)
     }
 
-    /// Returns the base style, treating Runaway as a variant of Front.
+    /// Returns the base style, treating [`Style::Runaway`] as a variant of
+    /// [`Style::Front`] while leaving all other styles unchanged.
     ///
-    /// This maps Runaway to Front and returns all other styles unchanged.
     /// Useful to group styles for condition evaluation or statistical purposes.
     ///
     /// # Examples
@@ -132,53 +134,54 @@ pub struct Uma {
     pub stamina: u16,
     /// Stat that affects acceleration and lateral movement.
     pub power: u16,
-    /// Stat that represents "the will to fight and overcome".
-    /// Affects speed and acceleration during duels and spot struggles.
-    /// Moreover, it affects HP consumption late-race and last spurt performance;
-    /// in short, the higher the Guts, the better the performance on the final stretch.
+    /// Stat that affects performance during struggles and last stride.
+    ///
+    /// Representing "the will to fight and overcome", it affects speed and
+    /// acceleration during duels and spot struggles. Moreover, it affects HP
+    /// consumption late-race and last spurt performance; the higher
+    /// the Guts, the better the performance on the final stretch.
     pub guts: u16,
-    /// a.k.a. wit, wisdom. Stat that represents how skillful the Uma is.
-    /// Affects skill activation rate, chance of avoiding getting rushed,
+    /// a.k.a. wit, wisdom. Stat that affects skill activation rate and
+    /// decision-making.
+    ///
+    /// It affects skill activation rate, chance of avoiding getting rushed,
     /// position keeping, last spurt planning, and more.
     #[serde(rename = "wisdom")]
     pub wiz: u16,
     /// Running style or strategy. Affects mainly positioning strategy.
     #[serde(rename = "strategy")]
     pub style: Style,
-    /// Aptitude for the current distance. Affects speed performance depending on
-    /// the course distance.
+    /// Aptitude for the current distance. Affects speed performance depending
+    /// on the course distance.
     pub distance_aptitude: Aptitude,
     /// Aptitude for the current track surface. Affects acceleration and power
     /// performance depending on the track type.
     #[serde(rename = "surfaceAptitude")]
     pub track_aptitude: Aptitude,
-    /// Aptitude for the current running style. Affects wisdom performance depending
-    /// on the running style.
+    /// Aptitude for the current running style. Affects wisdom performance
+    /// depending on the running style.
     #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,
 }
 
-/// Helper struct for deserializing Uma with motivation and skills from JSON.
+/// Helper struct for deserializing [`Uma`] with motivation and skills from
+/// JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
     #[serde(flatten)]
     pub uma: Uma,
+    /// Motivation, mood or condition of the Uma. Affects base stat multipliers.
     pub motivation: Motivation,
+    /// List of [`skill`](skill::Skill)s by ID that the Uma has.
     pub skills: Vec<u32>,
 }
 
 impl UmaData {
-    /// Parse UmaData from a JSON string.
+    /// Parse `UmaData` from a JSON string.
     ///
-    /// # Arguments
-    ///
-    /// - `json` - JSON string containing uma stats and skills.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(UmaData)` - The parsed UmaData.
-    /// - `Err` - If the JSON is invalid.
+    /// Returns a `Result` containing the parsed `UmaData` or an error if the
+    /// JSON is invalid.
     ///
     /// # Example
     ///
@@ -209,14 +212,8 @@ impl UmaData {
 
     /// Parse UmaData from a JSON file.
     ///
-    /// # Arguments
-    ///
-    /// - `path` - Path to the JSON file.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(UmaData)` - The parsed UmaData.
-    /// - `Err` - If the file can't be read or JSON is invalid.
+    /// Returns a `Result` containing the parsed `UmaData` or an error if the
+    /// file cannot be read or the JSON is invalid.
     pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
@@ -260,6 +257,7 @@ pub fn wiz_style_multiplier(style_aptitude: Aptitude) -> f64 {
 }
 
 /// Calculate base stat and apply motivation multiplier.
+///
 /// Any stat above 1200 has its excess halved before applying multiplier.
 pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
     let mut computed = stat;
@@ -296,7 +294,7 @@ pub fn calculate_adjusted_wiz(base_wiz: u16, style_aptitude: Aptitude) -> u16 {
     ((base_wiz as f64 * aptitude_mod) as u16).max(1)
 }
 
-/// Given a ThresholdStat, return the corresponding base stat from an Uma.
+/// Given a [`ThresholdStat`], return the corresponding base stat from an Uma.
 pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
     match stat_type {
         ThresholdStat::Speed => uma.speed,
@@ -309,9 +307,9 @@ pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
 
 /// Calculate course speed modifier based on course set status.
 ///
-/// Each course has a set of stats that provide bonuses if the Uma's corresponding
-/// base stats exceed certain thresholds. If multiple stats are present, their
-/// bonuses are averaged.
+/// Each course has a set of stats that provide bonuses if the [`Uma`]'s
+/// corresponding base stats exceed certain thresholds. If multiple stats are
+/// present, their bonuses are averaged.
 pub fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) -> f64 {
     if course_set_status.is_empty() {
         return 1.0;
@@ -344,7 +342,7 @@ fn threshold_stat_bonus(stat_value: u16) -> f64 {
 
 /// Calculate base stats multiplier from motivation.
 ///
-/// Returns motivation_value × 0.02 + 1.0, where motivation values range from
+/// Returns `motivation_value × 0.02 + 1.0`, where motivation values range from
 /// -2 (awful) to +2 (great).
 pub fn motivation_multiplier(motivation: Motivation) -> f64 {
     1.0 + (motivation as i8 as f64) * 0.02
