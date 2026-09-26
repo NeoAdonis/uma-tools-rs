@@ -196,3 +196,59 @@ fn test_is_exist_skill_id_in_available_skills() {
     // Should return true because skill 203061 is in available_skills
     assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
 }
+
+#[test]
+fn test_phase_values_by_position() {
+    use crate::course::Phase as CoursePhase;
+
+    let mut solver = create_test_race_solver();
+    let section = solver.state.course.section_length();
+
+    // (position in sections, phase, phase_firstquarter, phase_firsthalf, phase_laterhalf)
+    let cases = [
+        // Early: sections 0-4 (quarter 0-1, halves 0-2 and 2-4)
+        (0.0, 0, 0, 0, -1),
+        (0.5, 0, 0, 0, -1),
+        (1.0, 0, -1, 0, -1),
+        (2.0, 0, -1, -1, 0),
+        (3.9, 0, -1, -1, 0),
+        // Mid: sections 4-16 (quarter 4-7, halves 4-10 and 10-16)
+        (4.0, 1, 1, 1, -1),
+        (6.9, 1, 1, 1, -1),
+        (7.0, 1, -1, 1, -1),
+        (10.0, 1, -1, -1, 1),
+        (15.9, 1, -1, -1, 1),
+        // Late: sections 16-20 (quarter 16-17, halves 16-18 and 18-20)
+        (16.0, 2, 2, 2, -1),
+        (17.0, 2, -1, 2, -1),
+        (18.0, 2, -1, -1, 2),
+        (19.9, 2, -1, -1, 2),
+        // Last: sections 20-24 (quarter 20-21, halves 20-22 and 22-24)
+        (20.0, 3, 3, 3, -1),
+        (21.0, 3, -1, 3, -1),
+        (22.0, 3, -1, -1, 3),
+        (23.9, 3, -1, -1, 3),
+    ];
+
+    for (sections, phase, first_quarter, first_half, later_half) in cases {
+        let position = sections * section;
+        solver.runners[0].position = position;
+        solver.runners[0].phase = CoursePhase::from_position(position, &solver.state.course);
+
+        let course = &solver.state.course;
+        let runner = &solver.runners[0];
+        let actual = [
+            PhaseVar::Phase,
+            PhaseVar::PhaseFirstquarter,
+            PhaseVar::PhaseFirsthalf,
+            PhaseVar::PhaseLaterhalf,
+        ]
+        .map(|var| get_phase_value(&var, course, runner));
+
+        assert_eq!(
+            actual,
+            [phase, first_quarter, first_half, later_half],
+            "position {sections} sections"
+        );
+    }
+}
