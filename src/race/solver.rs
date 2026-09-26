@@ -429,7 +429,11 @@ impl RaceSolver<Runner> {
         // Because we are counting how many runners are *currently* behaving as
         // front runners rather than *actual* front runners, we cannot use
         // runners_by_style from RaceState.
-        let mut front_runner_count = 0;
+        let front_runner_count = self
+            .runners
+            .iter()
+            .filter(|runner| runner.positioning_style().is_front_like())
+            .count();
 
         // Find pacemaker
         let mut pacemaker_position = self.runners[0].position;
@@ -447,9 +451,6 @@ impl RaceSolver<Runner> {
                 if style < pacemaker_style {
                     pacemaker_style = style;
                     pacemaker_position = runner_i.position;
-                }
-                if style.is_front_like() {
-                    front_runner_count += 1;
                 }
                 // Because runners are sorted by position descendingly, we only
                 // need to update pacemaker when a more agressive style is found

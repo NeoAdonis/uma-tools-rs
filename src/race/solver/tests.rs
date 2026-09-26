@@ -269,3 +269,32 @@ fn test_pace_up_ex_not_before_one_point_five_anniversary() {
         assert!(!is_pace_up_ex(&mut solver, Style::Late));
     }
 }
+
+#[test]
+fn test_single_front_runner_keeps_speeding_up_with_larger_lead() {
+    // A lone front runner may keep speeding up while less than 12.5m ahead;
+    // otherwise the limit is 4.5m
+    let mut solver = positioning_solver(
+        &[(Style::Front, 108.0), (Style::Pace, 100.0)],
+        GameVersion::LATEST,
+    );
+    runner_with_style(&mut solver, Style::Front).positioning_strategy =
+        PositioningStrategy::FrontSpeedUp;
+    solver.update_positioning_strategy();
+    assert!(matches!(
+        runner_with_style(&mut solver, Style::Front).positioning_strategy,
+        PositioningStrategy::FrontSpeedUp
+    ));
+
+    let mut solver = positioning_solver(
+        &[(Style::Front, 108.0), (Style::Runaway, 100.0)],
+        GameVersion::LATEST,
+    );
+    runner_with_style(&mut solver, Style::Front).positioning_strategy =
+        PositioningStrategy::FrontSpeedUp;
+    solver.update_positioning_strategy();
+    assert!(matches!(
+        runner_with_style(&mut solver, Style::Front).positioning_strategy,
+        PositioningStrategy::Normal
+    ));
+}
