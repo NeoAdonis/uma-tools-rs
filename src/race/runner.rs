@@ -1913,6 +1913,17 @@ impl Runner {
 
     /// Update slope state and apply slope-based acceleration/deceleration.
     pub fn update_slope(&mut self, slopes: &[Slope], delta_time: f64, rng: &mut impl Rng) {
+        // Exit first, so that a slope right after another one is entered in the
+        // same frame
+        if self
+            .slope_manager
+            .check_exit(self.position, slopes)
+            .is_some()
+        {
+            // Exiting slope - stop any slope-based acceleration/deceleration
+            self.stop_slope_acceleration();
+        }
+
         if let Some((slope_idx, _slope_type)) =
             self.slope_manager.check_entry(self.position, slopes)
         {
@@ -1923,9 +1934,6 @@ impl Runner {
                 // Downhill - reset downhill timer
                 self.downhill_time = 0.0;
             }
-        } else if let Some(_slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
-            // Exiting slope - stop any slope-based acceleration/deceleration
-            self.stop_slope_acceleration();
         } else if let Some(idx) = self.current_slope() {
             // On slope - check for downhill acceleration
             if slopes[idx].is_downhill() {

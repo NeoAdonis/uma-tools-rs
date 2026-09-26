@@ -193,12 +193,6 @@ impl RaceSolver<Runner> {
 
     /// Perform a single simulation step.
     fn step(&mut self, delta_time: f64) {
-        // Pre-Update
-        for runner in &mut self.runners {
-            runner.check_corner_end(&self.state.course.corners);
-            runner.check_straight_end(&self.state.course.straights);
-        }
-
         self.state.elapsed_time += delta_time;
 
         for runner in &mut self.runners {
@@ -213,26 +207,31 @@ impl RaceSolver<Runner> {
             runner.check_continuous_triggers(&self.state);
             runner.update_target_speed(&self.state);
             runner.update_acceleration();
-            runner.update_phase(&mut self.state);
             runner.update_speed(delta_time, self.state.course.base_speed());
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
                 self.state.finish_time = Some(self.state.elapsed_time);
                 // TODO: calculate how many lenghts ahead the runner is from the next runner
             }
-            runner.update_lane(&self.state.course, delta_time);
-            runner.update_hp(delta_time, &self.state);
+
+            // Update everything derived from the new position, so that the rest of
+            // the frame (and the start of the next one) sees a consistent state
+            runner.update_phase(&mut self.state);
+            runner.check_corner_end(&self.state.course.corners);
+            runner.check_corner_start(&self.state.course.corners);
+            runner.check_straight_end(&self.state.course.straights);
+            runner.check_straight_start(&self.state.course.straights, &self.state);
             runner.update_slope(
                 &self.state.course.slopes,
                 delta_time,
                 &mut *self.state.rng.borrow_mut(),
             );
+
+            runner.update_lane(&self.state.course, delta_time);
+            runner.update_hp(delta_time, &self.state);
             runner.check_window_triggers(&self.state); // Distance, time, HP windows
             runner.check_activation_dependent_triggers(&self.state);
             runner.extract_buff_activations(&mut self.state);
-            // Post-Update
-            runner.check_corner_start(&self.state.course.corners);
-            runner.check_straight_start(&self.state.course.straights, &self.state);
         }
 
         for runner in &mut self.runners {
@@ -519,3 +518,6 @@ impl RaceSolver<Runner> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
