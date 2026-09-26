@@ -25,20 +25,15 @@ fn test_position_based_or_mutual_exclusion() {
         "order>=3&order_rate<=50&remain_distance<=200&bashin_diff_infront<=1@order>=3&order_rate<=50&remain_distance<=200&bashin_diff_behind<=1"
     ).unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 2 branches
     assert_eq!(branches.len(), 2, "Should create 2 OR branches");
 
     // Verify both branches exist with their conditions
-    let (triggers1, guards1) = &branches[0];
-    let (triggers2, guards2) = &branches[1];
-
-    // Both should have triggers and guards
-    assert!(!triggers1.is_empty(), "Branch 1 should have triggers");
-    assert!(!guards1.is_empty(), "Branch 1 should have guards");
-    assert!(!triggers2.is_empty(), "Branch 2 should have triggers");
-    assert!(!guards2.is_empty(), "Branch 2 should have guards");
+    // Both should keep all their comparisons as guards
+    assert_eq!(branches[0].guards.len(), 4, "Branch 1 should have guards");
+    assert_eq!(branches[1].guards.len(), 4, "Branch 2 should have guards");
 
     // The key property: bashin_diff_infront and bashin_diff_behind are mutually exclusive
     // This is enforced at runtime by the guard evaluation logic
@@ -56,17 +51,26 @@ fn test_order_based_or_mutual_exclusion() {
     )
     .unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 2 branches
     assert_eq!(branches.len(), 2, "Should create 2 OR branches");
 
-    // Both branches have triggers (can be DistanceCovered or Continuous depending on guards)
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert_eq!(triggers.len(), 1, "Branch {} should have 1 trigger", idx);
-        // Trigger can be either DistanceCovered or Continuous depending on dynamic guards
-        assert!(!triggers.is_empty(), "Branch {} should have a trigger", idx);
-        assert!(!guards.is_empty(), "Branch {} should have guards", idx);
+    // Both branches are checked from 50% on
+    for (idx, branch) in branches.iter().enumerate() {
+        assert!(
+            matches!(
+                branch.trigger,
+                TriggerCondition::Window {
+                    variable: WindowVariable::Position,
+                    min_threshold: 1000.0,
+                    ..
+                }
+            ),
+            "Branch {} should be checked from 50%",
+            idx
+        );
+        assert_eq!(branch.guards.len(), 3, "Branch {} should have guards", idx);
     }
 
     // The key property: order==1 and order==2 are mutually exclusive
@@ -88,7 +92,7 @@ fn test_complex_three_branch_distance_ranges() {
 
     // Need to provide random activation for phase_firsthalf_random
     let activation = vec![500.0]; // Random activation at 500m
-    let branches = split_condition(&condition, activation, &course);
+    let branches = compile_condition(&condition, &activation, &course);
 
     // Should create 3 branches
     assert_eq!(
@@ -97,11 +101,15 @@ fn test_complex_three_branch_distance_ranges() {
         "Should create 3 OR branches for distance ranges"
     );
 
-    // All branches should have triggers
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert!(!triggers.is_empty(), "Branch {} should have triggers", idx);
+    // All branches should trigger at the random point
+    for (idx, branch) in branches.iter().enumerate() {
         assert!(
-            !guards.is_empty(),
+            matches!(branch.trigger, TriggerCondition::Position { meters: 500.0 }),
+            "Branch {} should trigger at the random point",
+            idx
+        );
+        assert!(
+            !branch.guards.is_empty(),
             "Branch {} should have guards including distance checks",
             idx
         );
@@ -151,7 +159,7 @@ fn test_or_branch_skill_id_uniqueness() {
     assert_eq!(logic_1.alternative_index, logic_2.alternative_index);
 
     // The key isolation: they are separate entries in skill_logics array
-    // Each has independent ActivationState for tracking has_activated
+    // Each tracks has_activated independently
 }
 
 #[test]
@@ -185,8 +193,8 @@ fn test_or_branches_independent_activation_tracking() {
     );
 
     // But they are different objects with independent state tracking
-    assert!(!scheduler.skill_logics[0].state.has_activated);
-    assert!(!scheduler.skill_logics[1].state.has_activated);
+    assert!(!scheduler.skill_logics[0].has_activated);
+    assert!(!scheduler.skill_logics[1].has_activated);
 }
 
 // ============================================================================
@@ -204,26 +212,27 @@ fn test_three_branch_or_mutual_exclusion() {
     let condition =
         parse_condition("ground_condition==2@ground_condition==3@ground_condition==4").unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 3 branches
     assert_eq!(branches.len(), 3, "Should create 3 OR branches");
 
-    // All branches are guards-only (no meaningful triggers for ground_condition==X)
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert_eq!(
-            triggers.len(),
-            1,
-            "Branch {} should have fallback trigger",
+    // All branches are guards-only, checked during the whole race
+    for (idx, branch) in branches.iter().enumerate() {
+        assert!(
+            matches!(
+                branch.trigger,
+                TriggerCondition::Window {
+                    variable: WindowVariable::Position,
+                    min_threshold: 0.0,
+                    max_threshold: f64::INFINITY,
+                }
+            ),
+            "Branch {} should be checked during the whole race",
             idx
         );
         assert!(
-            !triggers.is_empty(),
-            "Branch {} should use Continuous trigger for ground_condition",
-            idx
-        );
-        assert!(
-            !guards.is_empty(),
+            !branch.guards.is_empty(),
             "Branch {} should have ground_condition as guard",
             idx
         );
@@ -246,28 +255,20 @@ fn test_four_branch_evaluation_priority() {
         "is_last_straight_onetime==1&change_order_up_end_after>=3@is_last_straight_onetime==1&change_order_up_end_after>=2&change_order_up_middle>=1@is_last_straight_onetime==1&change_order_up_end_after>=1&change_order_up_middle>=2@is_last_straight_onetime==1&change_order_up_middle>=3"
     ).unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 4 branches
     assert_eq!(branches.len(), 4, "Should create 4 OR branches");
 
     // All branches should have is_last_straight_onetime trigger
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert_eq!(triggers.len(), 1, "Branch {} should have 1 trigger", idx);
+    for (idx, branch) in branches.iter().enumerate() {
         assert!(
-            matches!(
-                triggers[0],
-                TriggerCondition::StraightTransition {
-                    is_last: true,
-                    is_onetime: true,
-                    is_entry: true
-                }
-            ),
+            matches!(branch.trigger, TriggerCondition::LastStraightEntry),
             "Branch {} should have onetime last straight trigger",
             idx
         );
         assert!(
-            !guards.is_empty(),
+            !branch.guards.is_empty(),
             "Branch {} should have change_order guards",
             idx
         );
@@ -293,27 +294,26 @@ fn test_similar_conditions_or_branches() {
         "is_last_straight==1&order_rate<=40&overtake_target_time>=1@is_last_straight==1&order_rate<=40&is_overtake==1"
     ).unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 2 branches
     assert_eq!(branches.len(), 2, "Should create 2 OR branches");
 
     // Both should have spatial window trigger (is_last_straight)
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert_eq!(triggers.len(), 1, "Branch {} should have 1 trigger", idx);
+    for (idx, branch) in branches.iter().enumerate() {
         assert!(
             matches!(
-                triggers[0],
+                branch.trigger,
                 TriggerCondition::Window {
-                    variable: WindowVariable::SpatialPosition,
+                    variable: WindowVariable::Position,
                     ..
                 }
             ),
-            "Branch {} should have spatial window trigger",
+            "Branch {} should have position window trigger",
             idx
         );
         assert!(
-            !guards.is_empty(),
+            !branch.guards.is_empty(),
             "Branch {} should have guards for order_rate and overtake condition",
             idx
         );
@@ -333,29 +333,28 @@ fn test_or_branches_with_shared_base_conditions() {
         "distance_rate>=50&ground_type==1&order==1@distance_rate>=50&ground_type==1&order==2@distance_rate>=50&ground_type==1&order>=3"
     ).unwrap();
     let course = load_course(10104);
-    let branches = split_condition(&condition, vec![], &course);
+    let branches = compile_condition(&condition, &[], &course);
 
     // Should create 3 branches
     assert_eq!(branches.len(), 3, "Should create 3 OR branches");
 
     // All branches share distance_rate>=50 and ground_type==1
     // But differ in order condition (mutually exclusive)
-    for (idx, (triggers, guards)) in branches.iter().enumerate() {
-        assert_eq!(triggers.len(), 1, "Branch {} should have 1 trigger", idx);
+    for (idx, branch) in branches.iter().enumerate() {
         assert!(
             matches!(
-                triggers[0],
+                branch.trigger,
                 TriggerCondition::Window {
-                    variable: WindowVariable::DistanceRate,
-                    min_threshold: 50.0,
-                    max_threshold: 100.0,
+                    variable: WindowVariable::Position,
+                    min_threshold: 1000.0,
+                    max_threshold: f64::INFINITY,
                 }
             ),
             "Branch {} should have shared distance_rate trigger",
             idx
         );
         assert!(
-            !guards.is_empty(),
+            !branch.guards.is_empty(),
             "Branch {} should have guards including order condition",
             idx
         );

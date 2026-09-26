@@ -48,23 +48,20 @@ fn test_precondition_with_window_trigger() {
         "Precondition should be compiled and stored separately"
     );
 
-    // Verify trigger is spatial window (not affected by precondition)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
+    // Verify trigger is a position window (not affected by precondition)
     assert!(
         matches!(
-            triggers[0],
+            logic.trigger,
             TriggerCondition::Window {
-                variable: WindowVariable::SpatialPosition,
+                variable: WindowVariable::Position,
                 ..
             }
         ),
-        "Condition should create spatial window trigger"
+        "Condition should create position window trigger"
     );
 
-    // is_last_straight==1 has no additional guards
-    assert!(guards.is_empty());
+    // Only the condition's comparison is a guard
+    assert_eq!(logic.guards.len(), 1);
 
     // Verify precondition_satisfied array is initialized correctly
     assert_eq!(

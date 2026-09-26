@@ -1,4 +1,3 @@
-use crate::condition::parser::CompOp;
 use crate::course::Phase;
 use crate::trigger::skill_activation::SkillActivationLogic;
 use std::cmp::Ordering;
@@ -6,7 +5,7 @@ use std::collections::BinaryHeap;
 
 /// Main scheduler coordinating all trigger types.
 ///
-/// This scheduler stores [`SkillActivationLogic`] which separates triggers
+/// This scheduler stores `SkillActivationLogic` which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
 pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
@@ -15,15 +14,11 @@ pub struct TriggerScheduler {
     // stored in `SkillActivationLogic::precondition`
     pub precondition_satisfied: Vec<bool>,
     // Position windows of precondition logics. Kept apart from regular windows
-    // because preconditions are checked at the start of each frame, before any
-    // other trigger
+    // because preconditions are checked before any other trigger
     pub precondition_windows: WindowQueue,
 
-    // Monotonic triggers - use priority queues for O(log n) activation
-    pub time_triggers: BinaryHeap<TimeTrigger>,
+    // Position triggers (random points) - min-heap by position
     pub distance_triggers: BinaryHeap<DistanceTrigger>,
-    pub hp_triggers: BinaryHeap<HpTrigger>,
-    pub phase_triggers: BinaryHeap<PhaseTransitionTrigger>,
 
     // Window triggers - checked every frame while within bounds
     // Position and time only increase, so their windows are queued; HP can
@@ -32,13 +27,8 @@ pub struct TriggerScheduler {
     pub time_windows: WindowQueue,
     pub hp_windows: Vec<WindowTrigger>,
 
-    // Spatial triggers - tied to course geometry
-    // Note: Corners and slopes use Window triggers (SpatialPosition)
-    // Only straights are here for is_last_straight_onetime support
-    pub straight_triggers: Vec<StraightTrigger>,
-
-    // Continuous triggers - checked every step (minimized)
-    pub continuous_triggers: Vec<usize>,
+    // Last straight entry triggers (is_last_straight_onetime)
+    pub last_straight_triggers: Vec<usize>,
 
     // Deferred random triggers - scheduled as distance triggers once
     // Full-Throttle Sprint starts
@@ -59,20 +49,43 @@ impl TriggerScheduler {
             skill_logics: Vec::new(),
             precondition_satisfied: Vec::new(),
             precondition_windows: WindowQueue::default(),
-            time_triggers: BinaryHeap::new(),
             distance_triggers: BinaryHeap::new(),
-            hp_triggers: BinaryHeap::new(),
-            phase_triggers: BinaryHeap::new(),
             position_windows: WindowQueue::default(),
             time_windows: WindowQueue::default(),
             hp_windows: Vec::new(),
-            straight_triggers: Vec::new(),
-            continuous_triggers: Vec::new(),
+            last_straight_triggers: Vec::new(),
             full_throttle_triggers: Vec::new(),
             any_activation_triggers: Vec::new(),
             buff_activation_triggers: Vec::new(),
             heal_activation_triggers: Vec::new(),
             activation_counts: ActivationCounts::default(),
+        }
+    }
+
+    /// Remove every trigger of the given logics, so they're never checked.
+    pub fn remove_triggers(&mut self, logic_indices: &[usize]) {
+        if logic_indices.is_empty() {
+            return;
+        }
+        let removed = |logic_idx: &usize| logic_indices.contains(logic_idx);
+
+        self.precondition_windows
+            .remove_if(|window| removed(&window.logic_idx));
+        self.position_windows
+            .remove_if(|window| removed(&window.logic_idx));
+        self.time_windows
+            .remove_if(|window| removed(&window.logic_idx));
+        self.hp_windows.retain(|window| !removed(&window.logic_idx));
+        self.distance_triggers
+            .retain(|trigger| !removed(&trigger.logic_idx));
+        for list in [
+            &mut self.last_straight_triggers,
+            &mut self.full_throttle_triggers,
+            &mut self.any_activation_triggers,
+            &mut self.buff_activation_triggers,
+            &mut self.heal_activation_triggers,
+        ] {
+            list.retain(|logic_idx| !removed(logic_idx));
         }
     }
 }
@@ -83,45 +96,10 @@ impl Default for TriggerScheduler {
     }
 }
 
-// ========== MONOTONIC TRIGGERS (Priority Queue Based) ==========
-
-/// Trigger based on elapsed time (monotonic increasing).
-#[derive(Clone, Debug)]
-pub struct TimeTrigger {
-    pub threshold_seconds: f64,
-    pub logic_idx: usize,
-    pub operator: CompOp,
-}
-
-impl Ord for TimeTrigger {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Min-heap: trigger earliest time first
-        other
-            .threshold_seconds
-            .partial_cmp(&self.threshold_seconds)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for TimeTrigger {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for TimeTrigger {
-    fn eq(&self, other: &Self) -> bool {
-        self.threshold_seconds == other.threshold_seconds
-    }
-}
-
-impl Eq for TimeTrigger {}
+// ========== POSITION TRIGGERS ==========
 
 /// Trigger based on distance. It fires once the runner's position reaches
-/// `threshold_meters`.
-///
-/// All distance-based conditions (distance rate, remaining distance, furlongs,
-/// random points) are converted to a position from the start when indexed.
+/// `threshold_meters`. Used for random points.
 #[derive(Clone, Debug)]
 pub struct DistanceTrigger {
     /// Position from the start in meters.
@@ -153,74 +131,10 @@ impl PartialEq for DistanceTrigger {
 
 impl Eq for DistanceTrigger {}
 
-/// Trigger based on HP percentage (generally decreasing).
-#[derive(Clone, Debug)]
-pub struct HpTrigger {
-    pub threshold_percent: f64,
-    pub logic_idx: usize,
-    pub operator: CompOp,
-}
+// ========== WINDOW TRIGGERS (Checked every frame within range) ==========
 
-impl Ord for HpTrigger {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Min-heap: check higher HP thresholds first (100% before 50%)
-        self.threshold_percent
-            .partial_cmp(&other.threshold_percent)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for HpTrigger {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for HpTrigger {
-    fn eq(&self, other: &Self) -> bool {
-        self.threshold_percent == other.threshold_percent
-    }
-}
-
-impl Eq for HpTrigger {}
-
-/// Trigger based on phase transitions (monotonic increasing).
-#[derive(Clone, Debug)]
-pub struct PhaseTransitionTrigger {
-    pub phase: Phase,
-    pub boundary_distance: f64, // Pre-computed from section boundaries
-    pub logic_indices: Vec<usize>,
-}
-
-impl Ord for PhaseTransitionTrigger {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Min-heap: trigger earlier phases first
-        other
-            .boundary_distance
-            .partial_cmp(&self.boundary_distance)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for PhaseTransitionTrigger {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for PhaseTransitionTrigger {
-    fn eq(&self, other: &Self) -> bool {
-        self.boundary_distance == other.boundary_distance
-    }
-}
-
-impl Eq for PhaseTransitionTrigger {}
-
-// ========== WINDOW TRIGGERS (Continuous Checking Within Range) ==========
-
-/// Trigger that signals a continuous skill check within a value range
-/// (`variable>=min & variable<=max`).
-/// More efficient than continuous triggers when we know the valid range in advance.
+/// Trigger that signals a skill check every frame while a value is within a
+/// range (`variable>=min & variable<=max`).
 ///
 /// The variable is implied by the collection holding the trigger (see
 /// [`TriggerScheduler`]).
@@ -245,15 +159,6 @@ pub struct WindowQueue {
     active: Vec<WindowTrigger>,
 }
 
-/// Result of advancing a [`WindowQueue`] to a new value.
-#[derive(Debug, Default)]
-pub struct WindowUpdate {
-    /// Logic indices whose window contains the current value.
-    pub inside: Vec<usize>,
-    /// Logic indices whose window was left (or skipped over) in this update.
-    pub exited: Vec<usize>,
-}
-
 impl WindowQueue {
     /// Add a window. Intended for build time.
     pub fn push(&mut self, trigger: WindowTrigger) {
@@ -263,9 +168,10 @@ impl WindowQueue {
         self.pending.insert(idx, trigger);
     }
 
-    /// Advance the queue to `value` and report which windows contain it and
-    /// which ones were left behind. Bounds are widened by `epsilon`.
-    pub fn advance(&mut self, value: f64, epsilon: f64) -> WindowUpdate {
+    /// Advance the queue to `value` and return the logic indices whose window
+    /// contains it. Windows left behind are dropped. Bounds are widened by
+    /// `epsilon`.
+    pub fn advance(&mut self, value: f64, epsilon: f64) -> Vec<usize> {
         while self
             .pending
             .last()
@@ -274,17 +180,8 @@ impl WindowQueue {
             self.active.push(self.pending.pop().unwrap());
         }
 
-        let mut update = WindowUpdate::default();
-        self.active.retain(|t| {
-            if value > t.max_threshold + epsilon {
-                update.exited.push(t.logic_idx);
-                false
-            } else {
-                update.inside.push(t.logic_idx);
-                true
-            }
-        });
-        update
+        self.active.retain(|t| value <= t.max_threshold + epsilon);
+        self.active.iter().map(|t| t.logic_idx).collect()
     }
 
     /// Remove every window matching `predicate`.
@@ -305,19 +202,6 @@ impl WindowQueue {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-}
-
-// ========== SPATIAL TRIGGERS (Course Geometry Based) ==========
-
-/// Triggers on specific straights.
-///
-/// Note: Only used for `is_last_straight_onetime` (one-time event trigger).
-/// Other spatial features (corners, slopes, regular straights) use [`WindowTrigger`]s.
-#[derive(Clone, Debug)]
-pub struct StraightTrigger {
-    pub straight_index: usize,
-    pub is_last: bool,
-    pub logic_indices: Vec<usize>,
 }
 
 // ========== ACTIVATION TRACKING ==========
@@ -369,7 +253,6 @@ impl ActivationCounts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::condition::parser::CompOp;
     use crate::course::Phase;
     use std::collections::BinaryHeap;
 
@@ -436,28 +319,6 @@ mod tests {
     }
 
     #[test]
-    fn test_time_trigger_ordering() {
-        let trigger1 = TimeTrigger {
-            threshold_seconds: 10.0,
-            logic_idx: 0,
-            operator: CompOp::GreaterEqual,
-        };
-        let trigger2 = TimeTrigger {
-            threshold_seconds: 5.0,
-            logic_idx: 1,
-            operator: CompOp::GreaterEqual,
-        };
-
-        let mut heap = BinaryHeap::new();
-        heap.push(trigger1);
-        heap.push(trigger2);
-
-        // Should pop trigger2 first (5.0 < 10.0)
-        let first = heap.pop().unwrap();
-        assert_eq!(first.threshold_seconds, 5.0);
-    }
-
-    #[test]
     fn test_distance_trigger_ordering() {
         let mut heap = BinaryHeap::new();
         for (logic_idx, threshold_meters) in [1700.0, 200.0, 1000.0].into_iter().enumerate() {
@@ -489,31 +350,26 @@ mod tests {
         queue.push(window(1, 0.0, f64::INFINITY));
         queue.push(window(2, 150.0, 300.0));
 
-        let update = queue.advance(50.0, 0.0);
-        assert_eq!(update.inside, vec![1]);
-        assert!(update.exited.is_empty());
+        assert_eq!(queue.advance(50.0, 0.0), vec![1]);
 
-        let mut update = queue.advance(160.0, 0.0);
-        update.inside.sort_unstable();
-        assert_eq!(update.inside, vec![0, 1, 2]);
+        let mut inside = queue.advance(160.0, 0.0);
+        inside.sort_unstable();
+        assert_eq!(inside, vec![0, 1, 2]);
 
-        let mut update = queue.advance(250.0, 0.0);
-        update.inside.sort_unstable();
-        assert_eq!(update.inside, vec![1, 2]);
-        assert_eq!(update.exited, vec![0]);
+        let mut inside = queue.advance(250.0, 0.0);
+        inside.sort_unstable();
+        assert_eq!(inside, vec![1, 2]);
 
         // Exited windows are dropped
         assert_eq!(queue.len(), 2);
     }
 
     #[test]
-    fn test_window_queue_reports_skipped_windows_as_exited() {
+    fn test_window_queue_drops_skipped_windows() {
         let mut queue = WindowQueue::default();
         queue.push(window(0, 100.0, 105.0));
 
-        let update = queue.advance(110.0, 0.0);
-        assert!(update.inside.is_empty());
-        assert_eq!(update.exited, vec![0]);
+        assert!(queue.advance(110.0, 0.0).is_empty());
         assert!(queue.is_empty());
     }
 
@@ -522,9 +378,10 @@ mod tests {
         let mut queue = WindowQueue::default();
         queue.push(window(0, 100.0, 200.0));
 
-        assert_eq!(queue.advance(99.95, 0.1).inside, vec![0]);
-        assert_eq!(queue.advance(200.05, 0.1).inside, vec![0]);
-        assert_eq!(queue.advance(200.2, 0.1).exited, vec![0]);
+        assert_eq!(queue.advance(99.95, 0.1), vec![0]);
+        assert_eq!(queue.advance(200.05, 0.1), vec![0]);
+        assert!(queue.advance(200.2, 0.1).is_empty());
+        assert!(queue.is_empty());
     }
 
     #[test]

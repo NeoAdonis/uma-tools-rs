@@ -1,323 +1,192 @@
-//! Unit tests for trigger ordering and simultaneous firing behavior
+//! Unit tests for conditions whose comparisons must all hold at the same time.
 //!
-//! These tests verify that skills with multiple conditions that might fire
-//! simultaneously are properly handled, and that trigger priority/ordering
-//! works correctly.
+//! Every comparison of a branch is a guard; the trigger only narrows down when
+//! the guards are checked, to the part of the race where all of them can be
+//! true.
 
 use crate::common::{activation_logics, load_course, make_skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
+use uma_tools::skill::Skill;
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
+use uma_tools::trigger::system::TriggerScheduler;
+
+/// Build a scheduler for a single skill.
+fn scheduler(skill: Skill, course_id: u32) -> TriggerScheduler {
+    let mut rng = Pcg64Mcg::seed_from_u64(0);
+    build_trigger_scheduler(&[skill], &load_course(course_id), &mut rng)
+}
+
+/// Get the variable and `(min, max)` thresholds of a window trigger.
+fn window(logic: &SkillActivationLogic) -> (WindowVariable, f64, f64) {
+    match logic.trigger {
+        TriggerCondition::Window {
+            variable,
+            min_threshold,
+            max_threshold,
+        } => (variable, min_threshold, max_threshold),
+        ref other => panic!("Expected window, got {:?}", other),
+    }
+}
+
+/// Assert that two floats are (almost) equal.
+fn assert_close(actual: f64, expected: f64) {
+    assert!(
+        actual == expected || (actual - expected).abs() < 1e-9,
+        "expected {expected}, got {actual}"
+    );
+}
+
+// Course 10104: 2000m, sections of 83.33m (Mid phase at 333-1333m, Late phase at
+// 1333-1667m), no slopes
+const SECTION: f64 = 2000.0 / 24.0;
 
 // ============================================================================
-// PHASE + DISTANCE COLLISION
+// PHASE + DISTANCE
 // ============================================================================
 
 #[test]
-fn test_phase_transition_and_distance_threshold() {
+fn test_phase_and_distance_intersect() {
     // Skill 100621: distance_rate>=50&phase==1&order>=3&order_rate<=70
-    // Tests: Phase boundary (phase==1) and distance trigger align
-    // When entering Mid phase (phase 1) at distance_rate=50%, both conditions fire
-
-    let skill = make_skill(
-        "100621",
-        "distance_rate>=50&phase==1&order>=3&order_rate<=70",
-        "",
+    // The phase must still be Mid when reaching 50%
+    let scheduler = scheduler(
+        make_skill(
+            "100621",
+            "distance_rate>=50&phase==1&order>=3&order_rate<=70",
+            "",
+        ),
+        10104,
     );
-
-    let course = load_course(10104); // 2000m course
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
 
     assert_eq!(scheduler.skill_logics.len(), 1);
     let logic = &scheduler.skill_logics[0];
-
-    // Should have PhaseChange trigger (explicit trigger takes precedence)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::PhaseChange { phase: _ }),
-        "Should have PhaseChange trigger"
-    );
-
-    // distance_rate, order, and order_rate become guards
-    assert!(
-        !guards.is_empty(),
-        "Should have guards for distance_rate, order, and order_rate"
-    );
-
-    // Key behavior: When phase changes to Mid at ~50% distance
-    // The PhaseChange trigger fires and checks all guards including distance_rate>=50
-    // This ensures simultaneous condition alignment is properly handled
+    let (variable, min, max) = window(logic);
+    assert_eq!(variable, WindowVariable::Position);
+    assert_close(min, 1000.0);
+    assert_close(max, SECTION * 16.0);
+    assert_eq!(logic.guards.len(), 4, "All comparisons are guards");
 }
 
-// ============================================================================
-// MULTIPLE SIMULTANEOUS CONDITIONS
-// ============================================================================
-
 #[test]
-fn test_multiple_conditions_align_at_phase_boundary() {
+fn test_impossible_on_course_is_skipped() {
     // Skill 110121: distance_rate>=60&phase==1&slope==2&order_rate>=50
-    // Precondition: change_order_up_middle>=3
-    // Tests: Multiple conditions must all be true at phase 1 entry
-
-    let skill = make_skill(
-        "110121",
-        "distance_rate>=60&phase==1&slope==2&order_rate>=50",
-        "change_order_up_middle>=3",
+    // Course 10104 has no downhill, so neither the skill nor its precondition is
+    // scheduled
+    let scheduler = scheduler(
+        make_skill(
+            "110121",
+            "distance_rate>=60&phase==1&slope==2&order_rate>=50",
+            "change_order_up_middle>=3",
+        ),
+        10104,
     );
 
-    let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    assert!(scheduler.skill_logics.is_empty());
+    assert!(scheduler.precondition_satisfied.is_empty());
+}
+
+#[test]
+fn test_six_conditions_intersect() {
+    // Skill 110591 on course 10913 (2000m, downhill at 1000-1800m):
+    // - distance_rate>=60: from 1200m
+    // - slope==2: downhills (0-1800m)
+    // - phase==1: until 1333m
+    // - remain_distance>=500: until 1500m
+    let scheduler = scheduler(
+        make_skill(
+            "110591",
+            "distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500",
+            "",
+        ),
+        10913,
+    );
 
     let logics = activation_logics(&scheduler);
     assert_eq!(logics.len(), 1);
-    let logic = logics[0];
-
-    // Should have precondition
-    assert_eq!(logic.precondition, Some(0), "Should have precondition");
-
-    // Should have PhaseChange trigger
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
-        "Should have PhaseChange trigger for phase==1"
-    );
-
-    // All other conditions (distance_rate, slope, order_rate) become guards
-    assert!(
-        !guards.is_empty(),
-        "Should have guards for simultaneous conditions"
-    );
-
-    // Key behavior: When phase changes to Mid:
-    // 1. Check precondition (change_order_up_middle>=3)
-    // 2. Fire PhaseChange trigger
-    // 3. Check all guards: distance_rate>=60, slope==2, order_rate>=50
-    // All must align at the same moment
-}
-
-#[test]
-fn test_six_conditions_simultaneous() {
-    // Skill 110591: distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500
-    // Tests: Six conditions must all align when trigger fires
-
-    let skill = make_skill(
-        "110591",
-        "distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500",
-        "",
-    );
-
-    let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
-
-    // Should have PhaseChange trigger (phase==1 is explicit trigger)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
-        "Should have PhaseChange trigger"
-    );
-
-    // All five other conditions become guards
-    assert!(
-        !guards.is_empty(),
-        "Should have guards for all non-trigger conditions"
-    );
-
-    // Key behavior: When phase==1 trigger fires, all guards must pass:
-    // - distance_rate>=60 (must be in second 60% of race)
-    // - slope==2 (must be on uphill slope)
-    // - order_rate>=40 && <=80 (must be in middle of pack)
-    // - remain_distance>=500 (must have 500m+ remaining)
-    // This tests the system's ability to handle complex simultaneous requirements
+    let (_, min, max) = window(logics[0]);
+    assert_close(min, 1200.0);
+    assert_close(max, SECTION * 16.0);
+    assert_eq!(logics[0].guards.len(), 6);
 }
 
 // ============================================================================
-// DISTANCE-BASED COLLISION
+// DISTANCE RANGES
 // ============================================================================
 
 #[test]
-fn test_distance_rate_and_remain_distance_alignment() {
+fn test_distance_rate_and_remain_distance_intersect() {
     // Skill 101191: distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500
-    // Tests: Two distance measurements must align simultaneously
-
-    let skill = make_skill(
-        "101191",
-        "distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500",
-        "",
-    );
-
-    let course = load_course(10104); // 2000m course
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
-
-    // Should have Window trigger for distance_rate 66-68%
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(
-            triggers[0],
-            TriggerCondition::Window {
-                variable: WindowVariable::DistanceRate,
-                min_threshold: 66.0,
-                max_threshold: 68.0,
-            }
+    // 66-68% (floored, so until 69%) is 1320-1380m, well before 500m remain
+    let scheduler = scheduler(
+        make_skill(
+            "101191",
+            "distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500",
+            "",
         ),
-        "Should have distance_rate window 66-68%"
+        10104,
     );
 
-    // order_rate and remain_distance become guards
-    assert!(!guards.is_empty(), "Should have guards");
-
-    // Key behavior: Window is only 2% wide (66-68%)
-    // When entering this window, must also check:
-    // - order_rate>=50 (must be in back half)
-    // - remain_distance>=500 (on 2000m course, at 66% = 1320m covered, 680m remaining)
-    //
-    // This tests alignment of:
-    // 1. Narrow window entry
-    // 2. Position-based guard (order_rate)
-    // 3. Distance-remaining guard (remain_distance)
+    let logic = &scheduler.skill_logics[0];
+    let (_, min, max) = window(logic);
+    assert_close(min, 1320.0);
+    assert_close(max, 1380.0);
+    assert_eq!(logic.guards.len(), 4);
 }
 
 // ============================================================================
-// HP VS DISTANCE TRIGGERS
+// NON-POSITION WINDOWS
 // ============================================================================
 
 #[test]
-fn test_hp_trigger_during_distance_window() {
-    // Skill 200761: distance_type==4&hp_per<=30
-    // Tests: HP trigger fires independently of distance progression
+fn test_hp_window() {
+    // Skill 200761: distance_type==4&hp_per<=30 (HP is floored, so until 31%)
+    let scheduler = scheduler(
+        make_skill("200761", "distance_type==4&hp_per<=30", ""),
+        10105,
+    );
 
-    let skill = make_skill("200761", "distance_type==4&hp_per<=30", "");
-
-    let course = load_course(10105); // 2600m course (distance_type 4)
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
     let logic = &scheduler.skill_logics[0];
+    let (variable, min, max) = window(logic);
+    assert_eq!(variable, WindowVariable::HpPercent);
+    assert_eq!((min, max), (0.0, 31.0));
+    assert_eq!(logic.guards.len(), 2);
+}
 
-    // Should have HpPercent trigger (HP is monitored separately)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(
-            triggers[0],
-            TriggerCondition::HpPercent {
-                threshold: 30.0,
-                ..
-            }
+#[test]
+fn test_time_window_with_dynamic_guards() {
+    // Checked every frame after 5 seconds until every guard holds
+    let scheduler = scheduler(
+        make_skill(
+            "test_time",
+            "accumulatetime>=5&blocked_front_continuetime>=1&order_rate<=50&overtake_target_time>=2",
+            "",
         ),
-        "Should have HP trigger"
+        10104,
     );
 
-    // distance_type becomes guard
-    assert!(!guards.is_empty(), "Should have distance_type guard");
-
-    // Key behavior: HP can drop below 30% at any distance
-    // HP trigger is monotonic decreasing, fires when crossing threshold
-    // Unlike distance triggers which fire based on position progression,
-    // HP triggers respond to stamina consumption and recovery
-    // This tests independent trigger systems working together
+    let logic = &scheduler.skill_logics[0];
+    let (variable, min, max) = window(logic);
+    assert_eq!(variable, WindowVariable::Time);
+    assert_eq!((min, max), (5.0, f64::INFINITY));
+    assert_eq!(logic.guards.len(), 4);
 }
 
-// ============================================================================
-// CONTINUOUS VS MONOTONIC TRIGGER INTERACTION
-// ============================================================================
-
 #[test]
-fn test_continuous_trigger_with_multiple_dynamic_guards() {
-    // Test: Skill with continuous trigger checking multiple dynamic conditions
-    // Tests: Continuous triggers re-evaluate every frame, handling dynamic state
-
-    let skill = make_skill(
-        "test_continuous",
-        "accumulatetime>=5&blocked_front_continuetime>=1&order_rate<=50&overtake_target_time>=2",
-        "",
+fn test_phase_window_with_dynamic_guards() {
+    // Checked every frame during Late phase (not only when entering it)
+    let scheduler = scheduler(
+        make_skill(
+            "test_phase",
+            "phase==2&blocked_front_continuetime>=1&order_rate<=50",
+            "",
+        ),
+        10104,
     );
 
-    let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
     let logic = &scheduler.skill_logics[0];
-
-    // Should use Continuous trigger (dynamic guards present)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        !triggers.is_empty(),
-        "Should have Continuous trigger due to dynamic guards"
-    );
-
-    // All conditions become guards (checked every frame)
-    assert!(!guards.is_empty(), "Should have all conditions as guards");
-
-    // Key behavior: Continuous trigger checks every frame
-    // All guards (accumulatetime, blocked_front_continuetime, order_rate, overtake_target_time)
-    // are re-evaluated continuously until all align
-    // This tests the difference between one-shot monotonic triggers
-    // and continuous re-evaluation for dynamic conditions
-}
-
-// ============================================================================
-// TRIGGER TYPE PRECEDENCE
-// ============================================================================
-
-#[test]
-fn test_explicit_trigger_takes_precedence_over_dynamic_guards() {
-    // Test: When explicit trigger exists, it takes precedence even with dynamic guards
-    // Tests: Trigger selection priority system
-
-    let skill = make_skill(
-        "test_precedence",
-        "phase==2&blocked_front_continuetime>=1&order_rate<=50",
-        "",
-    );
-
-    let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
-
-    // Should have PhaseChange trigger (explicit trigger has precedence)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
-        "PhaseChange trigger should take precedence over Continuous"
-    );
-
-    // Dynamic guards (blocked_front_continuetime, order_rate) are checked when trigger fires
-    assert!(
-        !guards.is_empty(),
-        "Should have dynamic guards checked on trigger"
-    );
-
-    // Key behavior: Even though blocked_front_continuetime and order_rate are dynamic,
-    // the explicit phase==2 trigger takes precedence over converting to Continuous
-    // The skill fires at phase transition, then checks dynamic guards at that moment
-    // This tests trigger precedence rules in the build system
+    let (_, min, max) = window(logic);
+    assert_close(min, SECTION * 16.0);
+    assert_close(max, SECTION * 20.0);
+    assert_eq!(logic.guards.len(), 3);
 }

@@ -548,191 +548,24 @@ impl VarType {
     }
 }
 
-/// Classification for trigger-guard separation.
-///
-/// Determines whether a variable acts as a trigger (determines WHEN to check)
-/// or a guard (must be true AT activation time).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VariableRole {
-    /// A trigger that fires at a random location. The activation point should be
-    /// pre-determined before race start.
-    ///
-    /// Examples: `phase_random==1`, `is_finalcorner_random==1`, `corner_random==2`
-    RandomTrigger,
-
-    /// A trigger that fires at a random location which can only be determined
-    /// during the race.
-    ///
-    /// Example: `run_at_full_speed_random==1` (rolled when Full-Throttle Sprint starts)
-    DeferredRandomTrigger,
-
-    /// A variable whose value can only increase OR decrease, but not both.
-    /// In most cases, it should be treated as a guard, but it can act as a trigger
-    /// depending on context.
-    ///
-    /// - When paired with explicit triggers (Random/Spatial/Phase): acts as a GUARD.
-    /// - When alone (no explicit triggers): if the condition starts as false and can
-    ///   turn true later (e.g. accumulatetime>=5), it acts as a TRIGGER; if it's the
-    ///   opposite (e.g. distance_rate<=50), it acts as CONTINUOUS, meaning that the
-    ///   underlying condition must be continuously checked.
-    ///
-    /// Examples: `hp_per<=50`, `accumulatetime>=5`, `distance_rate>=50`
-    MonotonicGuard,
-
-    /// Phase transition trigger - fires when entering new phase.
-    ///
-    /// Example: `phase>=2`
-    PhaseTrigger,
-
-    /// Spatial trigger - fires when entering/exiting course features.
-    ///
-    /// Examples: `corner!=0`, `slope==1`, `is_last_straight==1`
-    SpatialTrigger,
-
-    /// Activation trigger - fires when a skill is activated.
-    ///
-    /// Examples: `is_activate_any_skill==1`, `is_heal_skill_activated==1`
-    ActivationTrigger,
-
-    /// A variable whose value never changes during race. Therefore,
-    /// it can be evaluated just once at race start.
-    ///
-    /// Examples: `ground_type==2`, `running_style==1`, `motivation>=4`
-    StaticGuard,
-
-    /// A variable whose value can change during race.
-    /// Must be checked when a trigger fires.
-    ///
-    /// Examples: `order<=3`, `is_lastspurt==1`, `blocked_side_continuetime>=2`
-    DynamicGuard,
-}
-
 impl VarType {
-    /// Classify variable role for trigger-guard separation.
-    pub fn variable_role(&self) -> VariableRole {
+    /// Whether the value never changes during a race.
+    ///
+    /// Determines if a comparison can be evaluated once before the race starts
+    /// (e.g. `ground_type`, `running_style`, `motivation`).
+    pub fn is_static(&self) -> bool {
         use VarType::*;
-        use VariableRole::*;
 
         match self {
-            // RANDOM GATES - Activate at pre-rolled location, check guards there
-            Random(_) => RandomTrigger,
-            RandomPhase(_) => RandomTrigger,
-            RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => DeferredRandomTrigger,
-            RandomSpatial(_) => RandomTrigger,
-
-            // MONOTONIC GUARDS - Can act as trigger or guard depending on context
-            // Time-based
-            AccumulateTime => MonotonicGuard,
-
-            // Distance-based (increasing)
-            Spatial(SpatialVar::DistanceRate) => MonotonicGuard,
-            Spatial(SpatialVar::Furlong) => MonotonicGuard,
-
-            // Distance-based (decreasing)
-            Spatial(SpatialVar::RemainDistance) => MonotonicGuard,
-            Spatial(SpatialVar::RemainDistanceViewerId) => MonotonicGuard,
-
-            // HP-based (decreasing)
-            Status(StatusVar::HpPer) => MonotonicGuard,
-
-            // HP-based one-time event (increasing; from 0 to 1)
-            Status(StatusVar::IsHpEmptyOnetime) => MonotonicGuard,
-
-            // Temptation count (increasing)
-            Status(StatusVar::TemptationCount) => MonotonicGuard,
-
-            // Activation counts (increasing)
-            Activation(ActivationVar::ActivateCountAll) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountAllTeam) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountEndAfter) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountHeal) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountLaterHalf) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountMiddle) => MonotonicGuard,
-            Activation(ActivationVar::ActivateCountStart) => MonotonicGuard,
-            Activation(ActivationVar::CompeteFightCount) => MonotonicGuard,
-            Activation(ActivationVar::IsExistSkillId) => MonotonicGuard,
-            Activation(ActivationVar::IsUsedSkillId) => MonotonicGuard,
-
-            // PHASE TRIGGERS - Fire when entering new phase
-            Phase(PhaseVar::Phase) => PhaseTrigger,
-
-            // SPATIAL TRIGGERS - Fire when entering/exiting course features
-            // Corners
-            Spatial(SpatialVar::Corner) => SpatialTrigger,
-            Spatial(SpatialVar::IsFinalcorner) => SpatialTrigger,
-            Spatial(SpatialVar::IsFinalcornerLaterhalf) => SpatialTrigger,
-
-            // Slopes
-            Spatial(SpatialVar::Slope) => SpatialTrigger,
-
-            // Straights
-            Spatial(SpatialVar::IsLastStraight) => SpatialTrigger,
-            Spatial(SpatialVar::IsLastStraightOnetime) => SpatialTrigger,
-            Spatial(SpatialVar::StraightFrontType) => SpatialTrigger,
-
-            // Phase subdivisions (spatial within phase)
-            Phase(PhaseVar::PhaseFirsthalf) => SpatialTrigger,
-            Phase(PhaseVar::PhaseLaterhalf) => SpatialTrigger,
-            Phase(PhaseVar::PhaseFirstquarter) => SpatialTrigger,
-
-            // ACTIVATION TRIGGERS - Fire when skill is activated
-            Activation(ActivationVar::IsActivateAnySkill) => ActivationTrigger,
-            Activation(ActivationVar::IsActivateHealSkill) => ActivationTrigger,
-
-            // STATIC GUARDS - Never change during race
-            // Race parameters
-            RaceParam(_) => StaticGuard,
-
-            // Course properties
-            Course(_) => StaticGuard,
-
-            // Base stats
-            BaseStat(_) => StaticGuard,
-
-            // Initial state properties
-            InitialState(_) => StaticGuard,
-
-            // Static status properties
-            Status(StatusVar::IsBadstart) => StaticGuard,
-
-            // Running style
+            RaceParam(_) | Course(_) | BaseStat(_) | InitialState(_) => true,
+            Status(StatusVar::IsBadstart) => true,
             // N.B. While running style can technically change, it can only do so
             // from Front Runner to Runaway. Since both styles are considered
-            // the same for skill purposes, we can treat this type as static
-            RunningStyle(_) => StaticGuard,
-
+            // the same for skill purposes, we can treat this type as static.
+            RunningStyle(_) => true,
             // Special value - By definition, it never changes
-            Always => StaticGuard,
-
-            // DYNAMIC GUARDS - Can change during race
-            // Status flags
-            Status(StatusVar::IsLastspurt) => DynamicGuard,
-            Status(StatusVar::Lastspurt) => DynamicGuard,
-            Status(StatusVar::IsTemptation) => DynamicGuard,
-            Status(StatusVar::IsOvertake) => DynamicGuard,
-            Status(StatusVar::IsMoveLane) => DynamicGuard,
-
-            // Skill activation tracking
-            Activation(ActivationVar::IsActivateOtherSkillDetail) => DynamicGuard,
-            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => DynamicGuard,
-
-            // Order/Rank
-            Order(_) => DynamicGuard,
-
-            // Distance between runners
-            Distance(_) => DynamicGuard,
-
-            // Blocking/Surrounding
-            Blocking(_) => DynamicGuard,
-
-            // Temptation/Rush
-            Temptation(_) => DynamicGuard,
-
-            // Lane
-            Spatial(SpatialVar::LaneType) => DynamicGuard,
-
-            // Unknown
-            Unknown(_) => DynamicGuard,
+            Always => true,
+            _ => false,
         }
     }
 }
@@ -791,54 +624,5 @@ mod tests {
             "base_speed"
         );
         assert_eq!(format!("{}", VarType::Always), "always");
-    }
-
-    #[test]
-    fn test_variable_role_static_guards() {
-        use super::{CourseVar, RaceParamVar, StatKind, VarType, VariableRole};
-
-        // Course variables should be StaticGuard
-        let ground_var = VarType::Course(CourseVar::GroundType);
-        assert!(matches!(
-            ground_var.variable_role(),
-            VariableRole::StaticGuard
-        ));
-
-        // Race param variables should be StaticGuard
-        let season_var = VarType::RaceParam(RaceParamVar::Season);
-        assert!(matches!(
-            season_var.variable_role(),
-            VariableRole::StaticGuard
-        ));
-
-        // Base stat variables should be StaticGuard
-        let speed_var = VarType::BaseStat(StatKind::Speed);
-        assert!(matches!(
-            speed_var.variable_role(),
-            VariableRole::StaticGuard
-        ));
-    }
-
-    #[test]
-    fn test_variable_role_runtime_guards() {
-        use super::{OrderVar, PhaseVar, StatusVar, VarType, VariableRole};
-
-        // HP is runtime
-        let hp_var = VarType::Status(StatusVar::HpPer);
-        assert!(!matches!(hp_var.variable_role(), VariableRole::StaticGuard));
-
-        // Order is runtime
-        let order_var = VarType::Order(OrderVar::Order);
-        assert!(!matches!(
-            order_var.variable_role(),
-            VariableRole::StaticGuard
-        ));
-
-        // Phase is runtime
-        let phase_var = VarType::Phase(PhaseVar::Phase);
-        assert!(!matches!(
-            phase_var.variable_role(),
-            VariableRole::StaticGuard
-        ));
     }
 }

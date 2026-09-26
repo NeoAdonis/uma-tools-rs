@@ -2,6 +2,7 @@
 
 mod activation_dependent;
 mod common;
+mod condition_windows;
 mod distance_triggers;
 mod nearby;
 mod or_branch_isolation;

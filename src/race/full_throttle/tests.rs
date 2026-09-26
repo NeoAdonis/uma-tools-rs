@@ -180,12 +180,9 @@ fn test_random_trigger_scheduled_on_activation() {
         let scheduler = &solver.runners[0].trigger_scheduler;
         assert_eq!(scheduler.full_throttle_triggers, vec![0]);
         let logic = &scheduler.skill_logics[0];
-        assert!(matches!(
-            logic.triggers[..],
-            [TriggerCondition::FullThrottleStart]
-        ));
-        // Only distance_type remains as guard
-        assert_eq!(logic.guards.len(), 1);
+        assert!(matches!(logic.trigger, TriggerCondition::FullThrottleStart));
+        // distance_type==3 is resolved when the runner is created
+        assert!(logic.guards.is_empty());
         assert!(scheduler.distance_triggers.is_empty());
     }
 

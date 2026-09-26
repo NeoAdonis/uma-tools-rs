@@ -1,71 +1,38 @@
 //! # Skill Activation Logic
 //!
-//! This module implements the refined skill activation system that separates
-//! **triggers** (which determine WHEN to check a skill) from **guards**
-//! (which must be true AT activation time).
+//! This module compiles skill conditions into **triggers** (which determine WHEN to
+//! check a skill) and **guards** (which must be true AT activation time).
 //!
 //! ## Overview
 //!
-//! The skill activation logic is divided into the following main components:
+//! A condition is an OR of AND chains (branches). Each branch is compiled into a
+//! single trigger and a list of guards:
 //!
-//! **Triggers** determine WHEN to evaluate a skill.
+//! - **Guards**: every comparison of the branch, except the ones the evaluator can't
+//!   compute (random variables and `is_last_straight_onetime`). The guards alone
+//!   decide whether the skill activates.
+//! - **Trigger**: decides when to evaluate the guards. It never replaces a guard, so
+//!   it only needs to fire *at least* whenever all guards could be true:
+//!   - Events: random points, entering the last straight, skill activations.
+//!   - Windows: the range of positions (or time, or HP) where every comparison of the
+//!     branch can be true, checked every frame while inside it.
 //!
-//!   - One-time triggers: Fire once at a specific point. Obtained mainly from random
-//!     conditions; activation points are pre-rolled.
-//!   - Continuous triggers: Checked every frame. Used for conditions that can change
-//!     at any time.
-//!   - Window triggers: Active within a range (e.g., distance or time windows).
-//!   - Monotonic triggers: Obtained by promoting monotonic guard conditions (values
-//!     that only increase or decrease, e.g., distance, time, HP) to triggers when no
-//!     explicit triggers exist and no dynamic guards are present.
-//!
-//! **Guards** are evaluated ONLY when trigger fires.
-//!
-//!    - Represented as a flat list (`Vec<`[`Comparison``]`>`) - all of these must be true
-//!      for a skill to activate.
-//!    - OR operations are handled by splitting condition trees into separate
-//!      lists (branches).
-//!    - Can contain static guards - conditions that never change and can be
-//!      pre-evaluated before the race starts (e.g, ground type, running style).
-//!    - It can also contain dynamic guards - conditions to be evaluated at activation
-//!      time (e.g., HP, rush status). Some of these can be promoted to triggers if
-//!      they are monotonic.
-//!
-//! **Preconditions** unlock skills permanently.
-//!
-//!    - Allows event-based activation gates (e.g., "activate after overtaking
-//!      someone").
-//!    - Checked before triggers/guards can be evaluated.
-//!    - Once satisfied, skill remains unlocked for the rest of the race for
-//!      activation attempts.
-//!    - Compiled into their own logics (see [`compile_precondition`]) whose
-//!      action is to unlock the skill. They are only checked within the part of
-//!      the course where they can be true, or when their event happens.
-//!
-//! **Activation State** tracks whether skill has fired.
-//!
-//!    - One-time triggers mark skill as "attempted" after first check.
-//!    - Continuous triggers can be checked multiple times.
+//! **Preconditions** are compiled the same way into logics whose action is to unlock
+//! the skill instead of activating it (see [`LogicAction`]).
 //!
 //! ## Examples
 //!
-//! Consider a skill with condition: `hp_per>=20 & is_finalcorner_random==1`
+//! Condition `hp_per>=20 & is_finalcorner_random==1`:
 //!
-//! - **Trigger**: `is_finalcorner_random` pre-rolls to distance 1850m
-//!   (within final corner).
-//! - **Guards**: `[hp_per>=20]` - must be true when we reach 1850m.
+//! - **Trigger**: `Position { meters: 1850 }` (random point rolled on the final
+//!   corner).
+//! - **Guards**: `[hp_per>=20]`.
 //!
-//! Consider another skill with condition: `distance_rate>=80 & ground_type==2`
+//! Condition `phase==1 & corner!=0 & order<=3` (on a course with corners at
+//! 300-500m and 900-1100m, and Mid phase at 400-1600m):
 //!
-//! - **Trigger**: `distance_rate>=80` (promoted because no explicit triggers exist).
-//! - **Guards**: `[ground_type==2]` - checked before the race starts.
-//!
-//! Now consider a skill with **precondition**: `change_order_onetime<0`
-//!
-//! - **Every frame** (the precondition can be true anywhere): Check if overtaken
-//!   anyone. Once true, skill unlocked.
-//! - **At trigger time** (e.g., 1850m): If unlocked, evaluate guards → activate.
-//! - **If never unlocked**: Trigger fires but skill never activates.
+//! - **Trigger**: `Window { Position, 400, 1100 }` (Mid phase ∩ corners).
+//! - **Guards**: `[phase==1, corner!=0, order<=3]`.
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
@@ -75,8 +42,8 @@ use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.
 ///
-/// Combines triggers (WHEN to check), guards (IF to activate), and preconditions
-/// (unlock gates) in a single structure.
+/// Combines a trigger (WHEN to check), guards (IF to activate), and a precondition
+/// (unlock gate) in a single structure.
 #[derive(Clone, Debug)]
 pub struct SkillActivationLogic {
     /// Index into runner.available_skills.
@@ -85,8 +52,8 @@ pub struct SkillActivationLogic {
     /// Which alternative of this skill (skills can have multiple condition sets).
     pub alternative_index: usize,
 
-    /// Triggers that determine WHEN to check this skill
-    pub triggers: Vec<TriggerCondition>,
+    /// Trigger that determines WHEN to check this logic.
+    pub trigger: TriggerCondition,
 
     /// Guards that must ALL be true AT activation time.
     /// Empty list means no guard checks needed (always activates when trigger fires).
@@ -97,11 +64,11 @@ pub struct SkillActivationLogic {
     /// Enables event-based activation (e.g., "activate after overtaking someone").
     pub precondition: Option<usize>,
 
-    /// What happens when the triggers fire and the guards pass.
+    /// What happens when the trigger fires and the guards pass.
     pub action: LogicAction,
 
-    /// Activation state tracking.
-    pub state: ActivationState,
+    /// Whether the logic already succeeded. It's never checked again afterwards.
+    pub has_activated: bool,
 }
 
 /// What a [`SkillActivationLogic`] does when it succeeds.
@@ -109,109 +76,54 @@ pub struct SkillActivationLogic {
 pub enum LogicAction {
     /// Activate the skill alternative.
     Activate,
-    /// Mark the given precondition as satisfied (see [`compile_precondition`]).
+    /// Mark the given precondition as satisfied.
     Unlock(usize),
 }
 
-/// Tracks whether this skill has been checked/activated.
-#[derive(Clone, Debug, Default)]
-pub struct ActivationState {
-    /// Has this skill successfully activated?
-    pub has_activated: bool,
-
-    /// For one-time triggers: has the trigger fired (even if guards failed)?
-    /// Prevents re-checking skills that failed their guards.
-    /// N.B. This only applies to one-time triggers like random gates.
-    /// Monotonic triggers can be retried until activated.
-    pub onetime_trigger_attempted: bool,
-}
-
-/// Monotonic variables that can have window conditions.
+/// Variables that window triggers can be based on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowVariable {
+    /// Position (meters from start).
+    Position,
     /// Time elapsed since race start (seconds).
-    AccumulateTime,
-    /// Distance covered as percentage (0-100).
-    DistanceRate,
+    Time,
     /// HP percentage (0-100).
     HpPercent,
-    /// Remaining distance (meters to the goal).
-    RemainDistance,
-    /// Spatial position (meters from start).
-    /// Used for corners, slopes, straights.
-    SpatialPosition,
 }
 
 /// A trigger condition that determines WHEN to check a skill.
 #[derive(Clone, Debug)]
 pub enum TriggerCondition {
-    // ========== MONOTONIC TRIGGERS ==========
-    /// Time elapsed since race start.
-    Time { threshold: f64, operator: CompOp },
-
-    // Distance triggers fire once the runner reaches the threshold, regardless
-    // of the original comparison operator. Reversed comparisons (e.g.
-    // `remain_distance>=X`) are converted to window triggers instead.
-    /// Distance covered (as percentage 0-100).
-    DistanceCovered { threshold: f64 },
-
-    /// Distance remaining (in meters).
-    DistanceRemaining { threshold: f64 },
-
-    /// HP percentage (0-100).
-    HpPercent { threshold: f64, operator: CompOp },
-
-    /// Furlong crossed (distance in furlongs)
-    FurlongCrossed { threshold: f64 },
-
-    /// Position from the start (in meters). Used for random points.
+    /// Checked once, when reaching a position (in meters).
+    /// Used for random points.
     Position { meters: f64 },
 
-    // ========== WINDOW TRIGGERS ==========
-    /// Window trigger: skill can activate within [min, max] range.
-    /// Checked continuously while within window.
-    /// Pattern: variable>=min & variable<=max.
+    /// Checked every frame while the variable is within `[min, max]`.
     Window {
         variable: WindowVariable,
         min_threshold: f64,
         max_threshold: f64,
     },
 
-    // ========== PHASE TRIGGERS ==========
-    /// Phase transition - fires once when entering the specified phase.
-    /// Note: phase>=2 and phase==2 both fire when Late phase begins.
-    PhaseChange { phase: Phase },
+    /// Checked once, when entering the last straight
+    /// (`is_last_straight_onetime`).
+    LastStraightEntry,
 
-    // ========== SPATIAL TRIGGERS ==========
-    /// Entering or exiting a straight.
-    StraightTransition {
-        is_last: bool, // true = only last straight
-        is_entry: bool,
-        is_onetime: bool, // true = one-time event
-    },
-
-    // ========== DEFERRED RANDOM TRIGGERS ==========
     /// Random point after Full-Throttle Sprint starts. The point is rolled when
-    /// the sprint starts and scheduled as a distance trigger.
+    /// the sprint starts and scheduled as a position trigger.
     /// Used for `run_at_full_speed_random==1` conditions.
     FullThrottleStart,
 
-    // ========== CONTINUOUS ==========
-    /// Must be checked every frame.
-    /// Used for conditions that can't be efficiently triggered.
-    Continuous,
-
-    // ========== ACTIVATION-DEPENDENT TRIGGERS ==========
-    /// Fires when any skill activates.
-    /// Used for is_activate_any_skill==1 conditions.
+    /// Checked when any skill activates.
+    /// Used for `is_activate_any_skill==1` conditions.
     AnySkillActivation,
 
-    /// Fires when a buff skill activates.
-    /// Used for is_other_character_activate_advantage_skill==1 conditions.
+    /// Checked when a buff skill activates.
+    /// Used for `is_other_character_activate_advantage_skill` conditions.
     BuffSkillActivation,
 
-    /// Fires when a heal skill activates.
-    /// Used for is_activate_heal_skill==1 conditions.
+    /// Checked when a heal skill activates.
+    /// Used for `is_activate_heal_skill==1` conditions.
     HealSkillActivation,
 }
 
@@ -236,23 +148,12 @@ pub struct SkillActivationRecord {
     pub distance: f64,
 }
 
-impl TriggerCondition {
-    /// Is this a one-time trigger that can only fire once?
-    pub fn is_onetime(&self) -> bool {
-        if let TriggerCondition::StraightTransition { is_onetime, .. } = self {
-            *is_onetime
-        } else {
-            false
-        }
-    }
-}
-
 impl SkillActivationLogic {
     /// Create a new skill activation logic.
     pub fn new(
         skill_index: usize,
         alternative_index: usize,
-        triggers: Vec<TriggerCondition>,
+        trigger: TriggerCondition,
         guards: ComparisonList,
         precondition: Option<usize>,
         action: LogicAction,
@@ -260,946 +161,296 @@ impl SkillActivationLogic {
         SkillActivationLogic {
             skill_index,
             alternative_index,
-            triggers,
+            trigger,
             guards,
             precondition,
             action,
-            state: ActivationState::default(),
+            has_activated: false,
         }
-    }
-
-    /// Should this skill be checked at all?
-    /// Returns false if already activated or one-time trigger already attempted.
-    pub fn should_check(&self) -> bool {
-        if self.state.has_activated {
-            return false; // Already activated
-        }
-
-        // For one-time triggers, check if we've already attempted
-        // Monotonic triggers can be retried until activation
-        let has_onetime = self.triggers.iter().any(|t| t.is_onetime());
-        if has_onetime && self.state.onetime_trigger_attempted {
-            return false; // One-time trigger already fired
-        }
-
-        true
-    }
-
-    /// Mark that we've attempted this trigger (for one-time triggers only).
-    pub fn mark_attempted(&mut self) {
-        self.state.onetime_trigger_attempted = true;
-    }
-
-    /// Mark that skill has successfully activated.
-    pub fn mark_activated(&mut self) {
-        self.state.has_activated = true;
-        self.state.onetime_trigger_attempted = true;
     }
 }
 
-/// Split a condition tree into triggers and guards
-///
-/// This is the core algorithm that separates conditions based on their role:
-/// - Triggers determine WHEN to check
-/// - Guards must be all true AT check time
-///
-/// N.B. Preconditions are NOT handled here; they're separated earlier in the parsing
-/// pipeline (see `builder.rs`). This function only splits the main `condition` field.
-///
-/// # OR Handling
-///
-/// For conditions with OR (`@`), this returns **multiple** trigger-guard pairs.
-/// The caller should create separate SkillActivationLogic for each OR branch.
-/// Each branch's guards are guaranteed to be a pure AND conjunction (flat list).
-///
-/// # Example
-///
-/// Input:
-///
-/// ```text
-/// phase_random==1 & hp_per>=20
-/// @
-/// corner==2 & ground_type==1
-/// ```
-///
-/// Output (2 branches):
-///
-/// - Branch 1: triggers=[Position], guards=[hp_per>=20]
-/// - Branch 2: triggers=[Position], guards=[ground_type==1]
-///
-/// # Simple Example
-///
-/// Input: `hp_per>=20 & is_finalcorner_random==1 & ground_type==2`
-///
-/// Output (1 branch):
-///
-/// - Triggers: `[Position { meters: 1850 }]`
-/// - Guards: `[hp_per>=20, ground_type==2]`
-pub fn split_condition(
-    condition: &Condition,
-    random_activation: Vec<f64>,
-    course: &Course,
-) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
-    let branches = split_comp_tree(&condition.comp_tree, &random_activation, course);
-
-    // Apply promotion logic to each branch at the top level
-    branches
-        .into_iter()
-        .map(|(mut triggers, guards)| {
-            // Check if we already have explicit triggers (Window, Random, Spatial, Phase, etc.)
-            let has_explicit_trigger = triggers
-                .iter()
-                .any(|t| !matches!(t, TriggerCondition::Continuous));
-
-            // Try to promote a single monotonic guard to a window, but only if:
-            // 1. We DON'T already have explicit triggers
-            // 2. We DO have guards
-            // 3. The guards contain at least one dynamic guard
-            //
-            // This optimization handles the specific case where we have BOTH
-            // monotonic guards (that could become windows) AND dynamic guards
-            // (that would normally force Continuous trigger in Rule 2).
-            let has_dynamic_guard = contains_dynamic_guard_in_list(&guards);
-            let remaining_guards =
-                if !has_explicit_trigger && !guards.is_empty() && has_dynamic_guard {
-                    let (window_trigger, new_guards) =
-                        try_promote_single_monotonic_to_window(guards);
-                    if let Some(window) = window_trigger {
-                        triggers.push(window);
-                    }
-                    new_guards
-                } else {
-                    // Keep original guards - let apply_monotonic_promotion() handle it
-                    guards
-                };
-
-            // Then apply standard monotonic promotion rules
-            // If we promoted a window above, Rule 1 will keep it (explicit trigger exists)
-            let (final_triggers, final_guards) =
-                apply_monotonic_promotion(triggers, remaining_guards);
-
-            // Finally, remove all Continuous triggers if we have any explicit triggers
-            let cleaned_triggers = if final_triggers
-                .iter()
-                .any(|t| !matches!(t, TriggerCondition::Continuous))
-            {
-                final_triggers
-                    .into_iter()
-                    .filter(|t| !matches!(t, TriggerCondition::Continuous))
-                    .collect()
-            } else {
-                final_triggers
-            };
-            (cleaned_triggers, final_guards)
-        })
-        .collect()
-}
-
-/// One OR branch of a compiled precondition.
+/// One OR branch of a compiled condition.
 #[derive(Clone, Debug)]
-pub struct PreconditionBranch {
-    /// When to check the branch: a position window
-    /// (`Window { variable: SpatialPosition, .. }`) outside of which the branch
-    /// can't be true, or an event trigger if the branch waits for an event
-    /// (e.g. `is_activate_heal_skill==1`).
+pub struct CompiledBranch {
+    /// When to check the branch.
     pub trigger: TriggerCondition,
     /// Comparisons that must all be true when checked.
     pub guards: ComparisonList,
 }
 
-/// Compile a precondition into branches that unlock the skill when any of them
-/// passes. Returns an empty list if the precondition can never be satisfied on
-/// this course.
+/// Compile a condition into one [`CompiledBranch`] per OR branch.
 ///
-/// Instead of checking a precondition every frame, each OR branch is only checked
-/// within the part of the course where it can be true. That part is found by
-/// intersecting the ranges of its position-based comparisons (distance, phase,
-/// corners, slopes). All comparisons are kept as guards, so ranges only need to
-/// contain every position where the branch could be true.
+/// `random_activation` holds the points rolled for the condition's random variables
+/// (see [`roll_condition`](crate::trigger::random::roll_condition)).
 ///
-/// Branches containing an event (e.g. `is_activate_heal_skill==1`) are checked
-/// when the event happens instead, as such variables are only true for a moment.
+/// Branches that can never be true on this course (e.g. `slope==2` without
+/// downhills) are dropped, so the result is empty if the condition can never be
+/// satisfied.
 ///
 /// # Example
 ///
-/// Input: `phase==1&blocked_side_continuetime>=2` (on a 2400m course)
+/// Input: `phase_random==1 & hp_per>=20 @ corner==2 & ground_type==1`
 ///
-/// Output (1 branch):
+/// Output (2 branches):
 ///
-/// - Trigger: `Window { SpatialPosition, 400, 1600 }` (Mid phase)
-/// - Guards: `[phase==1, blocked_side_continuetime>=2]`
-pub fn compile_precondition(condition: &Condition, course: &Course) -> Vec<PreconditionBranch> {
+/// - Branch 1: trigger `Position` (rolled point), guards `[hp_per>=20]`
+/// - Branch 2: trigger `Window` (corner 2), guards `[corner==2, ground_type==1]`
+pub fn compile_condition(
+    condition: &Condition,
+    random_activation: &[f64],
+    course: &Course,
+) -> Vec<CompiledBranch> {
     condition
         .comp_tree
         .or_branches()
         .into_iter()
-        .filter_map(|comps| {
-            let (mut min, mut max) = (0.0, f64::INFINITY);
-            for comp in &comps {
-                if let Some((start, end)) = position_range(comp, course) {
-                    min = f64::max(min, start);
-                    max = f64::min(max, end);
-                }
-            }
-            if min > max {
-                return None; // The branch can't be true anywhere on this course
-            }
-
-            let event = comps.iter().find_map(|comp| precondition_event(comp));
-            let guards = comps
-                .into_iter()
-                .filter(|comp| precondition_event(comp).is_none())
-                .cloned()
-                .collect();
-            let trigger = event.unwrap_or(TriggerCondition::Window {
-                variable: WindowVariable::SpatialPosition,
-                min_threshold: min,
-                max_threshold: max,
-            });
-            Some(PreconditionBranch { trigger, guards })
-        })
+        .filter_map(|comps| compile_branch(&comps, random_activation, course))
         .collect()
 }
 
-/// Get the event trigger of a precondition comparison, if any.
-///
-/// These variables are only true while their event happens, so they can't be
-/// checked at a later time.
-fn precondition_event(comp: &Comparison) -> Option<TriggerCondition> {
+/// Compile an AND chain. Returns `None` if it can never be true on this course.
+fn compile_branch(
+    comps: &[&Comparison],
+    random_activation: &[f64],
+    course: &Course,
+) -> Option<CompiledBranch> {
     use VarType::*;
-    match (&comp.var, comp.op, comp.value) {
-        (Activation(ActivationVar::IsActivateAnySkill), CompOp::Equal, 1) => {
-            Some(TriggerCondition::AnySkillActivation)
+
+    let mut event = None;
+    let mut guards = Vec::new();
+    let mut position = FULL_RANGE;
+    let mut time = FULL_RANGE;
+    let mut hp = FULL_RANGE;
+
+    for comp in comps {
+        match &comp.var {
+            // Rolled when building the scheduler: if we're here, the roll succeeded
+            Random(_) => {}
+
+            // Random points: checked once at the rolled point. A branch holds at
+            // most one event (checked against the skill data)
+            RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
+                event.get_or_insert(TriggerCondition::FullThrottleStart);
+            }
+            RandomSpatial(_) | RandomPhase(_) => {
+                // Not rolled (e.g. in a precondition): the branch can't be triggered
+                let meters = *random_activation.first()?;
+                event.get_or_insert(TriggerCondition::Position { meters });
+            }
+
+            // Only true on the frame the last straight is entered
+            Spatial(SpatialVar::IsLastStraightOnetime) => {
+                course.straights.last()?;
+                event.get_or_insert(TriggerCondition::LastStraightEntry);
+            }
+
+            // Skill activations: only true on frames where a skill activated.
+            // Unlike the events above, these can be evaluated, so they stay as guards
+            Activation(activation) => {
+                let activation_event = match (activation, comp.op, comp.value) {
+                    (ActivationVar::IsActivateAnySkill, CompOp::Equal, 1) => {
+                        Some(TriggerCondition::AnySkillActivation)
+                    }
+                    (ActivationVar::IsActivateHealSkill, CompOp::Equal, 1) => {
+                        Some(TriggerCondition::HealSkillActivation)
+                    }
+                    _ => None,
+                };
+                if let Some(activation_event) = activation_event {
+                    event.get_or_insert(activation_event);
+                }
+                guards.push((*comp).clone());
+            }
+
+            _ => {
+                position = intersect(position, position_range(comp, course)?);
+                time = intersect(time, time_range(comp));
+                hp = intersect(hp, hp_range(comp));
+                guards.push((*comp).clone());
+            }
         }
-        (Activation(ActivationVar::IsActivateHealSkill), CompOp::Equal, 1) => {
-            Some(TriggerCondition::HealSkillActivation)
-        }
-        (Spatial(SpatialVar::IsLastStraightOnetime), CompOp::Equal, 1) => {
-            Some(TriggerCondition::StraightTransition {
-                is_last: true,
-                is_entry: true,
-                is_onetime: true,
-            })
-        }
-        _ => None,
     }
+
+    if is_empty(position) || is_empty(time) || is_empty(hp) {
+        return None; // Some comparisons can never be true at the same time
+    }
+
+    // Prefer position windows: they're the most common and cheapest to track
+    let window = |variable, (min_threshold, max_threshold)| TriggerCondition::Window {
+        variable,
+        min_threshold,
+        max_threshold,
+    };
+    let trigger = event.unwrap_or_else(|| {
+        if position != FULL_RANGE || (time == FULL_RANGE && hp == FULL_RANGE) {
+            window(WindowVariable::Position, position)
+        } else if time != FULL_RANGE {
+            window(WindowVariable::Time, time)
+        } else {
+            window(WindowVariable::HpPercent, hp)
+        }
+    });
+
+    Some(CompiledBranch { trigger, guards })
 }
+
+/// Range of values `(min, max)` a variable can take (both inclusive).
+type Range = (f64, f64);
+
+/// Range containing every value.
+const FULL_RANGE: Range = (0.0, f64::INFINITY);
+
+/// Range containing no value.
+const EMPTY_RANGE: Range = (f64::INFINITY, f64::NEG_INFINITY);
 
 /// All race phases, in order.
 const PHASES: [Phase; 4] = [Phase::Early, Phase::Mid, Phase::Late, Phase::Last];
 
-/// Get the range of positions (in meters from the start) where a comparison can
-/// be true. The range can be empty (start > end).
-///
-/// Returns `None` if the comparison doesn't depend on the position.
-fn position_range(comp: &Comparison, course: &Course) -> Option<(f64, f64)> {
-    use VarType::*;
-
-    const EMPTY: (f64, f64) = (f64::INFINITY, f64::NEG_INFINITY);
-    let distance = course.distance as f64;
-    // Values are floored when evaluated, so `value` holds until `value + 1`
-    let at_rate = |rate: i32| rate as f64 / 100.0 * distance;
-    let at_remain = |remain: i32| distance - remain as f64;
-    // Smallest range containing all given ranges
-    let envelope = |ranges: &mut dyn Iterator<Item = (f64, f64)>| {
-        ranges.fold(EMPTY, |(min, max), (start, end)| {
-            (min.min(start), max.max(end))
-        })
-    };
-
-    match (&comp.var, comp.op, comp.value) {
-        (Spatial(SpatialVar::DistanceRate), op, rate) => match op {
-            CompOp::Greater | CompOp::GreaterEqual => Some((at_rate(rate), f64::INFINITY)),
-            CompOp::Less | CompOp::LessEqual => Some((0.0, at_rate(rate + 1))),
-            CompOp::Equal => Some((at_rate(rate), at_rate(rate + 1))),
-            CompOp::NotEqual => None,
-        },
-
-        (Spatial(SpatialVar::RemainDistance), op, remain) => match op {
-            CompOp::Less | CompOp::LessEqual => Some((at_remain(remain + 1), f64::INFINITY)),
-            CompOp::Greater | CompOp::GreaterEqual => Some((0.0, at_remain(remain))),
-            CompOp::Equal => Some((at_remain(remain + 1), at_remain(remain))),
-            CompOp::NotEqual => None,
-        },
-
-        // Union of the phases that satisfy the comparison
-        (Phase(PhaseVar::Phase), op, value) => Some(envelope(
-            &mut PHASES
-                .into_iter()
-                .filter(|phase| op.apply(*phase as i32, value))
-                .map(|phase| phase.boundaries(course)),
-        )),
-
-        (Phase(PhaseVar::PhaseFirsthalf), CompOp::Equal, value) => Some(
-            PHASES
-                .into_iter()
-                .find(|phase| *phase as i32 == value)
-                .map_or(EMPTY, |phase| phase.boundaries_first_half(course)),
-        ),
-
-        // Final corner or beyond
-        (Spatial(SpatialVar::IsFinalcorner), CompOp::Equal, 1) => Some(
-            course
-                .corners
-                .last()
-                .map_or(EMPTY, |corner| (corner.start, f64::INFINITY)),
-        ),
-
-        (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => Some(envelope(
-            &mut course
-                .corners
-                .iter()
-                .map(|corner| (corner.start, corner.start + corner.length)),
-        )),
-
-        (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => Some(
-            course
-                .corners
-                .get(n as usize - 1)
-                .map_or(EMPTY, |corner| (corner.start, corner.start + corner.length)),
-        ),
-
-        (Spatial(SpatialVar::Slope), CompOp::Equal, slope_type) if slope_type != 0 => {
-            Some(envelope(
-                &mut course
-                    .slopes
-                    .iter()
-                    .filter(|slope| slope.slope_type() as i32 == slope_type)
-                    .map(|slope| (slope.start, slope.start + slope.length)),
-            ))
-        }
-
-        _ => None,
-    }
+fn intersect(a: Range, b: Range) -> Range {
+    (a.0.max(b.0), a.1.min(b.1))
 }
 
-/// Try to detect a window pattern on two comparisons: `variable>=min & variable<=max`
-/// (in either order).
-/// Returns `Some(window_trigger)` if detected, `None` otherwise.
-fn detect_window(left: &Comparison, right: &Comparison) -> Option<TriggerCondition> {
-    use VarType::*;
+fn is_empty(range: Range) -> bool {
+    range.0 > range.1
+}
 
-    let window_variable = |var: &VarType| match var {
-        AccumulateTime => Some(WindowVariable::AccumulateTime),
-        Spatial(SpatialVar::DistanceRate) => Some(WindowVariable::DistanceRate),
-        Spatial(SpatialVar::RemainDistance) => Some(WindowVariable::RemainDistance),
-        Status(StatusVar::HpPer) => Some(WindowVariable::HpPercent),
-        _ => None,
-    };
-
-    // Both comparisons must use the same window variable
-    let variable = window_variable(&left.var)?;
-    if window_variable(&right.var)? != variable {
-        return None;
-    }
-
-    let (min, max) = match (left.op, right.op) {
-        (CompOp::GreaterEqual, CompOp::LessEqual) => (left, right),
-        (CompOp::LessEqual, CompOp::GreaterEqual) => (right, left),
-        _ => return None,
-    };
-    Some(TriggerCondition::Window {
-        variable,
-        min_threshold: min.value as f64,
-        max_threshold: max.value as f64,
+/// Smallest range containing all given ranges.
+fn envelope(ranges: impl Iterator<Item = Range>) -> Range {
+    ranges.fold(EMPTY_RANGE, |(min, max), (start, end)| {
+        (min.min(start), max.max(end))
     })
 }
 
-/// Split a `ComparisonTree` into OR branches.
-/// Returns a list of (triggers, guards) where guards is a flat list of comparisons.
-///
-/// Each OR branch is a flat AND chain. Neighboring comparisons in a chain that form
-/// a range (e.g. `remain_distance<=401&remain_distance>=399`) become a single
-/// window trigger.
-///
-/// N.B. Promotion is NOT applied here - it will be done at top level.
-fn split_comp_tree(
-    comp_tree: &ComparisonTree,
-    random_activation: &[f64],
-    course: &Course,
-) -> Vec<(Vec<TriggerCondition>, ComparisonList)> {
-    comp_tree
-        .or_branches()
-        .into_iter()
-        .map(|comps| {
-            let mut triggers = Vec::new();
-            let mut guards = Vec::new();
-            let mut i = 0;
-            while i < comps.len() {
-                if let Some(window) = comps
-                    .get(i + 1)
-                    .and_then(|next| detect_window(comps[i], next))
-                {
-                    triggers.push(window);
-                    i += 2;
-                } else {
-                    let (comp_triggers, comp_guards) =
-                        split_single_comp(comps[i], random_activation, course);
-                    triggers.extend(comp_triggers);
-                    guards.extend(comp_guards);
-                    i += 1;
-                }
-            }
-            (triggers, guards)
-        })
-        .collect()
-}
-
-/// Apply monotonic guard promotion rules:
-///
-/// 1. If there are explicit triggers (Random/Spatial/Window), keep them regardless
-///    of guards.
-/// 2. If no explicit triggers AND there are dynamic guards, use Continuous trigger.
-/// 3. If no explicit triggers AND no dynamic guards, try to promote monotonic guards
-///    to triggers.
-/// 4. If only guards remain after promotion, add Continuous trigger.
-fn apply_monotonic_promotion(
-    mut triggers: Vec<TriggerCondition>,
-    guards: ComparisonList,
-) -> (Vec<TriggerCondition>, ComparisonList) {
-    // Check if we have explicit triggers (not Continuous)
-    let has_explicit_trigger = triggers
-        .iter()
-        .any(|t| !matches!(t, TriggerCondition::Continuous));
-
-    // Check if guards contain any DynamicGuard variables
-    let has_dynamic_guard = contains_dynamic_guard_in_list(&guards);
-
-    if has_explicit_trigger {
-        // Rule 1: Explicit triggers exist → keep them, guards stay as guards
-        // This includes Window, Random, Spatial, Phase triggers
-        // DynamicGuards don't force Continuous when we already have explicit triggers
-        (triggers, guards)
-    } else if has_dynamic_guard {
-        // Rule 2: No explicit triggers + DynamicGuards → use Continuous trigger
-        (vec![TriggerCondition::Continuous], guards)
-    } else {
-        // Rule 3: No explicit triggers, no DynamicGuards → try to promote MonotonicGuards
-        if !guards.is_empty() {
-            let (promoted_triggers, remaining_guards) = promote_monotonic_guards(&guards);
-
-            if !promoted_triggers.is_empty() {
-                // Successfully promoted some MonotonicGuards to triggers
-                triggers.extend(promoted_triggers);
-                (triggers, remaining_guards)
-            } else {
-                // Rule 4: No MonotonicGuards to promote → Continuous trigger
-                if triggers.is_empty() {
-                    triggers.push(TriggerCondition::Continuous);
-                }
-                (triggers, guards)
-            }
-        } else {
-            // No guards at all
-            if triggers.is_empty() {
-                // No triggers, no guards → Continuous (shouldn't happen often)
-                triggers.push(TriggerCondition::Continuous);
-            }
-            (triggers, guards)
-        }
+/// Range of values of a variable, floored when evaluated, where a comparison is
+/// true. As values are floored, `variable<=N` holds until `N + 1`.
+fn floored_range(op: CompOp, value: i32) -> Range {
+    let value = value as f64;
+    match op {
+        CompOp::Greater | CompOp::GreaterEqual => (value, f64::INFINITY),
+        CompOp::Less | CompOp::LessEqual => (f64::NEG_INFINITY, value + 1.0),
+        CompOp::Equal => (value, value + 1.0),
+        CompOp::NotEqual => (f64::NEG_INFINITY, f64::INFINITY),
     }
 }
 
-/// Extract monotonic guards from guard list and promote them to triggers.
+/// Get the range of positions (in meters from the start) where a comparison can be
+/// true. The range contains every position where it's true, but may contain some
+/// where it isn't (e.g. `corner!=0` covers from the first corner to the last one).
 ///
-/// Promoted comparisons are also kept as guards: triggers only decide WHEN to
-/// check, so a condition with several monotonic comparisons (e.g.
-/// `distance_rate>=50&hp_per<=30`) activates only once all of them hold, not as
-/// soon as any one of its triggers fires.
-///
-/// Returns: `(promoted triggers, guards)`
-fn promote_monotonic_guards(guards: &ComparisonList) -> (Vec<TriggerCondition>, ComparisonList) {
-    let promoted_triggers = guards
-        .iter()
-        .filter(|comp| comp.var.variable_role() == VariableRole::MonotonicGuard)
-        .map(extract_monotonic_trigger)
-        .collect();
-
-    (promoted_triggers, guards.clone())
-}
-
-/// Get the promotion priority for a monotonic variable as follows:
-///
-/// - [`DistanceRate`](SpatialVar::DistanceRate): 3 (highest - most commonly used spatial trigger)
-/// - [`AccumulateTime`](VarType::AccumulateTime): 2 (medium - time-based progression)
-/// - [`HpPer`](StatusVar::HpPer): 1 (lowest - less predictable due to recovery)
-/// - Others: 0 (not promotable)
-///
-/// Higher priority variables are preferred when promoting a single monotonic
-/// guard to a window trigger in the presence of dynamic guards.
-fn get_promotion_priority(var: &VarType) -> i32 {
-    use VarType::*;
-    match var {
-        Spatial(SpatialVar::DistanceRate) => 3,
-        AccumulateTime => 2,
-        Status(StatusVar::HpPer) => 1,
-        _ => 0,
-    }
-}
-
-/// Try to promote a single monotonic guard to a window trigger.
-///
-/// This is an optimization for conditions with both monotonic and dynamic guards.
-/// Instead of using a Continuous trigger that checks all conditions every frame,
-/// we can promote the highest-priority monotonic guard to a Window trigger,
-/// reducing per-frame evaluation overhead.
-///
-/// Returns: `(promoted window trigger, remaining guards)`
-///
-/// If no suitable monotonic guard is found, returns `(None, original guards)`.
-fn try_promote_single_monotonic_to_window(
-    guards: ComparisonList,
-) -> (Option<TriggerCondition>, ComparisonList) {
+/// Returns [`FULL_RANGE`] if the comparison doesn't depend on the position, and
+/// `None` if it's never true on this course (e.g. `slope==2` without downhills).
+fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
     use VarType::*;
 
-    if guards.is_empty() {
-        return (None, vec![]);
-    }
+    let distance = course.distance as f64;
+    let last_corner = course.corners.last();
+    let corner_range =
+        |corner: &crate::course::geometry::Corner| (corner.start, corner.start + corner.length);
+    let subdivision = |boundaries| subdivision_range(comp.value, course, boundaries);
 
-    // Collect all monotonic guards with their priorities
-    let mut monotonic_candidates: Vec<(i32, Comparison)> = Vec::new();
-    for comp in &guards {
-        let role = comp.var.variable_role();
-        if matches!(role, VariableRole::MonotonicGuard) {
-            let priority = get_promotion_priority(&comp.var);
-            if priority > 0 {
-                monotonic_candidates.push((priority, comp.clone()));
-            }
+    let range = match (&comp.var, comp.op, comp.value) {
+        (Spatial(SpatialVar::DistanceRate), op, value) => {
+            let (min, max) = floored_range(op, value);
+            (min / 100.0 * distance, max / 100.0 * distance)
         }
-    }
+        (Spatial(SpatialVar::RemainDistance), op, value) => {
+            let (min, max) = floored_range(op, value);
+            (distance - max, distance - min)
+        }
+        (Spatial(SpatialVar::Furlong), op, value) => {
+            let (min, max) = floored_range(op, value);
+            (furlongs_to_meters(min), furlongs_to_meters(max))
+        }
 
-    if monotonic_candidates.is_empty() {
-        return (None, guards);
-    }
+        // Union of the phases that satisfy the comparison
+        (Phase(PhaseVar::Phase), op, value) => envelope(
+            PHASES
+                .iter()
+                .filter(|phase| op.apply(**phase as i32, value))
+                .map(|phase| phase.boundaries(course)),
+        ),
+        (Phase(PhaseVar::PhaseFirstquarter), CompOp::Equal, _) => {
+            subdivision(crate::course::Phase::boundaries_first_quarter)
+        }
+        (Phase(PhaseVar::PhaseFirsthalf), CompOp::Equal, _) => {
+            subdivision(crate::course::Phase::boundaries_first_half)
+        }
+        (Phase(PhaseVar::PhaseLaterhalf), CompOp::Equal, _) => {
+            subdivision(crate::course::Phase::boundaries_second_half)
+        }
 
-    // Sort by priority (highest first)
-    monotonic_candidates.sort_by_key(|a| std::cmp::Reverse(a.0));
-
-    // Take the highest priority candidate
-    let (_priority, best_comp) = &monotonic_candidates[0];
-
-    // Convert the comparison to a Window trigger
-    // For single-sided comparisons, we need to infer the implicit bounds
-    let window_trigger = match &best_comp.var {
-        Spatial(SpatialVar::DistanceRate) => match best_comp.op {
-            CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
-                variable: WindowVariable::DistanceRate,
-                min_threshold: best_comp.value as f64,
-                max_threshold: 100.0,
+        // Final corner (or its second half) and beyond
+        (Spatial(SpatialVar::IsFinalcorner), CompOp::Equal, 1) => {
+            last_corner.map_or(EMPTY_RANGE, |corner| (corner.start, f64::INFINITY))
+        }
+        (Spatial(SpatialVar::IsFinalcornerLaterhalf), CompOp::Equal, 1) => last_corner
+            .map_or(EMPTY_RANGE, |corner| {
+                (corner.start + corner.length / 2.0, f64::INFINITY)
             }),
-            CompOp::LessEqual | CompOp::Less => Some(TriggerCondition::Window {
-                variable: WindowVariable::DistanceRate,
-                min_threshold: 0.0,
-                max_threshold: best_comp.value as f64,
+        // After the final corner (anywhere without corners)
+        (Spatial(SpatialVar::IsLastStraight), CompOp::Equal, 1) => last_corner
+            .map_or(FULL_RANGE, |corner| {
+                (corner.start + corner.length, f64::INFINITY)
             }),
-            _ => None,
-        },
-        AccumulateTime => {
-            match best_comp.op {
-                CompOp::GreaterEqual | CompOp::Greater => {
-                    // accumulatetime>=X doesn't need a window, use Time trigger
-                    None
-                }
-                CompOp::LessEqual | CompOp::Less => Some(TriggerCondition::Window {
-                    variable: WindowVariable::AccumulateTime,
-                    min_threshold: 0.0,
-                    max_threshold: best_comp.value as f64,
-                }),
-                _ => None,
-            }
+
+        (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => {
+            envelope(course.corners.iter().map(corner_range))
         }
-        Status(StatusVar::HpPer) => {
-            match best_comp.op {
-                CompOp::GreaterEqual | CompOp::Greater => Some(TriggerCondition::Window {
-                    variable: WindowVariable::HpPercent,
-                    min_threshold: best_comp.value as f64,
-                    max_threshold: 100.0,
-                }),
-                CompOp::LessEqual | CompOp::Less => {
-                    // hp_per<=X doesn't need a window, use HpPercent trigger
-                    None
-                }
-                _ => None,
-            }
+        (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => course
+            .corners
+            .get(n as usize - 1)
+            .map_or(EMPTY_RANGE, corner_range),
+        (Spatial(SpatialVar::Slope), CompOp::Equal, slope_type) if slope_type != 0 => envelope(
+            course
+                .slopes
+                .iter()
+                .filter(|slope| slope.slope_type() as i32 == slope_type)
+                .map(|slope| (slope.start, slope.start + slope.length)),
+        ),
+        (Spatial(SpatialVar::StraightFrontType), CompOp::Equal, front_type) if front_type != 0 => {
+            envelope(
+                course
+                    .straights
+                    .iter()
+                    .filter(|straight| straight.front_type as i32 == front_type)
+                    .map(|straight| (straight.start, straight.end)),
+            )
         }
-        _ => None,
+
+        _ => FULL_RANGE,
     };
 
-    let Some(window) = window_trigger else {
-        return (None, guards);
-    };
-
-    // Remove the promoted comparison from the guards list
-    let remaining_guards: ComparisonList = guards
-        .into_iter()
-        .filter(|comp| comp != best_comp)
-        .collect();
-
-    (Some(window), remaining_guards)
+    let range = intersect(range, FULL_RANGE);
+    (!is_empty(range)).then_some(range)
 }
 
-/// Check if a comparison list contains any DynamicGuard variables.
-fn contains_dynamic_guard_in_list(guards: &ComparisonList) -> bool {
-    guards
+/// Boundaries of a phase subdivision (e.g. [`Phase::boundaries_first_half`]).
+type PhaseBoundaries = fn(&Phase, &Course) -> Range;
+
+/// Range of a phase subdivision (`phase_firsthalf==N`, ...) for phase `value`.
+fn subdivision_range(value: i32, course: &Course, boundaries: PhaseBoundaries) -> Range {
+    PHASES
         .iter()
-        .any(|comp| comp.var.variable_role() == VariableRole::DynamicGuard)
+        .find(|phase| **phase as i32 == value)
+        .map_or(EMPTY_RANGE, |phase| boundaries(phase, course))
 }
 
-/// Split a single comparison into trigger and guard.
-///
-/// This function does NOT make promotion decisions for monotonic guards.
-/// It treats them as guards by default. Promotion happens at a higher level
-/// in [`split_comp_tree()`] after analyzing all conditions together.
-fn split_single_comp(
-    comp: &Comparison,
-    random_activation: &[f64],
-    course: &Course,
-) -> (Vec<TriggerCondition>, ComparisonList) {
-    use VariableRole::*;
-
-    let role = comp.var.variable_role();
-
-    match role {
-        RandomTrigger => {
-            // Extract random activation trigger
-            if let VarType::Random(_) = &comp.var {
-                // If we are here, it means that the activation roll succeeded
-                // → return no guards; the skill always activates at the rolled point
-                (vec![], vec![])
-            } else {
-                // Create trigger based on random activation distance
-                let trigger = TriggerCondition::Position {
-                    meters: random_activation[0],
-                };
-                // TODO: remove the used activation distance
-                (vec![trigger], vec![])
-            }
-        }
-
-        DeferredRandomTrigger => (vec![TriggerCondition::FullThrottleStart], vec![]),
-
-        MonotonicGuard => {
-            // MonotonicGuard: can be trigger OR guard depending on context
-            // Default to guard here; promotion happens at higher level
-            (vec![], vec![comp.clone()])
-        }
-
-        PhaseTrigger => {
-            // Phase with comparison operators (<=, >=, <, >) should be guards, not triggers
-            // Only phase==N creates a trigger (fires at phase entry)
-            // phase<=1 means "while in Early or Mid" (check at trigger time)
-            if comp.op == CompOp::Equal {
-                // phase==N → PhaseTrigger (fire at phase entry)
-                if let Some(trigger) = extract_phase_trigger(comp) {
-                    (vec![trigger], vec![])
-                } else {
-                    (vec![TriggerCondition::Continuous], vec![])
-                }
-            } else {
-                // phase<=N, phase>=N, etc. → DynamicGuard (check at trigger time)
-                (vec![], vec![comp.clone()])
-            }
-        }
-
-        SpatialTrigger => {
-            if let Some(trigger) = extract_spatial_trigger(comp, course) {
-                (vec![trigger], vec![])
-            } else {
-                (vec![TriggerCondition::Continuous], vec![])
-            }
-        }
-
-        ActivationTrigger => {
-            if comp.op == CompOp::Equal
-                && comp.value == 1
-                && let VarType::Activation(activation_var) = &comp.var
-            {
-                match activation_var {
-                    ActivationVar::IsActivateAnySkill => {
-                        return (vec![TriggerCondition::AnySkillActivation], vec![]);
-                    }
-                    ActivationVar::IsActivateHealSkill => {
-                        return (vec![TriggerCondition::HealSkillActivation], vec![]);
-                    }
-                    _ => {} // Other activation variables stay as guards
-                }
-            }
-            (vec![], vec![comp.clone()])
-        }
-
-        StaticGuard | DynamicGuard => {
-            // Static and Dynamic guards - keep as guard
-            (vec![], vec![comp.clone()])
-        }
+/// Get the range of elapsed times (in seconds) where a comparison can be true.
+fn time_range(comp: &Comparison) -> Range {
+    match comp.var {
+        VarType::AccumulateTime => intersect(floored_range(comp.op, comp.value), FULL_RANGE),
+        _ => FULL_RANGE,
     }
 }
 
-/// Extract monotonic trigger from comparison.
-///
-/// Detects operator direction mismatches and converts them to window triggers:
-///
-/// - Increasing monotonic variables (`distance_rate`, `accumulatetime`) with `<=`
-///   → `Window [0, threshold]`
-/// - Decreasing monotonic variables (`hp_per`, `remain_distance`) with `>=`
-///   → `Window [threshold, MAX]`
-fn extract_monotonic_trigger(comp: &Comparison) -> TriggerCondition {
-    use VarType::*;
-
-    // Helper to determine if this is a reversed operator that needs window conversion
-    let needs_window_conversion = |is_increasing: bool, op: CompOp| -> bool {
-        match (is_increasing, op) {
-            // Increasing variable with <= or < → needs window [0, threshold]
-            (true, CompOp::LessEqual | CompOp::Less) => true,
-            // Decreasing variable with >= or > → needs window [threshold, MAX]
-            (false, CompOp::GreaterEqual | CompOp::Greater) => true,
-            _ => false,
+/// Get the range of HP percentages where a comparison can be true.
+fn hp_range(comp: &Comparison) -> Range {
+    match comp.var {
+        VarType::Status(StatusVar::HpPer) => {
+            intersect(floored_range(comp.op, comp.value), FULL_RANGE)
         }
-    };
-
-    match &comp.var {
-        AccumulateTime => {
-            // AccumulateTime is monotonically increasing
-            if needs_window_conversion(true, comp.op) {
-                TriggerCondition::Window {
-                    variable: WindowVariable::AccumulateTime,
-                    min_threshold: 0.0,
-                    max_threshold: comp.value as f64,
-                }
-            } else {
-                TriggerCondition::Time {
-                    threshold: comp.value as f64,
-                    operator: comp.op,
-                }
-            }
-        }
-
-        Spatial(SpatialVar::DistanceRate) => {
-            // DistanceRate is monotonically increasing
-            if needs_window_conversion(true, comp.op) {
-                TriggerCondition::Window {
-                    variable: WindowVariable::DistanceRate,
-                    min_threshold: 0.0,
-                    max_threshold: comp.value as f64,
-                }
-            } else {
-                TriggerCondition::DistanceCovered {
-                    threshold: comp.value as f64,
-                }
-            }
-        }
-
-        Spatial(SpatialVar::RemainDistance) => {
-            // RemainDistance is monotonically decreasing
-            // Note: <= is normal direction for decreasing, >= is reversed
-            if needs_window_conversion(false, comp.op) {
-                // remain_distance>=X means "while still far from finish"
-                // Window from threshold to infinity (clamped to course length when indexed)
-                TriggerCondition::Window {
-                    variable: WindowVariable::RemainDistance,
-                    min_threshold: comp.value as f64,
-                    max_threshold: f64::INFINITY,
-                }
-            } else {
-                TriggerCondition::DistanceRemaining {
-                    threshold: comp.value as f64,
-                }
-            }
-        }
-
-        Status(StatusVar::HpPer) => {
-            // Even though HpPer can recover, for the most part it constantly decreases
-            // Treat as decreasing for window conversion purposes
-            if needs_window_conversion(false, comp.op) {
-                TriggerCondition::Window {
-                    variable: WindowVariable::HpPercent,
-                    min_threshold: comp.value as f64,
-                    max_threshold: 100.0,
-                }
-            } else {
-                TriggerCondition::HpPercent {
-                    threshold: comp.value as f64,
-                    operator: comp.op,
-                }
-            }
-        }
-
-        Status(StatusVar::IsHpEmptyOnetime) => TriggerCondition::HpPercent {
-            threshold: 0.0,
-            operator: CompOp::LessEqual,
-        },
-
-        Spatial(SpatialVar::Furlong) => {
-            // Furlong is monotonically increasing
-            if needs_window_conversion(true, comp.op) {
-                // furlong<=N means "activate while in first N furlongs"
-                TriggerCondition::Window {
-                    variable: WindowVariable::SpatialPosition,
-                    min_threshold: 0.0,
-                    max_threshold: furlongs_to_meters(comp.value as f64),
-                }
-            } else {
-                TriggerCondition::FurlongCrossed {
-                    threshold: comp.value as f64,
-                }
-            }
-        }
-
-        // Rush happens at an unknown time; rely on the comparison kept as guard
-        Activation(_) | Status(StatusVar::TemptationCount) => {
-            // Treat as continuous trigger
-            TriggerCondition::Continuous {}
-        }
-
-        _ => panic!("Not a monotonic trigger: {:?}", comp.var),
-    }
-}
-
-/// Extract phase trigger from comparison.
-///
-/// Phase triggers fire once when entering the specified phase.
-/// The comparison operator is ignored - both `phase==2` and `phase>=2`
-/// fire when Late phase begins (at the phase boundary).
-///
-/// This is semantically correct because:
-///
-/// - Phases are discrete states, not continuous values.
-/// - Skills activate on state transitions (Early→Mid→Late→Last).
-/// - `phase>=2` conceptually means "when in Late or Last phase".
-/// - The trigger fires at Late entry; the skill remains active during Late+Last.
-fn extract_phase_trigger(comp: &Comparison) -> Option<TriggerCondition> {
-    match &comp.var {
-        VarType::Phase(PhaseVar::Phase) => {
-            let phase = match comp.value {
-                0 => Phase::Early,
-                1 => Phase::Mid,
-                2 => Phase::Late,
-                3 => Phase::Last,
-                _ => return None,
-            };
-            Some(TriggerCondition::PhaseChange { phase })
-        }
-        _ => None,
-    }
-}
-
-/// Convert spatial conditions to Window triggers based on course geometry.
-fn extract_spatial_trigger(comp: &Comparison, course: &Course) -> Option<TriggerCondition> {
-    if let VarType::Spatial(var_type) = &comp.var {
-        match var_type {
-            SpatialVar::Corner => {
-                match (comp.op, comp.value) {
-                    // corner==N [N>0] → Window[corner_N.start, corner_N.end]
-                    (CompOp::Equal, n) if n > 0 => {
-                        let corner_idx = (n - 1) as usize; // Convert from 1-based index
-                        if corner_idx < course.corners.len() {
-                            let corner = &course.corners[corner_idx];
-                            Some(TriggerCondition::Window {
-                                variable: WindowVariable::SpatialPosition,
-                                min_threshold: corner.start,
-                                max_threshold: corner.start + corner.length,
-                            })
-                        } else {
-                            // Invalid corner index - fall back to continuous
-                            Some(TriggerCondition::Continuous)
-                        }
-                    }
-
-                    // corner!=0 → Continuous (multiple disjoint ranges - complex case)
-                    (CompOp::NotEqual, 0) => Some(TriggerCondition::Continuous),
-
-                    // corner==0 (not a corner) or corner!=N [N>0] → Not a trigger, stays as guard
-                    _ => None,
-                }
-            }
-            SpatialVar::IsFinalcorner => {
-                // is_finalcorner==1 → Window[final_corner.start, final_corner.end]
-                if comp.op == CompOp::Equal && comp.value == 1 {
-                    course
-                        .corners
-                        .last()
-                        .map(|corner| TriggerCondition::Window {
-                            variable: WindowVariable::SpatialPosition,
-                            min_threshold: corner.start,
-                            max_threshold: corner.start + corner.length,
-                        })
-                } else {
-                    // is_finalcorner==0 or other operators → Guard
-                    None
-                }
-            }
-            SpatialVar::IsFinalcornerLaterhalf => {
-                // is_finalcorner_laterhalf==1 → Window[final_corner.midpoint, final_corner.end]
-                if comp.op == CompOp::Equal && comp.value == 1 {
-                    if let Some(corner) = course.corners.last() {
-                        let midpoint = corner.start + corner.length / 2.0;
-                        Some(TriggerCondition::Window {
-                            variable: WindowVariable::SpatialPosition,
-                            min_threshold: midpoint,
-                            max_threshold: corner.start + corner.length,
-                        })
-                    } else {
-                        // No corners in course
-                        None
-                    }
-                } else {
-                    // Other operators → Guard
-                    None
-                }
-            }
-            SpatialVar::Slope => {
-                match (comp.op, comp.value) {
-                    // slope==1 or slope==2 → Continuous (multiple disjoint ranges - complex case)
-                    (CompOp::Equal, 1) | (CompOp::Equal, 2) => Some(TriggerCondition::Continuous),
-
-                    // slope==0 (flat) or slope!=X → Not a trigger, stays as guard
-                    _ => None,
-                }
-            }
-            SpatialVar::IsLastStraight => {
-                // is_last_straight==1 → Window[last_straight.start, last_straight.end]
-                if comp.op == CompOp::Equal && comp.value == 1 {
-                    course
-                        .straights
-                        .last()
-                        .map(|straight| TriggerCondition::Window {
-                            variable: WindowVariable::SpatialPosition,
-                            min_threshold: straight.start,
-                            max_threshold: straight.end,
-                        })
-                } else {
-                    // Other operators → Guard
-                    None
-                }
-            }
-            SpatialVar::IsLastStraightOnetime => {
-                // is_last_straight_onetime==1 → Keep as one-time event trigger
-                // This is genuinely a one-time activation, not a continuous window
-                if comp.op == CompOp::Equal && comp.value == 1 {
-                    Some(TriggerCondition::StraightTransition {
-                        is_last: true,
-                        is_entry: true,
-                        is_onetime: true,
-                    })
-                } else {
-                    // Other operators → Guard
-                    None
-                }
-            }
-            SpatialVar::StraightFrontType => {
-                // straight_front_type==1 or ==2 → Continuous (multiple straights)
-                if comp.op == CompOp::Equal && (comp.value == 1 || comp.value == 2) {
-                    // Complex case: there may be multiple straights of the same type
-                    // Fall back to continuous checking
-                    Some(TriggerCondition::Continuous)
-                } else {
-                    // Not a trigger
-                    None
-                }
-            }
-            _ => None,
-        }
-    } else {
-        None
+        _ => FULL_RANGE,
     }
 }
 

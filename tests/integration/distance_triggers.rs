@@ -91,7 +91,8 @@ fn test_random_point_activates_within_phase() {
 
 #[test]
 fn test_remain_distance_activates_near_goal() {
-    let threshold = COURSE_DISTANCE - 300.0;
+    // Remaining distance is floored: 300.5m remaining counts as 300m
+    let threshold = COURSE_DISTANCE - 301.0;
     assert_activates_within(
         "remain_distance<=300",
         threshold,
@@ -108,35 +109,38 @@ fn test_reversed_remain_distance_activates_early() {
 #[test]
 fn test_remain_distance_range_activates_within_range() {
     // Skill 100771
-    // Detected as a window: 399 <= remain_distance <= 401
-    let min = COURSE_DISTANCE - 401.0;
+    // 399 <= remain_distance <= 401, floored (so up to 402m remaining)
+    let min = COURSE_DISTANCE - 402.0;
     let max = COURSE_DISTANCE - 399.0;
     assert_activates_within("remain_distance<=401&remain_distance>=399", min, max);
 }
 
 #[test]
-fn test_distance_triggers_are_positions_in_order() {
+fn test_distance_windows_are_positions_in_order() {
     use rand::SeedableRng;
     use uma_tools::trigger::builder::build_trigger_scheduler;
     use uma_tools::units::furlongs_to_meters;
 
     let skills = [
-        skill("remain_distance<=300"), // 1700m
+        skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
         skill("distance_rate>=50"),    // 1000m
         skill("furlong>=3"),           // 3 furlongs
     ];
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let mut scheduler = build_trigger_scheduler(&skills, &load_course(10104), &mut rng);
+    let scheduler = build_trigger_scheduler(&skills, &load_course(10104), &mut rng);
 
-    let order: Vec<(usize, f64)> = std::iter::from_fn(|| scheduler.distance_triggers.pop())
-        .map(|t| (t.logic_idx, t.threshold_meters))
+    // Windows are queued by their start
+    let order: Vec<(usize, f64)> = scheduler
+        .position_windows
+        .iter()
+        .map(|window| (window.logic_idx, window.min_threshold))
         .collect();
     assert_eq!(
         order,
         vec![
             (2, furlongs_to_meters(3.0)),
             (1, 1000.0),
-            (0, COURSE_DISTANCE - 300.0)
+            (0, COURSE_DISTANCE - 301.0)
         ]
     );
 }
@@ -171,11 +175,11 @@ fn test_remain_distance_pair_window_range() {
         &mut rng,
     );
 
-    // A single window, no distance triggers or guards
+    // A single window; both comparisons stay as guards
     assert!(scheduler.distance_triggers.is_empty());
-    assert!(scheduler.skill_logics[0].guards.is_empty());
+    assert_eq!(scheduler.skill_logics[0].guards.len(), 2);
     assert_eq!(scheduler.position_windows.len(), 1);
     let window = scheduler.position_windows.iter().next().unwrap();
-    assert_eq!(window.min_threshold, COURSE_DISTANCE - 401.0);
+    assert_eq!(window.min_threshold, COURSE_DISTANCE - 402.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }

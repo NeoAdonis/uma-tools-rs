@@ -86,12 +86,9 @@ use crate::units::*;
 /// follows:
 ///
 /// ```rust,ignore
-/// let should_activate = if guards.is_empty() {
-///     true // No guards - always activate when trigger fires
-/// } else {
-///     let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-///     evaluate_comparison_list(&guards, &EvaluatorFull, Some(logic), state, self)
-/// };
+/// let logic = &self.trigger_scheduler.skill_logics[trigger_index];
+/// let should_activate =
+///     evaluate_comparison_list(&logic.guards, &EvaluatorFull, Some(logic), state, self);
 /// ```
 ///
 /// Examples of guard evaluation:
@@ -560,7 +557,7 @@ fn get_activation_value(
         ActivateCountMiddle => runner.trigger_scheduler.activation_counts.middle as i32,
         ActivateCountStart => runner.trigger_scheduler.activation_counts.start as i32,
 
-        // Continuous checks
+        // Skill activations in the current frame
         IsActivateAnySkill => runner.activation_flags.any_activated as i32,
         IsActivateHealSkill => runner.activation_flags.heal_activated as i32,
         IsActivateOtherSkillDetail => {
@@ -848,8 +845,7 @@ pub fn evaluate_static_comparison(
     }
 
     // Check if this is a static guard
-    let role = comp.var.variable_role();
-    if !matches!(role, VariableRole::StaticGuard) {
+    if !comp.var.is_static() {
         // Runtime variable - assume it could be satisfied
         return true;
     }

@@ -5,8 +5,7 @@ use std::rc::Rc;
 use rand::prelude::*;
 
 use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_comparison_list};
-use crate::condition::parser::{CompOp, Comparison, ComparisonList};
-use crate::condition::variables::VariableRole;
+use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
@@ -525,7 +524,7 @@ impl Runner {
 
         // Build final Runner with all modifications applied
         let mut runner = builder.build(state);
-        runner.resolve_static_preconditions(state);
+        runner.resolve_static_guards(state);
         runner
     }
 
@@ -1879,29 +1878,23 @@ impl Runner {
     }
 
     /// Check for straight entry. Skills triggered by the entry are checked on the
-    /// next skill check (see [`Self::check_straight_entry_triggers`]).
+    /// next skill check (see [`Self::check_last_straight_triggers`]).
     pub fn check_straight_start(&mut self, straights: &[Straight]) {
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
             self.entered_straight = Some(straight_idx);
         }
     }
 
-    /// Check the skills triggered by entering a straight since the last check.
-    /// Note: straight triggers are only for entry, not exit.
-    pub fn check_straight_entry_triggers(&mut self, state: &RaceState) {
+    /// Check the skills triggered by entering the last straight since the last check.
+    pub fn check_last_straight_triggers(&mut self, state: &RaceState) {
         let Some(straight_idx) = self.entered_straight.take() else {
             return;
         };
-        let skill_indices: Vec<usize> = self
-            .trigger_scheduler
-            .straight_triggers
-            .iter()
-            .filter(|t| t.straight_index == straight_idx)
-            .flat_map(|t| t.logic_indices.iter().copied())
-            .collect();
-
-        for skill_index in skill_indices {
-            self.try_activate_skill(skill_index, state);
+        if straight_idx + 1 != state.course.straights.len() {
+            return; // Not the last straight
+        }
+        for logic_idx in self.trigger_scheduler.last_straight_triggers.clone() {
+            self.try_activate_skill(logic_idx, state);
         }
     }
 
@@ -2137,17 +2130,15 @@ impl Runner {
     /// This must be called at the start of each frame, before any other trigger,
     /// so that a skill can activate in the same frame its precondition is satisfied.
     pub fn check_precondition_windows(&mut self, state: &RaceState) {
-        let update = self
+        let inside = self
             .trigger_scheduler
             .precondition_windows
             .advance(self.position, EPSILON);
 
         let mut any_unlocked = false;
-        for logic_idx in update.inside {
+        for logic_idx in inside {
             self.try_activate_skill(logic_idx, state);
-            any_unlocked |= self.trigger_scheduler.skill_logics[logic_idx]
-                .state
-                .has_activated;
+            any_unlocked |= self.trigger_scheduler.skill_logics[logic_idx].has_activated;
         }
 
         // Stop checking every branch of the preconditions that were just satisfied
@@ -2167,21 +2158,17 @@ impl Runner {
         }
     }
 
-    /// Resolve the precondition comparisons that can't change during the race
-    /// (e.g. `distance_type==3`), so that they aren't checked every frame.
+    /// Resolve the guards that can't change during the race (e.g.
+    /// `distance_type==3`), so that they aren't checked every frame.
     ///
-    /// Comparisons that are true are removed. Precondition windows with a false
-    /// comparison are dropped, as they can never be satisfied.
-    fn resolve_static_preconditions(&mut self, state: &RaceState) {
-        let is_static = |comp: &Comparison| comp.var.variable_role() == VariableRole::StaticGuard;
+    /// Guards that are true are removed. Logics with a false guard can never
+    /// succeed, so their triggers are removed.
+    fn resolve_static_guards(&mut self, state: &RaceState) {
+        let is_static = |comp: &Comparison| comp.var.is_static();
 
         let mut unsatisfiable = Vec::new();
         for logic_idx in 0..self.trigger_scheduler.skill_logics.len() {
             let logic = &self.trigger_scheduler.skill_logics[logic_idx];
-            if logic.action == LogicAction::Activate {
-                continue;
-            }
-
             let guards: ComparisonList = logic
                 .guards
                 .iter()
@@ -2196,19 +2183,7 @@ impl Runner {
             self.trigger_scheduler.skill_logics[logic_idx].guards = guards;
         }
 
-        self.trigger_scheduler
-            .precondition_windows
-            .remove_if(|window| unsatisfiable.contains(&window.logic_idx));
-    }
-
-    /// Check continuous triggers every frame.
-    pub fn check_continuous_triggers(&mut self, state: &RaceState) {
-        // Clone indices to avoid borrow conflicts
-        let continuous_indices: Vec<usize> = self.trigger_scheduler.continuous_triggers.to_vec();
-
-        for trigger_index in continuous_indices {
-            self.try_activate_skill(trigger_index, state);
-        }
+        self.trigger_scheduler.remove_triggers(&unsatisfiable);
     }
 
     /// Check every skill trigger.
@@ -2221,13 +2196,9 @@ impl Runner {
         // Preconditions go first, so that a skill can activate in the same frame
         // its precondition is satisfied
         self.check_precondition_windows(state);
-        self.check_time_triggers(state);
-        self.check_continuous_triggers(state);
-        self.check_phase_triggers(state);
         self.check_distance_triggers(state);
-        self.check_hp_triggers(state);
         self.check_window_triggers(state);
-        self.check_straight_entry_triggers(state);
+        self.check_last_straight_triggers(state);
         // Depend on the activations above
         self.check_activation_dependent_triggers(state);
         self.check_buff_dependent_triggers(state);
@@ -2279,20 +2250,7 @@ impl Runner {
         }
     }
 
-    /// Check phase triggers. They fire on the first check after entering their phase.
-    pub fn check_phase_triggers(&mut self, state: &RaceState) {
-        while let Some(trigger) = self.trigger_scheduler.phase_triggers.peek() {
-            if self.phase < trigger.phase {
-                break; // Phase not reached yet
-            }
-
-            let trigger = self.trigger_scheduler.phase_triggers.pop().unwrap();
-            for trigger_index in trigger.logic_indices {
-                self.try_activate_skill(trigger_index, state);
-            }
-        }
-    }
-
+    /// Check position triggers (random points) that have been reached.
     pub fn check_distance_triggers(&mut self, state: &RaceState) {
         while let Some(trigger) = self.trigger_scheduler.distance_triggers.peek() {
             if self.position < trigger.threshold_meters {
@@ -2305,80 +2263,28 @@ impl Runner {
         }
     }
 
-    pub fn check_hp_triggers(&mut self, state: &RaceState) {
-        while let Some(trigger) = self.trigger_scheduler.hp_triggers.peek() {
-            if !Self::should_fire_trigger(
-                self.hp.percent(),
-                trigger.threshold_percent,
-                trigger.operator,
-            ) {
-                break; // Threshold not reached yet, this and all subsequent triggers require lower HP
-            }
-
-            let trigger = self.trigger_scheduler.hp_triggers.pop().unwrap();
-            let trigger_index = trigger.logic_idx;
-            self.try_activate_skill(trigger_index, state);
-        }
-    }
-
-    pub fn check_time_triggers(&mut self, state: &RaceState) {
-        while let Some(trigger) = self.trigger_scheduler.time_triggers.peek() {
-            if !Self::should_fire_trigger(
-                state.elapsed_time,
-                trigger.threshold_seconds,
-                trigger.operator,
-            ) {
-                break; // Threshold not reached yet, this and all subsequent triggers require more time
-            }
-
-            let trigger = self.trigger_scheduler.time_triggers.pop().unwrap();
-            let trigger_index = trigger.logic_idx;
-            self.try_activate_skill(trigger_index, state);
-        }
-    }
-
+    /// Check window triggers (position, time, HP) containing the current values.
     pub fn check_window_triggers(&mut self, state: &RaceState) {
         let scheduler = &mut self.trigger_scheduler;
-        let position = scheduler.position_windows.advance(self.position, EPSILON);
-        let time = scheduler.time_windows.advance(state.elapsed_time, EPSILON);
-        let mut inside = position.inside;
-        inside.extend(time.inside);
-        let mut exited = position.exited;
-        exited.extend(time.exited);
+        let mut inside = scheduler.position_windows.advance(self.position, EPSILON);
+        inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
 
         // HP can recover, so HP windows are never dropped
         let hp = self.hp.percent();
-        for window in &scheduler.hp_windows {
-            if hp >= window.min_threshold - EPSILON && hp <= window.max_threshold + EPSILON {
-                inside.push(window.logic_idx);
-            } else if hp > window.max_threshold {
-                exited.push(window.logic_idx);
-            }
-        }
+        inside.extend(
+            scheduler
+                .hp_windows
+                .iter()
+                .filter(|window| {
+                    hp >= window.min_threshold - EPSILON && hp <= window.max_threshold + EPSILON
+                })
+                .map(|window| window.logic_idx),
+        );
 
         // Try activations in the order the logics were built
         inside.sort_unstable();
         for trigger_index in inside {
             self.try_activate_skill(trigger_index, state);
-        }
-
-        // Exited windows without activating - don't retry one-time triggers
-        for trigger_index in exited {
-            self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
-        }
-    }
-
-    /// Check if a monotonic trigger should fire based on operator.
-    fn should_fire_trigger(current_value: f64, threshold: f64, operator: CompOp) -> bool {
-        match operator {
-            CompOp::GreaterEqual => current_value >= threshold,
-            CompOp::LessEqual => current_value <= threshold,
-            // Most, if not all triggers use greater/less or equal comparisons
-            // Check all other operators for completeness
-            CompOp::Greater => current_value > threshold,
-            CompOp::Less => current_value < threshold,
-            CompOp::Equal => (current_value - threshold).abs() < EPSILON,
-            CompOp::NotEqual => (current_value - threshold).abs() >= EPSILON,
         }
     }
 
@@ -2457,34 +2363,23 @@ impl Runner {
             return;
         }
 
-        if !logic.should_check() {
+        if logic.has_activated {
             return;
         }
         let skill_index = logic.skill_index;
         let alternative_index = logic.alternative_index;
         let action = logic.action;
-        let guards = logic.guards.clone();
-        let is_onetime = logic.triggers.iter().any(|t| t.is_onetime());
-
-        let should_activate = if guards.is_empty() {
-            true // No guards - always activate when trigger fires
-        } else {
-            let logic = &self.trigger_scheduler.skill_logics[trigger_index];
-            evaluate_comparison_list(&guards, &EvaluatorFull, Some(logic), state, self)
-        };
+        let should_activate =
+            evaluate_comparison_list(&logic.guards, &EvaluatorFull, Some(logic), state, self);
 
         if should_activate {
             match action {
                 LogicAction::Activate => self.activate_skill(skill_index, alternative_index, state),
                 LogicAction::Unlock(id) => self.trigger_scheduler.precondition_satisfied[id] = true,
             }
-            self.trigger_scheduler.skill_logics[trigger_index].mark_activated();
-        } else if is_onetime {
-            // Onetime trigger that failed guards - mark attempted so we don't retry
-            self.trigger_scheduler.skill_logics[trigger_index].mark_attempted();
+            // Never checked again
+            self.trigger_scheduler.skill_logics[trigger_index].has_activated = true;
         }
-        // Note: Monotonic triggers that fail guards are NOT marked as attempted
-        // This allows window triggers to retry them continuously while in window
     }
 
     /// Apply a single skill effect to the runner.

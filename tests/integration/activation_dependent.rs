@@ -9,9 +9,17 @@ use rand_pcg::Pcg64Mcg;
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
 
-// ============================================================================
-// BASIC ACTIVATION DEPENDENCY
-// ============================================================================
+/// Get the variable and `(min, max)` thresholds of a window trigger.
+fn window(logic: &SkillActivationLogic) -> (WindowVariable, f64, f64) {
+    match logic.trigger {
+        TriggerCondition::Window {
+            variable,
+            min_threshold,
+            max_threshold,
+        } => (variable, min_threshold, max_threshold),
+        ref other => panic!("Expected window, got {:?}", other),
+    }
+}
 
 #[test]
 fn test_skill_activation_flag_triggers_dependent_skill() {
@@ -39,28 +47,22 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
     // Alternative 2 (index 1) has activation dependency
     let logic_alt2 = &scheduler.skill_logics[1];
 
-    let (triggers, guards) = (&logic_alt2.triggers[..], logic_alt2.guards.as_slice());
+    // Checked during Last phase (from 20/24 of the 2000m course)
+    let (variable, min, max) = window(logic_alt2);
+    assert_eq!(variable, WindowVariable::Position);
+    assert!((min - 2000.0 / 24.0 * 20.0).abs() < 1e-9);
+    assert_eq!(max, 2000.0);
 
-    // Should have PhaseChange trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(triggers[0], TriggerCondition::PhaseChange { .. }),
-        "Should have PhaseChange trigger for phase==3"
-    );
-
-    // is_activate_other_skill_detail==1 should be a guard
-    assert!(
-        !guards.is_empty(),
-        "Should have is_activate_other_skill_detail as guard"
+    // Both comparisons are guards
+    assert_eq!(
+        logic_alt2.guards.len(),
+        2,
+        "Should have phase and is_activate_other_skill_detail as guards"
     );
 
     // Key behavior: At build-time, we detect the activation dependency
     // At runtime, this would only fire if another skill activated in the same frame
 }
-
-// ============================================================================
-// HEAL-SPECIFIC DEPENDENCY
-// ============================================================================
 
 #[test]
 fn test_heal_skill_activation_dependency() {
@@ -108,10 +110,6 @@ fn test_heal_skill_activation_dependency() {
     assert!(scheduler.precondition_windows.is_empty());
 }
 
-// ============================================================================
-// ACTIVATION-DEPENDENT WITH OR BRANCHES
-// ============================================================================
-
 #[test]
 fn test_activation_dependent_or_branches() {
     // Skill 100901 (Alt 2): Two OR branches both requiring activation dependency
@@ -147,25 +145,18 @@ fn test_activation_dependent_or_branches() {
         let logic = &scheduler.skill_logics[idx];
         assert_eq!(1, 1, "Each OR branch should have 1 branch");
 
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        // Should have spatial window trigger (is_last_straight)
-        assert_eq!(triggers.len(), 1);
-        assert!(
-            matches!(
-                triggers[0],
-                TriggerCondition::Window {
-                    variable: WindowVariable::SpatialPosition,
-                    ..
-                }
-            ),
-            "Branch {} should have spatial window trigger",
+        // Checked after the final corner (ends at 1734m), until the goal (phase>=2)
+        assert_eq!(
+            window(logic),
+            (WindowVariable::Position, 1734.0, 2000.0),
+            "Branch {} should be checked on the last straight",
             idx
         );
 
-        // Should have guards including is_activate_other_skill_detail
-        assert!(
-            !guards.is_empty(),
+        // All comparisons are guards, including is_activate_other_skill_detail
+        assert_eq!(
+            logic.guards.len(),
+            5,
             "Branch {} should have activation dependency guard",
             idx
         );
@@ -175,10 +166,6 @@ fn test_activation_dependent_or_branches() {
     // Both branches require another skill to activate first
     // Then only one OR branch can activate (mutual exclusion)
 }
-
-// ============================================================================
-// MULTIPLE ALTERNATIVES WITH DEPENDENCY
-// ============================================================================
 
 #[test]
 fn test_alternative_with_and_without_dependency() {
@@ -213,40 +200,29 @@ fn test_alternative_with_and_without_dependency() {
     // Alternative 1 (indices 0-1): No activation dependency
     for idx in 0..=1 {
         let logic = &scheduler.skill_logics[idx];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        // Should have Window trigger for distance_rate<=50
-        assert_eq!(triggers.len(), 1);
-        assert!(
-            matches!(
-                triggers[0],
-                TriggerCondition::Window {
-                    variable: WindowVariable::DistanceRate,
-                    min_threshold: 0.0,
-                    max_threshold: 50.0,
-                }
-            ),
+        // distance_rate<=50 holds until 51% (floored)
+        assert_eq!(
+            window(logic),
+            (WindowVariable::Position, 0.0, 1020.0),
             "Alt 1 Branch {} should have distance_rate window",
             idx
         );
 
-        assert!(!guards.is_empty());
+        assert_eq!(logic.guards.len(), 5);
     }
 
     // Alternative 2 (index 2): Has activation dependency
     let logic_alt2 = &scheduler.skill_logics[2];
-    let (triggers, guards) = (&logic_alt2.triggers[..], logic_alt2.guards.as_slice());
-
-    // Should have Continuous trigger (corner==0 is complex)
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        !triggers.is_empty(),
-        "Alt 2 should have Continuous trigger for corner==0"
+    // 45-60% (until 61%, floored); corner==0 doesn't narrow it down
+    assert_eq!(
+        window(logic_alt2),
+        (WindowVariable::Position, 900.0, 1220.0)
     );
 
-    // Should have guards including is_activate_other_skill_detail
-    assert!(
-        !guards.is_empty(),
+    // All comparisons are guards, including is_activate_other_skill_detail
+    assert_eq!(
+        logic_alt2.guards.len(),
+        4,
         "Alt 2 should have activation dependency guard"
     );
 
@@ -255,10 +231,6 @@ fn test_alternative_with_and_without_dependency() {
     // Alt 2 requires another skill activation first
     // System evaluates alternatives in order (0 before 1)
 }
-
-// ============================================================================
-// INTER-CHARACTER ACTIVATION
-// ============================================================================
 
 #[test]
 fn test_other_character_skill_activation() {
@@ -282,25 +254,18 @@ fn test_other_character_skill_activation() {
     // All branches have is_other_character_activate_advantage_skill dependency
     for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
         assert_eq!(1, 1);
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        // Should have spatial window trigger (is_finalcorner)
-        assert_eq!(triggers.len(), 1);
-        assert!(
-            matches!(
-                triggers[0],
-                TriggerCondition::Window {
-                    variable: WindowVariable::SpatialPosition,
-                    ..
-                }
-            ),
-            "Branch {} should have finalcorner spatial window",
+        // Final corner (starts at 1475m) and beyond, until the goal (phase>=2)
+        assert_eq!(
+            window(logic),
+            (WindowVariable::Position, 1475.0, 2000.0),
+            "Branch {} should have final corner window",
             idx
         );
 
-        // Should have guards including other character activation check
-        assert!(
-            !guards.is_empty(),
+        // All comparisons are guards, including other character activation check
+        assert_eq!(
+            logic.guards.len(),
+            4,
             "Branch {} should have other character activation dependency",
             idx
         );
@@ -312,16 +277,12 @@ fn test_other_character_skill_activation() {
     // Tests cross-runner interaction tracking
 }
 
-// ============================================================================
-// DEPENDENCY DETECTION
-// ============================================================================
-
 #[test]
 fn test_activation_dependency_variable_detection() {
     // Test: Various activation dependency variables are correctly detected
     // Tests: Build system recognizes all forms of activation dependencies
 
-    // Test 1: is_activate_other_skill_detail (DynamicGuard → Continuous trigger with guard)
+    // Test 1: is_activate_other_skill_detail (checked during the whole race)
     {
         let skill = make_skill("test_dep1", "is_activate_other_skill_detail==1", "");
         let course = load_course(10104);
@@ -330,20 +291,19 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        assert_eq!(triggers.len(), 1);
-        assert!(
-            matches!(triggers[0], TriggerCondition::Continuous),
-            "is_activate_other_skill_detail should use Continuous trigger"
+        assert_eq!(
+            window(logic),
+            (WindowVariable::Position, 0.0, f64::INFINITY),
+            "is_activate_other_skill_detail should be checked during the whole race"
         );
-        assert!(
-            !guards.is_empty(),
+        assert_eq!(
+            logic.guards.len(),
+            1,
             "is_activate_other_skill_detail should remain as guard"
         );
     }
 
-    // Test 2: is_activate_heal_skill (ActivationTrigger → specific trigger, no guard)
+    // Test 2: is_activate_heal_skill (checked when a heal skill activates)
     {
         let skill = make_skill("test_dep2", "is_activate_heal_skill==1", "");
         let course = load_course(10104);
@@ -352,20 +312,18 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        assert_eq!(triggers.len(), 1);
         assert!(
-            matches!(triggers[0], TriggerCondition::HealSkillActivation),
+            matches!(logic.trigger, TriggerCondition::HealSkillActivation),
             "is_activate_heal_skill should create HealSkillActivation trigger"
         );
-        assert!(
-            guards.is_empty(),
-            "is_activate_heal_skill should have no guards (becomes trigger)"
+        assert_eq!(
+            logic.guards.len(),
+            1,
+            "is_activate_heal_skill should remain as guard"
         );
     }
 
-    // Test 3: is_other_character_activate_advantage_skill (DynamicGuard → Continuous with guard)
+    // Test 3: is_other_character_activate_advantage_skill (checked during the whole race)
     {
         let skill = make_skill(
             "test_dep3",
@@ -378,23 +336,18 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-
-        assert_eq!(triggers.len(), 1);
-        assert!(
-            matches!(triggers[0], TriggerCondition::Continuous),
-            "is_other_character_activate_advantage_skill should use Continuous trigger"
+        assert_eq!(
+            window(logic),
+            (WindowVariable::Position, 0.0, f64::INFINITY),
+            "is_other_character_activate_advantage_skill should be checked during the whole race"
         );
-        assert!(
-            !guards.is_empty(),
+        assert_eq!(
+            logic.guards.len(),
+            1,
             "is_other_character_activate_advantage_skill should remain as guard"
         );
     }
 }
-
-// ============================================================================
-// COMBINED DEPENDENCIES
-// ============================================================================
 
 #[test]
 fn test_activation_dependency_with_precondition() {
@@ -429,31 +382,23 @@ fn test_activation_dependency_with_precondition() {
         "Should start with precondition locked"
     );
 
-    // Should have Window trigger (distance_rate>=50 promoted to window with dynamic guard present)
-    assert_eq!(1, 1);
-    let (triggers, guards) = &(logic.triggers.as_slice(), logic.guards.as_slice());
-    assert_eq!(triggers.len(), 1);
-    assert!(
-        matches!(
-            triggers[0],
-            TriggerCondition::Window {
-                variable: WindowVariable::DistanceRate,
-                min_threshold: 50.0,
-                max_threshold: 100.0,
-            }
-        ),
-        "Should have DistanceRate window trigger [50, 100]"
+    // Checked from 50% on
+    assert_eq!(
+        window(logic),
+        (WindowVariable::Position, 1000.0, f64::INFINITY),
+        "Should be checked from 50% on"
     );
 
     // Should have guards including activation dependency
-    assert!(
-        !guards.is_empty(),
+    assert_eq!(
+        logic.guards.len(),
+        2,
         "Should have guards with activation dependency"
     );
 
     // Key behavior: Three-layer checking
     // 1. Precondition must be satisfied first (phase>=2)
-    // 2. Then trigger fires (distance_rate in window [50, 100])
-    // 3. Then guards checked (is_activate_other_skill_detail==1)
+    // 2. Then trigger fires (position from 50% on)
+    // 3. Then guards checked (is_activate_other_skill_detail==1, distance_rate>=50)
     // All three must align for skill activation
 }

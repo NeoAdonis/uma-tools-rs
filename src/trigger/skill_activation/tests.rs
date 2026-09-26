@@ -1,12 +1,10 @@
-//! Comprehensive tests for skill activation trigger-guard separation system
+//! Tests for compiling conditions into triggers and guards
 
 use super::*;
 use crate::course::geometry::*;
 use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
 use crate::trigger::builder::build_trigger_scheduler;
-
-mod windows;
 
 /// Create a simple test course for testing spatial triggers
 fn create_test_course() -> Course {
@@ -53,703 +51,236 @@ fn create_test_course() -> Course {
     )
 }
 
-// ============================================================================
-// BASIC SPLITTING TESTS
-// ============================================================================
-
-#[test]
-fn test_split_simple_guard_only() {
-    // Condition with only static guards (no triggers, no monotonic guards)
-    let condition = parse_condition("ground_type==2&motivation>=4").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    // Should have 1 branch
-    assert_eq!(branches.len(), 1);
-
-    let (triggers, guards) = &branches[0];
-
-    // Should have continuous trigger (fallback when no explicit triggers or monotonic guards)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-    // Should preserve both guards
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_split_hp_trigger_with_guards() {
-    // Condition: hp_per<=50 & ground_type==2
-    // hp_per is decreasing, so <= is the normal direction (not reversed)
-    let condition = parse_condition("hp_per<=50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    // Should have 1 branch
-    assert_eq!(branches.len(), 1);
-
-    let (triggers, guards) = &branches[0];
-
-    // Should remain as HpPercent trigger (correct direction for decreasing variable)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::HpPercent {
-            threshold: 50.0,
-            operator: CompOp::LessEqual,
-        }
-    ));
-
-    // Should have ground_type guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_split_random_gate_with_guards() {
-    // Condition: phase_random==1 & hp_per>=20
-    let condition = parse_condition("phase_random==1&hp_per>=20").unwrap();
-
-    // Simulate random activation
-    let activation = vec![800.0];
-
-    let branches = split_condition(&condition, activation, &create_test_course());
-
-    // Should have 1 branch
-    assert_eq!(branches.len(), 1);
-
-    let (triggers, guards) = &branches[0];
-
-    // Should have random gate trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Position { .. }));
-
-    // Should have hp_per guard (NOT phase_random)
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_split_onetime_event() {
-    // Condition: is_last_straight_onetime==1
-    let condition = parse_condition("is_last_straight_onetime==1").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    // Should have 1 branch
-    assert_eq!(branches.len(), 1);
-
-    let (triggers, guards) = &branches[0];
-
-    // Should extract onetime trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::StraightTransition {
-            is_last: true,
-            is_onetime: true,
-            is_entry: true
-        }
-    ));
-
-    // No guards
-    assert!(guards.is_empty());
-}
-
-#[test]
-fn test_split_or_condition() {
-    // Condition: (phase_random==1 & hp_per>=20) @ (corner!=0 & ground_type==1)
-    // This should create 2 separate branches
-    let condition = parse_condition("phase_random==1&hp_per>=20@corner!=0&ground_type==1").unwrap();
-
-    let activation = vec![800.0];
-
-    let branches = split_condition(&condition, activation, &create_test_course());
-
-    // Should have 2 branches (one for each OR alternative)
-    assert_eq!(branches.len(), 2);
-
-    // Branch 1: random trigger + hp guard
-    let (triggers1, guards1) = &branches[0];
-    assert!(
-        triggers1
-            .iter()
-            .any(|t| matches!(t, TriggerCondition::Position { .. }))
-    );
-    assert!(!guards1.is_empty());
-
-    // Branch 2: corner trigger (Continuous fallback) + guards
-    let (triggers2, guards2) = &branches[1];
-    assert!(
-        triggers2
-            .iter()
-            .any(|t| matches!(t, TriggerCondition::Continuous))
-    );
-    assert!(!guards2.is_empty());
-}
-
-// ============================================================================
-// OPERATOR DIRECTION TESTS
-// ============================================================================
-
-#[test]
-fn test_distance_rate_less_than_becomes_window() {
-    // distance_rate<=50 should become Window [0, 50], not DistanceCovered trigger
-    // distance_rate is monotonically increasing, so <= is reversed direction
-    let condition = parse_condition("distance_rate<=50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should create Window trigger, not DistanceCovered
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 0.0,
-            max_threshold: 50.0,
-        }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_distance_rate_greater_than_stays_trigger() {
-    // distance_rate>=50 should remain as DistanceCovered trigger (correct direction)
-    let condition = parse_condition("distance_rate>=50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should remain as DistanceCovered trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::DistanceCovered { threshold: 50.0 }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_accumulatetime_less_than_becomes_window() {
-    // accumulatetime<=10 should become Window [0, 10], not Time trigger
-    // accumulatetime is monotonically increasing, so <= is reversed direction
-    let condition = parse_condition("accumulatetime<=10&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should create Window trigger, not Time
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::AccumulateTime,
-            min_threshold: 0.0,
-            max_threshold: 10.0,
-        }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_accumulatetime_greater_than_stays_trigger() {
-    // accumulatetime>=10 should remain as Time trigger (correct direction)
-    let condition = parse_condition("accumulatetime>=10&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should remain as Time trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Time {
-            threshold: 10.0,
-            operator: CompOp::GreaterEqual,
-        }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_hp_per_greater_than_becomes_window() {
-    // hp_per>=50 should become Window [50, 100] for decreasing variable
-    // hp_per is decreasing, so >= is reversed direction
-    let condition = parse_condition("hp_per>=50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should create Window trigger for reversed direction
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::HpPercent,
-            min_threshold: 50.0,
-            max_threshold: 100.0,
-        }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_hp_per_less_than_stays_trigger() {
-    // hp_per<=50 should remain as HpPercent trigger (correct direction for decreasing)
-    let condition = parse_condition("hp_per<=50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should remain as HpPercent trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::HpPercent {
-            threshold: 50.0,
-            operator: CompOp::LessEqual,
-        }
-    ));
-
-    // ground_type should remain as guard
-    assert!(!guards.is_empty());
-}
-
-// ============================================================================
-// EDGE CASES
-// ============================================================================
-
-#[test]
-fn test_skill_100901_distance_rate_less_than() {
-    // Skill 100901: "distance_rate<=50&corner!=0&order_rate<=50&ground_type==1"
-    //
-    // Expected behavior:
-    // - distance_rate<=50 becomes Window [0, 50]
-    // - order_rate<=50 is DynamicGuard
-    // - corner!=0, ground_type==1 are all guards
-    // - Checked continuously every frame
-
-    let condition =
-        parse_condition("distance_rate<=50&corner!=0&order_rate<=50&ground_type==1").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should have Window trigger for distance_rate<=50
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 0.0,
-            max_threshold: 50.0,
-        }
-    ));
-
-    // All conditions become guards (checked continuously)
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_less_operator_also_converts() {
-    // Test that < (not just <=) also converts for increasing variables
-    let condition = parse_condition("distance_rate<50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should create Window trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 0.0,
-            max_threshold: 50.0,
-        }
-    ));
-
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_greater_operator_also_converts() {
-    // Test that > (not just >=) also converts for decreasing variables
-    let condition = parse_condition("hp_per>50&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should create Window trigger
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::HpPercent,
-            min_threshold: 50.0,
-            max_threshold: 100.0,
-        }
-    ));
-
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_window_detection_still_works() {
-    // Ensure existing window detection (distance_rate>=50 & distance_rate<=60) still works
-    let condition = parse_condition("distance_rate>=50&distance_rate<=60").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should detect as window
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 50.0,
-            max_threshold: 60.0,
-        }
-    ));
-
-    // No remaining guards
-    assert!(guards.is_empty());
-}
-
-// ============================================================================
-// PHASE OPERATOR BUG (Similar to monotonic variable bug)
-// ============================================================================
-
-#[test]
-fn test_phase_less_than_equal_bug() {
-    // Skill 200441: "phase<=1&accumulatetime>=5&blocked_front_continuetime>=1"
-    //
-    // SEMANTIC ISSUE: phase<=1 means "while in Early OR Mid phase"
-    // But currently it creates PhaseChange { phase: Mid } which only fires at Mid entry
-    //
-    // This is wrong because:
-    // 1. If all guards pass at t=5s during Early phase, skill should activate
-    // 2. But PhaseChange(Mid) hasn't fired yet
-    // 3. Skill won't activate until Mid phase begins
-    //
-    // EXPECTED FIX: phase<=1 should become a GUARD, not a TRIGGER
-    // - The trigger should be accumulatetime>=5 (Time trigger)
-    // - The guards should be: phase<=1 & blocked_front_continuetime>=1
-    // - At runtime: when Time(5s) fires, check if phase is <=Mid
-
-    let condition =
-        parse_condition("phase<=1&accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // AFTER FIXES:
-    // 1. phase<=1 is now a guard (not a trigger) ✓
-    // 2. blocked_front_continuetime is a DynamicGuard
-    // 3. Therefore: Convert to Continuous trigger!
-    //
-    // This is correct because blocked_front_continuetime can change during the race.
-    // We must check continuously, not just at t=5s.
-
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-    // All conditions should be guards (checked every frame)
-    assert!(!guards.is_empty());
-
-    // Success! Now the skill will activate when:
-    // - phase is <=Mid AND
-    // - accumulatetime is >=5s AND
-    // - blocked_front_continuetime is >=1
-    // Checked continuously every frame
-}
-
-#[test]
-fn test_phase_equality_still_creates_trigger() {
-    // Ensure phase==2 still creates a PhaseChange trigger (not a guard)
-    let condition = parse_condition("phase==2&accumulatetime>=5").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should have PhaseChange trigger (phase==2 is equality, so it's a trigger)
-    // accumulatetime should remain as guard (Rule 1: MonotonicGuard stays as guard with explicit trigger)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::PhaseChange { phase: _ }
-    ));
-
-    // accumulatetime should be a guard
-    assert!(!guards.is_empty());
-}
-
-// ============================================================================
-// DYNAMIC GUARD + MONOTONIC TRIGGER BUG
-// ============================================================================
-
-#[test]
-fn test_dynamic_guard_forces_continuous() {
-    // Skill with DynamicGuard should use Continuous trigger, not monotonic
-    // Example: accumulatetime>=5 & blocked_front_continuetime>=1
-    //
-    // Problem: If we use Time(5s) trigger, it fires once and is removed from heap.
-    // If blocked_front_continuetime=0 at t=5s, guard fails and skill is lost.
-    // Even if blocked_front_continuetime becomes 1 at t=6s, trigger is gone!
-    //
-    // Solution: Convert to Continuous trigger when DynamicGuards present
-
-    let condition = parse_condition("accumulatetime>=5&blocked_front_continuetime>=1").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should use Continuous trigger (not Time) because blocked_front_continuetime is DynamicGuard
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-    // All conditions should be guards
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_static_guards_allow_monotonic_trigger() {
-    // Skill with only StaticGuards can safely use monotonic triggers
-    // Example: accumulatetime>=5 & ground_type==2
-    //
-    // This is safe because ground_type never changes during race.
-    // If guard fails at t=5s, it will never pass.
-
-    let condition = parse_condition("accumulatetime>=5&ground_type==2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should promote accumulatetime to Time trigger (no DynamicGuards)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Time {
-            threshold: 5.0,
-            operator: CompOp::GreaterEqual
-        }
-    ));
-
-    // ground_type should be a guard
-    assert!(!guards.is_empty());
-}
-
-// ============================================================================
-// ACTIVATE_COUNT_* VARIABLE TESTS
-// ============================================================================
-// These tests verify that activate_count_* variables (MonotonicGuard role)
-// are correctly handled in trigger-guard separation:
-// - When explicit triggers exist: activate_count_* stays as guard
-// - When no explicit triggers: activate_count_* promotes to Continuous trigger
-
-#[test]
-fn test_activate_count_with_window_trigger() {
-    // Real Skill ID: 101051
-    // Condition: distance_rate>=50&distance_rate<=55&order_rate>=40&order_rate<=80&distance_type==3&activate_count_all>=7
-    //
-    // Expected behavior:
-    // - Window pattern detected on distance_rate → creates Window trigger
-    // - Window trigger is explicit, so it takes precedence over DynamicGuard continuous requirement
-    // - activate_count_all stays as guard (MonotonicGuard)
-    // - order_rate stays as guard (DynamicGuard)
-    // - All other conditions checked when window trigger fires
-
-    let condition = parse_condition(
-        "distance_rate>=50&distance_rate<=55&order_rate>=40&order_rate<=80&distance_type==3&activate_count_all>=7",
+/// Compile a condition on the test course, with a single random point at 1000m.
+fn compile(condition: &str) -> Vec<CompiledBranch> {
+    compile_condition(
+        &parse_condition(condition).unwrap(),
+        &[1000.0],
+        &create_test_course(),
     )
-    .unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
+}
 
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
+/// Compile a single-branch condition.
+fn compile_one(condition: &str) -> CompiledBranch {
+    let mut branches = compile(condition);
+    assert_eq!(branches.len(), 1, "{condition}");
+    branches.remove(0)
+}
 
-    // Should have Window trigger (explicit trigger takes precedence)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
+/// Get the variable and `(min, max)` thresholds of a window trigger.
+fn window(branch: &CompiledBranch) -> (WindowVariable, f64, f64) {
+    match branch.trigger {
         TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 50.0,
-            max_threshold: 55.0,
-        }
-    ));
+            variable,
+            min_threshold,
+            max_threshold,
+        } => (variable, min_threshold, max_threshold),
+        ref other => panic!("Expected window, got {:?}", other),
+    }
+}
 
-    // All other conditions should be guards (including activate_count_all, order_rate)
-    assert!(!guards.is_empty());
+/// Guards as strings, for readable assertions.
+fn guards(branch: &CompiledBranch) -> Vec<String> {
+    branch.guards.iter().map(|comp| comp.to_string()).collect()
+}
+
+/// Assert that two floats are (almost) equal.
+fn assert_close(actual: f64, expected: f64, context: &str) {
+    assert!(
+        actual == expected || (actual - expected).abs() < 1e-9,
+        "{context}: expected {expected}, got {actual}"
+    );
 }
 
 #[test]
-fn test_activate_count_with_monotonic_promoted() {
-    // Real Skill ID: 110041
-    // Condition: distance_rate>=50&activate_count_heal>=1&order<=3
-    //
-    // Expected behavior:
-    // - Window [50, ∞) detected on distance_rate → promotes to DistanceCovered trigger
-    // - order stays as DynamicGuard
-    // - activate_count_heal stays as guard (MonotonicGuard)
-    // - All conditions checked continuously
+fn test_every_comparison_is_a_guard() {
+    // Including the ones that define the trigger
+    let branch = compile_one("phase==2&is_finalcorner==1&corner!=0&order<=3&ground_type==1");
+    assert_eq!(
+        guards(&branch),
+        vec![
+            "phase == 2",
+            "is_finalcorner == 1",
+            "corner != 0",
+            "order <= 3",
+            "ground_type == 1"
+        ]
+    );
+}
 
-    let condition = parse_condition("distance_rate>=50&activate_count_heal>=1&order<=3").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
+#[test]
+fn test_unevaluable_comparisons_are_not_guards() {
+    // Random variables and is_last_straight_onetime can't be evaluated
+    assert_eq!(
+        guards(&compile_one("phase_random==1&order<=3")),
+        vec!["order <= 3"]
+    );
+    assert_eq!(
+        guards(&compile_one("run_at_full_speed_random==1&order<=3")),
+        vec!["order <= 3"]
+    );
+    assert_eq!(
+        guards(&compile_one("is_last_straight_onetime==1&order<=3")),
+        vec!["order <= 3"]
+    );
+    // random_lot is rolled when building: if compiled, it succeeded
+    assert!(compile_one("random_lot==50").guards.is_empty());
+}
 
+#[test]
+fn test_events_are_the_trigger() {
+    let cases = [
+        ("phase_random==1&order<=3", "Position { meters: 1000.0 }"),
+        ("run_at_full_speed_random==1", "FullThrottleStart"),
+        ("is_last_straight_onetime==1", "LastStraightEntry"),
+        ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
+        ("is_activate_heal_skill==1&phase>=2", "HealSkillActivation"),
+    ];
+    for (condition, trigger) in cases {
+        assert_eq!(format!("{:?}", compile_one(condition).trigger), trigger);
+    }
+}
+
+#[test]
+fn test_activation_events_stay_as_guards() {
+    // Evaluable: true on frames where a skill activated
+    assert_eq!(
+        guards(&compile_one("is_activate_any_skill==1&phase>=2")),
+        vec!["is_activate_any_skill == 1", "phase >= 2"]
+    );
+}
+
+#[test]
+fn test_position_window_ranges() {
+    // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
+    // 1200-1380, uphill at 800-900, straights at 0-100 and 1500-2000 (both facing
+    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1
+    let section = 2000.0 / 24.0;
+    let furlong = crate::units::FURLONG_TO_METERS;
+    let cases = [
+        ("distance_rate>=50", (1000.0, f64::INFINITY)),
+        ("distance_rate<=50", (0.0, 1020.0)),
+        ("distance_rate==50", (1000.0, 1020.0)),
+        ("distance_rate>=50&distance_rate<=51", (1000.0, 1040.0)),
+        ("remain_distance<=600", (1399.0, f64::INFINITY)),
+        ("remain_distance>=600", (0.0, 1400.0)),
+        (
+            "remain_distance<=305&remain_distance>=300",
+            (1694.0, 1700.0),
+        ),
+        ("furlong>=5", (5.0 * furlong, f64::INFINITY)),
+        ("phase==1", (section * 4.0, section * 16.0)),
+        ("phase>=2", (section * 16.0, 2000.0)),
+        ("phase<=1", (0.0, section * 16.0)),
+        ("phase_firstquarter==1", (section * 4.0, section * 7.0)),
+        ("phase_firsthalf==1", (section * 4.0, section * 10.0)),
+        ("phase_laterhalf==1", (section * 10.0, section * 16.0)),
+        // Final corner "or beyond" (and its second half)
+        ("is_finalcorner==1", (1200.0, f64::INFINITY)),
+        ("is_finalcorner_laterhalf==1", (1290.0, f64::INFINITY)),
+        // After the final corner
+        ("is_last_straight==1", (1380.0, f64::INFINITY)),
+        // Smallest range containing all corners/slopes/straights of that type
+        ("corner!=0", (100.0, 1380.0)),
+        ("corner==2", (500.0, 700.0)),
+        ("slope==1", (800.0, 900.0)),
+        ("straight_front_type==1", (0.0, 2000.0)),
+        // Intersections
+        ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
+        ("phase==1&corner!=0", (section * 4.0, section * 16.0)),
+        ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
+        // Nothing position-based: window covers the whole race
+        ("order<=3", (0.0, f64::INFINITY)),
+        ("distance_type==3", (0.0, f64::INFINITY)),
+    ];
+
+    for (condition, (min, max)) in cases {
+        let (variable, actual_min, actual_max) = window(&compile_one(condition));
+        assert_eq!(variable, WindowVariable::Position, "{condition}");
+        assert_close(actual_min, min, condition);
+        assert_close(actual_max, max, condition);
+    }
+}
+
+#[test]
+fn test_time_and_hp_windows() {
+    // Used when the branch doesn't depend on the position
+    let cases = [
+        (
+            "accumulatetime>=5",
+            WindowVariable::Time,
+            (5.0, f64::INFINITY),
+        ),
+        (
+            "accumulatetime<=10&order<=3",
+            WindowVariable::Time,
+            (0.0, 11.0),
+        ),
+        ("hp_per<=30", WindowVariable::HpPercent, (0.0, 31.0)),
+        (
+            "hp_per>=50&order<=3",
+            WindowVariable::HpPercent,
+            (50.0, f64::INFINITY),
+        ),
+    ];
+    for (condition, expected_variable, (min, max)) in cases {
+        let (variable, actual_min, actual_max) = window(&compile_one(condition));
+        assert_eq!(variable, expected_variable, "{condition}");
+        assert_close(actual_min, min, condition);
+        assert_close(actual_max, max, condition);
+    }
+
+    // Position windows take precedence; time and HP stay as guards
+    let branch = compile_one("distance_rate>=50&hp_per<=30");
+    assert_eq!(window(&branch).0, WindowVariable::Position);
+    assert_eq!(guards(&branch), vec!["distance_rate >= 50", "hp_per <= 30"]);
+}
+
+#[test]
+fn test_unsatisfiable_branches_are_dropped() {
+    // The test course has 3 corners and no downhill slopes
+    for condition in [
+        "slope==2",
+        "corner==4",
+        "phase==0&distance_rate>=50",
+        "hp_per>=50&hp_per<=30",
+        "slope==2&is_activate_heal_skill==1",
+    ] {
+        assert!(compile(condition).is_empty(), "{condition}");
+    }
+
+    // Only the satisfiable OR branch is kept
+    let branches = compile("slope==2&order<=3@slope==1&order<=3");
     assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
+    assert_eq!(guards(&branches[0]), vec!["slope == 1", "order <= 3"]);
+}
 
-    // Should use Window trigger
-    assert_eq!(triggers.len(), 1);
+#[test]
+fn test_phase_equality_is_a_window() {
+    let branch = compile_one("phase==1&distance_rate>=60");
+    let (_, min, max) = window(&branch);
+    assert_close(min, 1200.0, "min");
+    assert_close(max, 2000.0 / 24.0 * 16.0, "max");
+}
+
+#[test]
+fn test_spatial_comparisons_are_kept() {
+    let branch = compile_one("slope==1&order<=3");
+    assert_eq!(guards(&branch), vec!["slope == 1", "order <= 3"]);
+    let (_, min, max) = window(&branch);
+    assert_eq!((min, max), (800.0, 900.0));
+}
+
+#[test]
+fn test_multiple_trigger_comparisons_are_combined() {
+    let branch = compile_one("phase>=2&is_finalcorner==1&corner!=0&is_activate_any_skill==1");
     assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::DistanceRate,
-            min_threshold: 50.0,
-            max_threshold: 100.0,
-        }
+        branch.trigger,
+        TriggerCondition::AnySkillActivation
     ));
-
-    // activate_count_heal, distance_rate, and order should remain as guards
-    assert!(!guards.is_empty());
+    assert_eq!(branch.guards.len(), 4);
 }
 
-#[test]
-fn test_activate_count_with_phase_trigger() {
-    // Real Skill ID: 110011
-    // Condition: phase==1&order>=2&order_rate<=80&activate_count_middle>=2
-    //
-    // Expected behavior:
-    // - phase==1 creates PhaseChange trigger (explicit trigger)
-    // - PhaseChange trigger is explicit, so it takes precedence (Rule 1)
-    // - order and order_rate are DynamicGuards but don't force Continuous (explicit trigger exists)
-    // - activate_count_middle stays as guard (MonotonicGuard)
-    // - All other conditions checked when phase trigger fires
-
-    let condition =
-        parse_condition("phase==1&order>=2&order_rate<=80&activate_count_middle>=2").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should have PhaseChange trigger (explicit trigger takes precedence)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::PhaseChange { .. }));
-
-    // activate_count_middle and other conditions should be guards
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_activate_count_with_spatial_trigger() {
-    // Real Skill ID: 111051 (simplified to one branch)
-    // Condition: is_last_straight==1&phase>=2&order>=2&activate_count_middle==7
-    //
-    // Expected behavior
-    // - is_last_straight==1 creates Window trigger [straight.start, straight.end]
-    // - Window trigger is explicit, so it takes precedence
-    // - order is DynamicGuard but doesn't force Continuous (explicit trigger exists)
-    // - phase>=2 stays as guard (comparison operator)
-    // - activate_count_middle stays as guard (MonotonicGuard)
-    // - All other conditions checked while within the last straight window
-
-    let condition =
-        parse_condition("is_last_straight==1&phase>=2&order>=2&activate_count_middle==7").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should have Window trigger for last straight
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(
-        triggers[0],
-        TriggerCondition::Window {
-            variable: WindowVariable::SpatialPosition,
-            ..
-        }
-    ));
-
-    // All other conditions (including activate_count_middle) should be guards
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_activate_count_alone_continuous() {
-    // Real Skill ID: 102101211
-    // Condition: activate_count_middle>=3
-    //
-    // Expected behavior:
-    // - No explicit triggers available
-    // - activate_count_middle is MonotonicGuard but can't be promoted to threshold trigger
-    // - Use Continuous trigger (check every frame)
-
-    let condition = parse_condition("activate_count_middle>=3").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should use Continuous trigger (no explicit triggers, activate_count can't be promoted)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-    // activate_count_middle should be a guard
-    assert!(!guards.is_empty());
-}
-
-#[test]
-fn test_activate_count_with_static_guard_continuous() {
-    // Real Skill ID: 109001211
-    // Condition: distance_type==2&activate_count_start>=1
-    //
-    // Expected behavior:
-    // - No explicit triggers available
-    // - distance_type==2 is StaticGuard (can't be promoted)
-    // - activate_count_start is MonotonicGuard but can't be promoted to threshold trigger
-    // - Use Continuous trigger (check every frame)
-
-    let condition = parse_condition("distance_type==2&activate_count_start>=1").unwrap();
-    let branches = split_condition(&condition, vec![], &create_test_course());
-
-    assert_eq!(branches.len(), 1);
-    let (triggers, guards) = &branches[0];
-
-    // Should use Continuous trigger (no promotable triggers available)
-    assert_eq!(triggers.len(), 1);
-    assert!(matches!(triggers[0], TriggerCondition::Continuous));
-
-    // Both conditions should be guards
-    assert!(!guards.is_empty());
-}
-
-// ============================================================
-// PRECONDITION TESTS
-// ============================================================
 
 /// Helper function to create a test skill with precondition.
 fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
@@ -779,34 +310,6 @@ fn build_test_scheduler(skills: &[Skill]) -> crate::trigger::system::TriggerSche
     build_trigger_scheduler(skills, &create_test_course(), &mut rng)
 }
 
-/// Compile a precondition on the test course.
-fn compile_test_precondition(precondition: &str) -> Vec<PreconditionBranch> {
-    compile_precondition(
-        &parse_condition(precondition).unwrap(),
-        &create_test_course(),
-    )
-}
-
-/// Get the `(min, max)` thresholds of a precondition window trigger.
-fn window_bounds(branch: &PreconditionBranch) -> (f64, f64) {
-    match branch.trigger {
-        TriggerCondition::Window {
-            variable: WindowVariable::SpatialPosition,
-            min_threshold,
-            max_threshold,
-        } => (min_threshold, max_threshold),
-        ref other => panic!("Expected position window, got {:?}", other),
-    }
-}
-
-/// Assert that two floats are (almost) equal.
-fn assert_close(actual: f64, expected: f64) {
-    assert!(
-        actual == expected || (actual - expected).abs() < 1e-9,
-        "expected {expected}, got {actual}"
-    );
-}
-
 #[test]
 fn test_precondition_creates_unlock_logic_before_skill_logic() {
     let skill =
@@ -833,7 +336,9 @@ fn test_precondition_creates_unlock_logic_before_skill_logic() {
     let windows: Vec<_> = scheduler.precondition_windows.iter().collect();
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].logic_idx, 0);
-    assert!(scheduler.position_windows.is_empty());
+    let windows: Vec<_> = scheduler.position_windows.iter().collect();
+    assert_eq!(windows.len(), 1);
+    assert_eq!(windows[0].logic_idx, 1);
 }
 
 #[test]
@@ -949,81 +454,23 @@ fn test_unsatisfiable_precondition_skips_alternative() {
             scheduler.skill_logics.is_empty(),
             "{precondition} should never be satisfied"
         );
-        assert!(scheduler.distance_triggers.is_empty());
+        assert!(scheduler.position_windows.is_empty());
     }
 }
 
 #[test]
-fn test_precondition_window_ranges() {
-    // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
-    // 1200-1380, uphill at 800-900
-    let section = 2000.0 / 24.0;
-    let cases = [
-        ("distance_rate>=50", (1000.0, f64::INFINITY)),
-        ("distance_rate>=50&distance_rate<=51", (1000.0, 1040.0)),
-        ("remain_distance<=600", (1399.0, f64::INFINITY)),
-        (
-            "remain_distance<=305&remain_distance>=300",
-            (1694.0, 1700.0),
-        ),
-        ("phase==1", (section * 4.0, section * 16.0)),
-        ("phase>=2", (section * 16.0, 2000.0)),
-        ("phase_firsthalf==1", (section * 4.0, section * 10.0)),
-        ("is_finalcorner==1", (1200.0, f64::INFINITY)),
-        ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
-        ("corner==2", (500.0, 700.0)),
-        ("slope==1", (800.0, 900.0)),
-        ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
-        // Nothing position-based: window covers the whole race
-        ("change_order_onetime<0", (0.0, f64::INFINITY)),
-        ("distance_type==3", (0.0, f64::INFINITY)),
-    ];
+fn test_precondition_time_and_hp_windows_cover_the_race() {
+    // The precondition queue only tracks positions
+    let skill = create_skill_with_precondition("test", "distance_rate>=80", "accumulatetime>=10");
+    let scheduler = build_test_scheduler(&[skill]);
 
-    for (precondition, (min, max)) in cases {
-        let branches = compile_test_precondition(precondition);
-        assert_eq!(branches.len(), 1, "{precondition}");
-        let (actual_min, actual_max) = window_bounds(&branches[0]);
-        assert_close(actual_min, min);
-        assert_close(actual_max, max);
-        // Comparisons are kept as guards
-        assert_eq!(
-            branches[0].guards.len(),
-            precondition.split('&').count(),
-            "{precondition}"
-        );
-    }
-}
-
-#[test]
-fn test_precondition_event_branches() {
-    let branches = compile_test_precondition("phase_firsthalf==1&is_activate_heal_skill==1");
-    assert_eq!(branches.len(), 1);
-    assert!(matches!(
-        branches[0].trigger,
-        TriggerCondition::HealSkillActivation
-    ));
-    // Event comparison is removed; the rest is checked when the event happens
-    assert_eq!(branches[0].guards.len(), 1);
+    let windows: Vec<_> = scheduler.precondition_windows.iter().collect();
+    assert_eq!(windows.len(), 1);
     assert_eq!(
-        branches[0].guards[0].var,
-        crate::condition::variables::VarType::Phase(
-            crate::condition::variables::PhaseVar::PhaseFirsthalf
-        )
+        (windows[0].min_threshold, windows[0].max_threshold),
+        (0.0, f64::INFINITY)
     );
-
-    let branches = compile_test_precondition("phase>=2&is_last_straight_onetime==1");
-    assert!(matches!(
-        branches[0].trigger,
-        TriggerCondition::StraightTransition {
-            is_last: true,
-            is_onetime: true,
-            ..
-        }
-    ));
-    assert_eq!(branches[0].guards.len(), 1);
-
-    // Events can't happen where the rest of the branch is false
-    assert!(compile_test_precondition("slope==2&is_activate_heal_skill==1").is_empty());
+    assert!(scheduler.time_windows.is_empty());
 }
 
 #[test]
@@ -1037,7 +484,6 @@ fn test_precondition_event_is_indexed_before_skill() {
 
     // Both logics fire on the last straight; the unlock logic must go first
     assert!(scheduler.precondition_windows.is_empty());
-    assert_eq!(scheduler.straight_triggers.len(), 1);
-    assert_eq!(scheduler.straight_triggers[0].logic_indices, vec![0, 1]);
+    assert_eq!(scheduler.last_straight_triggers, vec![0, 1]);
     assert_eq!(scheduler.skill_logics[0].action, LogicAction::Unlock(0));
 }
