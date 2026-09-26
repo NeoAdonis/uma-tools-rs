@@ -203,6 +203,7 @@ impl UnreadyRunner {
                 gate_block,
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
+                fan_count: 0, // TODO: Determine fan count from race state or parameters
             },
             start_delay,
             activation_counts: ActivationCounts::default(),

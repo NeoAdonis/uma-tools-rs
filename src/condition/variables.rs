@@ -54,6 +54,7 @@ pub enum StatKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitialStateVar {
+    FanCount,
     Motivation,
     Popularity,
     PostNumber,
@@ -330,6 +331,7 @@ impl VarType {
             "base_wiz" => BaseStat(StatKind::Wiz),
 
             // Initial state
+            "fan_count" => InitialState(InitialStateVar::FanCount),
             "motivation" => InitialState(InitialStateVar::Motivation),
             "popularity" => InitialState(InitialStateVar::Popularity),
             "post_number" => InitialState(InitialStateVar::PostNumber),

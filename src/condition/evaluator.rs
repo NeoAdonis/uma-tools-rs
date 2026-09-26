@@ -642,6 +642,9 @@ fn get_initial_state_value(var: &InitialStateVar, state: &InitialState) -> i32 {
     use InitialStateVar::*;
 
     match var {
+        // Number of fans
+        FanCount => state.fan_count as i32,
+
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great
         Motivation => state.motivation as i32,
 

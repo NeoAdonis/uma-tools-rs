@@ -135,6 +135,8 @@ pub struct InitialState {
     pub judge_scores: JudgeScores,
     /// Gate bracket (1-8, from innermost to outermost).
     pub gate_block: u8,
+    /// Number of fans.
+    pub fan_count: u32,
 }
 
 /// State related to rushing (temptation, 掛かり).
