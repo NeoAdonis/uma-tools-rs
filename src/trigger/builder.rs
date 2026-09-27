@@ -38,7 +38,7 @@
 //!
 //! SkillActivationLogic {
 //!   // random segment in final corner
-//!   trigger: Segments { ranges: [(1850, 1860)] }, 
+//!   trigger: Segments { ranges: [(1850, 1860)] },
 //!   guards: [hp_per>=20, ground_type==2],
 //!   precondition: Some(0), // unlocked by the logic above
 //!   action: Activate,

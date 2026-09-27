@@ -129,7 +129,10 @@ fn test_unevaluable_comparisons_are_not_guards() {
 #[test]
 fn test_events_are_the_trigger() {
     let cases = [
-        ("phase_random==1&order<=3", "Segments { ranges: [(1000.0, 1010.0)] }"),
+        (
+            "phase_random==1&order<=3",
+            "Segments { ranges: [(1000.0, 1010.0)] }",
+        ),
         ("run_at_full_speed_random==1", "FullThrottleStart"),
         ("is_last_straight_onetime==1", "LastStraightEntry"),
         ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
@@ -541,5 +544,8 @@ fn test_segments_are_trimmed_to_the_branch() {
 #[test]
 fn test_earlier_event_wins_over_segments() {
     let branch = compile_one("is_activate_any_skill==1&phase_random==1");
-    assert!(matches!(branch.trigger, TriggerCondition::AnySkillActivation));
+    assert!(matches!(
+        branch.trigger,
+        TriggerCondition::AnySkillActivation
+    ));
 }

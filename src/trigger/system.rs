@@ -275,7 +275,6 @@ mod tests {
         assert_eq!(counts.end_after, 1);
     }
 
-
     fn window(logic_idx: usize, min_threshold: f64, max_threshold: f64) -> WindowTrigger {
         WindowTrigger {
             logic_idx,

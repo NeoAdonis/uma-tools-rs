@@ -219,7 +219,8 @@ fn test_random_segment_activates_within_segment() {
         let runner = run_race("phase_random==1", seed);
 
         // The rolled segment is 10m long
-        let TriggerCondition::Segments { ranges } = &runner.trigger_scheduler.skill_logics[0].trigger
+        let TriggerCondition::Segments { ranges } =
+            &runner.trigger_scheduler.skill_logics[0].trigger
         else {
             panic!("seed {seed}: expected segments");
         };
