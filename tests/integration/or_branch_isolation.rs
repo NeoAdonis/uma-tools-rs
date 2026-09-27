@@ -104,7 +104,10 @@ fn test_complex_three_branch_distance_ranges() {
     // All branches should trigger at the random point
     for (idx, branch) in branches.iter().enumerate() {
         assert!(
-            matches!(&branch.trigger, TriggerCondition::Position { meters } if meters == &[500.0]),
+            matches!(
+                &branch.trigger,
+                TriggerCondition::Segments { ranges } if ranges == &[(500.0, 510.0)]
+            ),
             "Branch {} should trigger at the random point",
             idx
         );

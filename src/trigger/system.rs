@@ -1,7 +1,5 @@
 use crate::course::Phase;
 use crate::trigger::skill_activation::SkillActivationLogic;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
 
 /// Main scheduler coordinating all trigger types.
 ///
@@ -17,12 +15,9 @@ pub struct TriggerScheduler {
     // because preconditions are checked before any other trigger
     pub precondition_windows: WindowQueue,
 
-    // Position triggers (random points) - min-heap by position
-    pub distance_triggers: BinaryHeap<DistanceTrigger>,
-
-    // Window triggers - checked every frame while within bounds
-    // Position and time only increase, so their windows are queued; HP can
-    // recover, so HP windows are scanned every frame
+    // Window triggers - checked every frame while within bounds (including random
+    // segments). Position and time only increase, so their windows are queued; HP
+    // can recover, so HP windows are scanned every frame
     pub position_windows: WindowQueue,
     pub time_windows: WindowQueue,
     pub hp_windows: Vec<WindowTrigger>,
@@ -49,7 +44,6 @@ impl TriggerScheduler {
             skill_logics: Vec::new(),
             precondition_satisfied: Vec::new(),
             precondition_windows: WindowQueue::default(),
-            distance_triggers: BinaryHeap::new(),
             position_windows: WindowQueue::default(),
             time_windows: WindowQueue::default(),
             hp_windows: Vec::new(),
@@ -76,8 +70,6 @@ impl TriggerScheduler {
         self.time_windows
             .remove_if(|window| removed(&window.logic_idx));
         self.hp_windows.retain(|window| !removed(&window.logic_idx));
-        self.distance_triggers
-            .retain(|trigger| !removed(&trigger.logic_idx));
         for list in [
             &mut self.last_straight_triggers,
             &mut self.full_throttle_triggers,
@@ -95,41 +87,6 @@ impl Default for TriggerScheduler {
         Self::new()
     }
 }
-
-// ========== POSITION TRIGGERS ==========
-
-/// Trigger based on distance. It fires once the runner's position reaches
-/// `threshold_meters`. Used for random points.
-#[derive(Clone, Debug)]
-pub struct DistanceTrigger {
-    /// Position from the start in meters.
-    pub threshold_meters: f64,
-    pub logic_idx: usize,
-}
-
-impl Ord for DistanceTrigger {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Min-heap: trigger earliest position first
-        other
-            .threshold_meters
-            .partial_cmp(&self.threshold_meters)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for DistanceTrigger {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for DistanceTrigger {
-    fn eq(&self, other: &Self) -> bool {
-        self.threshold_meters == other.threshold_meters
-    }
-}
-
-impl Eq for DistanceTrigger {}
 
 // ========== WINDOW TRIGGERS (Checked every frame within range) ==========
 
@@ -160,7 +117,8 @@ pub struct WindowQueue {
 }
 
 impl WindowQueue {
-    /// Add a window. Intended for build time.
+    /// Add a window, at build time or during the race (e.g. random segments rolled
+    /// once the Full-Throttle Sprint starts).
     pub fn push(&mut self, trigger: WindowTrigger) {
         let idx = self
             .pending
@@ -254,7 +212,6 @@ impl ActivationCounts {
 mod tests {
     use super::*;
     use crate::course::Phase;
-    use std::collections::BinaryHeap;
 
     #[test]
     fn test_activation_counts_early_phase() {
@@ -318,22 +275,6 @@ mod tests {
         assert_eq!(counts.end_after, 1);
     }
 
-    #[test]
-    fn test_distance_trigger_ordering() {
-        let mut heap = BinaryHeap::new();
-        for (logic_idx, threshold_meters) in [1700.0, 200.0, 1000.0].into_iter().enumerate() {
-            heap.push(DistanceTrigger {
-                threshold_meters,
-                logic_idx,
-            });
-        }
-
-        // Should pop in increasing position order
-        let order: Vec<f64> = std::iter::from_fn(|| heap.pop())
-            .map(|t| t.threshold_meters)
-            .collect();
-        assert_eq!(order, vec![200.0, 1000.0, 1700.0]);
-    }
 
     fn window(logic_idx: usize, min_threshold: f64, max_threshold: f64) -> WindowTrigger {
         WindowTrigger {

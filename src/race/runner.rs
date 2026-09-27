@@ -20,9 +20,9 @@ use crate::race::solver::RaceState;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
-use crate::trigger::random::random_segment;
+use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{ActiveTimedEffect, LogicAction, SkillActivationRecord};
-use crate::trigger::system::{DistanceTrigger, TriggerScheduler};
+use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::uma::*;
 
 /// Skill modifiers that are applied during race calculations.
@@ -804,24 +804,20 @@ impl Runner {
         .min(MAX_TARGET_SPEED)
     }
 
-    /// Schedule skills triggered at a random point after the Full-Throttle Sprint
-    /// starts (`run_at_full_speed_random`). The point is picked from the 10m
-    /// segments between the current position and the goal.
+    /// Schedule skills triggered in a random segment after the Full-Throttle
+    /// Sprint starts (`run_at_full_speed_random`). The segment is picked
+    /// between the current position and the goal, and checked like any other
+    /// position window.
     fn schedule_full_throttle_triggers(&mut self, state: &RaceState) {
         let course_distance = state.course.distance as f64;
         let mut rng = self.rng.borrow_mut();
         for logic_idx in self.trigger_scheduler.full_throttle_triggers.drain(..) {
-            let threshold_meters = if self.position < course_distance {
-                random_segment(self.position, course_distance, &mut *rng)
-            } else {
-                self.position
-            };
-            self.trigger_scheduler
-                .distance_triggers
-                .push(DistanceTrigger {
-                    threshold_meters,
-                    logic_idx,
-                });
+            let start = random_segment(self.position, course_distance, &mut *rng);
+            self.trigger_scheduler.position_windows.push(WindowTrigger {
+                logic_idx,
+                min_threshold: start,
+                max_threshold: start + SEGMENT_LENGTH,
+            });
         }
     }
 
@@ -2330,7 +2326,6 @@ impl Runner {
         // Preconditions go first, so that a skill can activate in the same frame
         // its precondition is satisfied
         self.check_precondition_windows(state);
-        self.check_distance_triggers(state);
         self.check_window_triggers(state);
         self.check_last_straight_triggers(state);
         // Depend on the activations above
@@ -2381,19 +2376,6 @@ impl Runner {
             for trigger_index in heal_activation_indices {
                 self.try_activate_skill(trigger_index, state);
             }
-        }
-    }
-
-    /// Check position triggers (random points) that have been reached.
-    pub fn check_distance_triggers(&mut self, state: &RaceState) {
-        while let Some(trigger) = self.trigger_scheduler.distance_triggers.peek() {
-            if self.position < trigger.threshold_meters {
-                break; // Threshold not reached yet, this and all subsequent triggers require further distance
-            }
-
-            let trigger = self.trigger_scheduler.distance_triggers.pop().unwrap();
-            let trigger_index = trigger.logic_idx;
-            self.try_activate_skill(trigger_index, state);
         }
     }
 

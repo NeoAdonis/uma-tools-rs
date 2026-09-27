@@ -4,8 +4,10 @@
 use crate::common::{load_course, race_params};
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::course::Phase;
+use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
+use uma_tools::trigger::skill_activation::TriggerCondition;
 use uma_tools::uma::*;
 
 /// Length of the test course (10104) in meters.
@@ -33,9 +35,8 @@ fn skill(condition: &str) -> Skill {
     )
 }
 
-/// Run a single-runner race with the given skill condition and return the
-/// positions at which the skill activated.
-fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
+/// Run a single-runner race with the given skill condition and return the runner.
+fn run_race(condition: &str, rng_seed: u64) -> Runner {
     let params = race_params(rng_seed);
     let uma = Uma {
         speed: 1200,
@@ -56,7 +57,13 @@ fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
     solver.add_runner(uma, Motivation::Normal, vec![skill(condition)]);
     let mut solver = solver.ready_runners();
     solver.run();
-    solver.runners[0]
+    solver.runners.remove(0)
+}
+
+/// Run a single-runner race with the given skill condition and return the
+/// positions at which the skill activated.
+fn activation_positions(condition: &str, rng_seed: u64) -> Vec<f64> {
+    run_race(condition, rng_seed)
         .activated_skills
         .iter()
         .map(|record| record.distance)
@@ -176,7 +183,6 @@ fn test_remain_distance_pair_window_range() {
     );
 
     // A single window; both comparisons stay as guards
-    assert!(scheduler.distance_triggers.is_empty());
     assert_eq!(scheduler.skill_logics[0].guards.len(), 2);
     assert_eq!(scheduler.position_windows.len(), 1);
     let window = scheduler.position_windows.iter().next().unwrap();
@@ -205,4 +211,29 @@ fn test_all_corner_random_activates_at_later_segment() {
 
     // With a single segment, it would only activate a quarter of the time
     assert!(activated >= 12, "activated in {activated} of 20 races");
+}
+
+#[test]
+fn test_random_segment_activates_within_segment() {
+    for seed in 0..5 {
+        let runner = run_race("phase_random==1", seed);
+
+        // The rolled segment is 10m long
+        let TriggerCondition::Segments { ranges } = &runner.trigger_scheduler.skill_logics[0].trigger
+        else {
+            panic!("seed {seed}: expected segments");
+        };
+        assert_eq!(ranges.len(), 1, "seed {seed}");
+        let (start, end) = ranges[0];
+        assert_eq!(end - start, 10.0, "seed {seed}");
+
+        // Activates in the first frame inside the segment
+        let positions: Vec<f64> = runner.activated_skills.iter().map(|r| r.distance).collect();
+        assert_eq!(positions.len(), 1, "seed {seed}");
+        assert!(
+            (start..=start + FRAME_DISTANCE).contains(&positions[0]),
+            "seed {seed}: activated at {}, segment [{start}, {end}]",
+            positions[0]
+        );
+    }
 }

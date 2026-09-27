@@ -13,7 +13,7 @@
 //!   decide whether the skill activates.
 //! - **Trigger**: decides when to evaluate the guards. It never replaces a guard, so
 //!   it only needs to fire *at least* whenever all guards could be true:
-//!   - Events: random points, entering the last straight, skill activations.
+//!   - Events: random segments, entering the last straight, skill activations.
 //!   - Windows: the range of positions (or time, or HP) where every comparison of the
 //!     branch can be true, checked every frame while inside it.
 //!
@@ -24,8 +24,8 @@
 //!
 //! Condition `hp_per>=20 & is_finalcorner_random==1`:
 //!
-//! - **Trigger**: `Position { meters: [1850] }` (random point rolled on the final
-//!   corner).
+//! - **Trigger**: `Segments { ranges: [(1850, 1860)] }` (random 10m segment rolled
+//!   on the final corner).
 //! - **Guards**: `[hp_per>=20]`.
 //!
 //! Condition `phase==1 & corner!=0 & order<=3` (on a course with corners at
@@ -38,6 +38,7 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::*;
 use crate::skill::SkillEffect;
+use crate::trigger::random::SEGMENT_LENGTH;
 use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.
@@ -94,9 +95,10 @@ pub enum WindowVariable {
 /// A trigger condition that determines WHEN to check a skill.
 #[derive(Clone, Debug)]
 pub enum TriggerCondition {
-    /// Checked once when reaching each position (in meters).
-    /// Used for random points.
-    Position { meters: Vec<f64> },
+    /// Checked every frame while the position is within any of the `(min, max)`
+    /// ranges (in meters). Used for random segments, trimmed to the positions where
+    /// the rest of the branch can be true.
+    Segments { ranges: Vec<(f64, f64)> },
 
     /// Checked every frame while the variable is within `[min, max]`.
     Window {
@@ -181,7 +183,7 @@ pub struct CompiledBranch {
 
 /// Compile a condition into one [`CompiledBranch`] per OR branch.
 ///
-/// `rolls` holds the points rolled for the random variables of each branch, or
+/// `rolls` holds the segment starts rolled for the random variables of each branch, or
 /// `None` if its roll failed (see
 /// [`roll_condition`](crate::trigger::random::roll_condition)). Branches without an
 /// entry (e.g. preconditions, which aren't rolled) have no random points.
@@ -196,7 +198,7 @@ pub struct CompiledBranch {
 ///
 /// Output (2 branches):
 ///
-/// - Branch 1: trigger `Position` (rolled point), guards `[hp_per>=20]`
+/// - Branch 1: trigger `Segments` (rolled segment), guards `[hp_per>=20]`
 /// - Branch 2: trigger `Window` (corner 2), guards `[corner==2, ground_type==1]`
 pub fn compile_condition(
     condition: &Condition,
@@ -218,8 +220,8 @@ pub fn compile_condition(
         .collect()
 }
 
-/// Compile an AND chain, with the `points` rolled for its random variables.
-/// Returns `None` if it can never be true on this course.
+/// Compile an AND chain, with the segment starts (`points`) rolled for its random
+/// variables. Returns `None` if it can never be true on this course.
 fn compile_branch(
     comps: &[&Comparison],
     points: &[f64],
@@ -238,8 +240,8 @@ fn compile_branch(
             // Rolled when building the scheduler: if we're here, the roll succeeded
             Random(_) => {}
 
-            // Random points: checked once at the rolled point. A branch holds at
-            // most one event (checked against the skill data)
+            // Random segments: checked while inside the rolled segments. A branch
+            // holds at most one event (checked against the skill data)
             RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
                 event.get_or_insert(TriggerCondition::FullThrottleStart);
             }
@@ -248,9 +250,8 @@ fn compile_branch(
                 if points.is_empty() {
                     return None;
                 }
-                event.get_or_insert(TriggerCondition::Position {
-                    meters: points.to_vec(),
-                });
+                // Filled once the position range of the branch is known
+                event.get_or_insert(TriggerCondition::Segments { ranges: Vec::new() });
             }
 
             // Only true on the frame the last straight is entered
@@ -288,6 +289,19 @@ fn compile_branch(
 
     if is_empty(position) || is_empty(time) || is_empty(hp) {
         return None; // Some comparisons can never be true at the same time
+    }
+
+    // Segments trimmed to the positions where the rest of the branch can be true
+    if let Some(TriggerCondition::Segments { ranges }) = &mut event {
+        ranges.extend(
+            points
+                .iter()
+                .map(|&start| intersect((start, start + SEGMENT_LENGTH), position))
+                .filter(|&range| !is_empty(range)),
+        );
+        if ranges.is_empty() {
+            return None; // No segment where the rest of the branch can be true
+        }
     }
 
     // Prefer position windows: they're the most common and cheapest to track

@@ -219,8 +219,8 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
             // all_corner_random==1
             // Picks up to 4 random segments on corners (see `random_all_corner_segments`)
-            // TODO: The skill can activate at each of them if it's off cooldown, but
-            // cooldowns aren't implemented yet, so it only activates at the first one
+            // TODO: The skill can activate in each of them if it's off cooldown, but
+            // cooldowns aren't implemented yet, so it only activates in the first one
             // where the other conditions are met.
             // No corners on course fails the roll
             let points = random_all_corner_segments(course, rng);
@@ -319,16 +319,14 @@ fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Op
 }
 
 /// Length in meters of the segments picked by random conditions.
-const SEGMENT_LENGTH: f64 = 10.0;
+pub const SEGMENT_LENGTH: f64 = 10.0;
 
-/// Pick a random 10m segment within `[start, end]` and return its start. The start
-/// is uniform in `[start, end - 10]`, so the segment always fits. Intervals shorter
-/// than 10m only have one segment, starting at `start`.
+/// Pick a random 10m segment within `[start, end]` and return its start. The
+/// start is uniform in `[start, end - 10]`, so the segment always fits.
+/// Intervals shorter than 10m only have one segment, starting at `start`.
 ///
-/// TODO: Random conditions pick a whole 10m segment, and the skill can activate
-/// anywhere in it as long as the other conditions are met. For now, only the start
-/// of the segment is used as a single activation point. Supporting activation
-/// windows requires refactoring the trigger system.
+/// The skill can activate anywhere in the segment, as long as the other
+/// conditions are met.
 pub fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
     let latest_start = end - SEGMENT_LENGTH;
     if latest_start <= start {

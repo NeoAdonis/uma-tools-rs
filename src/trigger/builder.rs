@@ -9,7 +9,7 @@
 //! For each skill alternative:
 //!
 //! 1. **Parse condition** - Parse condition string into AST.
-//! 2. **Pre-roll random triggers** - Determine random activation points.
+//! 2. **Pre-roll random triggers** - Determine random activation segments.
 //! 3. **Compile condition** - Turn each OR branch into a trigger + guards using
 //!    [`compile_condition()`].
 //! 4. **Compile precondition** - Turn the precondition (if present) into logics
@@ -37,7 +37,8 @@
 //! }
 //!
 //! SkillActivationLogic {
-//!   trigger: Position { meters: [1850] }, // random point in final corner
+//!   // random segment in final corner
+//!   trigger: Segments { ranges: [(1850, 1860)] }, 
 //!   guards: [hp_per>=20, ground_type==2],
 //!   precondition: Some(0), // unlocked by the logic above
 //!   action: Activate,
@@ -204,11 +205,12 @@ fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut T
     use TriggerCondition::*;
 
     match trigger {
-        Position { meters } => {
-            for &threshold_meters in meters {
-                scheduler.distance_triggers.push(DistanceTrigger {
-                    threshold_meters,
+        Segments { ranges } => {
+            for &(min_threshold, max_threshold) in ranges {
+                scheduler.position_windows.push(WindowTrigger {
                     logic_idx,
+                    min_threshold,
+                    max_threshold,
                 });
             }
         }

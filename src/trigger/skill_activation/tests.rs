@@ -129,7 +129,7 @@ fn test_unevaluable_comparisons_are_not_guards() {
 #[test]
 fn test_events_are_the_trigger() {
     let cases = [
-        ("phase_random==1&order<=3", "Position { meters: [1000.0] }"),
+        ("phase_random==1&order<=3", "Segments { ranges: [(1000.0, 1010.0)] }"),
         ("run_at_full_speed_random==1", "FullThrottleStart"),
         ("is_last_straight_onetime==1", "LastStraightEntry"),
         ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
@@ -503,8 +503,8 @@ fn test_branches_use_their_own_rolls() {
     assert_eq!(
         triggers,
         [
-            "Position { meters: [100.0, 200.0] }",
-            "Position { meters: [500.0] }"
+            "Segments { ranges: [(100.0, 110.0), (200.0, 210.0)] }",
+            "Segments { ranges: [(500.0, 510.0)] }"
         ]
     );
 
@@ -516,4 +516,30 @@ fn test_branches_use_their_own_rolls() {
 
     // Branches without a roll (preconditions) can't be triggered by random points
     assert!(compile_condition(&condition, &[], &course).is_empty());
+}
+
+#[test]
+fn test_segments_are_trimmed_to_the_branch() {
+    // Corner 3 of the test course is [500-700]
+    let condition = parse_condition("all_corner_random==1&corner==3").unwrap();
+    let course = create_test_course();
+
+    // Segments outside the corner are dropped, and the ones crossing its edges trimmed
+    let rolls = [Some(vec![95.0, 495.0, 600.0, 695.0, 900.0])];
+    let branches = compile_condition(&condition, &rolls, &course);
+    assert_eq!(branches.len(), 1);
+    let TriggerCondition::Segments { ranges } = &branches[0].trigger else {
+        panic!("expected segments, got {:?}", branches[0].trigger);
+    };
+    assert_eq!(ranges, &[(500.0, 505.0), (600.0, 610.0), (695.0, 700.0)]);
+
+    // No segment on the corner: the branch can never be satisfied
+    let rolls = [Some(vec![95.0, 900.0])];
+    assert!(compile_condition(&condition, &rolls, &course).is_empty());
+}
+
+#[test]
+fn test_earlier_event_wins_over_segments() {
+    let branch = compile_one("is_activate_any_skill==1&phase_random==1");
+    assert!(matches!(branch.trigger, TriggerCondition::AnySkillActivation));
 }

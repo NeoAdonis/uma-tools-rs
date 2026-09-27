@@ -183,16 +183,19 @@ fn test_random_trigger_scheduled_on_activation() {
         assert!(matches!(logic.trigger, TriggerCondition::FullThrottleStart));
         // distance_type==3 is resolved when the runner is created
         assert!(logic.guards.is_empty());
-        assert!(scheduler.distance_triggers.is_empty());
+        assert!(scheduler.position_windows.is_empty());
     }
 
     enter_last_spurt(&mut solver, 20.0);
 
     let scheduler = &solver.runners[0].trigger_scheduler;
     assert!(scheduler.full_throttle_triggers.is_empty());
-    let trigger = scheduler.distance_triggers.peek().unwrap();
-    assert_eq!(trigger.logic_idx, 0);
-    assert!((1500.0..2000.0).contains(&trigger.threshold_meters));
+    // A single 10m segment between the current position and the goal
+    let windows: Vec<_> = scheduler.position_windows.iter().collect();
+    assert_eq!(windows.len(), 1);
+    assert_eq!(windows[0].logic_idx, 0);
+    assert!((1500.0..2000.0).contains(&windows[0].min_threshold));
+    assert_eq!(windows[0].max_threshold, windows[0].min_threshold + 10.0);
 }
 
 #[test]
