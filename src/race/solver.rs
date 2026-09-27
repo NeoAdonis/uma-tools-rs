@@ -302,6 +302,7 @@ impl RaceSolver<Runner> {
             runner.reset_overtake_checks();
         }
 
+        let game_version = self.state.config.game_version;
         let num_runners = self.runners.len();
         for i in 0..num_runners {
             let (left, right) = self.runners.split_at_mut(i + 1);
@@ -341,7 +342,7 @@ impl RaceSolver<Runner> {
                 if self.state.course.is_side_surrounded(distance, lane_diff) {
                     runner_j.update_side_surrounded_by(runner_i);
                 }
-                if self.state.course.is_near(distance, lane_diff) {
+                if self.state.course.is_near(distance, lane_diff, game_version) {
                     runner_j.update_near_behind(runner_i);
                 }
                 if self.state.course.is_near_same_lane(distance, lane_diff) {
@@ -358,7 +359,7 @@ impl RaceSolver<Runner> {
                 }
 
                 // Update spot struggle and dueling status
-                if self.state.config.game_version >= GameVersion::FirstAnniversary {
+                if game_version >= GameVersion::FirstAnniversary {
                     if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
                     {
                         runner_i.start_spot_struggle(self.state.elapsed_time);

@@ -11,6 +11,7 @@ include!("course/track_names.rs");
 
 pub mod geometry;
 
+use crate::configuration::GameVersion;
 use crate::course::geometry::*;
 use crate::units::course_widths_to_meters;
 use num_enum::TryFromPrimitive;
@@ -417,9 +418,18 @@ impl Course {
 
     /// Check if a runner is near another runner based on distance and lane difference.
     ///
-    /// This is checked by certain skills.
-    pub fn is_near(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 3.0, 3.0)
+    /// Two runners are near if they are less than 3m apart and less than 3 lanes
+    /// to either side. Before the 1st anniversary update, both thresholds were 1.5
+    /// (1.5m and 1.5 lanes).
+    ///
+    /// This is checked by certain skills (`near_count`).
+    pub fn is_near(&self, distance: f64, lane_diff: f64, game_version: GameVersion) -> bool {
+        let threshold = if game_version >= GameVersion::FirstAnniversary {
+            3.0
+        } else {
+            1.5
+        };
+        self.is_near_by(distance, lane_diff, threshold, threshold)
     }
 
     /// Check if a runner is near another runner and in the same lane based on
@@ -593,6 +603,18 @@ mod tests {
         // Out of lane range, on either side
         assert!(!course.is_near_by(1.0, 3.0 * lane, 3.0, 3.0));
         assert!(!course.is_near_by(1.0, -3.0 * lane, 3.0, 3.0));
+    }
+
+    #[test]
+    fn test_is_near() {
+        let course = create_test_course(10001);
+        let lane = course.lane_width();
+        let version = GameVersion::LATEST;
+        assert!(course.is_near(2.9, 2.9 * lane, version));
+        assert!(course.is_near(2.9, -2.9 * lane, version));
+        assert!(!course.is_near(3.0, 0.0, version));
+        assert!(!course.is_near(0.0, 3.0 * lane, version));
+        assert!(!course.is_near(0.0, -3.0 * lane, version));
     }
 
     #[test]
