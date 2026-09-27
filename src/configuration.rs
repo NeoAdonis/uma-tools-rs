@@ -31,7 +31,8 @@ pub enum GameVersion {
     SecondAnniversary,
     /// After the 2.5 anniversary update in Japan.
     ///
-    /// This update introduced stamina limit breaks and lead securing mechanics.
+    /// This update introduced stamina limit breaks, compete before spurt,
+    /// stamina keep and lead securing mechanics.
     TwoPointFiveAnniversary,
     /// After the Mecha Umamusume scenario release in Japan.
     ///

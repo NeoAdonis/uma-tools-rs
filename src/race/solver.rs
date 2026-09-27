@@ -8,6 +8,7 @@ use rand::prelude::*;
 
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
+use crate::race::compete_before_spurt;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
@@ -247,6 +248,7 @@ impl RaceSolver<Runner> {
         self.update_blocking_status(delta_time);
         self.update_positioning_strategy();
         self.update_secure_lead();
+        self.update_compete_before_spurt();
     }
 
     /// Update order (rank) and distance differences for all runners.
@@ -514,26 +516,45 @@ impl RaceSolver<Runner> {
 
             let runner = &self.runners[i];
             let style = runner.adjusted.style;
-            let mut lead_insufficient = false;
-            let mut is_alone = true;
-            for (j, other) in self.runners.iter().enumerate() {
-                if i == j {
-                    continue;
-                }
-                let lead = runner.position - other.position;
-                if let Some(desirable) =
-                    secure_lead::desirable_lead(style, other.adjusted.style, course_distance)
-                    && lead < desirable
-                {
-                    lead_insufficient = true;
-                }
-                if other.adjusted.style == style && lead.abs() <= 10.0 {
-                    is_alone = false;
-                }
-            }
+            let lead_insufficient = self.runners.iter().any(|other| {
+                secure_lead::desirable_lead(style, other.adjusted.style, course_distance)
+                    .is_some_and(|desirable| runner.position - other.position < desirable)
+            });
+            let is_alone = self.is_alone(i, 10.0);
 
             self.runners[i].try_secure_lead(lead_insufficient, is_alone, &self.state);
         }
+    }
+
+    /// Update compete before spurt (位置取り調整) state for all runners.
+    fn update_compete_before_spurt(&mut self) {
+        let elapsed_time = self.state.elapsed_time;
+        let course_distance = self.state.course.distance as f64;
+
+        for i in 0..self.runners.len() {
+            self.runners[i].expire_compete_before_spurt(elapsed_time);
+            if !self.runners[i].is_compete_check_due(&self.state) {
+                continue;
+            }
+
+            let runner = &self.runners[i];
+            let threshold =
+                compete_before_spurt::lead_threshold(runner.adjusted.style, course_distance);
+            let far_from_lead = runner.position_diff.from_first > threshold;
+            let is_alone = self.is_alone(i, compete_before_spurt::ALONE_DISTANCE);
+
+            self.runners[i].try_compete_before_spurt(far_from_lead, is_alone, &self.state);
+        }
+    }
+
+    /// Check if no other runner with the same style as runner `i` is within `distance`.
+    fn is_alone(&self, i: usize, distance: f64) -> bool {
+        let runner = &self.runners[i];
+        self.runners.iter().enumerate().all(|(j, other)| {
+            i == j
+                || other.adjusted.style != runner.adjusted.style
+                || (runner.position - other.position).abs() > distance
+        })
     }
 
     #[inline]

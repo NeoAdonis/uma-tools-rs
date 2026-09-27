@@ -8,6 +8,7 @@ use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::parser::parse_condition;
 use crate::race::charge_up::{self, ChargeUp};
+use crate::race::compete_before_spurt;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, hp_style_multiplier};
 use crate::race::modifiers::{
@@ -414,6 +415,15 @@ impl UnreadyRunner {
                 }
         };
 
+        // Roll the HP ratio kept by Stamina Keep (2.5 Anniv. onward)
+        let stamina_keep_ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
+            0.0
+        } else {
+            self.rng
+                .borrow_mut()
+                .random_range(compete_before_spurt::STAMINA_KEEP_RATIO)
+        };
+
         // Initialize race state
         Runner {
             gate_roll: self.gate_roll,
@@ -480,6 +490,10 @@ impl UnreadyRunner {
             dueling: None,
             secure_lead: None,
             next_secure_lead_check: 0.0,
+            compete_before_spurt: None,
+            next_compete_check: 0.0,
+            stamina_keep_ratio,
+            is_stamina_keep: false,
             duel_targets: HashMap::new(),
             duel_count: 0,
             overtake_state: None,

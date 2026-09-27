@@ -3,12 +3,13 @@
 use rand::RngExt;
 
 use crate::configuration::GameVersion;
-use crate::course::Phase;
-use crate::race::hp::{estimate_hp_last_spurt, estimate_hp_per_meter_last_spurt};
+use crate::course::{Course, Phase};
+use crate::race::hp::{
+    calculate_hp_per_second, estimate_hp_last_spurt, estimate_hp_per_meter_last_spurt,
+};
 use crate::race::modifiers::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
-use crate::uma::{Aptitude, Style};
 
 /// Parameters defining the last spurt behavior of a runner.
 pub struct LastSpurt {
@@ -39,31 +40,72 @@ struct LastSpurtCandidate {
 }
 
 /// Calculate the maximum possible last spurt speed for a runner.
-fn last_spurt_speed_max(
-    base_speed: f64,
-    style: Style,
-    speed_stat: u16,
-    guts_stat: u16,
-    distance_aptitude: Aptitude,
-    game_version: GameVersion,
-) -> f64 {
+fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
+    let base_speed = state.course.base_speed();
+    let uma = &runner.adjusted;
     let base_target_late = base_target_speed(
         base_speed,
-        style,
+        uma.style,
         Phase::Late,
-        speed_stat,
-        distance_aptitude,
+        uma.speed,
+        uma.distance_aptitude,
     );
     let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
-    let speed_component = (500.0 * speed_stat as f64).sqrt()
-        * distance_proficiency_multiplier(distance_aptitude)
+    let speed_component = (500.0 * uma.speed as f64).sqrt()
+        * distance_proficiency_multiplier(uma.distance_aptitude)
         * 0.002;
-    let guts_component = if game_version < GameVersion::FirstAnniversary {
+    let guts_component = if state.config.game_version < GameVersion::FirstAnniversary {
         0.0
     } else {
-        (450.0 * guts_stat as f64).powf(0.597) * 0.0001
+        (450.0 * uma.guts as f64).powf(0.597) * 0.0001
     };
     base_component + speed_component + guts_component
+}
+
+/// Remaining distance from the start of the Late phase (or current position, if
+/// later) to the goal line.
+fn remaining_spurt_distance(runner: &Runner, course: &Course) -> f64 {
+    (course.distance as f64 - Phase::Late.boundaries(course).0)
+        .min(course.distance as f64 - runner.position)
+}
+
+/// HP required to run the last spurt at `speed` until 60m before the goal line.
+fn spurt_hp_required(runner: &Runner, state: &RaceState, speed: f64) -> f64 {
+    estimate_hp_last_spurt(
+        speed,
+        &state.course,
+        state.params.track_condition,
+        remaining_spurt_distance(runner, &state.course) - 60.0,
+        runner.adjusted.guts,
+    )
+}
+
+/// Estimate the HP required to finish the race from the current position.
+///
+/// It is the HP needed to run the rest of the Mid phase at its base target
+/// speed, plus the HP needed for a last spurt at max speed (as estimated by
+/// `calculate_last_spurt`).
+// ? Assumed to be the "required amount to finish the race" used by Stamina Keep.
+pub fn hp_required_to_finish(runner: &Runner, state: &RaceState) -> f64 {
+    let course = &state.course;
+    let mid_distance = (Phase::Late.boundaries(course).0 - runner.position).max(0.0);
+    let mid_speed = base_target_speed(
+        course.base_speed(),
+        runner.adjusted.style,
+        Phase::Mid,
+        runner.adjusted.speed,
+        runner.adjusted.distance_aptitude,
+    );
+    let mid_hp = calculate_hp_per_second(
+        mid_speed,
+        course,
+        state.params.track_condition,
+        Phase::Mid,
+        runner.adjusted.guts,
+        1.0,
+    ) * mid_distance
+        / mid_speed;
+    mid_hp + spurt_hp_required(runner, state, last_spurt_speed_max(runner, state))
 }
 
 /// Calculate and set the last spurt parameters for the given runner.
@@ -82,31 +124,16 @@ fn last_spurt_speed_max(
 pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt {
     let course = &state.course;
     let track_condition = state.params.track_condition;
-    let max_last_spurt_speed = last_spurt_speed_max(
-        course.base_speed(),
-        runner.adjusted.style,
-        runner.adjusted.speed,
-        runner.adjusted.guts,
-        runner.adjusted.distance_aptitude,
-        state.config.game_version,
-    );
+    let max_last_spurt_speed = last_spurt_speed_max(runner, state);
 
     // Calculate remaining distance from start of late phase (or current position)
-    // until 60m before goal line
-    let remaining_distance = (course.distance as f64 - Phase::Late.boundaries(course).0)
-        .min(course.distance as f64 - runner.position);
+    let remaining_distance = remaining_spurt_distance(runner, course);
 
     // Estimate stamina usage up to 60m before goal line
     let calculation_distance = remaining_distance - 60.0;
 
     // If HP is sufficient for max speed, use it immediately
-    let max_hp_required = estimate_hp_last_spurt(
-        max_last_spurt_speed,
-        course,
-        track_condition,
-        calculation_distance,
-        runner.adjusted.guts,
-    );
+    let max_hp_required = spurt_hp_required(runner, state, max_last_spurt_speed);
 
     if runner.hp.current >= max_hp_required {
         return LastSpurt {

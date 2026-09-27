@@ -10,6 +10,7 @@ use crate::configuration::GameVersion;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
+use crate::race::compete_before_spurt;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
@@ -159,6 +160,12 @@ pub struct StruggleState {
 
 /// Speed boost applied while securing the lead (リード確保) and its expiration time.
 pub struct SecureLeadState {
+    pub modifier: f64,
+    pub expires_at: f64,
+}
+
+/// Speed boost applied while competing before spurt (位置取り調整) and its expiration time.
+pub struct CompeteState {
     pub modifier: f64,
     pub expires_at: f64,
 }
@@ -442,6 +449,16 @@ pub struct Runner {
     pub secure_lead: Option<SecureLeadState>,
     /// Time of the next secure lead check in seconds.
     pub next_secure_lead_check: f64,
+    /// State related to compete before spurt. If `None`, the runner is not competing.
+    pub compete_before_spurt: Option<CompeteState>,
+    /// Time of the next compete before spurt (and Stamina Keep) check in seconds.
+    pub next_compete_check: f64,
+    /// Ratio of the HP required to finish the race that the runner tries to keep
+    /// (Stamina Keep, 持久力温存). Rolled before the race begins; zero before 2.5 Anniv.
+    pub stamina_keep_ratio: f64,
+    /// Whether the runner is in Stamina Keep mode. While in it, she won't
+    /// compete before spurt. Reset by recovery skills.
+    pub is_stamina_keep: bool,
     /// Duel targets being tracked for potential dueling. Gate number is used as key.
     pub duel_targets: HashMap<u8, DuelTarget>,
     /// Count of duels the runner has engaged in.
@@ -790,6 +807,11 @@ impl Runner {
 
         let secure_lead_modifier = self.secure_lead.as_ref().map_or(0.0, |s| s.modifier);
 
+        let compete_modifier = self
+            .compete_before_spurt
+            .as_ref()
+            .map_or(0.0, |c| c.modifier);
+
         self.target_speed = (target_speed
             + self.slope_acceleration.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
@@ -799,6 +821,7 @@ impl Runner {
             + force_in_modifier
             + struggle_modifier
             + secure_lead_modifier
+            + compete_modifier
             + self.stamina_limit_break
             + self.full_throttle.speed_bonus())
         .min(MAX_TARGET_SPEED)
@@ -1472,6 +1495,80 @@ impl Runner {
             self.hp.has_emptied = true;
         }
         self.next_secure_lead_check = elapsed_time + secure_lead::DURATION + secure_lead::COOLDOWN;
+    }
+
+    /// End the compete before spurt (位置取り調整) speed boost once it expires.
+    pub fn expire_compete_before_spurt(&mut self, elapsed_time: f64) {
+        if self
+            .compete_before_spurt
+            .as_ref()
+            .is_some_and(|c| elapsed_time >= c.expires_at)
+        {
+            self.compete_before_spurt = None;
+        }
+    }
+
+    /// Check if the runner should check whether to compete before spurt
+    /// (位置取り調整) on this frame.
+    pub fn is_compete_check_due(&self, state: &RaceState) -> bool {
+        state.config.game_version >= GameVersion::TwoPointFiveAnniversary
+            && !self.has_finished()
+            && !self.hp.is_empty()
+            && compete_before_spurt::SECTIONS.contains(&self.section)
+            && self.compete_before_spurt.is_none()
+            && state.elapsed_time >= self.next_compete_check
+    }
+
+    /// Attempt to compete before spurt (位置取り調整).
+    ///
+    /// First, if the runner lacks the HP she wants to keep to finish the race,
+    /// she may notice and enter Stamina Keep (持久力温存). Then, unless in
+    /// Stamina Keep, she competes if she is too far from the lead or has other
+    /// runners nearby, speeding up for a short time at the cost of HP, followed
+    /// by a cooldown.
+    ///
+    /// `is_alone` is whether no other runner with the same style is within
+    /// `compete_before_spurt::ALONE_DISTANCE`.
+    pub fn try_compete_before_spurt(
+        &mut self,
+        far_from_lead: bool,
+        is_alone: bool,
+        state: &RaceState,
+    ) {
+        let elapsed_time = state.elapsed_time;
+        self.next_compete_check = elapsed_time + compete_before_spurt::CHECK_INTERVAL;
+
+        if !self.is_stamina_keep
+            && self.hp.current < hp_required_to_finish(self, state) * self.stamina_keep_ratio
+            && self
+                .rng
+                .borrow_mut()
+                .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wiz))
+        {
+            self.is_stamina_keep = true;
+        }
+        // ? The activation check is deterministic; its chance formula is unknown
+        if self.is_stamina_keep || !(far_from_lead || self.nearby.count > 0) {
+            return;
+        }
+
+        let style = self.adjusted.style;
+        self.compete_before_spurt = Some(CompeteState {
+            modifier: compete_before_spurt::target_speed_bonus(
+                style,
+                self.adjusted.power,
+                self.adjusted.guts,
+                is_alone,
+            ),
+            expires_at: elapsed_time + compete_before_spurt::DURATION,
+        });
+        self.hp.current -=
+            compete_before_spurt::hp_cost(style, state.course.distance, far_from_lead);
+        if self.hp.is_empty() {
+            self.hp.has_emptied = true;
+        }
+        self.next_compete_check =
+            elapsed_time + compete_before_spurt::DURATION + compete_before_spurt::COOLDOWN;
     }
 
     /// Uncheck all duel targets at the start of an update cycle.
@@ -2538,6 +2635,9 @@ impl Runner {
 
             // Increment heal skill count
             self.trigger_scheduler.activation_counts.increment_heal();
+
+            // Recovering HP resets Stamina Keep (2.5 Anniv. onward)
+            self.is_stamina_keep = false;
 
             // Recalculate last spurt if in Mid phase or later (1st Anniv. onward)
             if state.config.game_version >= GameVersion::FirstAnniversary

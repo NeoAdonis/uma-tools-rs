@@ -73,15 +73,19 @@ pub fn hp_cost(style: Style, course_distance: i32) -> f64 {
         Style::Pace | Style::Late => 0.8,
         Style::End => 0.0,
     };
-    let distance_coef = match course_distance {
+    20.0 * style_coef * distance_coefficient(course_distance)
+}
+
+/// Course distance coefficient of the HP cost. Shared with compete before spurt.
+pub fn distance_coefficient(course_distance: i32) -> f64 {
+    match course_distance {
         ..=1800 => 0.3,
         1801..=2100 => 0.5,
         2101..=2200 => 0.8,
         2201..=2400 => 1.0,
         2401..=2600 => 1.1,
         _ => 1.2,
-    };
-    20.0 * style_coef * distance_coef
+    }
 }
 
 #[cfg(test)]
