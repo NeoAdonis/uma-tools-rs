@@ -16,6 +16,12 @@ use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
 
+/// Scale applied to raw finish times to get displayed times.
+pub const FINISH_TIME_SCALE: f64 = 1.18;
+
+/// Speed used to convert scaled finish time differences into margins, in m/s.
+const MARGIN_SPEED: f64 = 15.0;
+
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
@@ -170,7 +176,7 @@ impl RaceSolver<UnreadyRunner> {
 impl RaceSolver<Runner> {
     /// Get the time as displayed on the scoreboard after a race finishes.
     pub fn scoreboard_time(&self) -> Option<f64> {
-        let converted = self.state.finish_time? * 1.18;
+        let converted = self.state.finish_time? * FINISH_TIME_SCALE;
         let min = self.state.course.finish_time_min();
         let max = self.state.course.finish_time_max();
         let clamped = converted.clamp(min, max);
@@ -182,13 +188,30 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Run simulation until the first runner finishes.
+    /// Run simulation until every runner finishes, then record finish margins.
     ///
     /// Race state is updated 15 times per second.
     pub fn run(&mut self) {
         let dt = 1.0 / 15.0; // 15 FPS
-        while self.state.finish_time.is_none() {
+        while !self.runners.iter().all(Runner::has_finished) {
             self.step(dt);
+        }
+        self.update_finish_margins();
+    }
+
+    /// Set each runner's margin behind the runner that placed immediately ahead.
+    /// All runners must have finished.
+    fn update_finish_margins(&mut self) {
+        // Runners keep moving after finishing, so order must come from finish times
+        let mut by_finish: Vec<&mut Runner> = self.runners.iter_mut().collect();
+        by_finish.sort_by(|a, b| a.finish_time.partial_cmp(&b.finish_time).unwrap());
+
+        let mut prev_time = None;
+        for runner in by_finish {
+            let time = runner.finish_time.expect("all runners must have finished");
+            runner.finish_margin =
+                prev_time.map(|prev| (time - prev) * FINISH_TIME_SCALE * MARGIN_SPEED);
+            prev_time = Some(time);
         }
     }
 
@@ -199,8 +222,9 @@ impl RaceSolver<Runner> {
     /// advances and every runner is updated.
     fn step(&mut self, delta_time: f64) {
         for runner in &mut self.runners {
-            // Runners still in the gate haven't reached any state worth checking
-            if runner.start_delay > self.state.elapsed_time {
+            // Runners still in the gate haven't reached any state worth checking,
+            // and skills can't activate after the goal
+            if runner.start_delay > self.state.elapsed_time || runner.has_finished() {
                 continue;
             }
             runner.check_skills(&mut self.state);
@@ -219,7 +243,6 @@ impl RaceSolver<Runner> {
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
                 self.state.finish_time = Some(self.state.elapsed_time);
-                // TODO: calculate how many lenghts ahead the runner is from the next runner
             }
 
             // Update everything derived from the new position, so that skills

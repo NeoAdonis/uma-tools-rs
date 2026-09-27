@@ -419,6 +419,9 @@ pub struct Runner {
     pub available_skills: Vec<Skill>,
     // Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
+    /// Distance in meters behind the runner that placed immediately ahead.
+    /// `None` for first place or until the race is over.
+    pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
     /// Set of activated skill IDs.
@@ -1128,7 +1131,7 @@ impl Runner {
         let prev_position = self.position;
         // Use effective_speed which includes current_speed modifiers
         self.position += self.effective_speed() * move_time;
-        if self.position >= state.course.distance as f64 {
+        if self.finish_time.is_none() && self.position >= state.course.distance as f64 {
             // Calculate exact finish time
             let remaining_distance = state.course.distance as f64 - prev_position;
             let time_to_finish = remaining_distance / self.effective_speed();

@@ -468,3 +468,50 @@ fn test_runners_bound_to_rush_do_rush() {
         assert!(runner.has_rushed(), "gate {}", runner.gate_roll);
     }
 }
+
+#[test]
+fn test_all_runners_finish_with_margins() {
+    let course = Course::from_json_file("data/course_data.json", "10101")
+        .expect("Failed to load course data");
+    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    for (i, style) in [Style::Front, Style::Pace, Style::Late, Style::End]
+        .into_iter()
+        .enumerate()
+    {
+        let uma = Uma {
+            speed: 1000 + 50 * i as u16,
+            stamina: 1000,
+            power: 1000,
+            guts: 800,
+            wiz: 1000,
+            style,
+            distance_aptitude: Aptitude::A,
+            track_aptitude: Aptitude::A,
+            style_aptitude: Aptitude::A,
+        };
+        solver.add_runner(uma, Motivation::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+
+    // Finish times are fixed once set, even though runners keep moving
+    let mut first_finish = None;
+    while !solver.runners.iter().all(Runner::has_finished) {
+        solver.step(1.0 / 15.0);
+        let winner = solver.runners.iter().find(|runner| runner.has_finished());
+        if let Some(winner) = winner {
+            let id = (winner.gate_roll, winner.finish_time.unwrap());
+            assert_eq!(*first_finish.get_or_insert(id), id);
+        }
+    }
+    solver.update_finish_margins();
+
+    let mut runners: Vec<&Runner> = solver.runners.iter().collect();
+    runners.sort_by(|a, b| a.finish_time.partial_cmp(&b.finish_time).unwrap());
+    assert_eq!(runners[0].finish_margin, None);
+    for pair in runners.windows(2) {
+        let expected = (pair[1].finish_time.unwrap() - pair[0].finish_time.unwrap()) * 1.18 * 15.0;
+        let margin = pair[1].finish_margin.expect("non-winners have a margin");
+        assert!(margin >= 0.0);
+        assert!((margin - expected).abs() < 1e-9);
+    }
+}

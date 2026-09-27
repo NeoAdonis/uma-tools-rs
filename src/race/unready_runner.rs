@@ -486,6 +486,7 @@ impl UnreadyRunner {
             entered_straight: None,
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
+            finish_margin: None,
             spot_struggle: None,
             dueling: None,
             secure_lead: None,

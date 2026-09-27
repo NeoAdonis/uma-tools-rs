@@ -3,6 +3,7 @@ pub mod compete_before_spurt;
 pub mod full_throttle;
 pub mod hp;
 pub mod last_spurt;
+pub mod margin;
 pub mod modifiers;
 pub mod parameters;
 pub mod popularity;
