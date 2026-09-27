@@ -11,27 +11,49 @@ use rand::prelude::*;
 /// Returns one entry per branch (in the order of [`ComparisonTree::or_branches`]),
 /// holding the points where the branch should be checked, or `None` if a roll
 /// failed and the branch can never be satisfied.
+///
+/// Each distinct comparison is rolled once per condition: branches containing the
+/// same one (e.g. `phase_random==1` in `distance_type==3&phase_random==1 @
+/// distance_type==4&phase_random==1`) share its points, or its failure.
 pub fn roll_condition(
     condition: &Condition,
     course: &Course,
     rng: &mut impl Rng,
 ) -> Vec<Option<Vec<f64>>> {
+    let mut rolled = Vec::new();
     condition
         .comp_tree
         .or_branches()
         .iter()
-        .map(|comps| roll_branch(comps, course, rng))
+        .map(|comps| roll_branch(comps, course, &mut rolled, rng))
         .collect()
 }
 
-/// Roll the random variables of an AND chain.
+/// Results of the comparisons already rolled for a condition.
+type RolledComps<'a> = Vec<(&'a Comparison, Option<Vec<f64>>)>;
+
+/// Roll the random variables of an AND chain, reusing the results in `rolled`
+/// for comparisons already rolled by another branch.
 ///
 /// Returns the points where the branch should be checked, or `None` if a roll
 /// failed (e.g. a random lot, or no corners for `corner_random`).
-fn roll_branch(comps: &[&Comparison], course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
+fn roll_branch<'a>(
+    comps: &[&'a Comparison],
+    course: &Course,
+    rolled: &mut RolledComps<'a>,
+    rng: &mut impl Rng,
+) -> Option<Vec<f64>> {
     let mut points = Vec::new();
-    for comp in comps {
-        points.extend(process_random_comp(comp, course, rng)?);
+    for &comp in comps {
+        let result = match rolled.iter().find(|(prev, _)| *prev == comp) {
+            Some((_, result)) => result.clone(),
+            None => {
+                let result = process_random_comp(comp, course, rng);
+                rolled.push((comp, result.clone()));
+                result
+            }
+        };
+        points.extend(result?);
     }
     Some(points)
 }

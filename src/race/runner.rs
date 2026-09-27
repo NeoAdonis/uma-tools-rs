@@ -834,6 +834,13 @@ impl Runner {
     /// Sprint starts (`run_at_full_speed_random`). The segment is picked
     /// between the current position and the goal, and checked like any other
     /// position window.
+    ///
+    /// N.B. Unlike other random variables (see
+    /// [`roll_condition`](crate::trigger::random::roll_condition)), it's rolled
+    /// once per branch, not once per condition. In practice, at least for this
+    /// variable, only one branch is left for evaluation; other branches would
+    /// have contained a non-overlapping static guard that would have been false,
+    /// and therefore were removed when the runner was created.
     fn schedule_full_throttle_triggers(&mut self, state: &RaceState) {
         let course_distance = state.course.distance as f64;
         let mut rng = self.rng.borrow_mut();

@@ -723,8 +723,8 @@ fn test_all_corner_random_no_corners() {
 }
 
 #[test]
-fn test_all_corner_random_per_branch() {
-    // Each branch gets its own segments, never more than 4
+fn test_all_corner_random_shared_between_branches() {
+    // Both branches share the same segments, never more than 4
     let course = create_test_course();
     let condition = parse_condition(
         "distance_type==1&all_corner_random==1@distance_type==2&all_corner_random==1",
@@ -735,10 +735,63 @@ fn test_all_corner_random_per_branch() {
     for _ in 0..100 {
         let rolls = roll_condition(&condition, &course, &mut rng);
         assert_eq!(rolls.len(), 2);
-        for points in rolls {
-            assert!((1..=4).contains(&points.unwrap().len()));
-        }
+        let points = rolls[0].as_ref().unwrap();
+        assert!((1..=4).contains(&points.len()));
+        assert_eq!(rolls[0], rolls[1]);
     }
+}
+
+#[test]
+fn test_phase_random_shared_between_branches() {
+    let course = create_test_course();
+    let condition =
+        parse_condition("distance_type==3&phase_random==1@distance_type==4&phase_random==1")
+            .unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+    for _ in 0..100 {
+        let rolls = roll_condition(&condition, &course, &mut rng);
+        assert_eq!(rolls.len(), 2);
+        assert_eq!(rolls[0].as_ref().unwrap().len(), 1);
+        assert_eq!(rolls[0], rolls[1]);
+    }
+}
+
+#[test]
+fn test_random_lot_shared_between_branches() {
+    // The lot is drawn once for the whole condition: both branches hit or miss
+    // together, with the lot's chance (not 1 - 0.5^2 = 75%)
+    let course = create_test_course();
+    let condition =
+        parse_condition("random_lot==50&distance_type==1@random_lot==50&distance_type==2").unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+    let tries = 2000;
+    let mut hits = 0;
+    for _ in 0..tries {
+        let rolls = roll_condition(&condition, &course, &mut rng);
+        assert_eq!(rolls[0].is_some(), rolls[1].is_some());
+        hits += rolls[0].is_some() as usize;
+    }
+    let rate = hits as f64 / tries as f64;
+    assert!((0.45..0.55).contains(&rate), "hit rate {rate}");
+}
+
+#[test]
+fn test_different_random_comparisons_roll_separately() {
+    let course = create_test_course();
+    let condition = parse_condition("phase_random==1@phase_random==2").unwrap();
+    let rolls = roll_condition(
+        &condition,
+        &course,
+        &mut rand::rngs::StdRng::seed_from_u64(0),
+    );
+
+    // Mid (400-1600m) and Late (1600-2000m) phases get their own segments
+    let mid = rolls[0].as_ref().unwrap();
+    let late = rolls[1].as_ref().unwrap();
+    assert!((400.0..1600.0).contains(&mid[0]));
+    assert!((1600.0..2000.0).contains(&late[0]));
 }
 
 #[test]
