@@ -33,8 +33,8 @@ pub struct RaceState {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Elapsed time in seconds. This value is shared by all runners.
     pub elapsed_time: f64,
-    /// Time when the first runner finished, in seconds. This might be different from
-    /// displayed finish time due to scoreboard conversion.
+    /// Time when the first runner finished, in seconds. This might be different
+    /// from displayed finish time due to scoreboard conversion.
     pub finish_time: Option<f64>,
     /// Count of runners by style.
     pub runners_by_style: HashMap<Style, u8>,
@@ -52,23 +52,23 @@ pub struct RaceState {
 ///
 /// It is managed in two phases:
 ///
-/// 1. Before runners are ready (`RaceSolver<UnreadyRunner>`): Runners can be added,
-///    but their stats are not calculated yet.
-/// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are calculated
-///    and out-of-gate skills are applied. The simulation can begin.
+/// 1. Before runners are ready (`RaceSolver<UnreadyRunner>`): Runners can be
+///    added, but their stats are not calculated yet.
+/// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are
+///    calculated and out-of-gate skills are applied. The simulation can begin.
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
     // Ordered by gate so that runners are always built in the same order (which
-    // determines how the shared RNG is consumed)
+    // determines how the shared RNG is consumed).
     builders: BTreeMap<u8, UnreadyRunner>,
     pub state: RaceState,
     _marker: PhantomData<T>,
 }
 
-/// Methods available BEFORE runners are ready, i.e., before their stats have been
-/// calculated and out-of-gate skills have been applied.
+/// Methods available BEFORE runners are ready (before stats have been
+/// calculated and out-of-gate skills have been applied).
 impl RaceSolver<UnreadyRunner> {
-    /// Create a new RaceSolver with the given course, race parameters and configuration.
+    /// Create a new RaceSolver for a given course and parameters.
     pub fn new(course: Course, params: RaceParameters, config: &Configuration) -> Self {
         let seed = params.rng_seed;
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
@@ -101,7 +101,7 @@ impl RaceSolver<UnreadyRunner> {
             panic!("Cannot add more runners than available gates");
         }
 
-        // Get existing skills before moving them into builder
+        // Get existing skills before moving them into builder.
         for skill in &skills {
             *self
                 .state
@@ -110,7 +110,7 @@ impl RaceSolver<UnreadyRunner> {
                 .or_insert(0) += 1;
         }
 
-        // Roll gate
+        // Roll gate.
         let gate_roll = loop {
             let roll = self
                 .state
@@ -122,32 +122,33 @@ impl RaceSolver<UnreadyRunner> {
             }
         };
 
-        // Create builder
+        // Create builder.
         let builder = UnreadyRunner::new(uma, gate_roll, motivation, &self.state, skills);
 
-        // Update runnners-by-style count before moving builder
+        // Update runnners-by-style count before moving builder.
         *self
             .state
             .runners_by_style
             .entry(builder.base.style)
             .or_insert(0) += 1;
 
-        // Add to builders list
+        // Add to builders list.
         self.builders.insert(gate_roll, builder);
     }
 
-    /// Get all added runners ready by calculating their stats and activating
-    /// out-of-gate skills. It returns a new RaceSolver with ready runners
-    /// to run the simulation.
+    /// Get all runners ready by calculating their stats and activating out-of-gate
+    /// skills.
+    ///
+    /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
     pub fn ready_runners(self) -> RaceSolver<Runner> {
-        // Collect all UnreadyRunners and move state out
+        // Collect all UnreadyRunners and move state out.
         let mut builders: Vec<UnreadyRunner> = self.builders.into_values().collect();
         let mut state = self.state;
 
-        // Calculate popularity for all runners
+        // Calculate popularity for all runners.
         let popularity_ranks = crate::race::popularity::calculate_popularity(&mut builders, &state);
 
-        // Assign popularity ranks to each runner
+        // Assign popularity ranks to each runner.
         for (i, builder) in builders.iter_mut().enumerate() {
             builder.initial_state.popularity_rank = popularity_ranks[i];
             if builder.initial_state.popularity_rank == 1 {
@@ -155,7 +156,7 @@ impl RaceSolver<UnreadyRunner> {
             }
         }
 
-        // Build final runners
+        // Build final runners.
         let mut runners: Vec<Runner> = Vec::new();
         for builder in builders {
             let runner = Runner::new(builder, &state);
@@ -171,8 +172,8 @@ impl RaceSolver<UnreadyRunner> {
     }
 }
 
-/// Methods available AFTER runners are ready, i.e., after their stats have been
-/// calculated and out-of-gate skills have been applied.
+/// Methods available AFTER runners are ready (stats have been calculated,
+/// out-of-gate skills have been applied...).
 impl RaceSolver<Runner> {
     /// Get the time as displayed on the scoreboard after a race finishes.
     pub fn scoreboard_time(&self) -> Option<f64> {
@@ -181,7 +182,7 @@ impl RaceSolver<Runner> {
         let max = self.state.course.finish_time_max();
         let clamped = converted.clamp(min, max);
         if !(min..=max).contains(&converted) {
-            // Add random offset between 0.0 and 1.0 seconds
+            // Add random offset between 0.0 and 1.0 seconds.
             Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
         } else {
             Some(converted)
@@ -200,9 +201,12 @@ impl RaceSolver<Runner> {
     }
 
     /// Set each runner's margin behind the runner that placed immediately ahead.
-    /// All runners must have finished.
+    ///
+    /// Margin distance is calculated by scaling the difference in *displayed*
+    /// finish times between runners by a set multiplier (15 m/s). All runners must
+    /// have finished before calling this function.
     fn update_finish_margins(&mut self) {
-        // Runners keep moving after finishing, so order must come from finish times
+        // Order must come from finish times.
         let mut by_finish: Vec<&mut Runner> = self.runners.iter_mut().collect();
         by_finish.sort_by(|a, b| a.finish_time.partial_cmp(&b.finish_time).unwrap());
 
@@ -222,8 +226,8 @@ impl RaceSolver<Runner> {
     /// advances and every runner is updated.
     fn step(&mut self, delta_time: f64) {
         for runner in &mut self.runners {
-            // Runners still in the gate haven't reached any state worth checking,
-            // and skills can't activate after the goal
+            // Runners still in the gate haven't reached any state worth checking, and
+            // skills can't activate after the goal.
             if runner.start_delay > self.state.elapsed_time || runner.has_finished() {
                 continue;
             }
@@ -245,8 +249,8 @@ impl RaceSolver<Runner> {
                 self.state.finish_time = Some(self.state.elapsed_time);
             }
 
-            // Update everything derived from the new position, so that skills
-            // see a consistent state
+            // Update everything derived from the new position, so that skills see a
+            // consistent state.
             runner.update_phase(&mut self.state);
             runner.check_corner_end(&self.state.course.corners);
             runner.check_corner_start(&self.state.course.corners);
@@ -275,9 +279,10 @@ impl RaceSolver<Runner> {
     }
 
     /// Update order (rank) and distance differences for all runners.
-    /// Runners must be sorted by position in descending order before calling this method.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
     fn update_order_values(&mut self) {
-        // Debug: check sorting
+        // Debug: check sorting.
         self.assert_runners_sorted();
 
         let total_runners = self.runners.len() as u8;
@@ -288,7 +293,7 @@ impl RaceSolver<Runner> {
         let mut position_next = position_first;
         let mut rush_counter = 0;
 
-        // From first to last, update order and distance differences from runners ahead
+        // From first to last, update order and distance differences from runners ahead.
         for (index, runner) in self.runners.iter_mut().enumerate() {
             if runner.has_finished() {
                 continue;
@@ -305,7 +310,7 @@ impl RaceSolver<Runner> {
             rush_counter += runner.is_rushed() as u8;
         }
 
-        // From last to first, update distance differences from runners behind
+        // From last to first, update distance differences from runners behind.
         let mut position_prev = position_last;
         let mut rush_counter = 0;
         for runner in self.runners.iter_mut().rev() {
@@ -316,9 +321,10 @@ impl RaceSolver<Runner> {
     }
 
     /// Update blocking and overlapping status for all runners.
-    /// Runners must be sorted by position in descending order before calling this method.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
     fn update_blocking_status(&mut self, delta_time: f64) {
-        // Debug: check sorting
+        // Debug: check sorting.
         self.assert_runners_sorted();
 
         for runner in self.runners.iter_mut() {
@@ -335,7 +341,7 @@ impl RaceSolver<Runner> {
             let mut was_runner_behind_checked = false;
 
             for runner_j in right {
-                // Only check runner immediately behind
+                // Only check runner immediately behind.
                 if !was_runner_behind_checked && runner_j.lane.current < runner_i.lane.current {
                     runner_i.nearby.behind_in = true;
                 }
@@ -345,22 +351,24 @@ impl RaceSolver<Runner> {
                 let lane_diff = runner_i.lane.current - runner_j.lane.current;
 
                 if distance > 20.0 {
-                    break; // We have gone too far behind; move to next i
+                    // We have gone too far behind; move to next i.
+                    break;
                 }
 
                 if runner_j.is_visible(runner_i, &self.state.course) {
                     runner_j.visible_count += 1;
-                    // Check if runner_i is an overtake target for runner_j
+                    // Check if runner_i is an overtake target for runner_j.
                     if runner_j.check_overtake_target(runner_i, delta_time) {
                         runner_i.being_overtake_target_time += delta_time;
                     }
                 }
 
                 if distance > 5.0 {
-                    continue; // Too far for the following checks
+                    // Too far for the following checks.
+                    continue;
                 }
 
-                // Update surrounding and blocking status
+                // Update surrounding and blocking status.
                 if self.state.course.is_front_surrounded(distance, lane_diff) {
                     runner_j.update_front_surrounded_by(runner_i);
                 }
@@ -383,7 +391,7 @@ impl RaceSolver<Runner> {
                     runner_j.update_side_blocked_by(runner_i);
                 }
 
-                // Update spot struggle and dueling status
+                // Update spot struggle and dueling status.
                 if game_version >= GameVersion::FirstAnniversary {
                     if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
                     {
@@ -397,20 +405,21 @@ impl RaceSolver<Runner> {
                 }
             }
 
-            // Checked all runners behind i within a reasonable distance
-            // runner_i's block, near and dueling statuses can be updated now
+            // Checked all runners behind i within a reasonable distance.
+            // runner_i's block, near and dueling statuses can be updated now.
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
             runner_i.filter_duel_targets();
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
-        // Calculate lane targets (needs access to all runners)
-        // Use unsafe pointer to access runners slice while iterating
+        // Calculate lane targets (needs access to all runners).
+        // Use unsafe pointer to access runners slice while iterating.
         let runners_ptr = self.runners.as_ptr();
         let runners_len = self.runners.len();
 
-        // STUB: Using first corner as move lane point; should use course.move_lane_point when available
+        // STUB: Using first corner as move lane point; should use
+        // course.move_lane_point when available.
         let move_lane_point = self
             .state
             .course
@@ -421,21 +430,21 @@ impl RaceSolver<Runner> {
         for i in 0..num_runners {
             let runner = &mut self.runners[i];
 
-            // Skip if side-blocked (can't change lanes anyway)
+            // Skip if side-blocked (can't change lanes anyway).
             if runner.blocked.side {
                 continue;
             }
 
-            // Safety: We're only reading from other runners, not modifying them
+            // Safety: We're only reading from other runners, not modifying them.
             let all_runners = unsafe { std::slice::from_raw_parts(runners_ptr, runners_len) };
 
-            // Determine which mode to use: normal vs overtake
+            // Determine which mode to use: normal vs overtake.
             let distance_to_move_lane = move_lane_point - runner.position;
             let within_200m_of_move_lane = (0.0..=200.0).contains(&distance_to_move_lane);
 
             // Use normal mode if:
-            // 1. Not in overtake mode, OR
-            // 2. In Early/Mid phase AND within 200m of move lane point
+            // 1. Not in overtake mode, OR;
+            // 2. In Early/Mid phase AND within 200m of move lane point.
             let use_normal_mode = !runner.is_in_overtake_mode()
                 || (matches!(runner.phase, Phase::Early | Phase::Mid) && within_200m_of_move_lane);
 
@@ -450,27 +459,26 @@ impl RaceSolver<Runner> {
     /// Update positioning strategy for all runners. Runners must be sorted by
     /// position in descending order before calling this method.
     fn update_positioning_strategy(&mut self) {
-        // Debug: check sorting
+        // Debug: check sorting.
         self.assert_runners_sorted();
 
-        // Because we are counting how many runners are *currently* behaving as
-        // front runners rather than *actual* front runners, we cannot use
-        // runners_by_style from RaceState.
+        // Because we are counting how many runners are *currently* behaving as front
+        // runners rather than *actual* front runners, we cannot use runners_by_style
+        // from RaceState.
         let front_runner_count = self
             .runners
             .iter()
             .filter(|runner| runner.positioning_style().is_front_like())
             .count();
 
-        // Find pacemaker
+        // Find pacemaker.
         let mut pacemaker_position = self.runners[0].position;
-        // After the 1.5 anniversary update, the pacemaker *seems* to be the most
-        // forward runner overall. More parameters may be involved, but they are
-        // unknown. In the meantime, this is a reasonable approximation that works
-        // for most cases.
+        // After the 1.5 anniv. update, the pacemaker *seems* to be the most forward
+        // runner overall. More parameters may be involved, but they are unknown.
+        // In the meantime this is a reasonable approximation that works for most cases.
         if self.state.config.game_version < GameVersion::OnePointFiveAnniversary {
-            // Prior to the 1.5 anniversary update, the pacemaker was the most
-            // forward runner with the most aggressive style
+            // Prior to the 1.5 anniversary update, the pacemaker was the most forward
+            // runner with the most aggressive style.
             let mut pacemaker_style = self.runners[0].positioning_style();
             for i in 0..self.runners.len() {
                 let runner_i = &self.runners[i];
@@ -479,14 +487,14 @@ impl RaceSolver<Runner> {
                     pacemaker_style = style;
                     pacemaker_position = runner_i.position;
                 }
-                // Because runners are sorted by position descendingly, we only
-                // need to update pacemaker when a more agressive style is found
+                // Because runners are sorted by position descendingly, we only need to update
+                // pacemaker when a more agressive style is found.
             }
         }
 
         let has_pace_up_ex = self.state.config.game_version >= GameVersion::OnePointFiveAnniversary;
         let pacemaker_style = self.runners[0].positioning_style();
-        // Most passive style among runners ahead of the current one
+        // Most passive style among runners ahead of the current one.
         let mut max_style_ahead: Option<Style> = None;
 
         for i in 0..self.runners.len() {
@@ -505,7 +513,7 @@ impl RaceSolver<Runner> {
 
             let runner = &self.runners[i];
             if style.is_front_like() {
-                // Determine if we are in first place, and by how much
+                // Determine if we are in first place, and by how much.
                 let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
                     runner.position - self.runners[i + 1].position
                 } else {
@@ -518,7 +526,7 @@ impl RaceSolver<Runner> {
                     &self.state,
                 )
             } else {
-                // Determine distance behind pacemaker
+                // Determine distance behind pacemaker.
                 let distance_behind = pacemaker_position - runner.position;
                 let runner = &mut self.runners[i];
                 runner.update_positioning_non_front(distance_behind, &self.state)
@@ -570,7 +578,8 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Check if no other runner with the same style as runner `i` is within `distance`.
+    /// Check if there's no other runner with the same style as runner `i` within
+    /// `distance`.
     fn is_alone(&self, i: usize, distance: f64) -> bool {
         let runner = &self.runners[i];
         self.runners.iter().enumerate().all(|(j, other)| {

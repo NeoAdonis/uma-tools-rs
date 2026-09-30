@@ -9,32 +9,32 @@ pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
 
     // Precondition tracking - one-time unlocks, indexed by the precondition ID
-    // stored in `SkillActivationLogic::precondition`
+    // stored in `SkillActivationLogic::precondition`.
     pub precondition_satisfied: Vec<bool>,
     // Position windows of precondition logics. Kept apart from regular windows
-    // because preconditions are checked before any other trigger
+    // because preconditions are checked before any other trigger.
     pub precondition_windows: WindowQueue,
 
     // Window triggers - checked every frame while within bounds (including random
     // segments). Position and time only increase, so their windows are queued; HP
-    // can recover, so HP windows are scanned every frame
+    // can recover, so HP windows are scanned every frame.
     pub position_windows: WindowQueue,
     pub time_windows: WindowQueue,
     pub hp_windows: Vec<WindowTrigger>,
 
-    // Last straight entry triggers (is_last_straight_onetime)
+    // Last straight entry triggers (is_last_straight_onetime).
     pub last_straight_triggers: Vec<usize>,
 
     // Deferred random triggers - scheduled as distance triggers once
-    // Full-Throttle Sprint starts
+    // Full-Throttle Sprint starts.
     pub full_throttle_triggers: Vec<usize>,
 
-    // Activation-dependent triggers - checked when skills activate
+    // Activation-dependent triggers - checked when skills activate.
     pub any_activation_triggers: Vec<usize>,
     pub buff_activation_triggers: Vec<usize>,
     pub heal_activation_triggers: Vec<usize>,
 
-    // Activation tracking
+    // Activation tracking.
     pub activation_counts: ActivationCounts,
 }
 
@@ -167,12 +167,17 @@ impl WindowQueue {
 #[derive(Default, Debug, Clone)]
 pub struct ActivationCounts {
     pub all: usize,
-    pub start: usize,      // Phase::Early (sections 0-4)
-    pub middle: usize,     // Phase::Mid (sections 4-16)
-    pub later_half: usize, // After half course (section 12-24)
-    pub end_after: usize,  // Phase::Late + Phase::Last (sections 16-24)
+    // Phase::Early (sections 0-4).
+    pub start: usize,
+    // Phase::Mid (sections 4-16).
+    pub middle: usize,
+    // After half course (section 12-24).
+    pub later_half: usize,
+    // Phase::Late + Phase::Last (sections 16-24).
+    pub end_after: usize,
     pub heal: usize,
-    pub _all_team: usize, // TODO: Multi-uma stub
+    // TODO: Multi-uma stub.
+    pub _all_team: usize,
 }
 
 impl ActivationCounts {
@@ -184,14 +189,15 @@ impl ActivationCounts {
             Phase::Early => self.start += 1,
             Phase::Mid => {
                 self.middle += 1;
-                // Check if we're past section 12 (later half)
+                // Check if we're past section 12 (later half).
                 if position >= section_length * 12.0 {
                     self.later_half += 1;
                 }
             }
             Phase::Late | Phase::Last => {
                 self.end_after += 1;
-                self.later_half += 1; // Late/Last is always in later half
+                // Late/Last is always in later half.
+                self.later_half += 1;
             }
         }
     }
@@ -203,7 +209,7 @@ impl ActivationCounts {
 
     /// Increment team skill count (multi-uma stub).
     pub fn _increment_team(&mut self) {
-        // TODO: update when multi-uma is implemented
+        // TODO: update when multi-uma is implemented.
         self._all_team += 1;
     }
 }
@@ -228,7 +234,7 @@ mod tests {
     #[test]
     fn test_activation_counts_mid_phase_before_section_12() {
         let mut counts = ActivationCounts::default();
-        // Section length 100, position 1000 = section 10 (before 12)
+        // Section length 100, position 1000 = section 10 (before 12).
         counts.increment(Phase::Mid, 1000.0, 100.0);
 
         assert_eq!(counts.all, 1);
@@ -241,7 +247,7 @@ mod tests {
     #[test]
     fn test_activation_counts_mid_phase_after_section_12() {
         let mut counts = ActivationCounts::default();
-        // Section length 100, position 1300 = section 13 (after 12)
+        // Section length 100, position 1300 = section 13 (after 12).
         counts.increment(Phase::Mid, 1300.0, 100.0);
 
         assert_eq!(counts.all, 1);
@@ -300,7 +306,7 @@ mod tests {
         inside.sort_unstable();
         assert_eq!(inside, vec![1, 2]);
 
-        // Exited windows are dropped
+        // Exited windows are dropped.
         assert_eq!(queue.len(), 2);
     }
 
@@ -330,7 +336,8 @@ mod tests {
         queue.push(window(0, 0.0, 100.0));
         queue.push(window(1, 50.0, 100.0));
         queue.push(window(2, 0.0, 100.0));
-        queue.advance(10.0, 0.0); // 0 and 2 active, 1 pending
+        // 0 and 2 active, 1 pending.
+        queue.advance(10.0, 0.0);
 
         queue.remove_if(|w| w.logic_idx != 2);
         let remaining: Vec<_> = queue.iter().map(|w| w.logic_idx).collect();

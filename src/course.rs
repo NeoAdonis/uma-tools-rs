@@ -18,7 +18,7 @@ use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-// Track IDs for special handling
+// Track IDs for special handling.
 const TRACK_ID_OOI: u16 = 10101;
 const TRACK_ID_LONGCHAMP: u16 = 10201;
 
@@ -32,22 +32,19 @@ pub enum Phase {
     Mid = 1,
     /// Late race (sections 16-19).
     Late = 2,
-    /// Last leg (sections 20-23). Not to be confused with the last spurt
-    /// mechanic.
+    /// Last leg (sections 20-23). Not to be confused with the last spurt mechanic.
     Last = 3,
 }
 
 impl Phase {
-    /// Get the boundaries `(start, end)` in meters for `self` on a given
-    /// course.
+    /// Get the boundaries `(start, end)` in meters for `self` on a given course.
     ///
     /// Phases are defined by the following section ranges:
     ///
-    /// - Early: sections 0-3 (0.0 to `section_length * 4.0`)
-    /// - Mid: sections 4-15 (`section_length * 4.0` to `section_length * 16.0`)
-    /// - Late: sections 16-19 (`section_length * 16.0` to `section_length *
-    ///   20.0`)
-    /// - Last: sections 20-23 (`section_length * 20.0` to course distance)
+    /// - Early: sections 0-3 (0.0 to `section_length * 4.0`).
+    /// - Mid: sections 4-15 (`section_length * 4.0` to `section_length * 16.0`).
+    /// - Late: sections 16-19 (`section_length * 16.0` to `section_length * 20.0`).
+    /// - Last: sections 20-23 (`section_length * 20.0` to course distance).
     pub fn boundaries(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
         match self {
@@ -58,8 +55,8 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries `(start, end)` in meters for `self`'s first quarter
-    /// on a given course.
+    /// Get the boundaries `(start, end)` in meters for `self`'s first quarter on a
+    /// given course.
     pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
         let section = course.section_length();
         match self {
@@ -133,12 +130,12 @@ pub enum Direction {
 
 /// Course distance type.
 ///
-/// N.B. Even though distance type can be inferred from distance, it is explicitly
-/// stored in the data.
+/// N.B. Even though distance type can be inferred from distance, it is
+/// explicitly stored in the data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DistanceType {
-    /// a.k.a Sprint. Up to 1400m.
+    /// Also known as Sprint. Up to 1400m.
     Short = 1,
     /// 1401m up to 1800m.
     Mile = 2,
@@ -210,11 +207,11 @@ pub struct CourseData {
     pub straights: Vec<Straight>,
     /// Race track ID associated with this course.
     pub race_track_id: u16,
-    /// Minimum finish time that can be displayed on the scoreboard in 1000ths
-    /// of seconds.
+    /// Minimum finish time that can be displayed on the scoreboard in 1000ths of
+    /// seconds.
     pub(crate) finish_time_min: u32,
-    /// Maximum finish time that can be displayed on the scoreboard in 1000ths
-    /// of seconds.
+    /// Maximum finish time that can be displayed on the scoreboard in 1000ths of
+    /// seconds.
     pub(crate) finish_time_max: u32,
     /// Course width represented in its own units (not meters).
     pub(crate) lane_max: u32,
@@ -325,8 +322,8 @@ impl Course {
         self.width() / 18.0
     }
 
-    /// Get the track name in the specified language, or `None` if the track
-    /// name is not available in that language.
+    /// Get the track name in the specified language, or `None` if the track name is
+    /// not available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         get_track_name(self.race_track_id, language)
     }
@@ -372,8 +369,8 @@ impl Course {
 
     /// Load a specific course by ID from a JSON string.
     ///
-    /// Returns a `Result` containing the parsed `Course` or an error if the JSON
-    /// is invalid or the course ID is not found.
+    /// Returns a `Result` containing the parsed `Course` or an error if the JSON is
+    /// invalid or the course ID is not found.
     pub fn from_json_str(
         json_str: &str,
         course_id: &str,
@@ -394,17 +391,17 @@ impl Course {
         Ok(Course { id, data })
     }
 
-    /// Check if a runner is blocked by another runner from the front based on distance
-    /// and lane difference.
+    /// Check if a runner is blocked by another runner from the front based on
+    /// distance and lane difference.
     ///
     /// When front-blocked, the runner's speed is capped.
     pub fn check_front_blocked(&self, distance: f64, lane_diff: f64) -> bool {
         if !(0.0..2.0).contains(&distance) {
             return false;
         }
-        // Lane difference threshold decreases linearly with distance between runners
-        // At 0m, threshold is 0.75 lanes
-        // At 2m, threshold is 0.3 lanes
+        // Lane difference threshold decreases linearly with distance between runners.
+        // At 0m, threshold is 0.75 lanes.
+        // At 2m, threshold is 0.3 lanes.
         lane_diff.abs() <= (1.0 - 0.3 * distance) * 0.75 * self.lane_width()
     }
 
@@ -416,10 +413,11 @@ impl Course {
         self.is_near_by(distance, lane_diff, 1.05, 2.0)
     }
 
-    /// Check if a runner is near another runner based on distance and lane difference.
+    /// Check if a runner is near another runner based on distance and lane
+    /// difference.
     ///
-    /// Two runners are near if they are less than 3m apart and less than 3 lanes
-    /// to either side. Before the 1st anniversary update, both thresholds were 1.5
+    /// Two runners are near if they are less than 3m apart and less than 3 lanes to
+    /// either side. Before the 1st anniversary update, both thresholds were 1.5
     /// (1.5m and 1.5 lanes).
     ///
     /// This is checked by certain skills (`near_count`).
@@ -440,33 +438,33 @@ impl Course {
         self.is_near_by(distance, lane_diff, 2.5, 1.0)
     }
 
-    /// Check if a runner is behind another runner within a reasonable distance
-    /// and lane difference.
+    /// Check if a runner is behind another runner within a reasonable distance and
+    /// lane difference.
     ///
     /// This is checked by certain skills.
     pub fn is_near_behind_set1(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 5.0, 2.7)
     }
 
-    /// Check if a runner is surrounding another runner from the front (and conversely,
-    /// being surrounded by the other runner from behind) based on distance and lane
-    /// difference.
+    /// Check if a runner is surrounding another runner from the front (and
+    /// conversely, being surrounded by the other runner from behind) based on
+    /// distance and lane difference.
     ///
     /// This is checked by certain skills.
     pub fn is_front_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 3.0, 1.5)
     }
 
-    /// Check if a runner is surrounding (and being surrounded by) another runner from
-    /// the side based on distance and lane difference.
+    /// Check if a runner is surrounding (and being surrounded by) another runner
+    /// from the side based on distance and lane difference.
     ///
     /// This is checked by certain skills.
     pub fn is_side_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 1.5, 3.0)
     }
 
-    /// Check if a runner is within dueling range of another runner based on distance
-    /// and lane difference.
+    /// Check if a runner is within dueling range of another runner based on
+    /// distance and lane difference.
     pub fn check_dueling(&self, distance: f64, lane_diff: f64) -> bool {
         self.is_near_by(distance, lane_diff, 3.0, 0.25)
     }
@@ -524,7 +522,7 @@ mod tests {
 
     #[test]
     fn test_is_exchange_race() {
-        // Ooi, Kawasaki, Funabashi, Morioka
+        // Ooi, Kawasaki, Funabashi, Morioka.
         let exchange = [10101, 10103, 10104, 10105];
         for track_id in TRACK_IDS {
             assert_eq!(
@@ -537,7 +535,7 @@ mod tests {
 
     #[test]
     fn test_is_abroad() {
-        // Longchamp, Santa Anita Park, Del Mar
+        // Longchamp, Santa Anita Park, Del Mar.
         let abroad = [10201, 10202, 10203];
         for track_id in TRACK_IDS {
             assert_eq!(
@@ -550,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_is_tight_track() {
-        // Sapporo, Hakodate, Fukushima, Kokura, Kawasaki, Funabashi
+        // Sapporo, Hakodate, Fukushima, Kokura, Kawasaki, Funabashi.
         let tight = [10001, 10002, 10004, 10010, 10103, 10104];
         for track_id in TRACK_IDS {
             assert_eq!(
@@ -574,7 +572,7 @@ mod tests {
             course
         };
 
-        // Numbered backwards from the final corner, which is always the fourth
+        // Numbered backwards from the final corner, which is always the fourth.
         for (count, expected) in [
             (2, vec![3, 4]),
             (3, vec![2, 3, 4]),
@@ -593,14 +591,14 @@ mod tests {
     fn test_is_near_by() {
         let course = create_test_course(10001);
         let lane = course.lane_width();
-        // Within range, on either side
+        // Within range, on either side.
         assert!(course.is_near_by(0.0, 0.0, 3.0, 3.0));
         assert!(course.is_near_by(2.9, 2.9 * lane, 3.0, 3.0));
         assert!(course.is_near_by(2.9, -2.9 * lane, 3.0, 3.0));
-        // Out of distance range
+        // Out of distance range.
         assert!(!course.is_near_by(3.0, 0.0, 3.0, 3.0));
         assert!(!course.is_near_by(-0.1, 0.0, 3.0, 3.0));
-        // Out of lane range, on either side
+        // Out of lane range, on either side.
         assert!(!course.is_near_by(1.0, 3.0 * lane, 3.0, 3.0));
         assert!(!course.is_near_by(1.0, -3.0 * lane, 3.0, 3.0));
     }

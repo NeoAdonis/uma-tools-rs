@@ -8,12 +8,12 @@ use crate::uma::Style;
 /// if it reaches 0.
 /// It's also used to get the distance at which her last spurt can start.
 pub struct HpState {
-    /// Current HP. It's set to `max_hp` at the start of the race and decreases
-    /// over time. It can be restored by skills but cannot exceed `max_hp`.
+    /// Current HP. It's set to `max_hp` at the start of the race and decreases over
+    /// time. It can be restored by skills but cannot exceed `max_hp`.
     ///
     /// If HP reaches 0, the runner's maximum speed is greatly reduced.
     pub current: f64,
-    /// Maximum HP. Calculated from the runner's stamina stat at the start of the race.
+    /// Maximum HP. Calculated from the stamina stat at the start of the race.
     pub maximum: f64,
     /// Flag indicating if the runner has emptied her HP at least once.
     pub has_emptied: bool,
@@ -93,7 +93,7 @@ pub fn calculate_hp_per_second(
 
     let consumption = base_consumption * status_modifier * ground_modifier;
 
-    // In late-race and last spurt, HP consumption is multiplied by guts modifier
+    // In late-race and last spurt, HP consumption is multiplied by guts modifier.
     match phase {
         Phase::Late | Phase::Last => consumption * hp_guts_modifier(guts_stat),
         _ => consumption,
@@ -118,7 +118,8 @@ pub fn estimate_hp_per_meter_last_spurt(
         track_condition,
         Phase::Late,
         guts_stat,
-        1.0, // No special status modifier (not rushed, not pace-down, not downhill)
+        // No special status modifier (not rushed, not pace-down, not downhill).
+        1.0,
     );
     hp_per_second / speed
 }
@@ -140,7 +141,8 @@ pub fn estimate_hp_last_spurt(
         track_condition,
         Phase::Late,
         guts_stat,
-        1.0, // No special status modifier (not rushed, not pace-down, not downhill)
+        // No special status modifier (not rushed, not pace-down, not downhill).
+        1.0,
     );
     hp_per_second * time
 }

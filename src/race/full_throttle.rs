@@ -1,7 +1,8 @@
 //! Full-Throttle Sprint (全開スパート) formulas (5th Anniversary onward).
 //!
 //! A runner with more than 2000 speed stat keeps gaining target speed after
-//! reaching her last spurt speed, until she finishes the race or runs out of HP.
+//! reaching her last spurt speed, until she finishes the race or runs out of
+//! HP.
 
 use crate::configuration::GameVersion;
 
@@ -40,7 +41,8 @@ impl FullThrottle {
 
 /// Full-Throttle Sprint acceleration in m/s² before skill modifiers.
 ///
-/// Zero if the runner is not eligible, i.e. adjusted speed stat of 2000 or below.
+/// Zero if the runner is not eligible, i.e. adjusted speed stat of 2000 or
+/// below.
 // ? Empirical formula; exact values are under investigation.
 // ? The maximum gain should scale with speed, but it seems to never be reached,
 // ? so it is not modeled (the global max speed still applies).

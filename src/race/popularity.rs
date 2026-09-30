@@ -1,28 +1,28 @@
 //! # Popularity Calculation
 //!
-//! An runner's popularity (favorite rank) is obtained from three "judges". Each judge
-//! gives a score based on various stats:
+//! A runner's popularity (favorite rank) is obtained from three "judges". Each
+//! judge gives a score based on various stats:
 //!
 //! - **Left Judge**: AdjustedSpeed * φ(BaseGuts)^0.5
 //! - **Center Judge**: AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6
 //! - **Right Judge**: AdjustedPower * φ(BaseWiz)^0.5
 //!
-//! Where φ(Stat) is the standard deviation score for the computed stat across all
-//! runners (mean 50.0, std dev 10.0).
+//! Where φ(Stat) is the standard deviation score for the computed stat across
+//! all runners (mean 50.0, std dev 10.0).
 //!
 //! Stats are adjusted by adding points from activable skills to the base stats;
 //! skills related to speed, stamina, and power contribute points to those stats
 //! respectively. The sum is then multiplied by distance/track aptitude and
 //! motivation coefficients.
 //!
-//! For each judge, the runners receive marks based on their rank; first five places
-//! receive, in order, ◎, ○, ▲, or △ (two runners get the last mark). The other runners
-//! receive no mark. Having any of these marks adds ~4 points to the Uma's popularity
-//! score corresponding to that judge.
+//! For each judge, the runners receive marks based on their rank; first five
+//! places receive, in order, ◎, ○, ▲, or △ (two runners get the last mark). The
+//! other runners receive no mark. Having any of these marks adds ~4 points to
+//! the Uma's popularity score corresponding to that judge.
 //!
-//! Finally, the runner's total popularity score is the sum of the points from each
-//! judge. The runner are then ranked by their total popularity score to determine
-//! their final favorite rank.
+//! Finally, the runner's total popularity score is the sum of the points from
+//! each judge. The runner are then ranked by their total popularity score to
+//! determine their final favorite rank.
 
 use std::collections::HashMap;
 
@@ -32,7 +32,7 @@ use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::{Skill, SkillRarity, SkillType};
 use crate::uma::motivation_multiplier;
 
-/// Popularity mark assigned by a judge
+/// Popularity mark assigned by a judge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PopularityMark {
     None,
@@ -43,7 +43,7 @@ pub enum PopularityMark {
 }
 
 impl PopularityMark {
-    /// Get the points value for this mark (~4 points each)
+    /// Get the points value for this mark (~4 points each).
     pub fn points(&self) -> f64 {
         match self {
             PopularityMark::None => 0.0,
@@ -54,7 +54,7 @@ impl PopularityMark {
         }
     }
 
-    /// Get the display character for this mark
+    /// Get the display character for this mark.
     pub fn as_char(&self) -> char {
         match self {
             PopularityMark::None => '-',
@@ -66,7 +66,7 @@ impl PopularityMark {
     }
 }
 
-/// Scores and marks from all three judges
+/// Scores and marks from all three judges.
 #[derive(Debug, Clone)]
 pub struct JudgeScores {
     pub left_score: f64,
@@ -91,13 +91,13 @@ impl Default for JudgeScores {
 }
 
 impl JudgeScores {
-    /// Get total popularity points from all judges
+    /// Get total popularity points from all judges.
     pub fn total_points(&self) -> f64 {
         self.left_mark.points() + self.center_mark.points() + self.right_mark.points()
     }
 }
 
-/// Stats that a skill can affect
+/// Stats that a skill can affect.
 #[derive(Debug, Clone, Copy)]
 struct StatContributions {
     speed: bool,
@@ -105,7 +105,8 @@ struct StatContributions {
     power: bool,
 }
 
-/// Determine which stats a skill's effects contribute to for popularity calculation
+/// Determine which stats a skill's effects contribute to for popularity
+/// calculation.
 fn categorize_skill_effects(skill: &Skill) -> StatContributions {
     let mut contributions = StatContributions {
         speed: false,
@@ -113,29 +114,29 @@ fn categorize_skill_effects(skill: &Skill) -> StatContributions {
         power: false,
     };
 
-    // Check all alternatives for effect types
+    // Check all alternatives for effect types.
     for alternative in &skill.alternatives {
         for effect in &alternative.effects {
             match effect.skill_type {
-                // Speed-altering skills
+                // Speed-altering skills.
                 SkillType::SpeedUp
                 | SkillType::CurrentSpeed
                 | SkillType::CurrentSpeedWithNaturalDeceleration
                 | SkillType::TargetSpeed => {
                     contributions.speed = true;
                 }
-                // Stamina-altering skills (including Recovery)
+                // Stamina-altering skills (including Recovery).
                 SkillType::StaminaUp | SkillType::Recovery => {
                     contributions.stamina = true;
                 }
-                // Power-altering skills (including Acceleration and FoV)
+                // Power-altering skills (including Acceleration and FoV).
                 SkillType::PowerUp
                 | SkillType::Acceleration
                 | SkillType::AccelerationFullThrottle
                 | SkillType::Fov => {
                     contributions.power = true;
                 }
-                // All stats up
+                // All stats up.
                 SkillType::AllStatsUp => {
                     contributions.speed = true;
                     contributions.stamina = true;
@@ -149,13 +150,13 @@ fn categorize_skill_effects(skill: &Skill) -> StatContributions {
     contributions
 }
 
-/// Calculate added points to stats from activable skills
+/// Calculate added points to stats from activable skills.
 fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f64, f64) {
     let mut added_speed = 0.0;
     let mut added_stamina = 0.0;
     let mut added_power = 0.0;
 
-    // Get all skills (both out-of-gate and runtime)
+    // Get all skills (both out-of-gate and runtime).
     let all_skills: Vec<&Skill> = runner
         .out_of_gate_skills
         .iter()
@@ -163,21 +164,21 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
         .collect();
 
     for skill in all_skills {
-        // Skip skills that can't activate on this course
+        // Skip skills that can't activate on this course.
         if !skill.is_activable_on_course(state, runner) {
             continue;
         }
 
-        // Determine base points based on rarity
+        // Determine base points based on rarity.
         let base_points = match skill.rarity {
             SkillRarity::Gold | SkillRarity::Evolution => 60.0,
             _ => 20.0,
         };
 
-        // Determine which stats this skill contributes to
+        // Determine which stats this skill contributes to.
         let contributions = categorize_skill_effects(skill);
 
-        // Add points to each applicable stat, weighted by activation chance
+        // Add points to each applicable stat, weighted by activation chance.
         let weighted_points = base_points * skill.activation_chance(runner.base.wiz);
         if contributions.speed {
             added_speed += weighted_points;
@@ -194,19 +195,20 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
 }
 
 /// Calculate standard deviation score (φ) for a value given a mean and standard
-/// deviation. Mean value scores 50; each standard deviation adds/subtracts 10 points.
+/// deviation. Mean value scores 50; each standard deviation adds/subtracts 10
+/// points.
 ///
 /// Returns 50.0 if `std_dev` is zero (all values are the same).
 fn calculate_phi(value: f64, mean: f64, std_dev: f64) -> f64 {
     if std_dev.abs() < 1e-9 {
-        // If all values are the same, return 50.0 (no deviation)
+        // If all values are the same, return 50.0 (no deviation).
         50.0
     } else {
         (value - mean) / std_dev * 10.0 + 50.0
     }
 }
 
-/// Calculate mean and standard deviation for a set of values
+/// Calculate mean and standard deviation for a set of values.
 fn calculate_stats(values: &[f64]) -> (f64, f64) {
     if values.is_empty() {
         return (0.0, 0.0);
@@ -228,7 +230,7 @@ fn calculate_stats(values: &[f64]) -> (f64, f64) {
     (mean, std_dev)
 }
 
-/// Data for calculating popularity for a single runner
+/// Data for calculating popularity for a single runner.
 struct RunnerPopData {
     adjusted_speed: f64,
     adjusted_stamina: f64,
@@ -237,11 +239,11 @@ struct RunnerPopData {
     base_wiz: f64,
 }
 
-/// Calculate the three judge scores for each runner
+/// Calculate the three judge scores for each runner.
 fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)> {
     let n = runners_data.len();
 
-    // First, calculate φ scores for base stats across all runners
+    // First, calculate φ scores for base stats across all runners.
     let guts_values: Vec<f64> = runners_data.iter().map(|r| r.base_guts).collect();
     let wiz_values: Vec<f64> = runners_data.iter().map(|r| r.base_wiz).collect();
 
@@ -258,25 +260,25 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
         .map(|&v| calculate_phi(v, wiz_mean, wiz_std))
         .collect();
 
-    // Calculate intermediate values for each judge
+    // Calculate intermediate values for each judge.
     let mut left_values = Vec::with_capacity(n);
     let mut center_values = Vec::with_capacity(n);
     let mut right_values = Vec::with_capacity(n);
 
     for (i, runner) in runners_data.iter().enumerate() {
-        // Left Judge: AdjustedSpeed * φ(BaseGuts)^0.5
+        // Left Judge: AdjustedSpeed * φ(BaseGuts)^0.5.
         left_values.push(runner.adjusted_speed * guts_phi[i].abs().powf(0.5));
 
-        // Center Judge: AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6
+        // Center Judge: AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6.
         center_values.push(
             runner.adjusted_stamina * guts_phi[i].abs().powf(0.8) * wiz_phi[i].abs().powf(0.6),
         );
 
-        // Right Judge: AdjustedPower * φ(BaseWiz)^0.5
+        // Right Judge: AdjustedPower * φ(BaseWiz)^0.5.
         right_values.push(runner.adjusted_power * wiz_phi[i].abs().powf(0.5));
     }
 
-    // Calculate φ scores for each judge's values
+    // Calculate φ scores for each judge's values.
     let (left_mean, left_std) = calculate_stats(&left_values);
     let (center_mean, center_std) = calculate_stats(&center_values);
     let (right_mean, right_std) = calculate_stats(&right_values);
@@ -293,15 +295,15 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
     scores
 }
 
-/// Assign marks to top 5 runners for a single judge's scores
+/// Assign marks to top 5 runners for a single judge's scores.
 fn assign_marks_for_judge(scores: &[(usize, f64)]) -> HashMap<usize, PopularityMark> {
-    // Sort by score (descending)
+    // Sort by score (descending).
     let mut sorted: Vec<(usize, f64)> = scores.to_vec();
     sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut marks = HashMap::new();
 
-    // Assign marks to top 5 (or fewer if there are fewer runners)
+    // Assign marks to top 5 (or fewer if there are fewer runners).
     for (rank, (runner_idx, _score)) in sorted.iter().enumerate() {
         let mark = match rank {
             0 => PopularityMark::First,      // ◎
@@ -316,23 +318,23 @@ fn assign_marks_for_judge(scores: &[(usize, f64)]) -> HashMap<usize, PopularityM
     marks
 }
 
-/// Calculate popularity rankings for all runners
+/// Calculate popularity rankings for all runners.
 pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) -> Vec<u8> {
     let n = runners.len();
 
-    // Calculate added points and adjusted stats for each runner
+    // Calculate added points and adjusted stats for each runner.
     let mut runners_data = Vec::with_capacity(n);
 
     for runner in runners.iter() {
         let (added_speed, added_stamina, added_power) = calculate_added_points(runner, state);
 
-        // Get coefficients
+        // Get coefficients.
         let mood_coef = motivation_multiplier(runner.initial_state.motivation);
         let distance_coef = distance_proficiency_multiplier(runner.base.distance_aptitude);
         let track_coef = ground_type_proficiency_multiplier(runner.base.track_aptitude);
 
-        // Calculate adjusted stats for popularity
-        // Note: These are different from the adjusted stats used in the race simulation
+        // Calculate adjusted stats for popularity.
+        // These are different from the adjusted stats used in a race simulation.
         let adjusted_speed = (runner.base.speed as f64 + added_speed) * distance_coef * mood_coef;
         let adjusted_stamina = (runner.base.stamina as f64 + added_stamina) * mood_coef;
         let adjusted_power =
@@ -347,10 +349,10 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
         });
     }
 
-    // Calculate judge scores
+    // Calculate judge scores.
     let judge_scores = calculate_judge_scores(&runners_data);
 
-    // Assign marks for each judge
+    // Assign marks for each judge.
     let left_scores: Vec<(usize, f64)> = judge_scores
         .iter()
         .enumerate()
@@ -371,7 +373,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
     let center_marks = assign_marks_for_judge(&center_scores);
     let right_marks = assign_marks_for_judge(&right_scores);
 
-    // Calculate total popularity points and update runners
+    // Calculate total popularity points and update runners.
     let mut popularity_data: Vec<(usize, f64, JudgeScores)> = Vec::with_capacity(n);
 
     for i in 0..n {
@@ -397,16 +399,16 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
         popularity_data.push((i, total_points, judge_scores));
     }
 
-    // Sort by total points (descending) to determine ranks
+    // Sort by total points (descending) to determine ranks.
     popularity_data.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Assign ranks (1-indexed, ties get same rank)
+    // Assign ranks (1-indexed, ties get same rank).
     let mut ranks = vec![0u8; n];
     let mut current_rank = 1u8;
     let mut prev_points = f64::MAX;
 
     for (runner_idx, points, judge_scores) in popularity_data {
-        // If points are different from previous, update rank
+        // If points are different from previous, update rank.
         if (points - prev_points).abs() > 1e-9 {
             current_rank = (ranks.iter().filter(|&&r| r > 0).count() + 1) as u8;
         }
@@ -449,7 +451,7 @@ mod tests {
     fn test_stat_contributions() {
         use crate::skill::*;
 
-        // Test speed skill
+        // Test speed skill.
         let speed_skill = Skill::new(
             "test_speed".to_string(),
             SkillData {
@@ -473,7 +475,7 @@ mod tests {
         assert!(!contributions.stamina);
         assert!(!contributions.power);
 
-        // Test AllStatsUp
+        // Test AllStatsUp.
         let all_stats_skill = Skill::new(
             "test_all".to_string(),
             SkillData {
@@ -500,14 +502,14 @@ mod tests {
 
     #[test]
     fn test_phi_calculation() {
-        // Test normal case
+        // Test normal case.
         let phi = calculate_phi(15.0, 10.0, 5.0);
-        // 1 std dev above mean = 50 + 10 = 60
+        // 1 std dev above mean = 50 + 10 = 60.
         assert!((phi - 60.0).abs() < 0.001);
 
-        // Test zero std dev (all values same)
+        // Test zero std dev (all values same).
         let phi = calculate_phi(10.0, 10.0, 0.0);
-        // mean value = 50
+        // Mean value = 50.
         assert_eq!(phi, 50.0);
     }
 

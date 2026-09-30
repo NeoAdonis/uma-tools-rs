@@ -15,7 +15,8 @@ impl CornerManager {
     /// Check for corner entry, returns corner index if entered.
     pub fn check_entry(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
         if self.current_corner.is_some() {
-            return None; // Already in a corner
+            // Already in a corner.
+            return None;
         }
 
         for (idx, corner) in corners.iter().enumerate() {
@@ -66,7 +67,8 @@ impl SlopeManager {
     /// Check for slope entry, returns (slope index, slope type) if entered.
     pub fn check_entry(&mut self, position: f64, slopes: &[Slope]) -> Option<(usize, SlopeType)> {
         if self.current_slope.is_some() {
-            return None; // Already on a slope
+            // Already on a slope.
+            return None;
         }
 
         for (idx, slope) in slopes.iter().enumerate() {
@@ -118,7 +120,8 @@ impl StraightManager {
     /// Check for straight entry, returns straight index if entered.
     pub fn check_entry(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
         if self.current_straight.is_some() {
-            return None; // Already in a straight
+            // Already in a straight.
+            return None;
         }
 
         for (idx, straight) in straights.iter().enumerate() {

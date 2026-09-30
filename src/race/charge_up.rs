@@ -1,4 +1,4 @@
-//! Charge Up (足を貯める) and Fully Charged (脚色十分) formulas (2nd Anniversary onward).
+//! Charge Up (足を貯める) and Fully Charged (脚色十分) formulas (2nd Anniv. onward).
 //!
 //! A runner with more than 1200 charge power conserves power during the first
 //! 10 sections while keeping her position calmly. Upon entering her last spurt,
@@ -10,7 +10,8 @@ use crate::uma::Style;
 
 /// Charge power that must be exceeded to be eligible.
 pub const POWER_THRESHOLD: f64 = 1200.0;
-/// Time in seconds after leaving a blocking state before power can be conserved again.
+/// Time in seconds after leaving a blocking state before power can be conserved
+/// again.
 pub const COOLDOWN: f64 = 1.5;
 /// Minimum release duration in seconds. Shorter releases don't happen at all.
 pub const MIN_DURATION: f64 = 0.2;
@@ -145,7 +146,8 @@ pub fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
     }
 }
 
-/// Activity coefficient of the release acceleration. Penalties stack multiplicatively.
+/// Activity coefficient of the release acceleration. Penalties stack
+/// multiplicatively.
 pub fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
     let mut coefficient = 1.0;
     if struggled {

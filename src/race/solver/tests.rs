@@ -1,7 +1,8 @@
 use super::*;
 use crate::test_utils::race_params;
 
-/// Index of the course feature containing `position`, given `(start, end)` ranges.
+/// Index of the course feature containing `position`, given `(start, end)`
+/// ranges.
 fn feature_at(position: f64, ranges: impl Iterator<Item = (f64, f64)>) -> Option<usize> {
     ranges
         .enumerate()
@@ -12,7 +13,7 @@ fn feature_at(position: f64, ranges: impl Iterator<Item = (f64, f64)>) -> Option
 #[test]
 fn test_position_derived_state_is_consistent_after_each_frame() {
     // Skills are checked against the runner's state; everything derived from the
-    // position must match the position at the end of each frame
+    // position must match the position at the end of each frame.
     for course_id in ["10101", "10104", "10606", "10913"] {
         let course = Course::from_json_file("data/course_data.json", course_id)
             .expect("Failed to load course data");
@@ -37,7 +38,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
             solver.step(1.0 / 15.0);
 
             let course = &solver.state.course;
-            // Runners still in the gate aren't updated (nor are their skills checked)
+            // Runners still in the gate aren't updated (no skills are checked).
             let started = solver
                 .runners
                 .iter()
@@ -85,7 +86,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
 fn test_skills_see_state_after_the_move() {
     // On a 2400m course, Late phase starts at 1600m, i.e. with 800m remaining.
     // The distance trigger and the phase guard become true on the same frame, so
-    // both must be seen at once
+    // both must be seen at once.
     let course = Course::from_json_file("data/course_data.json", "10108")
         .expect("Failed to load course data");
     assert_eq!(course.distance, 2400);
@@ -132,8 +133,8 @@ fn test_skills_see_state_after_the_move() {
     );
 }
 
-/// Solver with one runner per `(style, position)` pair, sorted by position and past
-/// every start delay, ready for positioning strategy updates.
+/// Solver with one runner per `(style, position)` pair, sorted by position and
+/// past every start delay, ready for positioning strategy updates.
 fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
@@ -196,7 +197,7 @@ fn test_pace_up_ex_front_runner_enters_and_exits() {
     assert!(is_pace_up_ex(&mut solver, Style::Front));
     assert!(!is_pace_up_ex(&mut solver, Style::End));
 
-    // Still behind: stays in Pace Up Ex
+    // Still behind: stays in Pace Up Ex.
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Front));
 
@@ -219,7 +220,7 @@ fn test_pace_up_ex_runaway_behind_front() {
 
 #[test]
 fn test_pace_up_ex_non_front_depends_on_pacemaker() {
-    // End pacemaker should be behind Late
+    // End pacemaker should be behind Late.
     let mut solver = positioning_solver(
         &[(Style::Late, 100.0), (Style::End, 110.0)],
         GameVersion::LATEST,
@@ -227,7 +228,7 @@ fn test_pace_up_ex_non_front_depends_on_pacemaker() {
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Late));
 
-    // Pace pacemaker should be ahead of Late, even if an End runner is ahead too
+    // Pace pacemaker should be ahead of Late even if an End runner is ahead too.
     let mut solver = positioning_solver(
         &[
             (Style::Late, 100.0),
@@ -272,7 +273,7 @@ fn test_pace_up_ex_not_before_one_point_five_anniversary() {
 #[test]
 fn test_single_front_runner_keeps_speeding_up_with_larger_lead() {
     // A lone front runner may keep speeding up while less than 12.5m ahead;
-    // otherwise the limit is 4.5m
+    // otherwise the limit is 4.5m.
     let mut solver = positioning_solver(
         &[(Style::Front, 108.0), (Style::Pace, 100.0)],
         GameVersion::LATEST,
@@ -369,7 +370,7 @@ fn test_start_delay_within_first_frame_prorates_distance_only() {
 
     let (position, speed, hp) = runner_state(&delayed);
     let (_, ref_speed, ref_hp) = runner_state(&reference);
-    // Acceleration and HP consumption are unaffected
+    // Acceleration and HP consumption are unaffected.
     assert_close(speed, ref_speed, "speed");
     assert_close(hp, ref_hp, "hp");
     assert_close(position, speed * (FRAME - 0.03), "position");
@@ -380,14 +381,14 @@ fn test_start_delay_longer_than_a_frame_skips_whole_frames() {
     let mut delayed = start_delay_solver(0.09, 0);
     let (start_position, start_speed, start_hp) = runner_state(&delayed);
 
-    // First frame is entirely within the start delay: nothing happens
+    // First frame is entirely within the start delay: nothing happens.
     delayed.step(FRAME);
     assert_eq!(
         runner_state(&delayed),
         (start_position, start_speed, start_hp)
     );
 
-    // Second frame: full acceleration and HP consumption, prorated distance
+    // Second frame: full acceleration and HP consumption, prorated distance.
     delayed.step(FRAME);
     let mut reference = start_delay_solver(0.0, 0);
     reference.step(FRAME);
@@ -401,8 +402,8 @@ fn test_start_delay_longer_than_a_frame_skips_whole_frames() {
 
 #[test]
 fn test_longer_start_delay_loses_a_frame_of_acceleration() {
-    // Both leave the gate on the second frame, but only the one that leaves on
-    // the first frame accelerates on it
+    // Both leave the gate on the second frame, but only the one that leaves on the
+    // first frame accelerates on it.
     let mut early = start_delay_solver(0.05, 0);
     let mut late = start_delay_solver(0.09, 0);
     for _ in 0..2 {
@@ -441,7 +442,7 @@ fn test_runners_bound_to_rush_do_rush() {
         .expect("Failed to load course data");
     let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
     for _ in 0..9 {
-        // Low wisdom for a high rush chance
+        // Low wisdom for a high rush chance.
         let uma = Uma {
             speed: 1200,
             stamina: 1000,
@@ -493,7 +494,7 @@ fn test_all_runners_finish_with_margins() {
     }
     let mut solver = solver.ready_runners();
 
-    // Finish times are fixed once set, even though runners keep moving
+    // Finish times are fixed once set, even though runners keep moving.
     let mut first_finish = None;
     while !solver.runners.iter().all(Runner::has_finished) {
         solver.step(1.0 / 15.0);

@@ -1,31 +1,33 @@
 //! # Skill Activation Logic
 //!
-//! This module compiles skill conditions into **triggers** (which determine WHEN to
-//! check a skill) and **guards** (which must be true AT activation time).
+//! This module compiles skill conditions into **triggers** (which determine
+//! WHEN to check a skill) and **guards** (which must be true AT activation
+//! time).
 //!
 //! ## Overview
 //!
-//! A condition is an OR of AND chains (branches). Each branch is compiled into a
-//! single trigger and a list of guards:
+//! A condition is an OR of AND chains (branches). Each branch is compiled into
+//! a single trigger and a list of guards:
 //!
-//! - **Guards**: every comparison of the branch, except the ones the evaluator can't
-//!   compute (random variables and `is_last_straight_onetime`). The guards alone
-//!   decide whether the skill activates.
-//! - **Trigger**: decides when to evaluate the guards. It never replaces a guard, so
-//!   it only needs to fire *at least* whenever all guards could be true:
+//! - **Guards**: every comparison of the branch, except the ones the evaluator
+//!   can't compute (random variables and `is_last_straight_onetime`). The
+//!   guards alone decide whether the skill activates.
+//! - **Trigger**: decides when to evaluate the guards. It never replaces a
+//!   guard, so it only needs to fire *at least* whenever all guards could be
+//!   true:
 //!   - Events: random segments, entering the last straight, skill activations.
-//!   - Windows: the range of positions (or time, or HP) where every comparison of the
-//!     branch can be true, checked every frame while inside it.
+//!   - Windows: the range of positions (or time, or HP) where every comparison
+//!     of the branch can be true, checked every frame while inside it.
 //!
-//! **Preconditions** are compiled the same way into logics whose action is to unlock
-//! the skill instead of activating it (see [`LogicAction`]).
+//! **Preconditions** are compiled the same way into logics whose action is to
+//! unlock the skill instead of activating it (see [`LogicAction`]).
 //!
 //! ## Examples
 //!
 //! Condition `hp_per>=20 & is_finalcorner_random==1`:
 //!
-//! - **Trigger**: `Segments { ranges: [(1850, 1860)] }` (random 10m segment rolled
-//!   on the final corner).
+//! - **Trigger**: `Segments { ranges: [(1850, 1860)] }` (random 10m segment
+//!   rolled on the final corner).
 //! - **Guards**: `[hp_per>=20]`.
 //!
 //! Condition `phase==1 & corner!=0 & order<=3` (on a course with corners at
@@ -43,8 +45,8 @@ use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.
 ///
-/// Combines a trigger (WHEN to check), guards (IF to activate), and a precondition
-/// (unlock gate) in a single structure.
+/// Combines a trigger (WHEN to check), guards (IF to activate), and a
+/// precondition (unlock gate) in a single structure.
 #[derive(Clone, Debug)]
 pub struct SkillActivationLogic {
     /// Index into runner.available_skills.
@@ -57,11 +59,14 @@ pub struct SkillActivationLogic {
     pub trigger: TriggerCondition,
 
     /// Guards that must ALL be true AT activation time.
-    /// Empty list means no guard checks needed (always activates when trigger fires).
+    ///
+    /// An empty list means no guard checks needed (always activates when trigger
+    /// fires).
     pub guards: ComparisonList,
 
-    /// Precondition that must be satisfied before this logic can succeed, as an
-    /// index into `scheduler.precondition_satisfied`.
+    /// Precondition to satisfy before this logic can succeed, as an index into
+    /// `scheduler.precondition_satisfied`.
+    ///
     /// Enables event-based activation (e.g., "activate after overtaking someone").
     pub precondition: Option<usize>,
 
@@ -107,12 +112,11 @@ pub enum TriggerCondition {
         max_threshold: f64,
     },
 
-    /// Checked once, when entering the last straight
-    /// (`is_last_straight_onetime`).
+    /// Checked once, when entering the last straight (`is_last_straight_onetime`).
     LastStraightEntry,
 
-    /// Random point after Full-Throttle Sprint starts. The point is rolled when
-    /// the sprint starts and scheduled as a position trigger.
+    /// Random point after Full-Throttle Sprint starts. The point is rolled when the
+    /// sprint starts and scheduled as a position trigger.
     /// Used for `run_at_full_speed_random==1` conditions.
     FullThrottleStart,
 
@@ -183,14 +187,15 @@ pub struct CompiledBranch {
 
 /// Compile a condition into one [`CompiledBranch`] per OR branch.
 ///
-/// `rolls` holds the segment starts rolled for the random variables of each branch, or
-/// `None` if its roll failed (see
-/// [`roll_condition`](crate::trigger::random::roll_condition)). Branches without an
-/// entry (e.g. preconditions, which aren't rolled) have no random points.
+/// `rolls` holds the segment starts rolled for the random variables of each
+/// branch, or `None` if its roll failed (see
+/// [`roll_condition`](crate::trigger::random::roll_condition)). Branches
+/// without an entry (e.g. preconditions, which aren't rolled) have no random
+/// points.
 ///
 /// Branches that can never be true on this course (e.g. `slope==2` without
-/// downhills, or a failed roll) are dropped, so the result is empty if the condition
-/// can never be satisfied.
+/// downhills, or a failed roll) are dropped, so the result is empty if the
+/// condition can never be satisfied.
 ///
 /// # Example
 ///
@@ -198,8 +203,9 @@ pub struct CompiledBranch {
 ///
 /// Output (2 branches):
 ///
-/// - Branch 1: trigger `Segments` (rolled segment), guards `[hp_per>=20]`
-/// - Branch 2: trigger `Window` (corner 2), guards `[corner==2, ground_type==1]`
+/// - Branch 1: trigger `Segments` (rolled segment), guards `[hp_per>=20]`.
+/// - Branch 2: trigger `Window` (corner 2), guards
+///   `[corner==2, ground_type==1]`.
 pub fn compile_condition(
     condition: &Condition,
     rolls: &[Option<Vec<f64>>],
@@ -212,7 +218,8 @@ pub fn compile_condition(
         .enumerate()
         .filter_map(|(idx, comps)| {
             let points = match rolls.get(idx) {
-                Some(roll) => roll.as_deref()?, // Failed roll: never satisfied
+                // Failed roll: never satisfied.
+                Some(roll) => roll.as_deref()?,
                 None => &[],
             };
             compile_branch(&comps, points, course)
@@ -220,8 +227,8 @@ pub fn compile_condition(
         .collect()
 }
 
-/// Compile an AND chain, with the segment starts (`points`) rolled for its random
-/// variables. Returns `None` if it can never be true on this course.
+/// Compile an AND chain, with the segment starts (`points`) rolled for its
+/// random variables. Returns `None` if it can never be true on this course.
 fn compile_branch(
     comps: &[&Comparison],
     points: &[f64],
@@ -237,31 +244,32 @@ fn compile_branch(
 
     for comp in comps {
         match &comp.var {
-            // Rolled when building the scheduler: if we're here, the roll succeeded
+            // Rolled when building the scheduler.
+            // If we're here, the roll succeeded.
             Random(_) => {}
 
-            // Random segments: checked while inside the rolled segments. A branch
-            // holds at most one event (checked against the skill data)
+            // Random segments: checked while inside the rolled segments. A branch holds at
+            // most one event (checked against the skill data).
             RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
                 event.get_or_insert(TriggerCondition::FullThrottleStart);
             }
             RandomSpatial(_) | RandomPhase(_) => {
-                // Not rolled (e.g. in a precondition): the branch can't be triggered
+                // No activation points rolled: the branch can't be triggered.
                 if points.is_empty() {
                     return None;
                 }
-                // Filled once the position range of the branch is known
+                // Filled once the position range of the branch is known.
                 event.get_or_insert(TriggerCondition::Segments { ranges: Vec::new() });
             }
 
-            // Only true on the frame the last straight is entered
+            // Only true on the frame the last straight is entered.
             Spatial(SpatialVar::IsLastStraightOnetime) => {
                 course.straights.last()?;
                 event.get_or_insert(TriggerCondition::LastStraightEntry);
             }
 
             // Skill activations: only true on frames where a skill activated.
-            // Unlike the events above, these can be evaluated, so they stay as guards
+            // Unlike the events above, these can be evaluated, so they stay as guards.
             Activation(activation) => {
                 let activation_event = match (activation, comp.op, comp.value) {
                     (ActivationVar::IsActivateAnySkill, CompOp::Equal, 1) => {
@@ -288,10 +296,11 @@ fn compile_branch(
     }
 
     if is_empty(position) || is_empty(time) || is_empty(hp) {
-        return None; // Some comparisons can never be true at the same time
+        // Some comparisons can never be true at the same time.
+        return None;
     }
 
-    // Segments trimmed to the positions where the rest of the branch can be true
+    // Segments trimmed to exclude always-false intervals.
     if let Some(TriggerCondition::Segments { ranges }) = &mut event {
         ranges.extend(
             points
@@ -300,11 +309,12 @@ fn compile_branch(
                 .filter(|&range| !is_empty(range)),
         );
         if ranges.is_empty() {
-            return None; // No segment where the rest of the branch can be true
+            // No segment where the rest of the branch can be true.
+            return None;
         }
     }
 
-    // Prefer position windows: they're the most common and cheapest to track
+    // Prefer position windows: they're the most common and cheapest to track.
     let window = |variable, (min_threshold, max_threshold)| TriggerCondition::Window {
         variable,
         min_threshold,
@@ -362,12 +372,16 @@ fn floored_range(op: CompOp, value: i32) -> Range {
     }
 }
 
-/// Get the range of positions (in meters from the start) where a comparison can be
-/// true. The range contains every position where it's true, but may contain some
-/// where it isn't (e.g. `corner!=0` covers from the first corner to the last one).
+/// Get the range of positions (in meters from the start) where a comparison can
+/// be true.
+///
+/// The range contains every position where it's true, but may contain some
+/// where it isn't (e.g. `corner!=0` covers from the first corner to the last
+/// one).
 ///
 /// Returns [`FULL_RANGE`] if the comparison doesn't depend on the position, and
-/// `None` if it's never true on this course (e.g. `slope==2` without downhills).
+/// `None` if it's never true on this course (e.g. `slope==2` without
+/// downhills).
 fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
     use VarType::*;
 
@@ -391,7 +405,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
             (furlongs_to_meters(min), furlongs_to_meters(max))
         }
 
-        // Union of the phases that satisfy the comparison
+        // Union of the phases that satisfy the comparison.
         (Phase(PhaseVar::Phase), op, value) => envelope(
             PHASES
                 .iter()
@@ -408,7 +422,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
             subdivision(crate::course::Phase::boundaries_second_half)
         }
 
-        // Final corner (or its second half) and beyond
+        // Final corner (or its second half) and beyond.
         (Spatial(SpatialVar::IsFinalcorner), CompOp::Equal, 1) => {
             last_corner.map_or(EMPTY_RANGE, |corner| (corner.start, f64::INFINITY))
         }
@@ -416,7 +430,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
             .map_or(EMPTY_RANGE, |corner| {
                 (corner.start + corner.length / 2.0, f64::INFINITY)
             }),
-        // After the final corner (anywhere without corners)
+        // After the final corner (anywhere without corners).
         (Spatial(SpatialVar::IsLastStraight), CompOp::Equal, 1) => last_corner
             .map_or(FULL_RANGE, |corner| {
                 (corner.start + corner.length, f64::INFINITY)
@@ -425,7 +439,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
         (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => {
             envelope(course.corners.iter().map(corner_range))
         }
-        // Every occurrence of the corner (multiple if the race has more than one lap)
+        // Every occurrence of the corner (multiple if more than one lap).
         (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => envelope(
             course
                 .corners

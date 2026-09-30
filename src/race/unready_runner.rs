@@ -58,7 +58,8 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
             modify_stat(&mut uma.guts, modifier);
             modify_stat(&mut uma.wiz, modifier);
         }
-        _ => {} // Not a stat boost effect
+        // Not a stat boost effect.
+        _ => {}
     }
 }
 
@@ -71,7 +72,8 @@ fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType
         SkillType::SetStartDelay => {
             *start_delay = modifier as f64 / 10000.0;
         }
-        _ => {} // Not a start delay effect
+        // Not a start delay effect.
+        _ => {}
     }
 }
 
@@ -90,14 +92,14 @@ pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
     matches!(effect_type, SkillType::RushChanceUp)
 }
 
-/// A data structure that holds all information needed to initialize a [`Runner`].
-/// It allows for proper activation of out-of-gate skills that can take into
-/// account the runner's base stats, race parameters, and most importantly,
-/// data about other runners.
+/// A data structure that holds all information needed to initialize a
+/// [`Runner`]. It allows for proper activation of out-of-gate skills that can
+/// take into account the runner's base stats, race parameters, and most
+/// importantly, data about other runners.
 pub struct UnreadyRunner {
     // === Immutable context ===
-    /// Base stats before adjustments. Also used for skill conditions in
-    /// out-of-gate skills.
+    /// Base stats before adjustments. Also used for skill conditions in out-of-gate
+    /// skills.
     pub base: Uma,
     /// Raw power stat, before halving and motivation. Used for Charge Up.
     raw_power: u16,
@@ -136,9 +138,9 @@ pub struct UnreadyRunner {
     /// Indices of golden skills in `runtime_skills` for activation by skills that
     /// activate golden skills.
     golden_skill_indices: Vec<usize>,
-    /// Temporary: Number of runners that have the same skill as the one currently being
-    /// evaluated. Used for conditions like `same_skill_horse_count` that need to know
-    /// which skill they're checking.
+    /// Temporary: Number of runners that have the same skill as the one currently
+    /// being evaluated. Used for conditions like `same_skill_horse_count` that need
+    /// to know which skill they're checking.
     pub same_skill_count: u8,
 
     // === Random number generator ===
@@ -159,14 +161,14 @@ impl UnreadyRunner {
         let params = &state.params;
         let rng = Rc::clone(&state.rng);
 
-        // Calculate base stats
+        // Calculate base stats.
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let raw_power = uma.power;
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate.
-        // N.B. As observed, skill activation update happens before out-of-gate skills activate.
-        // Thus, out-of-gate skills don't affect skill activation chance.
+        // N.B. As observed, skill activation update happens before out-of-gate skills
+        // activate. Thus, out-of-gate skills don't affect skill activation chance.
         let available_skills = skills
             .into_iter()
             .filter(|skill| {
@@ -175,23 +177,23 @@ impl UnreadyRunner {
             })
             .collect::<Vec<Skill>>();
 
-        // Partition skills into out-of-gate and runtime skills
+        // Partition skills into out-of-gate and runtime skills.
         let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
             .into_iter()
             .partition(|skill| skill.should_activate_out_of_gate());
 
         // Build trigger scheduler from the runtime skills, as its skill indices
-        // refer to them
+        // refer to them.
         let trigger_scheduler =
             build_trigger_scheduler(&runtime_skills, course, &mut *rng.borrow_mut());
 
-        // Calculate adjusted stats (before out-of-gate skills)
+        // Calculate adjusted stats (before out-of-gate skills).
         let adjusted_uma = adjust_stats(&base_uma, course, params);
 
-        // Determine start delay (0.0 to 0.1 seconds)
+        // Determine start delay (0.0 to 0.1 seconds).
         let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
 
-        // Build golden skill indices for random activation
+        // Build golden skill indices for random activation.
         let golden_skill_indices = runtime_skills
             .iter()
             .enumerate()
@@ -211,7 +213,8 @@ impl UnreadyRunner {
                 gate_block,
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
-                fan_count: 0, // TODO: Determine fan count from race state or parameters
+                // TODO: Determine fan count from race state or parameters.
+                fan_count: 0,
             },
             start_delay,
             activation_counts: ActivationCounts::default(),
@@ -233,41 +236,43 @@ impl UnreadyRunner {
         let skill_id = skill.id.clone();
         let alternative = &skill.alternatives[alt_index];
 
-        // Apply each effect in the alternative
+        // Apply each effect in the alternative.
         for effect in &alternative.effects {
             let effect_type = &effect.skill_type;
 
-            // Apply stat boosts
+            // Apply stat boosts.
             if is_stat_boost(effect_type) {
                 apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
                 if matches!(effect_type, SkillType::PowerUp | SkillType::AllStatsUp) {
                     self.power_skill_bonus += effect.modifier / 10000;
                 }
             }
-            // Apply start delay modifications
+            // Apply start delay modifications.
             else if is_start_delay_modification(effect_type) {
                 apply_start_delay_modification(&mut self.start_delay, effect_type, effect.modifier);
             }
-            // Apply style changes
+            // Apply style changes.
             else if is_style_change(effect_type) {
                 apply_style_change(&mut self.adjusted.style, effect_type);
             }
-            // Apply rush chance modifications
+            // Apply rush chance modifications.
             else if is_rush_chance_effect(effect_type) {
                 self.rush_chance_modifier += effect.modifier as f64 / 10000.0;
             }
-            // Timed effects, recovery, and other runtime-only effects are not applicable out-of-gate.
-            // These should not appear in out-of-gate skills, so they are gracefully ignored.
+            // Timed effects, recovery, and other runtime-only effects are not applicable
+            // out-of-gate.
+            // These should not appear in out-of-gate skills, so they're gracefully ignored.
         }
 
-        // Track skill activation
+        // Track skill activation.
         self.activated_skill_ids.insert(skill_id.clone());
         self.activated_skills.push(SkillActivationRecord {
             skill_id,
-            distance: 0.0, // Out-of-gate activations occur at position 0
+            // Out-of-gate activations occur at position 0.
+            distance: 0.0,
         });
 
-        // Increment activation counts (all out-of-gate skills count as "start" phase)
+        // Increment activation counts (all out-of-gate skills count as "start" phase).
         self.activation_counts.increment(Phase::Early, 0.0, 0.0);
     }
 
@@ -278,11 +283,11 @@ impl UnreadyRunner {
     /// gate 2 to bracket 2, etc.).
     ///
     /// In races with more than 8 participants, gates will be added in reverse,
-    /// starting from the last bracket. So, in a race with 9 participants, the extra
-    /// gate will go to bracket 8 (paticipants in gate numbers 8 and 9 will share
-    /// bracket 8); with 10 participants, to brackets 8 and 7 (participants in gates
-    /// 7 and 8 will share bracket 7, gates 8 and 9 will share bracket 8), etc. If
-    /// there are more than 16 participants, the process starts from bracket 8 again.
+    /// starting from the last bracket. So in a race with 9 participants, the extra
+    /// gate goes to bracket 8 (paticipants in gate numbers 8 and 9 share bracket
+    /// 8); with 10 participants, to brackets 8 and 7 (participants in gates 7 and 8
+    /// will share bracket 7, gates 8 and 9 will share bracket 8), etc. If there are
+    /// more than 16 participants, the process starts from bracket 8 again.
     ///
     /// N.B. All inputs and outputs are 1-indexed.
     fn get_gate_bracket(gate_roll: u8, max_gates: u8) -> u8 {
@@ -290,30 +295,32 @@ impl UnreadyRunner {
             return gate_roll;
         }
 
-        // Convert to 0-indexed for easier calculation
+        // Convert to 0-indexed for easier calculation.
         let mut gate_roll = gate_roll - 1;
 
         let extra = max_gates - 8;
-        let base_extra = extra / 8; // Extra gates all brackets get
-        let remainder = extra % 8; // Additional gates for last brackets
+        // Extra gates all brackets get.
+        let base_extra = extra / 8;
+        // Additional gates for last brackets.
+        let remainder = extra % 8;
 
-        // Gates per bracket
+        // Gates per bracket.
         let gates_per_small = 1 + base_extra;
         let gates_per_large = gates_per_small + 1;
 
-        // Number of brackets with fewer gates
+        // Number of brackets with fewer gates.
         let num_small = 8 - remainder;
         let total_in_small = num_small * gates_per_small;
 
         gate_roll = if gate_roll < total_in_small {
-            // In a "smaller" bracket
+            // In a "smaller" bracket.
             gate_roll / gates_per_small
         } else {
-            // In a "larger" bracket (with extra gate)
+            // In a "larger" bracket (with extra gate).
             num_small + (gate_roll - total_in_small) / gates_per_large
         };
 
-        // Convert back to 1-indexed
+        // Convert back to 1-indexed.
         gate_roll + 1
     }
 
@@ -321,15 +328,16 @@ impl UnreadyRunner {
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
         for skill in &skills {
-            // Update count (same_skill_horse_count)
+            // Update count (same_skill_horse_count).
             self.same_skill_count = state.existing_skills.get(&skill.id).cloned().unwrap_or(0);
 
-            // Apply the first alternative whose condition is satisfied, if any
+            // Apply the first alternative whose condition is satisfied, if any.
             let alt_index = skill.alternatives.iter().position(|alternative| {
                 let Ok(condition) = parse_condition(&alternative.condition) else {
-                    return false; // Skip unparseable conditions
+                    // Skip unparseable conditions.
+                    return false;
                 };
-                // Satisfied if all comparisons of any OR branch are true
+                // Satisfied if all comparisons of any OR branch are true.
                 condition.comp_tree.or_branches().iter().any(|branch| {
                     branch
                         .iter()
@@ -347,31 +355,32 @@ impl UnreadyRunner {
         let course = &state.course;
         let game_version = state.config.game_version;
 
-        // Convert stamina to HP (using FINAL adjusted stats after out-of-gate boosts)
+        // Convert stamina to HP using adjusted stats after out-of-gate boosts.
         let max_hp =
             0.8 * hp_style_multiplier(self.adjusted.style) * (self.adjusted.stamina as f64)
                 + course.distance as f64;
 
-        // Set starting speed (done in the constructor)
-        // Determine rush chance
+        // Set starting speed (done in the constructor).
+        // Determine rush chance.
         let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier;
         let can_rush = self.rng.borrow_mut().random_bool(rush_chance / 100.0);
         let rush_state = if can_rush {
             let style = match self.adjusted.style {
-                // Front-like styles (Front and Runaway) keep their style when rushing
+                // Front-like styles (Front and Runaway) keep their style when rushing.
                 Style::Front | Style::Runaway => self.adjusted.style,
+                // Pace runner always changes her strategy to Front.
                 Style::Pace => Style::Front,
+                // 75% chance of changing strategy to Front, 25% to Pace.
                 Style::Late => {
-                    // 75% chance to change strategy to Front, 25% to Pace
                     if self.rng.borrow_mut().random_bool(0.75) {
                         Style::Front
                     } else {
                         Style::Pace
                     }
                 }
+                // 70% chance of changing strategy to Front, 20% to Pace, 10% to Late.
                 Style::End => {
-                    // 70% chance to change strategy to Front, 20% to Pace, 10% to Late
                     let roll: f64 = self.rng.borrow_mut().random();
                     if roll < 0.7 {
                         Style::Front
@@ -382,7 +391,7 @@ impl UnreadyRunner {
                     }
                 }
             };
-            // Uma will rush in a random section between 2 and 9 (1-indexed)
+            // Uma will rush in a random section between 2 and 9 (1-indexed).
             let section = self.rng.borrow_mut().random_range(1..=8);
             Some(RushState {
                 section,
@@ -396,14 +405,14 @@ impl UnreadyRunner {
             None
         };
 
-        // Calculate section modifier for base speed adjustment
+        // Calculate section modifier for base speed adjustment.
         let section_speed_modifier = roll_section_speed_modifier(
             &mut self.rng.borrow_mut(),
             self.adjusted.wiz,
             course.base_speed(),
         );
 
-        // Calculate force-in modifier based on style and randomness
+        // Calculate force-in modifier based on style and randomness.
         let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
             0.0
         } else {
@@ -415,7 +424,7 @@ impl UnreadyRunner {
                 }
         };
 
-        // Roll the HP ratio kept by Stamina Keep (2.5 Anniv. onward)
+        // Roll the HP ratio kept by Stamina Keep (2.5 Anniv. onward).
         let stamina_keep_ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
             0.0
         } else {
@@ -424,14 +433,15 @@ impl UnreadyRunner {
                 .random_range(compete_before_spurt::STAMINA_KEEP_RATIO)
         };
 
-        // Initialize race state
+        // Initialize race state.
         Runner {
             gate_roll: self.gate_roll,
             base: self.base,
             adjusted: self.adjusted,
             initial_state: self.initial_state,
             speed: 3.0,
-            acceleration: 0.0, // start dash acceleration is applied separately
+            // Start dash acceleration is applied separately.
+            acceleration: 0.0,
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),

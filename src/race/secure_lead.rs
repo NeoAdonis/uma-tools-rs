@@ -21,8 +21,9 @@ pub const COOLDOWN: f64 = 1.0;
 // ? Should scale with wiz, but the formula is unknown.
 pub const CHANCE: f64 = 0.2;
 
-/// Desirable lead (in meters) of a runner with `style` over a runner with `other`
-/// style, or `None` if `other` should not be behind `style` by strategy.
+/// Desirable lead (in meters) of a runner with `style` over a runner with
+/// `other` style, or `None` if `other` should not be behind `style` by
+/// strategy.
 pub fn desirable_lead(style: Style, other: Style, course_distance: f64) -> Option<f64> {
     use Style::*;
     let coef = match (style, other) {
@@ -76,7 +77,8 @@ pub fn hp_cost(style: Style, course_distance: i32) -> f64 {
     20.0 * style_coef * distance_coefficient(course_distance)
 }
 
-/// Course distance coefficient of the HP cost. Shared with compete before spurt.
+/// Course distance coefficient of the HP cost. Shared with compete before
+/// spurt mechanics.
 pub fn distance_coefficient(course_distance: i32) -> f64 {
     match course_distance {
         ..=1800 => 0.3,

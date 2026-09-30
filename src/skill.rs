@@ -68,11 +68,10 @@ pub enum SkillRarity {
     Gold = 2,
     /// Skill unique to a specific Uma (1 or 2 stars).
     Unique = 3,
-    /// Skill unique to a specific Uma (3+ stars) after upgrade from a 1 or 2
-    /// stars unique skill.
+    /// Skill unique to a specific Uma (3+ stars) after upgrade from a 1 or 2 stars
+    /// unique skill.
     UniqueUpgraded = 4,
-    /// Skill unique to a specific Uma (3+ stars) with no 1 or 2 stars
-    /// equivalent.
+    /// Skill unique to a specific Uma (3+ stars) with no 1 or 2 stars equivalent.
     UniqueNatural = 5,
     /// Skills evolved from gold skills.
     Evolution = 6,
@@ -104,7 +103,7 @@ pub enum SkillTarget {
     RushedBehind = 20,
     /// Skill affects runners with a specific running style that are rushed.
     RushedStrategy = 21,
-    /// (Unknown)
+    /// Unknown.
     UmaId = 22,
     /// Skill affects runners that have used recovery skills.
     UsedRecovery = 23,
@@ -135,7 +134,8 @@ pub struct SkillAlternative {
     pub condition: String,
     /// List of effects that this alternative applies when triggered.
     pub effects: Vec<SkillEffect>,
-    /// Precondition that must be satisfied before this alternative can be considered.
+    /// Precondition that must be satisfied before this alternative can be
+    /// considered.
     pub precondition: String,
 }
 
@@ -197,25 +197,25 @@ impl Skill {
     /// Determine whether a skill effect is positive or negative.
     pub fn is_effect_positive(effect: &SkillEffect) -> bool {
         match effect.skill_type {
-            // Purely positive effects
+            // Purely positive effects.
             SkillType::ActivateRandomGold
             | SkillType::ActivateSympathy
             | SkillType::ChangeStyleRunaway => true,
-            // When a start delay is set, it's always to a bad start
+            // When a start delay is set, it's always to a bad start.
             SkillType::SetStartDelay => false,
-            // Multiplier of less than or equal to 1.0 is a reduction in delay
+            // Multiplier of less than or equal to 1.0 is a reduction in delay.
             SkillType::MultiplyStartDelay => effect.modifier <= 10000,
-            // Less chance or shorter rush time is good
+            // Less chance or shorter rush time is good.
             SkillType::RushChanceUp | SkillType::RushTimeUp => effect.modifier <= 0,
-            // Positive modifier is good for other effects
+            // Positive modifier is good for other effects.
             _ => effect.modifier >= 0,
         }
     }
 
     /// Check if a skill affects you positively (buff).
     ///
-    /// N.B. Because a skill can have both positive and negative effects,
-    /// a skill can be both a buff and a nerf.
+    /// N.B. Because a skill can have both positive and negative effects, a skill
+    /// can be both a buff and a nerf.
     pub fn is_buff(self: &Skill) -> bool {
         for alternative in &self.alternatives {
             for effect in &alternative.effects {
@@ -229,8 +229,8 @@ impl Skill {
 
     /// Check if a skill affects you negatively (nerf).
     ///
-    /// N.B. Because a skill can have both positive and negative effects, a
-    /// skill can be both a buff and a nerf.
+    /// N.B. Because a skill can have both positive and negative effects, a skill
+    /// can be both a buff and a nerf.
     pub fn is_nerf(self: &Skill) -> bool {
         for alternative in &self.alternatives {
             for effect in &alternative.effects {
@@ -254,8 +254,7 @@ impl Skill {
         false
     }
 
-    /// Check if this skill is a unique skill (i.e. only available to a specific
-    /// Uma).
+    /// Check if `self` is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
             self.rarity,
@@ -263,8 +262,8 @@ impl Skill {
         )
     }
 
-    /// Check if this skill benefits from the Wiz Limit Break buff (5th
-    /// Anniversary onward).
+    /// Check if this skill benefits from the Wiz Limit Break buff (5th Anniversary
+    /// onward).
     ///
     /// Only unique, evolved and gold skills are affected. Inherited uniques
     /// are stored as white skills, so they are excluded as well.
@@ -274,8 +273,8 @@ impl Skill {
 
     /// Chance that this skill passes its pre-race activation check.
     ///
-    /// Skills that don't require a wisdom check always pass; otherwise the
-    /// chance depends on the runner's base wisdom (minimum 20%).
+    /// Skills that don't require a wisdom check always pass; otherwise the chance
+    /// depends on the runner's base wisdom (minimum 20%).
     pub fn activation_chance(&self, base_wiz: u16) -> f64 {
         if !self.wisdom_check {
             return 1.0;
@@ -285,18 +284,18 @@ impl Skill {
 
     /// Check if this skill should activate out of gate (before race begins).
     pub fn should_activate_out_of_gate(&self) -> bool {
-        // Green skills (stat boosts) always activate at start
+        // Green skills (stat boosts) always activate at start.
         if self.is_green() {
             return true;
         }
 
-        // Skills with always==1 condition activate at start
+        // Skills with always==1 condition activate at start.
         if let Some(alt) = self.alternatives.first() {
             if alt.condition == "always==1" {
                 return true;
             }
 
-            // Start delay modification skills activate at start
+            // Start delay modification skills activate at start.
             if alt.effects.iter().any(|ef| {
                 matches!(
                     ef.skill_type,
@@ -310,12 +309,12 @@ impl Skill {
         false
     }
 
-    /// Check if this skill can activate on a specific course (ignoring
-    /// wisdom-based activation chance).
+    /// Check if this skill can activate on a specific course (ignoring wisdom-based
+    /// activation chance).
     ///
-    /// This evaluates only course-static guards (ground type, distance type,
-    /// etc.) and ignores runtime guards (hp percentage, phase, order, etc.)
-    /// which are assumed to be potentially satisfiable during the race.
+    /// This evaluates only course-static guards (ground type, distance type, etc.)
+    /// and ignores runtime guards (hp percentage, phase, order, etc.) that are
+    /// assumed to be potentially satisfiable during the race.
     ///
     /// Returns `true` if at least one alternative can activate on this course.
     pub fn is_activable_on_course(
@@ -323,7 +322,7 @@ impl Skill {
         state: &crate::race::solver::RaceState,
         runner: &crate::race::unready_runner::UnreadyRunner,
     ) -> bool {
-        // A skill is activable if at least one of its alternatives can activate
+        // A skill is activable if at least one of its alternatives can activate.
         for alternative in &self.alternatives {
             if can_alternative_activate(alternative, state, runner) {
                 return true;
@@ -332,8 +331,7 @@ impl Skill {
         false
     }
 
-    /// Load all skills from a JSON file into a hash map of skill ID to
-    /// [`Skill`] object.
+    /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
     pub fn load_skills_from_file(
         json_path: &str,
     ) -> Result<HashMap<String, Skill>, Box<dyn std::error::Error>> {
@@ -353,8 +351,8 @@ impl Skill {
 
 /// Check if a specific skill alternative can activate on this course.
 ///
-/// Parses the alternative's condition and evaluates only static guards.
-/// Returns `true` if all static guards pass (or there are no static guards).
+/// Parses the alternative's condition and evaluates only static guards and
+/// returns `true` if all static guards pass or there are no static guards.
 fn can_alternative_activate(
     alternative: &SkillAlternative,
     state: &crate::race::solver::RaceState,
@@ -363,21 +361,21 @@ fn can_alternative_activate(
     use crate::condition::evaluator::check_static_guards;
     use crate::condition::parser::parse_condition;
 
-    // Empty condition means always activable
+    // Empty condition means always activable.
     if alternative.condition.is_empty() {
         return true;
     }
 
-    // Parse condition
+    // Parse condition.
     let condition = match parse_condition(&alternative.condition) {
         Ok(cond) => cond,
         Err(_) => {
-            // If parsing fails, conservatively assume activable
+            // If parsing fails, conservatively assume activable.
             return true;
         }
     };
 
-    // Check static guards only
+    // Check static guards only.
     check_static_guards(&condition.comp_tree, state, runner)
 }
 
@@ -407,7 +405,7 @@ mod tests {
     fn test_activation_chance_with_wisdom_check() {
         let skill = skill_with_wisdom_check(true);
         assert!((skill.activation_chance(900) - 0.9).abs() < 1e-9);
-        // Low wisdom is clamped to the minimum chance
+        // Low wisdom is clamped to the minimum chance.
         assert_eq!(skill.activation_chance(100), 0.2);
         assert_eq!(skill.activation_chance(0), 0.2);
     }

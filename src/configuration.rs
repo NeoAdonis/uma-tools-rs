@@ -14,16 +14,16 @@ pub enum GameVersion {
     /// After the first anniversary update in Japan (Half-anniversary update in
     /// global).
     ///
-    /// This update introduced spot struggles and stamina dueling mechanics,
-    /// a buff to make the guts stat more useful, last spurt recalculation with
-    /// HP changes, and a force-in modifier for lane changes.
+    /// This update introduced spot struggles and stamina dueling mechanics, a buff
+    /// to make the guts stat more useful, last spurt recalculation with HP changes,
+    /// and a force-in modifier for lane changes.
     FirstAnniversary,
     /// After the 1.5 anniversary update in Japan.
     ///
     /// This update makes adjustments to positioning. It softened pace-down
-    /// positioning in the mid-race, making the slowdown milder and the target
-    /// gap to the pacemaker smaller, and let a lone front runner keep speeding
-    /// up to stay ahead with a larger lead.
+    /// positioning in the mid-race, making the slowdown milder and the target gap
+    /// to the pacemaker smaller, and let a lone front runner keep speeding up to
+    /// stay ahead with a larger lead.
     OnePointFiveAnniversary,
     /// After the 2nd anniversary update in Japan.
     ///
@@ -31,8 +31,8 @@ pub enum GameVersion {
     SecondAnniversary,
     /// After the 2.5 anniversary update in Japan.
     ///
-    /// This update introduced stamina limit breaks, compete before spurt,
-    /// stamina keep and lead securing mechanics.
+    /// This update introduced stamina limit breaks, compete before spurt, stamina
+    /// keep and lead securing mechanics.
     TwoPointFiveAnniversary,
     /// After the Mecha Umamusume scenario release in Japan.
     ///
@@ -41,9 +41,9 @@ pub enum GameVersion {
     MechaUmaUpdate,
     /// After the 5th anniversary update in Japan.
     ///
-    /// This update introduce full-throttle sprint and wiz limit break
-    /// mechanics, increased stat caps and added a buff for front-runners when
-    /// securing the lead.
+    /// This update introduce full-throttle sprint and wiz limit break mechanics,
+    /// increased stat caps and added a buff for front-runners when securing the
+    /// lead.
     FifthAnniversary,
 }
 

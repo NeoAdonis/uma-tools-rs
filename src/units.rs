@@ -1,4 +1,4 @@
-//! Unit conversion utilities for race measurements
+//! Unit conversion utilities for race measurements.
 
 /// Course width to meters conversion unit. 1 course width = 11.25 meters.
 ///
@@ -25,7 +25,8 @@ pub fn meters_to_bashin(meters: f64) -> f64 {
 }
 
 /// Furlong to meters conversion unit. 1 furlong = 201.168 meters.
-pub const FURLONG_TO_METERS: f64 = 201.168; // ? The standard definition of furlong is presumably used
+// ? The standard definition of furlong is presumably used.
+pub const FURLONG_TO_METERS: f64 = 201.168;
 
 /// Convert furlongs to meters.
 pub fn furlongs_to_meters(furlongs: f64) -> f64 {

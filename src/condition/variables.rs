@@ -19,7 +19,7 @@ pub enum VarType {
     RandomPhase(RandomPhaseVar),
     /// Variables related to course properties.
     Course(CourseVar),
-    /// Variables related to spatial position (i.e. position on course or course features).
+    /// Variables related to position (distance or course features).
     Spatial(SpatialVar),
     /// Variables related to random positional aspects.
     RandomSpatial(RandomSpatialVar),
@@ -284,7 +284,7 @@ impl fmt::Display for StatKind {
     }
 }
 
-// Implement Display for other enums (using snake_case of variant name)
+// Implement Display for other enums (using snake_case of variant name).
 macro_rules! impl_display_snake_case {
     ($type:ty) => {
         impl fmt::Display for $type {
@@ -325,20 +325,20 @@ impl VarType {
         use VarType::*;
 
         match s {
-            // Base stats
+            // Base stats.
             "base_speed" => BaseStat(StatKind::Speed),
             "base_stamina" => BaseStat(StatKind::Stamina),
             "base_power" => BaseStat(StatKind::Power),
             "base_guts" => BaseStat(StatKind::Guts),
             "base_wiz" => BaseStat(StatKind::Wiz),
 
-            // Initial state
+            // Initial state.
             "fan_count" => InitialState(InitialStateVar::FanCount),
             "motivation" => InitialState(InitialStateVar::Motivation),
             "popularity" => InitialState(InitialStateVar::Popularity),
             "post_number" => InitialState(InitialStateVar::PostNumber),
 
-            // Order/Rank
+            // Order/Rank.
             "change_order_onetime" => Order(OrderVar::ChangeOrderOnetime),
             "change_order_up_end_after" => Order(OrderVar::ChangeOrderUpEndAfter),
             "change_order_up_finalcorner_after" => Order(OrderVar::ChangeOrderUpFinalcornerAfter),
@@ -354,23 +354,23 @@ impl VarType {
             "order_rate_out50_continue" => Order(OrderVar::OrderRateOut50Continue),
             "order_rate_out70_continue" => Order(OrderVar::OrderRateOut70Continue),
 
-            // Distance to other runners
+            // Distance to other runners.
             "bashin_diff_behind" => Distance(DistanceVar::BashinDiffBehind),
             "bashin_diff_infront" => Distance(DistanceVar::BashinDiffInfront),
             "distance_diff_rate" => Distance(DistanceVar::DistanceDiffRate),
             "distance_diff_top_float" => Distance(DistanceVar::DistanceDiffTopFloat),
             "distance_diff_top" => Distance(DistanceVar::DistanceDiffTop),
 
-            // Time
+            // Time.
             "accumulatetime" => AccumulateTime,
 
-            // Phase
+            // Phase.
             "phase" => Phase(PhaseVar::Phase),
             "phase_firsthalf" => Phase(PhaseVar::PhaseFirsthalf),
             "phase_firstquarter" => Phase(PhaseVar::PhaseFirstquarter),
             "phase_laterhalf" => Phase(PhaseVar::PhaseLaterhalf),
 
-            // Random Phase
+            // Random Phase.
             "phase_corner_random" => RandomPhase(RandomPhaseVar::PhaseCornerRandom),
             "phase_first_half_straight_random" => {
                 RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom)
@@ -384,7 +384,7 @@ impl VarType {
             "phase_random" => RandomPhase(RandomPhaseVar::PhaseRandom),
             "phase_straight_random" => RandomPhase(RandomPhaseVar::PhaseStraightRandom),
 
-            // Course
+            // Course.
             "corner_count" => Course(CourseVar::CornerCount),
             "course_distance" => Course(CourseVar::CourseDistance),
             "distance_type" => Course(CourseVar::DistanceType),
@@ -396,7 +396,7 @@ impl VarType {
             "rotation" => Course(CourseVar::Rotation),
             "track_id" => Course(CourseVar::TrackId),
 
-            // Spatial
+            // Spatial.
             "corner" => Spatial(SpatialVar::Corner),
             "distance_rate" => Spatial(SpatialVar::DistanceRate),
             "furlong" => Spatial(SpatialVar::Furlong),
@@ -410,7 +410,7 @@ impl VarType {
             "slope" => Spatial(SpatialVar::Slope),
             "straight_front_type" => Spatial(SpatialVar::StraightFrontType),
 
-            // Random Spatial
+            // Random Spatial.
             "all_corner_random" => RandomSpatial(RandomSpatialVar::AllCornerRandom),
             "corner_random" => RandomSpatial(RandomSpatialVar::CornerRandom),
             "distance_rate_after_random" => {
@@ -424,7 +424,7 @@ impl VarType {
             "up_slope_random" => RandomSpatial(RandomSpatialVar::UpSlopeRandom),
             "up_slope_random_later_half" => RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf),
 
-            // Activation tracking
+            // Activation tracking.
             "activate_count_all_team" => Activation(ActivationVar::ActivateCountAllTeam),
             "activate_count_all" => Activation(ActivationVar::ActivateCountAll),
             "activate_count_end_after" => Activation(ActivationVar::ActivateCountEndAfter),
@@ -444,7 +444,7 @@ impl VarType {
             }
             "is_used_skill_id" => Activation(ActivationVar::IsUsedSkillId),
 
-            // Race parameters
+            // Race parameters.
             "grade" => RaceParam(RaceParamVar::Grade),
             "ground_condition" => RaceParam(RaceParamVar::GroundCondition),
             "is_exist_chara_id" => RaceParam(RaceParamVar::IsExistCharaId),
@@ -453,7 +453,7 @@ impl VarType {
             "time" => RaceParam(RaceParamVar::Time),
             "weather" => RaceParam(RaceParamVar::Weather),
 
-            // Running style
+            // Running style.
             "running_style" => RunningStyle(RunningStyleVar::RunningStyle),
             "running_style_count_nige_otherself" => {
                 RunningStyle(RunningStyleVar::RunningStyleCountNigeOtherself)
@@ -475,7 +475,7 @@ impl VarType {
                 RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
             }
 
-            // Status
+            // Status.
             "hp_per" => Status(StatusVar::HpPer),
             "is_badstart" => Status(StatusVar::IsBadstart),
             "is_hp_empty_onetime" => Status(StatusVar::IsHpEmptyOnetime),
@@ -486,10 +486,10 @@ impl VarType {
             "lastspurt" => Status(StatusVar::Lastspurt),
             "temptation_count" => Status(StatusVar::TemptationCount),
 
-            // Randoms
+            // Randoms.
             "random_lot" => Random(RandomVar::RandomLot),
 
-            // Blocking/Surrounding
+            // Blocking/Surrounding.
             "behind_near_lane_time_set1" => Blocking(BlockingVar::BehindNearLaneTimeSet1),
             "behind_near_lane_time" => Blocking(BlockingVar::BehindNearLaneTime),
             "blocked_all_continuetime" => Blocking(BlockingVar::BlockedAllContinuetime),
@@ -507,7 +507,7 @@ impl VarType {
             "overtake_target_time" => Blocking(BlockingVar::OvertakeTargetTime),
             "visiblehorse" => Blocking(BlockingVar::Visiblehorse),
 
-            // Rush/Temptation
+            // Rush/Temptation.
             "running_style_temptation_count_nige" => {
                 Temptation(TemptationVar::RunningStyleTemptationCountNige)
             }
@@ -541,10 +541,10 @@ impl VarType {
                 Temptation(TemptationVar::TemptationOpponentCountInfront)
             }
 
-            // Special
+            // Special.
             "always" => Always,
 
-            // Unknown variable - fallback
+            // Unknown variable - fallback.
             _ => {
                 #[cfg(debug_assertions)]
                 eprintln!("warning: unknown variable '{}', evaluating to false", s);
@@ -565,11 +565,11 @@ impl VarType {
         match self {
             RaceParam(_) | Course(_) | BaseStat(_) | InitialState(_) => true,
             Status(StatusVar::IsBadstart) => true,
-            // N.B. While running style can technically change, it can only do so
-            // from Front Runner to Runaway. Since both styles are considered
-            // the same for skill purposes, we can treat this type as static.
+            // N.B. While running style can technically change, it can only do so from Front
+            // Runner to Runaway. Since both styles are considered the same for skill
+            // purposes, we can treat this type as static.
             RunningStyle(_) => true,
-            // Special value - By definition, it never changes
+            // Special value - By definition, it never changes.
             Always => true,
             _ => false,
         }
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_known_variables_parse() {
-        // Test a sample of known variables
+        // Test a sample of known variables.
         assert!(matches!(
             VarType::parse("base_speed"),
             VarType::BaseStat(StatKind::Speed)

@@ -10,7 +10,7 @@ pub mod units;
 #[cfg(test)]
 mod test_utils;
 
-// Re-export commonly used types for convenience
+// Re-export commonly used types for convenience.
 pub use condition::*;
 pub use course::*;
 pub use race::parameters::*;

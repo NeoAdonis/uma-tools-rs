@@ -5,26 +5,26 @@
 
 use serde::Deserialize;
 
-/// Running style or strategy of an Uma. The values represent in order, from most to
-/// least aggressive:
+/// Running style or strategy of an Uma. The values represent in order, from
+/// most to least aggressive:
 ///
 /// - Runaway (大逃げ): A front runner that tries to outpace others from the start.
 /// - Front runner (逃げ): Aims to lead the race.
 /// - Pace chaser (先行): Stays near the front, behind the front runners (if any).
-/// - Late surger (差し): Stays in the middle, behind front runners and pace chasers,
-///   and makes a late surge.
+/// - Late surger (差し): Stays in the middle, behind front runners and pace
+///   chasers, and makes a late surge.
 /// - End closer (追込): Stays at the back and sprints towards the end.
 ///
 /// ## Notes on Runaway vs Front
 ///
 /// Runaway is a variant of Front running with more aggressive pacing. In many
 /// contexts, they share the same behavior (e.g., positioning strategy, rush
-/// calculations), but in specific situations (e.g., HP multipliers, phase modifiers,
-/// spot struggle), they have distinct values.
+/// calculations), but in specific situations (e.g., HP multipliers, phase
+/// modifiers, spot struggle), they have distinct values.
 ///
-/// When required to treat both Front and Runaway the same way, [`Style::is_front_like`] can
-/// be used. Otherwise, explicit matching on `Style` should be done to handle their
-/// distinct behaviors.
+/// When required to treat both Front and Runaway the same way,
+/// [`Style::is_front_like`] can be used. Otherwise, explicit matching on
+/// `Style` should be done to handle their distinct behaviors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
@@ -38,8 +38,8 @@ pub enum Style {
     /// 先行, senkō - Stays near the front, behind the front runners (if any).
     #[serde(rename = "Senkou")]
     Pace = 2,
-    /// 差し, sashi - Stays in the middle, behind front runners and pace chasers,
-    /// and makes a late surge.
+    /// 差し, sashi - Stays in the middle, behind front runners and pace chasers, and
+    /// makes a late surge.
     #[serde(rename = "Sasi")]
     Late = 3,
     /// 追込, oikomi - Stays at the back and sprints towards the end.
@@ -51,10 +51,8 @@ impl Style {
     /// Returns `true` if `self` is a front-running style ([`Style::Front`] or
     /// [`Style::Runaway`]).
     ///
-    /// Used when treating both Front and Runaway the same way is desired,
-    /// (e.g., in positioning strategy or rush detection).
-    ///
-    /// # Examples
+    /// Used when treating both Front and Runaway the same way is desired, (e.g., in
+    /// positioning strategy or rush detection).
     ///
     /// ```rust
     /// use uma_tools::uma::Style;
@@ -72,8 +70,6 @@ impl Style {
     /// [`Style::Front`] while leaving all other styles unchanged.
     ///
     /// Useful to group styles for condition evaluation or statistical purposes.
-    ///
-    /// # Examples
     ///
     /// ```rust
     /// use uma_tools::uma::Style;
@@ -107,15 +103,15 @@ pub enum Aptitude {
 /// Motivation, mood or condition of the Uma. Affects base stat multipliers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Motivation {
-    /// 絶不調 (Very bad)
+    /// 絶不調, very bad.
     Awful = -2,
-    /// 不調 (Bad)
+    /// 不調, bad.
     Bad,
-    /// 普通 (Normal)
+    /// 普通, normal.
     Normal,
-    /// 好調 (Favorable)
+    /// 好調, favorable.
     Good,
-    /// 絶好調 (In top shape)
+    /// 絶好調, in top shape.
     Great,
 }
 
@@ -136,25 +132,25 @@ pub struct Uma {
     /// consumption late-race and last spurt performance; the higher
     /// the Guts, the better the performance on the final stretch.
     pub guts: u16,
-    /// a.k.a. wit, wisdom. Stat that affects skill activation rate and
+    /// Also known as wit or wisdom. Stat that affects skill activation rate and
     /// decision-making.
     ///
-    /// It affects skill activation rate, chance of avoiding getting rushed,
-    /// position keeping, last spurt planning, and more.
+    /// Specifically, it affects skill activation rate, chance of avoiding getting
+    /// rushed, position keeping, last spurt planning, and more.
     #[serde(rename = "wisdom")]
     pub wiz: u16,
     /// Running style or strategy. Affects mainly positioning strategy.
     #[serde(rename = "strategy")]
     pub style: Style,
-    /// Aptitude for the current distance. Affects speed performance depending
-    /// on the course distance.
+    /// Aptitude for the current distance. Affects speed performance depending on
+    /// the course distance.
     pub distance_aptitude: Aptitude,
     /// Aptitude for the current track surface. Affects acceleration and power
     /// performance depending on the track type.
     #[serde(rename = "surfaceAptitude")]
     pub track_aptitude: Aptitude,
-    /// Aptitude for the current running style. Affects wisdom performance
-    /// depending on the running style.
+    /// Aptitude for the current running style. Affects wisdom performance depending
+    /// on the running style.
     #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,
 }
@@ -175,10 +171,7 @@ pub struct UmaData {
 impl UmaData {
     /// Parse `UmaData` from a JSON string.
     ///
-    /// Returns a `Result` containing the parsed `UmaData` or an error if the
-    /// JSON is invalid.
-    ///
-    /// # Example
+    /// Returns an error if the JSON is invalid.
     ///
     /// ```rust
     /// # use uma_tools::uma::UmaData;
@@ -205,10 +198,9 @@ impl UmaData {
         serde_json::from_str(json)
     }
 
-    /// Parse UmaData from a JSON file.
+    /// Parse `UmaData` from a JSON file.
     ///
-    /// Returns a `Result` containing the parsed `UmaData` or an error if the
-    /// file cannot be read or the JSON is invalid.
+    /// Returns an error if the file cannot be read or the JSON is invalid.
     pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
@@ -254,7 +246,7 @@ impl Uma {
     }
 }
 
-// Random distribution implementation for Motivation
+// Random distribution implementation for Motivation.
 use rand::distr::{Distribution, StandardUniform};
 use rand::prelude::*;
 
@@ -276,13 +268,13 @@ mod tests {
 
     #[test]
     fn test_motivation_multiplier() {
-        // Normal = 0; multiplier should be 1.0
+        // Normal = 0; multiplier should be 1.0.
         assert_eq!(motivation_multiplier(Motivation::Normal), 1.0);
 
-        // Great = +2; multiplier should be 1.04
+        // Great = +2; multiplier should be 1.04.
         assert!((motivation_multiplier(Motivation::Great) - 1.04).abs() < 0.001);
 
-        // Awful = -2; multiplier should be 0.96
+        // Awful = -2; multiplier should be 0.96.
         assert!((motivation_multiplier(Motivation::Awful) - 0.96).abs() < 0.001);
     }
 
@@ -300,19 +292,19 @@ mod tests {
             style_aptitude: Aptitude::A,
         };
 
-        // Test motivation effects
+        // Test motivation effects.
         let base_uma = Uma::raw_to_base(raw_uma, Motivation::Normal);
 
         // Normal motivation should not change stats significantly
-        // (motivation multiplier is 1.0 for Normal)
+        // (motivation multiplier is 1.0 for Normal).
         assert!(base_uma.speed > 0);
         assert!(base_uma.stamina > 0);
 
-        // Test Great motivation (positive boost)
+        // Test Great motivation (positive boost).
         let great_uma = Uma::raw_to_base(raw_uma, Motivation::Great);
         assert!(great_uma.speed > base_uma.speed);
 
-        // Test Awful motivation (negative impact)
+        // Test Awful motivation (negative impact).
         let awful_uma = Uma::raw_to_base(raw_uma, Motivation::Awful);
         assert!(awful_uma.speed < base_uma.speed);
     }

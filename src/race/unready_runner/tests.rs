@@ -72,7 +72,7 @@ fn activated_ids(runner: &UnreadyRunner) -> Vec<&str> {
 
 #[test]
 fn test_stat_boost_is_applied() {
-    // Green skills store stat boosts in 10000ths (e.g. 800000 = +80 speed)
+    // Green skills store stat boosts in 10000ths (e.g. 800000 = +80 speed).
     let (mut runner, state) = unready_runner(vec![skill(
         "speed",
         "always==1",
@@ -118,7 +118,7 @@ fn test_every_out_of_gate_skill_is_applied() {
 
 #[test]
 fn test_unsatisfied_condition_is_not_applied() {
-    // Course 10104 is turf (ground_type==1)
+    // Course 10104 is turf (ground_type==1).
     let (mut runner, state) = unready_runner(vec![skill(
         "dirt_delay",
         "ground_type==2",
@@ -135,7 +135,7 @@ fn test_unsatisfied_condition_is_not_applied() {
 
 #[test]
 fn test_unsatisfied_stat_boost_is_not_applied() {
-    // Course 10104 is turf (ground_type==1)
+    // Course 10104 is turf (ground_type==1).
     let (mut runner, state) = unready_runner(vec![skill(
         "dirt_speed",
         "ground_type==2",
@@ -152,8 +152,8 @@ fn test_unsatisfied_stat_boost_is_not_applied() {
 
 #[test]
 fn test_first_satisfied_alternative_is_applied() {
-    // Course 10104 is turf (ground_type==1); only the second alternative holds,
-    // and the third one must not be applied on top of it
+    // Course 10104 is turf (ground_type==1); only the second alternative holds, and
+    // the third one must not be applied on top of it.
     let (mut runner, state) = unready_runner(vec![skill_with_alternatives(
         "speed",
         vec![
@@ -173,7 +173,7 @@ fn test_first_satisfied_alternative_is_applied() {
 #[test]
 fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // Out-of-gate skills listed first must not shift the skills the trigger
-    // scheduler refers to
+    // scheduler refers to.
     let course = Course::from_json_file("data/course_data.json", "10104")
         .expect("Failed to load course data");
     let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());

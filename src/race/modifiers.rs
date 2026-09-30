@@ -8,16 +8,16 @@ use crate::uma::{Aptitude, Style, Uma};
 /// Calculate acceleration strategy phase multiplier based on running style.
 pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
-        // Early-race
+        // Early-race.
         (Style::Front, Phase::Early) => 1.0,
         (Style::Pace, Phase::Early) => 0.985,
         (Style::Late, Phase::Early) => 0.975,
         (Style::End, Phase::Early) => 0.945,
         (Style::Runaway, Phase::Early) => 1.17,
-        // Mid-race
+        // Mid-race.
         (Style::Runaway, Phase::Mid) => 0.94,
         (_, Phase::Mid) => 1.0, // All styles except Runaway
-        // Late-race and Last spurt
+        // Late-race and Last spurt.
         (Style::Front, Phase::Late | Phase::Last) => 0.996,
         (Style::Pace, Phase::Late | Phase::Last) => 0.996,
         (Style::Late, Phase::Late | Phase::Last) => 1.0,
@@ -28,7 +28,7 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
 
 /// Wiz multiplier for the Wiz Limit Break buff (5th Anniversary onward).
 ///
-/// Zero at 1200 wiz or below; it then grows in brackets up to a maximum of 1.12.
+/// Zero at 1200 wiz or less; it then grows in brackets up to a maximum of 1.12.
 pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
     let brackets = |from: u16, step: f64| ((wiz - from) as f64 / step).ceil();
     match wiz {
@@ -40,7 +40,7 @@ pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
     }
 }
 
-/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniversary onward).
+/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniv. onward).
 pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         (Style::Front | Style::Runaway, Phase::Early) => 0.26,
@@ -128,19 +128,19 @@ pub fn acceleration_distance_proficiency_multiplier(distance_aptitude: Aptitude)
 /// Calculate strategy phase multiplier based on running style.
 pub fn strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
-        // Early-race
+        // Early-race.
         (Style::Front, Phase::Early) => 1.0,
         (Style::Pace, Phase::Early) => 0.978,
         (Style::Late, Phase::Early) => 0.938,
         (Style::End, Phase::Early) => 0.931,
         (Style::Runaway, Phase::Early) => 1.063,
-        // Mid-race
+        // Mid-race.
         (Style::Front, Phase::Mid) => 0.98,
         (Style::Pace, Phase::Mid) => 0.991,
         (Style::Late, Phase::Mid) => 0.998,
         (Style::End, Phase::Mid) => 1.0,
         (Style::Runaway, Phase::Mid) => 0.962,
-        // Late-race and Last spurt
+        // Late-race and Last spurt.
         (Style::Front, Phase::Late | Phase::Last) => 0.962,
         (Style::Pace, Phase::Late | Phase::Last) => 0.975,
         (Style::Late, Phase::Late | Phase::Last) => 0.994,
@@ -172,7 +172,7 @@ pub fn base_target_speed(
     distance_aptitude: Aptitude,
 ) -> f64 {
     let base = base_speed * strategy_phase_multiplier(style, phase);
-    // Speed stat only affects target speed during late-race and last spurt
+    // Speed stat only affects target speed during late-race and last spurt.
     match phase {
         Phase::Early | Phase::Mid => base,
         Phase::Late | Phase::Last => {
@@ -287,7 +287,7 @@ pub fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) ->
         })
         .sum();
 
-    // Return average bonus as multiplier (1.0 + average bonus)
+    // Return average bonus as multiplier (1.0 + average bonus).
     1.0 + (total_bonus / course_set_status.len() as f64)
 }
 

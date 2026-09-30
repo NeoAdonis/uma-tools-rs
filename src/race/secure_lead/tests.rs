@@ -11,7 +11,7 @@ const EPSILON: f64 = 1e-9;
 #[test]
 fn test_desirable_lead_table() {
     use Style::*;
-    // Distance term is zero at -1000m, so the coefficient is returned as-is
+    // Distance term is zero at -1000m, so the coefficient is returned as-is.
     let cases = [
         (Runaway, Front, 2.0),
         (Runaway, Pace, 7.0),
@@ -53,7 +53,8 @@ fn test_desirable_lead_distance_term() {
 
 #[test]
 fn test_target_speed_bonus() {
-    let base = 0.3; // guts 2000 -> sqrt(1) * 0.3
+    // Guts 2000 -> sqrt(1) * 0.3.
+    let base = 0.3;
     let cases = [
         (Style::Runaway, false, base * 0.2),
         (Style::Runaway, true, base * 0.2 * 7.0),
@@ -168,7 +169,7 @@ fn test_secure_lead_activation_and_expiry() {
     let (mut runner, mut state) = ready_runner(Style::Front);
     runner.section = 12;
 
-    // Sufficient lead never triggers
+    // Sufficient lead never triggers.
     for t in 0..50 {
         let elapsed = t as f64 * CHECK_INTERVAL;
         state.elapsed_time = elapsed;
@@ -177,7 +178,7 @@ fn test_secure_lead_activation_and_expiry() {
         assert!((runner.next_secure_lead_check - (elapsed + CHECK_INTERVAL)).abs() < EPSILON);
     }
 
-    // Insufficient lead eventually triggers
+    // Insufficient lead eventually triggers.
     let hp_before = runner.hp.current;
     let mut elapsed = 0.0;
     while runner.secure_lead.is_none() {
@@ -200,7 +201,7 @@ fn test_secure_lead_activation_and_expiry() {
     assert!((runner.hp.current - expected_hp).abs() < EPSILON);
     assert!((runner.next_secure_lead_check - (elapsed + DURATION + COOLDOWN)).abs() < EPSILON);
 
-    // Boost is applied to target speed
+    // Boost is applied to target speed.
     runner.update_target_speed(&state);
     let boosted = runner.target_speed;
     runner.expire_secure_lead(elapsed + DURATION - 0.01);

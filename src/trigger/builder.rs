@@ -1,8 +1,8 @@
 //! # Trigger Builder
 //!
 //! This module builds the [`TriggerScheduler`] of a runner: it compiles skill
-//! conditions into triggers and guards (see `skill_activation.rs`), and indexes the
-//! triggers so they can be checked efficiently.
+//! conditions into triggers and guards (see `skill_activation.rs`), and indexes
+//! the triggers so they can be checked efficiently.
 //!
 //! ## Architecture
 //!
@@ -14,7 +14,8 @@
 //!    [`compile_condition()`].
 //! 4. **Compile precondition** - Turn the precondition (if present) into logics
 //!    that unlock the skill, the same way.
-//! 5. **Create [`SkillActivationLogic`]** - Store trigger + guards + precondition ID.
+//! 5. **Create [`SkillActivationLogic`]** - Store trigger + guards +
+//!    precondition ID.
 //! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
 //!
 //! ## Example
@@ -48,8 +49,9 @@
 //!
 //! **Runtime behavior**:
 //!
-//!   - **Every frame** (within the precondition window): Check if overtaken anyone
-//!     (`change_order_onetime<0`). Once true, skill unlocked for activation attempts.
+//!   - **Every frame** (within the precondition window): Check if overtaken
+//!     anyone (`change_order_onetime<0`). Once true, skill unlocked for
+//!     activation attempts.
 //!   - **At 1850m** (if unlocked): Trigger fires, evaluate guards
 //!     `hp_per>=20 & ground_type==2`.
 //!   - **If guards pass**: Activate skill.
@@ -83,29 +85,33 @@ pub fn build_trigger_scheduler(
 
     for (skill_idx, skill) in skills.iter().enumerate() {
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
-            // Parse condition
+            // Parse condition.
             let condition = match parse_condition(&alternative.condition) {
                 Ok(cond) => cond,
-                Err(_) => continue, // Skip unparseable conditions
+                // Skip unparseable conditions.
+                Err(_) => continue,
             };
 
-            // One logic per OR branch, except the ones whose random roll failed
+            // One logic per OR branch, except the ones whose random roll failed.
             let rolls = roll_condition(&condition, course, rng);
             let branches = compile_condition(&condition, &rolls, course);
             if branches.is_empty() {
-                continue; // Condition can't be satisfied, skill never activates
+                // Condition can't be satisfied, skill never activates.
+                continue;
             }
 
-            // Compile precondition (if any)
+            // Compile precondition (if any).
             let precondition = if alternative.precondition.is_empty() {
                 None
             } else {
                 let Ok(parsed) = parse_condition(&alternative.precondition) else {
-                    continue; // Skip unparseable preconditions
+                    // Skip unparseable preconditions.
+                    continue;
                 };
                 let branches = compile_condition(&parsed, &[], course);
                 if branches.is_empty() {
-                    continue; // Precondition can't be satisfied, skill never activates
+                    // Precondition can't be satisfied, skill never activates.
+                    continue;
                 }
                 Some(add_precondition(
                     branches,
@@ -148,8 +154,8 @@ fn add_precondition(
     scheduler.precondition_satisfied.push(false);
 
     for branch in branches {
-        // Windows go to their own queue, checked before any other trigger. That
-        // queue tracks positions only: time and HP windows cover the whole race
+        // Windows go to their own queue, checked before any other trigger. That queue
+        // tracks positions only: time and HP windows cover the whole race.
         let trigger = match branch.trigger {
             TriggerCondition::Window {
                 variable: WindowVariable::Position,

@@ -78,7 +78,8 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
 }
 
 /// Activate the only skill of a single runner with high wiz and return
-/// (target speed modifier, current speed modifier, expected Wiz Limit Break bonus rate).
+/// (target speed modifier, current speed modifier, expected Wiz Limit Break
+/// bonus rate).
 fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
@@ -214,7 +215,7 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
     runner.update_target_speed(&solver.state);
     let buff = runner.stamina_limit_break;
 
-    // Buff must persist even if the last spurt is gone (e.g. HP recalculation)
+    // Buff must persist even if the last spurt is gone (e.g. HP recalculation).
     runner.last_spurt = None;
     runner.update_target_speed(&solver.state);
     assert_eq!(runner.stamina_limit_break, buff);
@@ -237,7 +238,7 @@ fn test_stamina_limit_break_waits_for_last_spurt_speed() {
 
 #[test]
 fn test_aptitude_multipliers() {
-    // Test that aptitude multipliers are ordered correctly
+    // Test that aptitude multipliers are ordered correctly.
     let s_coef = wiz_style_multiplier(Aptitude::S);
     let a_coef = wiz_style_multiplier(Aptitude::A);
     let b_coef = wiz_style_multiplier(Aptitude::B);
@@ -250,10 +251,10 @@ fn test_aptitude_multipliers() {
 
 #[test]
 fn test_track_condition_modifiers() {
-    // Test that track conditions apply appropriate modifiers
+    // Test that track conditions apply appropriate modifiers.
     let heavy_modifier = track_speed_modifier(TrackCondition::Heavy);
     let firm_modifier = track_speed_modifier(TrackCondition::Firm);
 
-    // Heavy track should have more penalty than firm
+    // Heavy track should have more penalty than firm.
     assert!(heavy_modifier > firm_modifier);
 }

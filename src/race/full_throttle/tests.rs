@@ -13,7 +13,7 @@ const EPSILON: f64 = 1e-9;
 const DELTA_TIME: f64 = 1.0 / 15.0;
 
 /// Same as skill 204222, but without wisdom check so it is always available.
-// TODO: Replace with a global switch to disable wisdom checks (see docs/TODOS.md).
+// TODO: Replace with a global switch to disable wisdom checks.
 fn full_throttle_skill() -> Skill {
     Skill::new(
         "204222".to_string(),
@@ -88,11 +88,11 @@ fn test_base_acceleration() {
         base_acceleration(2200, 1200, 2000, GameVersion::MechaUmaUpdate),
         0.0
     );
-    // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5
+    // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5.
     let expected = 0.068 * 0.0006 * 600000f64.sqrt() / 8f64.sqrt();
     assert!((base_acceleration(2001, 1200, 2000, latest) - expected).abs() < EPSILON);
     assert!((expected - 0.011173).abs() < 1e-6);
-    // Longer courses accelerate less
+    // Longer courses accelerate less.
     assert!(base_acceleration(2001, 1200, 3000, latest) < expected);
 }
 
@@ -115,7 +115,7 @@ fn test_activates_at_last_spurt_speed() {
 #[test]
 fn test_ineligible_runner_never_activates() {
     for (speed, behavior) in [
-        // Raw 2000 is adjusted to 1600 * 1.2 = 1920
+        // Raw 2000 is adjusted to 1600 * 1.2 = 1920.
         (2000, GameVersion::LATEST),
         (2500, GameVersion::MechaUmaUpdate),
     ] {
@@ -155,7 +155,7 @@ fn test_hp_out_drops_speed_to_minimum() {
     assert_eq!(runner.speed, runner.min_speed);
     assert_eq!(runner.full_throttle, FullThrottle::Ended);
 
-    // Can't be activated again, even if HP is recovered
+    // Can't be activated again, even if HP is recovered.
     runner.hp.recover(100.0);
     runner.speed = 20.0;
     runner.update_target_speed(&solver.state);
@@ -181,7 +181,7 @@ fn test_random_trigger_scheduled_on_activation() {
         assert_eq!(scheduler.full_throttle_triggers, vec![0]);
         let logic = &scheduler.skill_logics[0];
         assert!(matches!(logic.trigger, TriggerCondition::FullThrottleStart));
-        // distance_type==3 is resolved when the runner is created
+        // `distance_type==3` is resolved when the runner is created.
         assert!(logic.guards.is_empty());
         assert!(scheduler.position_windows.is_empty());
     }
@@ -190,7 +190,7 @@ fn test_random_trigger_scheduled_on_activation() {
 
     let scheduler = &solver.runners[0].trigger_scheduler;
     assert!(scheduler.full_throttle_triggers.is_empty());
-    // A single 10m segment between the current position and the goal
+    // A single 10m segment between the current position and the goal.
     let windows: Vec<_> = scheduler.position_windows.iter().collect();
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].logic_idx, 0);
@@ -207,7 +207,7 @@ fn test_full_race() {
         let runner = &with.runners[0];
         assert_ne!(runner.full_throttle, FullThrottle::Pending, "seed {seed}");
 
-        // The skill activates after the last spurt begins
+        // The skill activates after the last spurt begins.
         let target_distance = runner.last_spurt.as_ref().unwrap().target_distance;
         for record in &runner.activated_skills {
             assert!(record.distance >= target_distance, "seed {seed}");

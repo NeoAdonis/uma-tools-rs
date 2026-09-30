@@ -54,7 +54,7 @@ fn eligible_solver() -> RaceSolver<Runner> {
     )
 }
 
-/// Run `update_charge_up` for `seconds`, starting at `start`. Returns the end time.
+/// Run `update_charge_up` for `seconds`, starting at `start`. Returns end time.
 fn conserve_for(runner: &mut Runner, start: f64, seconds: f64) -> f64 {
     let frames = (seconds / DELTA_TIME).round() as usize;
     let mut elapsed = start;
@@ -86,10 +86,10 @@ fn enter_last_spurt(solver: &mut RaceSolver<Runner>, conserved: f64) {
 #[test]
 fn test_charge_power() {
     assert_eq!(charge_power(1200, 1200, 0), 1200.0);
-    // Raw 1600: base 1400 + 0.5 * 400
+    // Raw 1600: base 1400 + 0.5 * 400.
     assert_eq!(charge_power(1400, 1600, 0), 1600.0);
     assert_eq!(charge_power(1400, 1600, 60), 1660.0);
-    // Below 1200 the raw term is zero
+    // Below 1200 the raw term is zero.
     assert_eq!(charge_power(1000, 1000, 0), 1000.0);
 }
 
@@ -102,7 +102,7 @@ fn test_motivation_affects_base_part_only() {
         GameVersion::LATEST,
         42,
     );
-    // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without motivation
+    // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without motivation.
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
     assert!((charge_up.power - 1656.0).abs() < EPSILON);
 }
@@ -121,7 +121,7 @@ fn test_eligibility() {
     ));
     assert!(is_eligible(1202, Motivation::Normal, GameVersion::LATEST));
     assert!(!is_eligible(1200, Motivation::Normal, GameVersion::LATEST));
-    // 1200 * 0.96 = 1152, plus 0.5 * 20
+    // 1200 * 0.96 = 1152, plus 0.5 * 20.
     assert!(!is_eligible(1220, Motivation::Awful, GameVersion::LATEST));
     assert!(!is_eligible(
         1600,
@@ -180,13 +180,13 @@ fn test_coefficients() {
 
 #[test]
 fn test_release_formulas() {
-    // sqrt(400 * 130) * 0.001 * 0.875 * 0.8
+    // Expected: sqrt(400 * 130) * 0.001 * 0.875 * 0.8.
     let expected = 52000f64.sqrt() * 0.001 * 0.875 * 0.8;
     let acceleration = release_acceleration(1600.0, Style::Late, DistanceType::Medium, 0.8);
     assert!((acceleration - expected).abs() < EPSILON);
     assert!((acceleration - 0.159625).abs() < 1e-6);
 
-    // 100 * sqrt(1600) * 1.0 / 1450
+    // 100 * sqrt(1600) * 1.0 / 1450.
     let duration = release_duration(100.0, 1600, DistanceType::Mile);
     assert!((duration - 4000.0 / 1450.0).abs() < EPSILON);
 }
@@ -223,7 +223,7 @@ fn test_blocked_and_cooldown() {
     let elapsed = conserve_for(runner, 0.0, 1.0);
     assert_eq!(conserved(runner), 0.0);
 
-    // Cooldown lasts 1.5s after exiting
+    // Cooldown lasts 1.5s after exiting.
     runner.positioning_strategy = PositioningStrategy::Normal;
     let elapsed = conserve_for(runner, elapsed, 1.4);
     assert_eq!(conserved(runner), 0.0);
@@ -265,18 +265,18 @@ fn test_spot_struggle_penalty() {
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
     runner.start_spot_struggle(10.0);
     assert!((conserved(runner) - 95.0).abs() < EPSILON);
-    // Already struggling: no further penalty
+    // Already struggling: no further penalty.
     runner.start_spot_struggle(10.1);
     assert!((conserved(runner) - 95.0).abs() < EPSILON);
 
-    // Struggling blocks conservation
+    // Struggling blocks conservation.
     conserve_for(runner, 10.1, 1.0);
     assert!((conserved(runner) - 95.0).abs() < EPSILON);
 }
 
 #[test]
 fn test_rush_penalty() {
-    // Find a seed where the runner is bound to rush
+    // Find a seed where the runner is bound to rush.
     let mut solver = (0..)
         .map(|seed| {
             solver(
@@ -293,7 +293,7 @@ fn test_rush_penalty() {
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
 
-    // Enter the rush section
+    // Enter the rush section.
     runner.section = rush_section - 1;
     runner.position = solver.state.course.distance as f64 / 24.0 * rush_section as f64 + 1.0;
     solver.state.elapsed_time = 10.0;
@@ -301,7 +301,7 @@ fn test_rush_penalty() {
     assert!(runner.is_rushed());
     assert!((conserved(runner) - 80.0).abs() < EPSILON);
 
-    // Rushing blocks conservation
+    // Rushing blocks conservation.
     conserve_for(runner, 10.0, 1.0);
     assert!((conserved(runner) - 80.0).abs() < EPSILON);
 }
@@ -322,13 +322,13 @@ fn test_release() {
     assert_eq!(release.start_time, 60.0);
     assert_eq!(release.start_position, 1500.0);
 
-    // Bonus only while active
+    // Bonus only while active.
     let charge_up = runner.charge_up.as_ref().unwrap();
     assert_eq!(charge_up.acceleration(59.9), 0.0);
     assert_eq!(charge_up.acceleration(60.0 + duration / 2.0), acceleration);
     assert_eq!(charge_up.acceleration(60.0 + duration), 0.0);
 
-    // Released only once
+    // Released only once.
     let before = runner.charge_up.clone();
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 500.0;
@@ -361,7 +361,7 @@ fn test_release_increases_acceleration() {
 #[test]
 fn test_insufficient_release() {
     let mut solver = eligible_solver();
-    // 3 * sqrt(2000) * 0.875 / 1450 = 0.081s < 0.2s
+    // 3 * sqrt(2000) * 0.875 / 1450 = 0.081s < 0.2s.
     enter_last_spurt(&mut solver, 3.0);
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
     assert_eq!(charge_up.outcome, ChargeUpOutcome::Insufficient);
@@ -387,7 +387,7 @@ fn test_full_race() {
         let target_distance = runner.last_spurt.as_ref().unwrap().target_distance;
         assert!(release.start_position >= target_distance, "seed {seed}");
         assert!(release.conserved > 0.0, "seed {seed}");
-        // Nothing is conserved after the release
+        // Nothing is conserved after the release.
         assert_eq!(release.conserved, charge_up.conserved, "seed {seed}");
     }
 }

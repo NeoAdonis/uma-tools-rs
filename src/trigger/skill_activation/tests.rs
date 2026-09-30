@@ -1,4 +1,4 @@
-//! Tests for compiling conditions into triggers and guards
+//! Tests for compiling conditions into triggers and guards.
 
 use super::*;
 use crate::course::geometry::*;
@@ -6,7 +6,7 @@ use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
 use crate::trigger::builder::build_trigger_scheduler;
 
-/// Create a simple test course for testing spatial triggers
+/// Create a simple test course for testing spatial triggers.
 fn create_test_course() -> Course {
     Course::new_test(
         10001,
@@ -51,7 +51,7 @@ fn create_test_course() -> Course {
     )
 }
 
-/// Compile a condition on the test course, with a single random point at 1000m
+/// Compile a condition on the test course, with a single random point at 1000m.
 /// for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
     let condition = parse_condition(condition).unwrap();
@@ -93,7 +93,7 @@ fn assert_close(actual: f64, expected: f64, context: &str) {
 
 #[test]
 fn test_every_comparison_is_a_guard() {
-    // Including the ones that define the trigger
+    // Including the ones that define the trigger.
     let branch = compile_one("phase==2&is_finalcorner==1&corner!=0&order<=3&ground_type==1");
     assert_eq!(
         guards(&branch),
@@ -109,7 +109,7 @@ fn test_every_comparison_is_a_guard() {
 
 #[test]
 fn test_unevaluable_comparisons_are_not_guards() {
-    // Random variables and is_last_straight_onetime can't be evaluated
+    // Random variables and is_last_straight_onetime can't be evaluated.
     assert_eq!(
         guards(&compile_one("phase_random==1&order<=3")),
         vec!["order <= 3"]
@@ -122,7 +122,7 @@ fn test_unevaluable_comparisons_are_not_guards() {
         guards(&compile_one("is_last_straight_onetime==1&order<=3")),
         vec!["order <= 3"]
     );
-    // random_lot is rolled when building: if compiled, it succeeded
+    // `random_lot` is rolled when building: if compiled, it succeeded.
     assert!(compile_one("random_lot==50").guards.is_empty());
 }
 
@@ -145,7 +145,7 @@ fn test_events_are_the_trigger() {
 
 #[test]
 fn test_activation_events_stay_as_guards() {
-    // Evaluable: true on frames where a skill activated
+    // Evaluable: true on frames where a skill activated.
     assert_eq!(
         guards(&compile_one("is_activate_any_skill==1&phase>=2")),
         vec!["is_activate_any_skill == 1", "phase >= 2"]
@@ -156,7 +156,7 @@ fn test_activation_events_stay_as_guards() {
 fn test_position_window_ranges() {
     // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
     // 1200-1380, uphill at 800-900, straights at 0-100 and 1500-2000 (both facing
-    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1
+    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1.
     let section = 2000.0 / 24.0;
     let furlong = crate::units::FURLONG_TO_METERS;
     let cases = [
@@ -177,22 +177,22 @@ fn test_position_window_ranges() {
         ("phase_firstquarter==1", (section * 4.0, section * 7.0)),
         ("phase_firsthalf==1", (section * 4.0, section * 10.0)),
         ("phase_laterhalf==1", (section * 10.0, section * 16.0)),
-        // Final corner "or beyond" (and its second half)
+        // Final corner "or beyond" (and its second half).
         ("is_finalcorner==1", (1200.0, f64::INFINITY)),
         ("is_finalcorner_laterhalf==1", (1290.0, f64::INFINITY)),
-        // After the final corner
+        // After the final corner.
         ("is_last_straight==1", (1380.0, f64::INFINITY)),
-        // Smallest range containing all corners/slopes/straights of that type
+        // Smallest range containing all corners/slopes/straights of that type.
         ("corner!=0", (100.0, 1380.0)),
         ("corner==2", (100.0, 250.0)),
         ("corner==3", (500.0, 700.0)),
         ("slope==1", (800.0, 900.0)),
         ("straight_front_type==1", (0.0, 2000.0)),
-        // Intersections
+        // Intersections.
         ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
         ("phase==1&corner!=0", (section * 4.0, section * 16.0)),
         ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
-        // Nothing position-based: window covers the whole race
+        // Nothing position-based: window covers the whole race.
         ("order<=3", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
     ];
@@ -207,7 +207,7 @@ fn test_position_window_ranges() {
 
 #[test]
 fn test_time_and_hp_windows() {
-    // Used when the branch doesn't depend on the position
+    // Used when the branch doesn't depend on the position.
     let cases = [
         (
             "accumulatetime>=5",
@@ -233,7 +233,7 @@ fn test_time_and_hp_windows() {
         assert_close(actual_max, max, condition);
     }
 
-    // Position windows take precedence; time and HP stay as guards
+    // Position windows take precedence; time and HP stay as guards.
     let branch = compile_one("distance_rate>=50&hp_per<=30");
     assert_eq!(window(&branch).0, WindowVariable::Position);
     assert_eq!(guards(&branch), vec!["distance_rate >= 50", "hp_per <= 30"]);
@@ -241,7 +241,8 @@ fn test_time_and_hp_windows() {
 
 #[test]
 fn test_unsatisfiable_branches_are_dropped() {
-    // The test course has no downhill slopes and 3 corners (the second to the fourth)
+    // The test course has no downhill slopes and 3 corners (the second to the
+    // fourth).
     for condition in [
         "slope==2",
         "corner==1",
@@ -252,7 +253,7 @@ fn test_unsatisfiable_branches_are_dropped() {
         assert!(compile(condition).is_empty(), "{condition}");
     }
 
-    // Only the satisfiable OR branch is kept
+    // Only the satisfiable OR branch is kept.
     let branches = compile("slope==2&order<=3@slope==1&order<=3");
     assert_eq!(branches.len(), 1);
     assert_eq!(guards(&branches[0]), vec!["slope == 1", "order <= 3"]);
@@ -320,7 +321,7 @@ fn test_precondition_creates_unlock_logic_before_skill_logic() {
 
     assert_eq!(scheduler.skill_logics.len(), 2);
 
-    // Unlock logic comes first, keeps the comparison as guard
+    // Unlock logic comes first, keeps the comparison as guard.
     let unlock = &scheduler.skill_logics[0];
     assert_eq!(unlock.action, LogicAction::Unlock(0));
     assert!(unlock.precondition.is_none());
@@ -328,12 +329,12 @@ fn test_precondition_creates_unlock_logic_before_skill_logic() {
     assert_eq!(unlock.guards[0].op, CompOp::GreaterEqual);
     assert_eq!(unlock.guards[0].value, 2);
 
-    // Skill logic waits for the precondition
+    // Skill logic waits for the precondition.
     let skill_logic = &scheduler.skill_logics[1];
     assert_eq!(skill_logic.action, LogicAction::Activate);
     assert_eq!(skill_logic.precondition, Some(0));
 
-    // Starts locked; its window is queued separately from regular windows
+    // Starts locked; its window is queued separately from regular windows.
     assert_eq!(scheduler.precondition_satisfied, vec![false]);
     let windows: Vec<_> = scheduler.precondition_windows.iter().collect();
     assert_eq!(windows.len(), 1);
@@ -358,12 +359,14 @@ fn test_empty_precondition_treated_as_none() {
 fn test_or_condition_branches_share_precondition() {
     let skill = create_skill_with_precondition(
         "test_or",
-        "distance_rate>=80@hp_per<=50", // OR condition
-        "phase>=2",                     // Shared precondition
+        // OR condition.
+        "distance_rate>=80@hp_per<=50",
+        // Shared precondition.
+        "phase>=2",
     );
     let scheduler = build_test_scheduler(&[skill]);
 
-    // 1 unlock logic + 2 condition branches, all tied to the same precondition
+    // 1 unlock logic + 2 condition branches, all tied to the same precondition.
     assert_eq!(scheduler.skill_logics.len(), 3);
     assert_eq!(scheduler.skill_logics[0].action, LogicAction::Unlock(0));
     assert_eq!(scheduler.skill_logics[1].precondition, Some(0));
@@ -385,7 +388,7 @@ fn test_or_precondition_creates_one_unlock_logic_per_branch() {
 
 #[test]
 fn test_precondition_only_in_alternative_zero() {
-    // Create a skill with 2 alternatives - only first has precondition
+    // Create a skill with 2 alternatives - only first has precondition.
     let skill = Skill::new(
         "test_multi_alt".to_string(),
         SkillData {
@@ -393,7 +396,8 @@ fn test_precondition_only_in_alternative_zero() {
             alternatives: vec![
                 SkillAlternative {
                     condition: "distance_rate>=80".to_string(),
-                    precondition: "phase>=2".to_string(), // Has precondition
+                    // Has precondition.
+                    precondition: "phase>=2".to_string(),
                     base_duration: 40000,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
@@ -403,7 +407,8 @@ fn test_precondition_only_in_alternative_zero() {
                 },
                 SkillAlternative {
                     condition: "hp_per<=50".to_string(),
-                    precondition: "".to_string(), // No precondition
+                    // No precondition.
+                    precondition: "".to_string(),
                     base_duration: 40000,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
@@ -417,7 +422,7 @@ fn test_precondition_only_in_alternative_zero() {
     );
     let scheduler = build_test_scheduler(&[skill]);
 
-    // Unlock logic, then one logic per alternative
+    // Unlock logic, then one logic per alternative.
     assert_eq!(scheduler.skill_logics.len(), 3);
     assert_eq!(scheduler.skill_logics[1].alternative_index, 0);
     assert_eq!(scheduler.skill_logics[1].precondition, Some(0));
@@ -447,7 +452,7 @@ fn test_precondition_ids_are_assigned_per_alternative() {
 
 #[test]
 fn test_unsatisfiable_precondition_skips_alternative() {
-    // The test course has no downhill slopes and 3 corners (the second to the fourth)
+    // The test course has no downhill slopes and 3 corners (second to fourth).
     for precondition in ["slope==2", "corner==1", "phase==1&distance_rate>=90"] {
         let skill = create_skill_with_precondition("test", "distance_rate>=80", precondition);
         let scheduler = build_test_scheduler(&[skill]);
@@ -462,7 +467,7 @@ fn test_unsatisfiable_precondition_skips_alternative() {
 
 #[test]
 fn test_precondition_time_and_hp_windows_cover_the_race() {
-    // The precondition queue only tracks positions
+    // The precondition queue only tracks positions.
     let skill = create_skill_with_precondition("test", "distance_rate>=80", "accumulatetime>=10");
     let scheduler = build_test_scheduler(&[skill]);
 
@@ -484,7 +489,7 @@ fn test_precondition_event_is_indexed_before_skill() {
     );
     let scheduler = build_test_scheduler(&[skill]);
 
-    // Both logics fire on the last straight; the unlock logic must go first
+    // Both logics fire on the last straight; the unlock logic must go first.
     assert!(scheduler.precondition_windows.is_empty());
     assert_eq!(scheduler.last_straight_triggers, vec![0, 1]);
     assert_eq!(scheduler.skill_logics[0].action, LogicAction::Unlock(0));
@@ -511,23 +516,24 @@ fn test_branches_use_their_own_rolls() {
         ]
     );
 
-    // Branches whose roll failed are dropped
+    // Branches whose roll failed are dropped.
     let rolls = [None, Some(vec![500.0])];
     let branches = compile_condition(&condition, &rolls, &course);
     assert_eq!(branches.len(), 1);
     assert_eq!(guards(&branches[0]), vec!["distance_type == 2"]);
 
-    // Branches without a roll (preconditions) can't be triggered by random points
+    // Branches without a roll (preconditions) can't be triggered by random points.
     assert!(compile_condition(&condition, &[], &course).is_empty());
 }
 
 #[test]
 fn test_segments_are_trimmed_to_the_branch() {
-    // Corner 3 of the test course is [500-700]
+    // Corner 3 of the test course is [500-700].
     let condition = parse_condition("all_corner_random==1&corner==3").unwrap();
     let course = create_test_course();
 
-    // Segments outside the corner are dropped, and the ones crossing its edges trimmed
+    // Segments outside the corner are dropped, and the ones crossing its edges
+    // trimmed.
     let rolls = [Some(vec![95.0, 495.0, 600.0, 695.0, 900.0])];
     let branches = compile_condition(&condition, &rolls, &course);
     assert_eq!(branches.len(), 1);
@@ -536,7 +542,7 @@ fn test_segments_are_trimmed_to_the_branch() {
     };
     assert_eq!(ranges, &[(500.0, 505.0), (600.0, 610.0), (695.0, 700.0)]);
 
-    // No segment on the corner: the branch can never be satisfied
+    // No segment on the corner: the branch can never be satisfied.
     let rolls = [Some(vec![95.0, 900.0])];
     assert!(compile_condition(&condition, &rolls, &course).is_empty());
 }

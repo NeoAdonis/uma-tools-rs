@@ -39,9 +39,9 @@ pub enum Season {
     Autumn = 3,
     /// 冬
     Winter = 4,
-    /// 桜 - Cherry Blossom (Sakura). It is considered part of Spring, therefore skills
-    /// that are supposed to activate in Spring will generally have another condition
-    /// to check for Sakura season as well.
+    /// 桜 - Cherry Blossom (Sakura). It is considered part of Spring, therefore
+    /// skills that are supposed to activate in Spring will generally have another
+    /// condition to check for Sakura season as well.
     Sakura = 5,
 }
 
@@ -62,8 +62,8 @@ pub enum Time {
 /// Race grade enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Grade {
-    /// Grade 1 races. Other important races (e.g. URA Finals, Champions Meeting, etc.)
-    /// generally fall under this category as well.
+    /// Grade 1 races, as well as other important races (e.g. URA Finals, Champions
+    /// Meeting, etc.).
     G1 = 100,
     /// Grade 2 races.
     G2 = 200,
@@ -112,35 +112,21 @@ pub struct RaceParametersData {
 impl RaceParametersData {
     /// Parse `RaceParameters` from a JSON string.
     ///
-    /// # Arguments
-    ///
-    /// - `json` - JSON string containing race parameters.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(RaceParameters)` - The parsed parameters.
-    /// - `Err` - If the JSON is invalid.
+    /// Returns an error if the JSON is invalid.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
 
     /// Parse `RaceParameters` from a JSON file.
     ///
-    /// # Arguments
-    ///
-    /// - `path` - Path to the JSON file.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(RaceParameters)` - The parsed parameters.
-    /// - `Err` - If the file can't be read or JSON is invalid.
+    /// Returns an error if the file can't be read or JSON is invalid.
     pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
     }
 }
 
-// Random distribution implementations for race parameters
+// Random distribution implementations for race parameters.
 use rand::distr::{Distribution, StandardUniform};
 use rand::prelude::*;
 

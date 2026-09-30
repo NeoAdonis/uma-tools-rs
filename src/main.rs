@@ -9,7 +9,7 @@ use uma_tools::skill::*;
 use uma_tools::uma::*;
 
 fn main() {
-    // TODO: Load configuration from a config file or command-line arguments
+    // TODO: Load configuration from a config file or command-line arguments.
     let config = Configuration {
         game_version: GameVersion::OnePointFiveAnniversary,
         language: Language::English,
@@ -18,7 +18,7 @@ fn main() {
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
 
-    // Parse command-line arguments
+    // Parse command-line arguments.
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -34,14 +34,14 @@ fn main() {
         }
     }
 
-    // Load Uma data from JSON file
+    // Load Uma data from JSON file.
     let uma_data = UmaData::from_json_file(uma_path.to_str().expect("Invalid --uma path"))
         .expect("Failed to parse uma JSON");
     let uma = uma_data.uma;
     let motivation = uma_data.motivation;
     let skill_ids = uma_data.skills;
 
-    // Load race parameters from JSON file
+    // Load race parameters from JSON file.
     let parameters = RaceParametersData::from_json_file(
         parameters_path.to_str().expect("Invalid --parameters path"),
     )
@@ -50,7 +50,7 @@ fn main() {
     let race_parameters = parameters.race;
     let course_id = parameters.course_id;
 
-    // Load course data from JSON file
+    // Load course data from JSON file.
     let course = Course::from_json_file("data/course_data.json", &course_id)
         .expect("Failed to load course data");
 
@@ -64,13 +64,13 @@ fn main() {
     println!("  Surface: {:?}", course.surface);
     println!("  Course set status: {:?}", course.course_set_status);
 
-    // Load all skills from JSON file
+    // Load all skills from JSON file.
     let skills_map =
         Skill::load_skills_from_file("data/skill_data.json").expect("Failed to load skill data");
 
     println!("\nLoaded {} skills from JSON", skills_map.len());
 
-    // Convert skill IDs to actual Skill objects
+    // Convert skill IDs to actual Skill objects.
     let skills: Vec<Skill> = skill_ids
         .iter()
         .filter_map(|id| skills_map.get(&id.to_string()).cloned())
@@ -81,11 +81,11 @@ fn main() {
         println!("  Skill ID: {}, Rarity: {:?}", skill.id, skill.rarity);
     }
 
-    // Initialize the race state
+    // Initialize the race state.
     let mut solver = RaceSolver::new(course, race_parameters, &config);
     solver.add_runner(uma, motivation, skills);
 
-    // Initialize runners
+    // Initialize runners.
     let mut solver = solver.ready_runners();
 
     {
@@ -106,7 +106,7 @@ fn main() {
         );
     }
 
-    // Simulate
+    // Simulate.
     solver.run();
 
     {

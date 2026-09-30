@@ -12,7 +12,7 @@ const EPSILON: f64 = 1e-9;
 #[test]
 fn test_lead_threshold_table() {
     use Style::*;
-    // Distance term is zero at -1000m, so the coefficient is returned as-is
+    // Distance term is zero at -1000m, so the coefficient is returned as-is.
     let cases = [
         (Runaway, 0.0),
         (Front, 0.0),
@@ -37,7 +37,8 @@ fn test_lead_threshold_distance_term() {
 
 #[test]
 fn test_target_speed_bonus() {
-    let base = 0.3; // power 1500, guts 3000 -> (1 * 2 + 1) * 0.1
+    // Power 1500, guts 3000 -> (1 * 2 + 1) * 0.1.
+    let base = 0.3;
     let cases = [
         (Style::Runaway, false, base * 0.2),
         (Style::Runaway, true, base * 0.2 * 2.0),
@@ -56,7 +57,7 @@ fn test_target_speed_bonus() {
         );
     }
 
-    // power 375 -> sqrt(0.25) * 2 = 1; guts 3000 * 2^-5 -> 0.5
+    // Power 375 -> sqrt(0.25) * 2 = 1; guts 3000 * 2^-5 -> 0.5.
     let actual = target_speed_bonus(Style::Pace, 375, 3000 / 32, false);
     assert!((actual - 1.5 * 0.1).abs() < 1e-3);
 }
@@ -71,7 +72,7 @@ fn test_hp_cost() {
         (Style::End, 1.0),
     ];
     for (style, coef) in cases {
-        // 2400m -> distance coefficient 1.0
+        // 2400m -> distance coefficient 1.0.
         let far = hp_cost(style, 2400, true);
         assert!((far - 20.0 * coef).abs() < EPSILON, "{style:?} far");
         let near = hp_cost(style, 2400, false);
@@ -81,7 +82,7 @@ fn test_hp_cost() {
         );
     }
 
-    // 1200m -> distance coefficient 0.3
+    // 1200m -> distance coefficient 0.3.
     let actual = hp_cost(Style::Front, 1200, false);
     assert!((actual - 20.0 * (1.2 * 0.3 + 0.5)).abs() < EPSILON);
 }
@@ -150,15 +151,16 @@ fn test_stamina_keep_ratio_range() {
 fn test_compete_activation_and_expiry() {
     let (mut runner, mut state) = ready_runner(Style::Front, GameVersion::LATEST);
     runner.section = 12;
-    runner.stamina_keep_ratio = 0.0; // never enter Stamina Keep
+    // Never enter Stamina Keep.
+    runner.stamina_keep_ratio = 0.0;
 
-    // Neither far from lead nor nearby runners
+    // Neither far from lead nor nearby runners.
     state.elapsed_time = 10.0;
     runner.try_compete_before_spurt(false, true, &state);
     assert!(runner.compete_before_spurt.is_none());
     assert!((runner.next_compete_check - (10.0 + CHECK_INTERVAL)).abs() < EPSILON);
 
-    // Far from lead
+    // Far from lead.
     let hp_before = runner.hp.current;
     state.elapsed_time = 12.0;
     runner.try_compete_before_spurt(true, true, &state);
@@ -175,7 +177,7 @@ fn test_compete_activation_and_expiry() {
     assert!((runner.hp.current - expected_hp).abs() < EPSILON);
     assert!((runner.next_compete_check - (12.0 + DURATION + COOLDOWN)).abs() < EPSILON);
 
-    // Boost is applied to target speed
+    // Boost is applied to target speed.
     runner.update_target_speed(&state);
     let boosted = runner.target_speed;
     runner.expire_compete_before_spurt(12.0 + DURATION - 0.01);
@@ -185,7 +187,7 @@ fn test_compete_activation_and_expiry() {
     runner.update_target_speed(&state);
     assert!((boosted - runner.target_speed - expected_modifier).abs() < EPSILON);
 
-    // Nearby runners only: near factor is added to the HP cost
+    // Nearby runners only: near factor is added to the HP cost.
     let hp_before = runner.hp.current;
     runner.nearby.count = 1;
     state.elapsed_time = 20.0;
@@ -202,7 +204,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
     runner.position = 700.0;
     runner.hp.current = 1.0;
 
-    // Low HP is eventually noticed, and competing is blocked from then on
+    // Low HP is eventually noticed, and competing is blocked from then on.
     let mut elapsed = 0.0;
     while !runner.is_stamina_keep {
         elapsed += CHECK_INTERVAL;
@@ -216,7 +218,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
     runner.try_compete_before_spurt(true, true, &state);
     assert!(runner.compete_before_spurt.is_none());
 
-    // Recovering enough HP resets Stamina Keep and allows competing again
+    // Recovering enough HP resets Stamina Keep and allows competing again.
     let recovery = SkillEffect {
         skill_type: SkillType::Recovery,
         target: SkillTarget::Oneself,

@@ -84,8 +84,8 @@ pub struct Comparison {
 }
 
 impl ComparisonTree {
-    /// Split the tree into its OR branches, each one being the list of
-    /// comparisons of an AND chain (from left to right).
+    /// Split the tree into its OR branches, each one being the list of comparisons
+    /// of an AND chain (from left to right).
     ///
     /// The tree is true if all comparisons of any branch are true.
     pub fn or_branches(&self) -> Vec<Vec<&Comparison>> {
@@ -105,8 +105,7 @@ impl ComparisonTree {
 
     /// Collect the comparisons of an AND chain from left to right.
     ///
-    /// The condition grammar has no parentheses, so an AND chain never contains
-    /// an OR.
+    /// The grammar has no parentheses, so an AND chain never contains an OR.
     fn and_chain(&self) -> Vec<&Comparison> {
         match self {
             ComparisonTree::Single(comp) => vec![comp],
@@ -143,7 +142,7 @@ impl fmt::Display for ComparisonTree {
         match self {
             ComparisonTree::Single(comp) => write!(f, "{}", comp),
             ComparisonTree::Binary { left, op, right } => {
-                // Add parentheses for clarity when displaying nested expressions
+                // Add parentheses on nested expressions for clarity.
                 match (&**left, &**right) {
                     (ComparisonTree::Single(_), ComparisonTree::Single(_)) => {
                         write!(f, "{} {} {}", left, op, right)
@@ -229,7 +228,7 @@ impl Lexer {
         let mut tokens = Vec::new();
 
         loop {
-            // No condition string actually contains whitespace, but just in case
+            // No condition string should contain whitespaces, but just in case...
             self.skip_whitespace();
 
             match self.current() {
@@ -301,7 +300,7 @@ impl Lexer {
     fn read_number(&mut self) -> Result<Token, LexError> {
         let start = self.pos;
 
-        // Handle negative sign
+        // Handle negative sign.
         if self.current() == Some('-') {
             self.advance();
         }
@@ -433,24 +432,24 @@ impl Parser {
     }
 
     fn parse_comp(&mut self) -> Result<Comparison, ParseError> {
-        // Parse variable
+        // Parse variable.
         let var_str = match self.current() {
             Some(Token::Variable(v)) => v.clone(),
             _ => return Err(ParseError::ExpectedVariable),
         };
         self.advance();
 
-        // Convert string to VarType enum
+        // Convert string to VarType enum.
         let var = VarType::parse(&var_str);
 
-        // Parse comparison operator
+        // Parse comparison operator.
         let op = match self.current() {
             Some(Token::CompOp(op)) => *op,
             _ => return Err(ParseError::ExpectedCompOp),
         };
         self.advance();
 
-        // Parse value
+        // Parse value.
         let value = match self.current() {
             Some(Token::Value(v)) => *v,
             _ => return Err(ParseError::ExpectedValue),

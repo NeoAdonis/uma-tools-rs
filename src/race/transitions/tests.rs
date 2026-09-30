@@ -21,13 +21,13 @@ fn test_corner_entry() {
     let mut manager = CornerManager::new();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
-    // Before corner
+    // Before corner.
     assert_eq!(manager.check_entry(50.0, &corners), None);
 
-    // At corner start
+    // At corner start.
     assert_eq!(manager.check_entry(100.0, &corners), Some(0));
 
-    // Already in corner
+    // Already in corner.
     assert_eq!(manager.check_entry(125.0, &corners), None);
 }
 
@@ -36,16 +36,16 @@ fn test_corner_exit() {
     let mut manager = CornerManager::new();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
-    // Enter corner
+    // Enter corner.
     manager.check_entry(100.0, &corners);
 
-    // Still in corner
+    // Still in corner.
     assert_eq!(manager.check_exit(125.0, &corners), None);
 
-    // At corner end
+    // At corner end.
     assert_eq!(manager.check_exit(150.0, &corners), Some(0));
 
-    // Already exited
+    // Already exited.
     assert_eq!(manager.check_exit(175.0, &corners), None);
 }
 
@@ -57,28 +57,29 @@ fn test_multiple_corners() {
         create_test_corner(200.0, 30.0),
     ];
 
-    // Enter first corner
+    // Enter first corner.
     assert_eq!(manager.check_entry(100.0, &corners), Some(0));
 
-    // Exit first corner
+    // Exit first corner.
     assert_eq!(manager.check_exit(150.0, &corners), Some(0));
 
-    // Enter second corner
+    // Enter second corner.
     assert_eq!(manager.check_entry(200.0, &corners), Some(1));
 
-    // Exit second corner
+    // Exit second corner.
     assert_eq!(manager.check_exit(230.0, &corners), Some(1));
 }
 
 #[test]
 fn test_slope_entry_uphill() {
     let mut manager = SlopeManager::new();
-    let slopes = vec![create_test_slope(100.0, 50.0, 500)]; // Positive = uphill
+    // Positive = uphill.
+    let slopes = vec![create_test_slope(100.0, 50.0, 500)];
 
-    // Before slope
+    // Before slope.
     assert_eq!(manager.check_entry(50.0, &slopes), None);
 
-    // At slope start
+    // At slope start.
     let entry = manager.check_entry(100.0, &slopes);
     assert!(entry.is_some());
     let (idx, slope_type) = entry.unwrap();
@@ -89,7 +90,8 @@ fn test_slope_entry_uphill() {
 #[test]
 fn test_slope_entry_downhill() {
     let mut manager = SlopeManager::new();
-    let slopes = vec![create_test_slope(100.0, 50.0, -500)]; // Negative = downhill
+    // Negative = downhill.
+    let slopes = vec![create_test_slope(100.0, 50.0, -500)];
 
     let entry = manager.check_entry(100.0, &slopes);
     assert!(entry.is_some());
@@ -103,16 +105,16 @@ fn test_slope_exit() {
     let mut manager = SlopeManager::new();
     let slopes = vec![create_test_slope(100.0, 50.0, 500)];
 
-    // Enter slope
+    // Enter slope.
     manager.check_entry(100.0, &slopes);
 
-    // Still on slope
+    // Still on slope.
     assert_eq!(manager.check_exit(125.0, &slopes), None);
 
-    // At slope end
+    // At slope end.
     assert_eq!(manager.check_exit(150.0, &slopes), Some(0));
 
-    // Already exited
+    // Already exited.
     assert_eq!(manager.check_exit(175.0, &slopes), None);
 }
 
@@ -121,13 +123,13 @@ fn test_straight_entry() {
     let mut manager = StraightManager::new();
     let straights = vec![create_test_straight(100.0, 150.0)];
 
-    // Before straight
+    // Before straight.
     assert_eq!(manager.check_entry(50.0, &straights), None);
 
-    // At straight start
+    // At straight start.
     assert_eq!(manager.check_entry(100.0, &straights), Some(0));
 
-    // Already in straight
+    // Already in straight.
     assert_eq!(manager.check_entry(125.0, &straights), None);
 }
 
@@ -136,16 +138,16 @@ fn test_straight_exit() {
     let mut manager = StraightManager::new();
     let straights = vec![create_test_straight(100.0, 150.0)];
 
-    // Enter straight
+    // Enter straight.
     manager.check_entry(100.0, &straights);
 
-    // Still in straight
+    // Still in straight.
     assert_eq!(manager.check_exit(125.0, &straights), None);
 
-    // At straight end
+    // At straight end.
     assert_eq!(manager.check_exit(150.0, &straights), Some(0));
 
-    // Already exited
+    // Already exited.
     assert_eq!(manager.check_exit(175.0, &straights), None);
 }
 
@@ -157,15 +159,15 @@ fn test_multiple_straights() {
         create_test_straight(200.0, 230.0),
     ];
 
-    // Enter first straight
+    // Enter first straight.
     assert_eq!(manager.check_entry(100.0, &straights), Some(0));
 
-    // Exit first straight
+    // Exit first straight.
     assert_eq!(manager.check_exit(150.0, &straights), Some(0));
 
-    // Enter second straight
+    // Enter second straight.
     assert_eq!(manager.check_entry(200.0, &straights), Some(1));
 
-    // Exit second straight
+    // Exit second straight.
     assert_eq!(manager.check_exit(230.0, &straights), Some(1));
 }
