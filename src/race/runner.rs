@@ -215,6 +215,14 @@ struct OvertakeLaneCandidate {
     score: f64,
 }
 
+/// Result of a lane target calculation to be written back to the runner.
+///
+/// Both fields hold the runner's current values when unchanged.
+pub struct LaneDecision {
+    pub target: f64,
+    pub extra_move_lane: Option<f64>,
+}
+
 /// State related to order (rank) in the race.
 pub struct OrderState {
     /// Current order (rank), 1-based.
@@ -1757,19 +1765,30 @@ impl Runner {
     }
 
     /// Calculate lane target when in normal mode (not overtaking).
+    pub fn normal_mode_lane_decision(
+        &self,
+        course: &Course,
+        all_runners: &[Runner],
+    ) -> LaneDecision {
+        LaneDecision {
+            target: self.normal_mode_lane_target(course, all_runners),
+            extra_move_lane: self.extra_move_lane,
+        }
+    }
+
+    /// Target lane in normal mode.
+    ///
     /// Rules are checked in priority order; first match wins.
-    pub fn calculate_normal_mode_lane_target(&mut self, course: &Course, all_runners: &[Runner]) {
+    fn normal_mode_lane_target(&self, course: &Course, all_runners: &[Runner]) -> f64 {
         // Out of HP - stay in current lane.
         if self.hp.is_empty() {
-            self.lane.target = self.lane.current;
-            return;
+            return self.lane.current;
         }
 
         // Position keeping mode is pace-down.
         // Set target to 0.18 of course width (18% from inside).
         if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
-            self.lane.target = (0.18 * course.width()).clamp(0.0, course.width());
-            return;
+            return (0.18 * course.width()).clamp(0.0, course.width());
         }
 
         // On final straight AND extra move lane is on the outside.
@@ -1778,16 +1797,14 @@ impl Runner {
             && extra > self.lane.current
             && self.has_lane_space_to(extra, all_runners)
         {
-            self.lane.target = extra.clamp(0.0, course.width());
-            return;
+            return extra.clamp(0.0, course.width());
         }
 
         // In early-race or mid-race - move inward by 0.05 course width.
         if matches!(self.phase, Phase::Early | Phase::Mid) {
             let target = self.lane.current - 0.05 * course.width();
             if target >= 0.0 && self.has_lane_space_to(target, all_runners) {
-                self.lane.target = target;
-                return;
+                return target;
             }
         }
 
@@ -1800,24 +1817,29 @@ impl Runner {
             // Move to 2.0 horse lanes away from inside runner.
             let target = inside_lane + 2.0 * course.lane_width();
             if self.has_lane_space_to(target, all_runners) {
-                self.lane.target = target.clamp(0.0, course.width());
+                return target.clamp(0.0, course.width());
             }
         }
 
         // Default - keep straight; target lane remains as-is.
+        self.lane.target
     }
 
     /// Calculate target lane when in overtake mode.
     ///
     /// This should be called every frame after overtake state is finalized.
-    pub fn calculate_overtake_lane_target(&mut self, course: &Course, all_runners: &[Runner]) {
+    pub fn overtake_lane_decision(&self, course: &Course, all_runners: &[Runner]) -> LaneDecision {
+        let mut decision = LaneDecision {
+            target: self.lane.target,
+            extra_move_lane: self.extra_move_lane,
+        };
+
         // Early exit if not in overtake mode or side-blocked.
         if !self.is_in_overtake_mode() || self.blocked.side {
-            return;
+            return decision;
         }
 
-        // Update extra move lane.
-        self.update_extra_move_lane(course, all_runners);
+        decision.extra_move_lane = self.next_extra_move_lane(course, all_runners);
 
         // Build candidate list from overtake targets and extra candidate.
         let mut candidates = Vec::with_capacity(32);
@@ -1841,15 +1863,17 @@ impl Runner {
             let mut target_lane = best.lane;
 
             // Check extra_move_lane override.
-            if let Some(extra) = self.extra_move_lane
+            if let Some(extra) = decision.extra_move_lane
                 && target_lane < extra
                 && self.has_lane_space_to(extra, all_runners)
             {
                 target_lane = extra;
             }
 
-            self.lane.target = target_lane.clamp(0.0, course.width());
+            decision.target = target_lane.clamp(0.0, course.width());
         }
+
+        decision
     }
 
     /// Find the innermost and outermost uma in a target's crowd.
@@ -2037,23 +2061,21 @@ impl Runner {
         true
     }
 
-    /// Update extra_move_lane based on furthest visible runner ahead.
-    /// Only active during Early and Mid phases.
-    fn update_extra_move_lane(&mut self, course: &Course, all_runners: &[Runner]) {
+    /// Next extra_move_lane based on furthest visible runner ahead.
+    ///
+    /// Only active during Early and Mid phases. Keeps the current value if no
+    /// runner ahead is visible.
+    fn next_extra_move_lane(&self, course: &Course, all_runners: &[Runner]) -> Option<f64> {
         if self.phase > Phase::Mid {
-            self.extra_move_lane = None;
-            return;
+            return None;
         }
 
         // Find furthest visible runner ahead.
-        let furthest_visible = all_runners
+        all_runners
             .iter()
             .filter(|r| r.position > self.position && self.is_visible(r, course))
-            .max_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
-
-        if let Some(furthest) = furthest_visible {
-            self.extra_move_lane = Some(furthest.lane.current);
-        }
+            .max_by(|a, b| a.position.partial_cmp(&b.position).unwrap())
+            .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
 
     /// Check if runner is currently on the final straight.

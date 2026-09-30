@@ -413,11 +413,6 @@ impl RaceSolver<Runner> {
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
-        // Calculate lane targets (needs access to all runners).
-        // Use unsafe pointer to access runners slice while iterating.
-        let runners_ptr = self.runners.as_ptr();
-        let runners_len = self.runners.len();
-
         // STUB: Using first corner as move lane point; should use
         // course.move_lane_point when available.
         let move_lane_point = self
@@ -427,16 +422,16 @@ impl RaceSolver<Runner> {
             .first()
             .map_or(self.state.course.halfway(), |c| c.start);
 
+        // Calculate lane targets.
         for i in 0..num_runners {
-            let runner = &mut self.runners[i];
+            // Borrow all runners along with a single runner in an immutable state first.
+            let all_runners = &self.runners;
+            let runner = &all_runners[i];
 
             // Skip if side-blocked (can't change lanes anyway).
             if runner.blocked.side {
                 continue;
             }
-
-            // Safety: We're only reading from other runners, not modifying them.
-            let all_runners = unsafe { std::slice::from_raw_parts(runners_ptr, runners_len) };
 
             // Determine which mode to use: normal vs overtake.
             let distance_to_move_lane = move_lane_point - runner.position;
@@ -448,11 +443,16 @@ impl RaceSolver<Runner> {
             let use_normal_mode = !runner.is_in_overtake_mode()
                 || (matches!(runner.phase, Phase::Early | Phase::Mid) && within_200m_of_move_lane);
 
-            if use_normal_mode {
-                runner.calculate_normal_mode_lane_target(&self.state.course, all_runners);
+            let decision = if use_normal_mode {
+                runner.normal_mode_lane_decision(&self.state.course, all_runners)
             } else {
-                runner.calculate_overtake_lane_target(&self.state.course, all_runners);
-            }
+                runner.overtake_lane_decision(&self.state.course, all_runners)
+            };
+
+            // Shared borrow of all runners ends here; result can be written back.
+            let runner = &mut self.runners[i];
+            runner.lane.target = decision.target;
+            runner.extra_move_lane = decision.extra_move_lane;
         }
     }
 
