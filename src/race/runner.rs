@@ -1288,8 +1288,10 @@ impl Runner {
 
     /// Update HP based on current speed, phase, and modifiers.
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
-        let mut multiplier = if let Some(struggle) = &self.spot_struggle
-            && state.elapsed_time < struggle.expires_at
+        let mut multiplier = if self
+            .spot_struggle
+            .as_ref()
+            .is_some_and(|struggle| state.elapsed_time < struggle.expires_at)
         {
             if self.adjusted.style == Style::Runaway {
                 if self.is_rushed() { 7.7 } else { 3.5 }
