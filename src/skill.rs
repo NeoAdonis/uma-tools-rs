@@ -6,6 +6,8 @@ use serde_repr::Deserialize_repr;
 use serde_with::{BoolFromInt, serde_as};
 use std::collections::HashMap;
 
+use crate::uma::Style;
+
 /// Represents the type of skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, Hash, TryFromPrimitive)]
 #[repr(u8)]
@@ -56,6 +58,61 @@ pub enum SkillType {
     ExtendEvolvedDuration = 42,
     /// Modify acceleration during Full-throttle spurt (5th Anniversary onward).
     AccelerationFullThrottle = 48,
+}
+
+impl SkillType {
+    /// Check if this effect type is a stat boost (applied permanently).
+    #[inline]
+    pub fn is_stat_boost(self) -> bool {
+        use SkillType::*;
+        matches!(
+            self,
+            SpeedUp | StaminaUp | PowerUp | GutsUp | WizUp | AllStatsUp
+        )
+    }
+
+    /// Check if this effect type is a start delay modification.
+    #[inline]
+    pub fn is_start_delay_modification(self) -> bool {
+        matches!(
+            self,
+            SkillType::MultiplyStartDelay | SkillType::SetStartDelay
+        )
+    }
+
+    /// Returns the running style this effect type changes to, or `None` if it isn't
+    /// a style change.
+    #[inline]
+    pub fn style_change(self) -> Option<Style> {
+        match self {
+            SkillType::ChangeStyleRunaway => Some(Style::Runaway),
+            _ => None,
+        }
+    }
+
+    /// Check if this effect type is a rush chance effect.
+    #[inline]
+    pub fn is_rush_chance_effect(self) -> bool {
+        matches!(self, SkillType::RushChanceUp)
+    }
+
+    /// Check if this effect type is a timed effect.
+    #[inline]
+    pub fn is_timed_effect(self) -> bool {
+        use SkillType::*;
+        matches!(
+            self,
+            Acceleration
+                | AccelerationFullThrottle
+                | TargetSpeed
+                | CurrentSpeed
+                | CurrentSpeedWithNaturalDeceleration
+                | Fov
+                | ExtendEvolvedDuration
+                | LaneMovementSpeed
+                | LaneChange
+        )
+    }
 }
 
 /// Represents the rarity of a skill.

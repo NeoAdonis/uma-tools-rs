@@ -41,8 +41,9 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
     }
 }
 
-/// Apply stat boost effects to an [`Uma`]'s stats.
-/// Apply a stat boost effect. `modifier` is in 10000ths of a stat point.
+/// Apply a stat boost effect to an [`Uma`]'s stats.
+///
+/// `modifier` is in 10000ths of a stat point.
 fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
     let modifier = modifier / 10000;
     match effect_type {
@@ -84,12 +85,6 @@ fn modify_stat(stat: &mut u16, modifier: i32) {
     } else {
         stat.saturating_sub((-modifier) as u16).max(1)
     };
-}
-
-/// Check if an effect type is a rush chance effect.
-#[inline]
-pub fn is_rush_chance_effect(effect_type: &SkillType) -> bool {
-    matches!(effect_type, SkillType::RushChanceUp)
 }
 
 /// A data structure that holds all information needed to initialize a
@@ -241,22 +236,22 @@ impl UnreadyRunner {
             let effect_type = &effect.skill_type;
 
             // Apply stat boosts.
-            if is_stat_boost(effect_type) {
+            if effect_type.is_stat_boost() {
                 apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
                 if matches!(effect_type, SkillType::PowerUp | SkillType::AllStatsUp) {
                     self.power_skill_bonus += effect.modifier / 10000;
                 }
             }
             // Apply start delay modifications.
-            else if is_start_delay_modification(effect_type) {
+            else if effect_type.is_start_delay_modification() {
                 apply_start_delay_modification(&mut self.start_delay, effect_type, effect.modifier);
             }
             // Apply style changes.
-            else if is_style_change(effect_type) {
-                apply_style_change(&mut self.adjusted.style, effect_type);
+            else if let Some(style) = effect_type.style_change() {
+                self.adjusted.style = style;
             }
             // Apply rush chance modifications.
-            else if is_rush_chance_effect(effect_type) {
+            else if effect_type.is_rush_chance_effect() {
                 self.rush_chance_modifier += effect.modifier as f64 / 10000.0;
             }
             // Timed effects, recovery, and other runtime-only effects are not applicable

@@ -69,67 +69,6 @@ pub const MAX_TARGET_SPEED: f64 = 30.0;
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
 
-/// Apply style change effects.
-#[inline]
-pub fn apply_style_change(style: &mut Style, effect_type: &SkillType) {
-    // Account for possible future additions.
-    #[allow(clippy::single_match)]
-    match effect_type {
-        SkillType::ChangeStyleRunaway => {
-            *style = Style::Runaway;
-        }
-        // Not a style change effect.
-        _ => {}
-    }
-}
-
-/// Check if an effect type is a stat boost (applied permanently).
-#[inline]
-pub fn is_stat_boost(effect_type: &SkillType) -> bool {
-    matches!(
-        effect_type,
-        SkillType::SpeedUp
-            | SkillType::StaminaUp
-            | SkillType::PowerUp
-            | SkillType::GutsUp
-            | SkillType::WizUp
-            | SkillType::AllStatsUp
-    )
-}
-
-/// Check if an effect type is a start delay modification.
-#[inline]
-pub fn is_start_delay_modification(effect_type: &SkillType) -> bool {
-    matches!(
-        effect_type,
-        SkillType::MultiplyStartDelay | SkillType::SetStartDelay
-    )
-}
-
-/// Check if an effect type is a style change.
-#[inline]
-pub fn is_style_change(effect_type: &SkillType) -> bool {
-    matches!(effect_type, SkillType::ChangeStyleRunaway)
-}
-
-/// Check if an effect type is a timed effect.
-#[inline]
-pub fn is_timed_effect(effect_type: &SkillType) -> bool {
-    use SkillType::*;
-    matches!(
-        effect_type,
-        Acceleration
-            | AccelerationFullThrottle
-            | TargetSpeed
-            | CurrentSpeed
-            | CurrentSpeedWithNaturalDeceleration
-            | Fov
-            | ExtendEvolvedDuration
-            | LaneMovementSpeed
-            | LaneChange
-    )
-}
-
 pub struct InitialState {
     /// Runner motivation level. It affects initial stat adjustments,
     /// and is also used to evaluate some skill conditions.
@@ -2670,7 +2609,7 @@ impl Runner {
         // Therefore, these are gracefully ignored here.
 
         // Timed effects (tracked in active_timed_effects).
-        if is_timed_effect(effect_type) {
+        if effect_type.is_timed_effect() {
             let expires_at = state.elapsed_time + scaled_duration;
             // Apply Wiz Limit Break bonus to target and current speed effects.
             let bonus = match effect_type {
@@ -2715,8 +2654,8 @@ impl Runner {
             }
         }
         // Style change.
-        else if is_style_change(effect_type) {
-            apply_style_change(&mut self.adjusted.style, effect_type);
+        else if let Some(style) = effect_type.style_change() {
+            self.adjusted.style = style;
         }
         // Rush time extension.
         else if matches!(effect_type, SkillType::RushTimeUp) {
