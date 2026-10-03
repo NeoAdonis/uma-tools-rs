@@ -3,16 +3,19 @@
 //! A runner's popularity (favorite rank) is obtained from three "judges". Each
 //! judge gives a score based on various stats:
 //!
-//! - **Left Judge**: AdjustedSpeed * φ(BaseGuts)^0.5
-//! - **Center Judge**: AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6
-//! - **Right Judge**: AdjustedPower * φ(BaseWiz)^0.5
+//! - **Left Judge**: φ(AdjustedSpeed * φ(BaseGuts)^0.5)
+//! - **Center Judge**: φ(AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6)
+//! - **Right Judge**: φ(AdjustedPower * φ(BaseWiz)^0.5)
 //!
 //! Where φ(Stat) is the standard deviation score for the computed stat across
-//! all runners (mean 50.0, std dev 10.0).
+//! all runners (mean 50, std dev 10), clamped to the 0-100 range.
 //!
-//! Stats are adjusted by adding points from activable skills to the base stats;
-//! skills related to speed, stamina, and power contribute points to those stats
-//! respectively. The sum is then multiplied by distance/track aptitude and
+//! Stats are adjusted by adding points from activable skills to the base stats.
+//! Each skill gives a number of points depending on its rarity (e.g. 20 for
+//! white skills, 60 for gold skills), which go to the stat of its strongest
+//! effect on oneself, or are split evenly between two stats. Debuffs on others
+//! split their points between the debuffed stat and wisdom, and negative skills
+//! take points away. The sum is then multiplied by distance/track aptitude and
 //! motivation coefficients.
 //!
 //! For each judge, the runners receive marks based on their rank; first five
@@ -21,16 +24,17 @@
 //! the Uma's popularity score corresponding to that judge.
 //!
 //! Finally, the runner's total popularity score is the sum of the points from
-//! each judge. The runner are then ranked by their total popularity score to
-//! determine their final favorite rank.
+//! each judge (score plus mark bonus). The runners are then ranked by their
+//! total popularity score to determine their final favorite rank.
 
 use std::collections::HashMap;
 
 use crate::race::modifiers::{distance_proficiency_multiplier, ground_type_proficiency_multiplier};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
-use crate::skill::{Skill, SkillRarity, SkillType};
 use crate::uma::motivation_multiplier;
+
+mod skill_points;
 
 /// Popularity mark assigned by a judge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +49,7 @@ pub enum PopularityMark {
 impl PopularityMark {
     /// Get the points value for this mark (~4 points each).
     pub fn points(&self) -> f64 {
+        // ? The exact value is unknown, but it should be very close to 4.
         match self {
             PopularityMark::None => 0.0,
             PopularityMark::Fourth => 4.0,
@@ -91,63 +96,16 @@ impl Default for JudgeScores {
 }
 
 impl JudgeScores {
-    /// Get total popularity points from all judges.
+    /// Get total popularity points from all judges: each judge's score plus the
+    /// bonus from its mark.
     pub fn total_points(&self) -> f64 {
-        self.left_mark.points() + self.center_mark.points() + self.right_mark.points()
+        self.left_score
+            + self.left_mark.points()
+            + self.center_score
+            + self.center_mark.points()
+            + self.right_score
+            + self.right_mark.points()
     }
-}
-
-/// Stats that a skill can affect.
-#[derive(Debug, Clone, Copy)]
-struct StatContributions {
-    speed: bool,
-    stamina: bool,
-    power: bool,
-}
-
-/// Determine which stats a skill's effects contribute to for popularity
-/// calculation.
-fn categorize_skill_effects(skill: &Skill) -> StatContributions {
-    let mut contributions = StatContributions {
-        speed: false,
-        stamina: false,
-        power: false,
-    };
-
-    // Check all alternatives for effect types.
-    for alternative in &skill.alternatives {
-        for effect in &alternative.effects {
-            match effect.skill_type {
-                // Speed-altering skills.
-                SkillType::SpeedUp
-                | SkillType::CurrentSpeed
-                | SkillType::CurrentSpeedWithNaturalDeceleration
-                | SkillType::TargetSpeed => {
-                    contributions.speed = true;
-                }
-                // Stamina-altering skills (including Recovery).
-                SkillType::StaminaUp | SkillType::Recovery => {
-                    contributions.stamina = true;
-                }
-                // Power-altering skills (including Acceleration and FoV).
-                SkillType::PowerUp
-                | SkillType::Acceleration
-                | SkillType::AccelerationFullThrottle
-                | SkillType::Fov => {
-                    contributions.power = true;
-                }
-                // All stats up.
-                SkillType::AllStatsUp => {
-                    contributions.speed = true;
-                    contributions.stamina = true;
-                    contributions.power = true;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    contributions
 }
 
 /// Calculate added points to stats from activable skills.
@@ -157,11 +115,10 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
     let mut added_power = 0.0;
 
     // Get all skills (both out-of-gate and runtime).
-    let all_skills: Vec<&Skill> = runner
+    let all_skills = runner
         .out_of_gate_skills
         .iter()
-        .chain(runner.runtime_skills.iter())
-        .collect();
+        .chain(runner.runtime_skills.iter());
 
     for skill in all_skills {
         // Skip skills that can't activate on this course.
@@ -169,34 +126,23 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
             continue;
         }
 
-        // Determine base points based on rarity.
-        let base_points = match skill.rarity {
-            SkillRarity::Gold | SkillRarity::Evolution => 60.0,
-            _ => 20.0,
-        };
-
-        // Determine which stats this skill contributes to.
-        let contributions = categorize_skill_effects(skill);
-
-        // Add points to each applicable stat, weighted by activation chance.
-        let weighted_points = base_points * skill.activation_chance(runner.base.wiz);
-        if contributions.speed {
-            added_speed += weighted_points;
-        }
-        if contributions.stamina {
-            added_stamina += weighted_points;
-        }
-        if contributions.power {
-            added_power += weighted_points;
-        }
+        // Add points to each stat, weighted by activation chance.
+        // TODO: Read the points from the skill data once they're available.
+        let popularity = skill_points::skill_popularity(skill);
+        let chance = skill.activation_chance(runner.base.wiz);
+        added_speed += popularity.speed * chance;
+        added_stamina += popularity.stamina * chance;
+        added_power += popularity.power * chance;
     }
 
     (added_speed, added_stamina, added_power)
 }
 
 /// Calculate standard deviation score (φ) for a value given a mean and standard
-/// deviation. Mean value scores 50; each standard deviation adds/subtracts 10
-/// points.
+/// deviation.
+///
+/// Mean value scores 50; each standard deviation adds/subtracts 10
+/// points. The result is clamped to the 0-100 range.
 ///
 /// Returns 50.0 if `std_dev` is zero (all values are the same).
 fn calculate_phi(value: f64, mean: f64, std_dev: f64) -> f64 {
@@ -204,7 +150,7 @@ fn calculate_phi(value: f64, mean: f64, std_dev: f64) -> f64 {
         // If all values are the same, return 50.0 (no deviation).
         50.0
     } else {
-        (value - mean) / std_dev * 10.0 + 50.0
+        ((value - mean) / std_dev * 10.0 + 50.0).clamp(0.0, 100.0)
     }
 }
 
@@ -267,15 +213,13 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
 
     for (i, runner) in runners_data.iter().enumerate() {
         // Left Judge: AdjustedSpeed * φ(BaseGuts)^0.5.
-        left_values.push(runner.adjusted_speed * guts_phi[i].abs().powf(0.5));
+        left_values.push(runner.adjusted_speed * guts_phi[i].powf(0.5));
 
         // Center Judge: AdjustedStamina * φ(BaseGuts)^0.8 * φ(BaseWiz)^0.6.
-        center_values.push(
-            runner.adjusted_stamina * guts_phi[i].abs().powf(0.8) * wiz_phi[i].abs().powf(0.6),
-        );
+        center_values.push(runner.adjusted_stamina * guts_phi[i].powf(0.8) * wiz_phi[i].powf(0.6));
 
         // Right Judge: AdjustedPower * φ(BaseWiz)^0.5.
-        right_values.push(runner.adjusted_power * wiz_phi[i].abs().powf(0.5));
+        right_values.push(runner.adjusted_power * wiz_phi[i].powf(0.5));
     }
 
     // Calculate φ scores for each judge's values.
@@ -444,60 +388,9 @@ mod tests {
             right_score: -0.3,
             right_mark: PopularityMark::None,
         };
-        assert_eq!(scores.total_points(), 8.0); // 4 + 4 + 0
-    }
-
-    #[test]
-    fn test_stat_contributions() {
-        use crate::skill::*;
-
-        // Test speed skill.
-        let speed_skill = Skill::new(
-            "test_speed".to_string(),
-            SkillData {
-                rarity: SkillRarity::White,
-                alternatives: vec![SkillAlternative {
-                    base_duration: 0,
-                    condition: "".to_string(),
-                    precondition: "".to_string(),
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::CurrentSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 100,
-                    }],
-                }],
-                wisdom_check: true,
-            },
-        );
-
-        let contributions = categorize_skill_effects(&speed_skill);
-        assert!(contributions.speed);
-        assert!(!contributions.stamina);
-        assert!(!contributions.power);
-
-        // Test AllStatsUp.
-        let all_stats_skill = Skill::new(
-            "test_all".to_string(),
-            SkillData {
-                rarity: SkillRarity::White,
-                alternatives: vec![SkillAlternative {
-                    base_duration: 0,
-                    condition: "".to_string(),
-                    precondition: "".to_string(),
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::AllStatsUp,
-                        target: SkillTarget::Oneself,
-                        modifier: 50,
-                    }],
-                }],
-                wisdom_check: true,
-            },
-        );
-
-        let contributions = categorize_skill_effects(&all_stats_skill);
-        assert!(contributions.speed);
-        assert!(contributions.stamina);
-        assert!(contributions.power);
+        // Judge scores: 1.5 + 0.8 - 0.3 = 2.0.
+        // Mark points: 4 + 4 + 0 = 8.
+        assert_eq!(scores.total_points(), 10.0);
     }
 
     #[test]
