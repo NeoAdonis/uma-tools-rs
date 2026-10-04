@@ -62,7 +62,6 @@ pub enum SkillType {
 
 impl SkillType {
     /// Check if this effect type is a stat boost (applied permanently).
-    #[inline]
     pub fn is_stat_boost(self) -> bool {
         use SkillType::*;
         matches!(
@@ -72,7 +71,6 @@ impl SkillType {
     }
 
     /// Check if this effect type is a start delay modification.
-    #[inline]
     pub fn is_start_delay_modification(self) -> bool {
         matches!(
             self,
@@ -82,7 +80,6 @@ impl SkillType {
 
     /// Returns the running style this effect type changes to, or `None` if it isn't
     /// a style change.
-    #[inline]
     pub fn style_change(self) -> Option<Style> {
         match self {
             SkillType::ChangeStyleRunaway => Some(Style::Runaway),
@@ -91,13 +88,11 @@ impl SkillType {
     }
 
     /// Check if this effect type is a rush chance effect.
-    #[inline]
     pub fn is_rush_chance_effect(self) -> bool {
         matches!(self, SkillType::RushChanceUp)
     }
 
     /// Check if this effect type is a timed effect.
-    #[inline]
     pub fn is_timed_effect(self) -> bool {
         use SkillType::*;
         matches!(

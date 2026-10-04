@@ -61,7 +61,6 @@ impl Style {
     /// assert!(Style::Runaway.is_front_like());
     /// assert!(!Style::Pace.is_front_like());
     /// ```
-    #[inline]
     pub fn is_front_like(self) -> bool {
         matches!(self, Style::Front | Style::Runaway)
     }
@@ -78,7 +77,6 @@ impl Style {
     /// assert_eq!(Style::Front.base_style(), Style::Front);
     /// assert_eq!(Style::Pace.base_style(), Style::Pace);
     /// ```
-    #[inline]
     pub fn base_style(self) -> Style {
         match self {
             Style::Runaway => Style::Front,

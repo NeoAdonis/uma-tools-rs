@@ -589,7 +589,6 @@ impl RaceSolver<Runner> {
         })
     }
 
-    #[inline]
     fn assert_runners_sorted(&self) {
         #[cfg(debug_assertions)]
         for i in 1..self.runners.len() {
