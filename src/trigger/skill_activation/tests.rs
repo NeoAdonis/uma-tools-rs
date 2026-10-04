@@ -302,6 +302,7 @@ fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str)
                     modifier: 4000,
                 }],
             }],
+            popularity: None,
             wisdom_check: true,
         },
     )
@@ -420,6 +421,7 @@ fn test_precondition_only_in_alternative_zero() {
                     }],
                 },
             ],
+            popularity: None,
             wisdom_check: true,
         },
     );

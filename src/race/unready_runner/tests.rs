@@ -24,6 +24,7 @@ fn skill_with_alternatives(id: &str, alternatives: Vec<(&str, SkillType, i32)>) 
                     precondition: String::new(),
                 })
                 .collect(),
+            popularity: None,
             wisdom_check: false,
         },
     )

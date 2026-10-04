@@ -11,11 +11,9 @@
 //! all runners (mean 50, std dev 10), clamped to the 0-100 range.
 //!
 //! Stats are adjusted by adding points from activable skills to the base stats.
-//! Each skill gives a number of points depending on its rarity (e.g. 20 for
-//! white skills, 60 for gold skills), which go to the stat of its strongest
-//! effect on oneself, or are split evenly between two stats. Debuffs on others
-//! split their points between the debuffed stat and wisdom, and negative skills
-//! take points away. The sum is then multiplied by distance/track aptitude and
+//! Each skill gives a number of points to one or two stats, read from the skill
+//! data (e.g. 20 for white skills, 60 for gold skills; negative skills take
+//! points away). The sum is then multiplied by distance/track aptitude and
 //! motivation coefficients.
 //!
 //! For each judge, the runners receive marks based on their rank; first five
@@ -32,9 +30,53 @@ use std::collections::HashMap;
 use crate::race::modifiers::{distance_proficiency_multiplier, ground_type_proficiency_multiplier};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::skill::{PopularityStat, Skill};
 use crate::uma::motivation_multiplier;
 
 mod skill_points;
+
+/// Popularity points a skill adds to each stat.
+///
+/// Guts and wisdom points don't affect the judges (they use base guts and
+/// wisdom), but they are tracked because they take part of a skill's points.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct SkillPopularity {
+    speed: f64,
+    stamina: f64,
+    power: f64,
+    guts: f64,
+    wiz: f64,
+}
+
+impl SkillPopularity {
+    /// Create popularity points with `points` added to `stat`.
+    fn with(mut self, stat: PopularityStat, points: f64) -> Self {
+        match stat {
+            PopularityStat::Speed => self.speed += points,
+            PopularityStat::Stamina => self.stamina += points,
+            PopularityStat::Power => self.power += points,
+            PopularityStat::Guts => self.guts += points,
+            PopularityStat::Wiz => self.wiz += points,
+            PopularityStat::None => {}
+        }
+        self
+    }
+}
+
+/// Get the popularity points a skill adds to each stat.
+///
+/// Uses the points from the skill data if available, or estimates them
+/// otherwise (outdated skill data).
+fn skill_popularity(skill: &Skill) -> SkillPopularity {
+    match &skill.popularity {
+        Some(popularity) => popularity
+            .iter()
+            .fold(SkillPopularity::default(), |p, entry| {
+                p.with(entry.stat, entry.value as f64)
+            }),
+        None => skill_points::estimate_popularity(skill),
+    }
+}
 
 /// Popularity mark assigned by a judge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,8 +169,7 @@ fn calculate_added_points(runner: &UnreadyRunner, state: &RaceState) -> (f64, f6
         }
 
         // Add points to each stat, weighted by activation chance.
-        // TODO: Read the points from the skill data once they're available.
-        let popularity = skill_points::skill_popularity(skill);
+        let popularity = skill_popularity(skill);
         let chance = skill.activation_chance(runner.base.wiz);
         added_speed += popularity.speed * chance;
         added_stamina += popularity.stamina * chance;
@@ -368,6 +409,159 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner], state: &RaceState) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skill::{
+        DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData, SkillEffect,
+        SkillRarity, SkillTarget, SkillType,
+    };
+
+    /// Create a skill with a single alternative with the given effects and no
+    /// popularity data.
+    pub(super) fn skill(
+        id: &str,
+        rarity: SkillRarity,
+        effects: &[(SkillType, SkillTarget, i32)],
+    ) -> Skill {
+        Skill::new(
+            id.to_string(),
+            SkillData {
+                rarity,
+                alternatives: vec![SkillAlternative {
+                    base_duration: 30000,
+                    base_cooldown: DEFAULT_COOLDOWN,
+                    condition: "".to_string(),
+                    precondition: "".to_string(),
+                    effects: effects
+                        .iter()
+                        .map(|&(skill_type, target, modifier)| SkillEffect {
+                            skill_type,
+                            target,
+                            modifier,
+                        })
+                        .collect(),
+                }],
+                popularity: None,
+                wisdom_check: true,
+            },
+        )
+    }
+
+    /// Create popularity points with the given points added to each stat.
+    pub(super) fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
+        stats
+            .iter()
+            .fold(SkillPopularity::default(), |p, &(stat, points)| {
+                p.with(stat, points)
+            })
+    }
+
+    #[test]
+    fn test_skill_popularity_from_data() {
+        let skills = Skill::load_skills_from_file("data/skill_data.json")
+            .expect("Failed to load skill data");
+
+        // Expected values are the ones given in-game.
+        let cases = [
+            ("200961", points(&[(Stat::Speed, 30.0)])),
+            ("200962", points(&[(Stat::Speed, 20.0)])),
+            ("200011", points(&[(Stat::Speed, 45.0)])),
+            ("200342", points(&[(Stat::Power, 20.0)])),
+            ("200433", points(&[(Stat::Speed, -30.0)])),
+            ("200851", points(&[(Stat::Speed, 10.0), (Stat::Wiz, 10.0)])),
+            ("202521", points(&[(Stat::Power, 60.0)])),
+            ("10071", points(&[(Stat::Speed, 30.0)])),
+            ("900011", points(&[(Stat::Power, 15.0)])),
+            ("900091", points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
+        ];
+        for (id, expected) in cases {
+            assert_eq!(skill_popularity(&skills[id]), expected, "skill {id}");
+        }
+    }
+
+    #[test]
+    fn test_skill_popularity_reads_data() {
+        use crate::skill::SkillPopularity as Entry;
+
+        let base = skill(
+            "1",
+            SkillRarity::Gold,
+            &[(SkillType::TargetSpeed, SkillTarget::Oneself, 3500)],
+        );
+        let with_popularity = |popularity| {
+            Skill::new(
+                base.id.clone(),
+                SkillData {
+                    popularity,
+                    ..(*base).clone()
+                },
+            )
+        };
+        let with_data = |entries: Vec<Entry>| with_popularity(Some(entries));
+        let entry = |stat, value| Entry { stat, value };
+
+        // Values from the data take precedence over the heuristic.
+        assert_eq!(
+            skill_popularity(&with_data(vec![entry(Stat::Power, 40)])),
+            points(&[(Stat::Power, 40.0)]),
+        );
+        assert_eq!(
+            skill_popularity(&with_data(vec![
+                entry(Stat::Stamina, 7),
+                entry(Stat::Guts, 7),
+            ])),
+            points(&[(Stat::Stamina, 7.0), (Stat::Guts, 7.0)]),
+        );
+        assert_eq!(
+            skill_popularity(&with_data(vec![entry(Stat::Speed, -30)])),
+            points(&[(Stat::Speed, -30.0)]),
+        );
+
+        // No entries means no points, while a missing field falls back to the
+        // heuristic.
+        assert_eq!(
+            skill_popularity(&with_data(vec![])),
+            SkillPopularity::default()
+        );
+        assert_eq!(
+            skill_popularity(&with_data(vec![entry(Stat::None, 30)])),
+            SkillPopularity::default()
+        );
+        assert_eq!(
+            skill_popularity(&with_popularity(None)),
+            points(&[(Stat::Speed, 60.0)])
+        );
+    }
+
+    #[test]
+    fn test_skill_popularity_deserialization() {
+        let parse = |popularity: &str| {
+            let json =
+                format!(r#"{{"rarity": 1, "alternatives": [], {popularity} "wisdomCheck": 1}}"#);
+            serde_json::from_str::<SkillData>(&json)
+                .expect("Failed to parse skill data")
+                .popularity
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .map(|e| (e.stat, e.value))
+                        .collect::<Vec<_>>()
+                })
+        };
+
+        assert_eq!(parse(""), None);
+        assert_eq!(parse(r#""popularity": [],"#), Some(vec![]));
+        assert_eq!(
+            parse(r#""popularity": [{"stat": 3, "value": 60}],"#),
+            Some(vec![(Stat::Power, 60)]),
+        );
+        assert_eq!(
+            parse(r#""popularity": [{"stat": 1, "value": 10}, {"stat": 5, "value": 10}],"#),
+            Some(vec![(Stat::Speed, 10), (Stat::Wiz, 10)]),
+        );
+        assert_eq!(
+            parse(r#""popularity": [{"stat": 2, "value": -30}],"#),
+            Some(vec![(Stat::Stamina, -30)]),
+        );
+    }
 
     #[test]
     fn test_popularity_mark_points() {

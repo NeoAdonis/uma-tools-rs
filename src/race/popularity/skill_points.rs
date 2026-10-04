@@ -1,48 +1,14 @@
 //! Heuristic for the popularity points a skill adds to each stat.
 //!
-//! The in-game values aren't available in the skill data, so they are
-//! estimated from the skill rarity and effects.
+//! Used when the in-game values are missing from the skill data (outdated
+//! skill data), estimating them from the skill rarity and effects.
 //!
-//! TODO: Remove this module once the points are available in the skill data.
+//! TODO: Remove this module once outdated skill data is no longer supported.
 
-use crate::skill::{Skill, SkillEffect, SkillRarity, SkillTarget, SkillType};
-
-/// Stat that can receive popularity points from a skill.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Stat {
-    Speed,
-    Stamina,
-    Power,
-    Guts,
-    Wiz,
-}
-
-/// Popularity points a skill adds to each stat.
-///
-/// Guts and wisdom points don't affect the judges (they use base guts and
-/// wisdom), but they are tracked because they take part of a skill's points.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub(super) struct SkillPopularity {
-    pub(super) speed: f64,
-    pub(super) stamina: f64,
-    pub(super) power: f64,
-    guts: f64,
-    wiz: f64,
-}
-
-impl SkillPopularity {
-    /// Create popularity points with `points` given to `stat`.
-    fn with(mut self, stat: Stat, points: f64) -> Self {
-        match stat {
-            Stat::Speed => self.speed += points,
-            Stat::Stamina => self.stamina += points,
-            Stat::Power => self.power += points,
-            Stat::Guts => self.guts += points,
-            Stat::Wiz => self.wiz += points,
-        }
-        self
-    }
-}
+use super::SkillPopularity;
+use crate::skill::{
+    PopularityStat as Stat, Skill, SkillEffect, SkillRarity, SkillTarget, SkillType,
+};
 
 /// Get the stat a skill effect on oneself is associated with, and its strength
 /// relative to a typical gold skill effect of the same type.
@@ -133,14 +99,14 @@ fn tier_points(skill: &Skill) -> f64 {
     }
 }
 
-/// Calculate the popularity points a skill adds to each stat.
+/// Estimate the popularity points a skill adds to each stat.
 ///
 /// Points go to the stat of the strongest effect on oneself, and are split
 /// evenly with a second stat when its strongest effect is at least half as
 /// strong. Drawbacks (e.g. using stamina) are ignored. Skills with no positive
 /// effect on oneself split their points between the stat affected by their
 /// debuff on others and wisdom, or take 30 points from the stat they lower.
-pub(super) fn skill_popularity(skill: &Skill) -> SkillPopularity {
+pub(super) fn estimate_popularity(skill: &Skill) -> SkillPopularity {
     let effects = || {
         skill
             .alternatives
@@ -211,44 +177,11 @@ pub(super) fn skill_popularity(skill: &Skill) -> SkillPopularity {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Create a skill with a single alternative with the given effects.
-    fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, i32)]) -> Skill {
-        use crate::skill::{DEFAULT_COOLDOWN, SkillAlternative, SkillData};
-
-        Skill::new(
-            id.to_string(),
-            SkillData {
-                rarity,
-                alternatives: vec![SkillAlternative {
-                    base_duration: 30000,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    condition: "".to_string(),
-                    precondition: "".to_string(),
-                    effects: effects
-                        .iter()
-                        .map(|&(skill_type, target, modifier)| SkillEffect {
-                            skill_type,
-                            target,
-                            modifier,
-                        })
-                        .collect(),
-                }],
-                wisdom_check: true,
-            },
-        )
-    }
-
-    fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
-        stats
-            .iter()
-            .fold(SkillPopularity::default(), |p, &(stat, points)| {
-                p.with(stat, points)
-            })
-    }
+    use crate::race::popularity::skill_popularity;
+    use crate::race::popularity::tests::{points, skill};
 
     #[test]
-    fn test_skill_popularity_tiers() {
+    fn test_estimate_popularity_tiers() {
         use SkillRarity::*;
         use SkillType::*;
 
@@ -279,7 +212,7 @@ mod tests {
         for (id, rarity, skill_type, modifier, stat, expected) in cases {
             let skill = skill(id, rarity, &[(skill_type, SkillTarget::Oneself, modifier)]);
             assert_eq!(
-                skill_popularity(&skill),
+                estimate_popularity(&skill),
                 points(&[(stat, expected)]),
                 "{id}"
             );
@@ -287,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn test_skill_popularity_split() {
+    fn test_estimate_popularity_split() {
         use SkillTarget::Oneself;
         use SkillType::*;
 
@@ -297,7 +230,7 @@ mod tests {
             &[(TargetSpeed, Oneself, 3500), (Acceleration, Oneself, 4000)],
         );
         assert_eq!(
-            skill_popularity(&balanced),
+            estimate_popularity(&balanced),
             points(&[(Stat::Speed, 30.0), (Stat::Power, 30.0)]),
         );
 
@@ -313,7 +246,7 @@ mod tests {
             ],
         );
         assert_eq!(
-            skill_popularity(&unbalanced),
+            estimate_popularity(&unbalanced),
             points(&[(Stat::Speed, 60.0)])
         );
 
@@ -323,7 +256,7 @@ mod tests {
             SkillRarity::White,
             &[(TargetSpeed, Oneself, 2500), (Recovery, Oneself, -200)],
         );
-        assert_eq!(skill_popularity(&costly), points(&[(Stat::Speed, 20.0)]));
+        assert_eq!(estimate_popularity(&costly), points(&[(Stat::Speed, 20.0)]));
 
         let inherited = skill(
             "900011",
@@ -331,13 +264,13 @@ mod tests {
             &[(TargetSpeed, Oneself, 1500), (Acceleration, Oneself, 2000)],
         );
         assert_eq!(
-            skill_popularity(&inherited),
+            estimate_popularity(&inherited),
             points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)]),
         );
     }
 
     #[test]
-    fn test_skill_popularity_debuff_and_negative() {
+    fn test_estimate_popularity_debuff_and_negative() {
         use SkillTarget::*;
         use SkillType::*;
 
@@ -347,12 +280,15 @@ mod tests {
             &[(CurrentSpeed, BehindSelf, -1500)],
         );
         assert_eq!(
-            skill_popularity(&debuff),
+            estimate_popularity(&debuff),
             points(&[(Stat::Speed, 10.0), (Stat::Wiz, 10.0)]),
         );
 
         let negative = skill("200013", SkillRarity::White, &[(SpeedUp, Oneself, -400000)]);
-        assert_eq!(skill_popularity(&negative), points(&[(Stat::Speed, -30.0)]));
+        assert_eq!(
+            estimate_popularity(&negative),
+            points(&[(Stat::Speed, -30.0)])
+        );
 
         // A bad start is associated with speed.
         let late_start = skill(
@@ -361,31 +297,26 @@ mod tests {
             &[(MultiplyStartDelay, Oneself, 15000)],
         );
         assert_eq!(
-            skill_popularity(&late_start),
+            estimate_popularity(&late_start),
             points(&[(Stat::Speed, -30.0)])
         );
     }
 
     #[test]
-    fn test_skill_popularity_from_data() {
+    fn test_estimate_popularity_matches_data() {
         let skills = Skill::load_skills_from_file("data/skill_data.json")
             .expect("Failed to load skill data");
 
-        // Expected values are the ones given in-game.
-        let cases = [
-            ("200961", points(&[(Stat::Speed, 30.0)])),
-            ("200962", points(&[(Stat::Speed, 20.0)])),
-            ("200011", points(&[(Stat::Speed, 45.0)])),
-            ("200342", points(&[(Stat::Power, 20.0)])),
-            ("200433", points(&[(Stat::Speed, -30.0)])),
-            ("200851", points(&[(Stat::Speed, 10.0), (Stat::Wiz, 10.0)])),
-            ("202521", points(&[(Stat::Power, 60.0)])),
-            ("10071", points(&[(Stat::Speed, 30.0)])),
-            ("900011", points(&[(Stat::Power, 15.0)])),
-            ("900091", points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
+        let ids = [
+            "200961", "200962", "200011", "200342", "200433", "200851", "202521", "10071",
+            "900011", "900091",
         ];
-        for (id, expected) in cases {
-            assert_eq!(skill_popularity(&skills[id]), expected, "skill {id}");
+        for id in ids {
+            assert_eq!(
+                estimate_popularity(&skills[id]),
+                skill_popularity(&skills[id]),
+                "skill {id}"
+            );
         }
     }
 }

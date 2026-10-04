@@ -105,6 +105,7 @@ fn test_skills_see_state_after_the_move() {
                 }],
                 precondition: String::new(),
             }],
+            popularity: None,
             wisdom_check: false,
         },
     );

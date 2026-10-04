@@ -206,6 +206,28 @@ pub struct SkillAlternative {
     pub precondition: String,
 }
 
+/// Stat that can receive popularity points from a skill.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
+#[repr(u8)]
+pub enum PopularityStat {
+    None = 0,
+    Speed = 1,
+    Stamina = 2,
+    Power = 3,
+    Guts = 4,
+    Wiz = 5,
+}
+
+/// Represents the popularity points granted by a skill to a specific stat.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillPopularity {
+    /// Stat that receives popularity points.
+    pub stat: PopularityStat,
+    /// Amount of popularity points granted (negative for negative skills).
+    pub value: i8,
+}
+
 /// Represents a skill with its ID and data.
 #[derive(Clone, Debug)]
 pub struct Skill {
@@ -230,6 +252,12 @@ pub struct SkillData {
     pub rarity: SkillRarity,
     /// Skill alternatives, each with its own conditions and effects.
     pub alternatives: Vec<SkillAlternative>,
+    /// Popularity points granted by this skill to specific stats.
+    ///
+    /// `None` when missing from the skill data (outdated data), in which case
+    /// the points are estimated from the skill rarity and effects.
+    #[serde(default)]
+    pub popularity: Option<Vec<SkillPopularity>>,
     /// Whether this skill requires a wisdom check to activate.
     #[serde_as(as = "BoolFromInt")]
     pub wisdom_check: bool,
@@ -456,6 +484,7 @@ mod tests {
             SkillData {
                 rarity: SkillRarity::White,
                 alternatives: vec![],
+                popularity: None,
                 wisdom_check,
             },
         )
@@ -485,6 +514,7 @@ mod tests {
                 SkillData {
                     rarity,
                     alternatives: vec![],
+                    popularity: None,
                     wisdom_check: true,
                 },
             )

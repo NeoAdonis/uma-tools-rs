@@ -30,6 +30,7 @@ fn full_throttle_skill() -> Skill {
                 }],
                 precondition: String::new(),
             }],
+            popularity: None,
             wisdom_check: false,
         },
     )

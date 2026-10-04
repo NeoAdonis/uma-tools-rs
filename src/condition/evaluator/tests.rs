@@ -177,6 +177,7 @@ fn test_is_exist_skill_id_in_available_skills() {
     let skill_data = SkillData {
         rarity: SkillRarity::White,
         alternatives: vec![],
+        popularity: None,
         wisdom_check: true,
     };
     let skill = Skill::new("203061".to_string(), skill_data);

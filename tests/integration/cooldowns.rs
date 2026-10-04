@@ -28,6 +28,7 @@ fn skill(condition: &str, base_cooldown: i32) -> Skill {
                 }],
                 precondition: String::new(),
             }],
+            popularity: None,
             wisdom_check: false,
         },
     )
@@ -51,7 +52,11 @@ fn run(condition: &str, base_cooldown: i32) -> Runner {
         race_params(0),
         &Configuration::default(),
     );
-    solver.add_runner(uma, Motivation::Normal, vec![skill(condition, base_cooldown)]);
+    solver.add_runner(
+        uma,
+        Motivation::Normal,
+        vec![skill(condition, base_cooldown)],
+    );
     let mut solver = solver.ready_runners();
     solver.run();
     solver.runners.swap_remove(0)

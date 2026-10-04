@@ -152,6 +152,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     }],
                 },
             ],
+            popularity: None,
             wisdom_check: true,
         },
     );
@@ -216,6 +217,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
                     modifier: 350,
                 }],
             }],
+            popularity: None,
             wisdom_check: false,
         },
     )

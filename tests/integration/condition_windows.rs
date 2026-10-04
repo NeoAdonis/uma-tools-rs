@@ -24,6 +24,7 @@ fn skill(condition: &str) -> Skill {
                 }],
                 precondition: String::new(),
             }],
+            popularity: None,
             wisdom_check: false,
         },
     )

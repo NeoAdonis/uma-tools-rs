@@ -47,6 +47,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                     }],
                 })
                 .collect(),
+            popularity: None,
             wisdom_check: true,
         },
     )

@@ -74,6 +74,7 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
                     modifier: 3500,
                 }],
             }],
+            popularity: None,
             wisdom_check: false,
         },
     )
