@@ -1,3 +1,5 @@
+//! Health Points (HP) state and calculations.
+
 use crate::course::*;
 use crate::race::parameters::TrackCondition;
 use crate::uma::Style;
@@ -6,14 +8,19 @@ use crate::uma::Style;
 ///
 /// HP determines if the runner can sustain her target speed, decelerating
 /// if it reaches 0.
+///
 /// It's also used to get the distance at which her last spurt can start.
 pub struct HpState {
-    /// Current HP. It's set to `max_hp` at the start of the race and decreases over
-    /// time. It can be restored by skills but cannot exceed `max_hp`.
+    /// Current HP.
+    ///
+    /// HP is set to its maximum at the start of the race and decreases over time.
+    /// It can be restored by skills but cannot exceed `maximum`.
     ///
     /// If HP reaches 0, the runner's maximum speed is greatly reduced.
     pub current: f64,
-    /// Maximum HP. Calculated from the stamina stat at the start of the race.
+    /// Maximum HP.
+    ///
+    /// Calculated from the stamina stat at the start of the race.
     pub maximum: f64,
     /// Flag indicating if the runner has emptied her HP at least once.
     pub has_emptied: bool,
@@ -62,8 +69,7 @@ fn hp_guts_modifier(guts_stat: u16) -> f64 {
     1.0 + (200.0 / (600.0 * guts_stat as f64).sqrt())
 }
 
-/// Calculate HP style multiplier based on running style.
-pub fn hp_style_multiplier(style: Style) -> f64 {
+fn hp_style_multiplier(style: Style) -> f64 {
     match style {
         Style::Runaway => 0.86,
         Style::Front => 0.95,
@@ -71,6 +77,13 @@ pub fn hp_style_multiplier(style: Style) -> f64 {
         Style::Late => 1.0,
         Style::End => 0.995,
     }
+}
+
+/// Calculate maximum HP from the stamina stat, running style and course.
+///
+/// Stats should already include any adjustments applied before the race starts.
+pub fn calculate_max_hp(style: Style, stamina_stat: u16, course: &Course) -> f64 {
+    0.8 * hp_style_multiplier(style) * stamina_stat as f64 + course.distance as f64
 }
 
 /// Calculate HP consumption per second.

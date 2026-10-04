@@ -10,7 +10,7 @@ use crate::parser::parse_condition;
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt;
 use crate::race::full_throttle::{self, FullThrottle};
-use crate::race::hp::{HpState, hp_style_multiplier};
+use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
     calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wiz,
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
@@ -351,9 +351,7 @@ impl UnreadyRunner {
         let game_version = state.config.game_version;
 
         // Convert stamina to HP using adjusted stats after out-of-gate boosts.
-        let max_hp =
-            0.8 * hp_style_multiplier(self.adjusted.style) * (self.adjusted.stamina as f64)
-                + course.distance as f64;
+        let max_hp = calculate_max_hp(self.adjusted.style, self.adjusted.stamina, course);
 
         // Set starting speed (done in the constructor).
         // Determine rush chance.
