@@ -122,6 +122,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     condition: "distance_rate>=80".to_string(),
                     precondition: "phase>=2".to_string(), // Has precondition
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
@@ -132,6 +133,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     condition: "hp_per<=50".to_string(),
                     precondition: "accumulatetime>=10".to_string(), // Different precondition
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
@@ -142,6 +144,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     condition: "is_last_straight==1".to_string(),
                     precondition: String::new(), // No precondition
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
@@ -206,6 +209,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
                 condition: condition.to_string(),
                 precondition: precondition.to_string(),
                 base_duration: 30000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 effects: vec![SkillEffect {
                     skill_type: effect,
                     target: SkillTarget::Oneself,

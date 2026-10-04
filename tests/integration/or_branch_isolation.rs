@@ -162,13 +162,13 @@ fn test_or_branch_skill_id_uniqueness() {
     assert_eq!(logic_1.alternative_index, logic_2.alternative_index);
 
     // The key isolation: they are separate entries in skill_logics array
-    // Each tracks has_activated independently
+    // Each is checked independently, but they share the cooldown
 }
 
 #[test]
 fn test_or_branches_independent_activation_tracking() {
     // Test: Each OR branch tracks activation independently
-    // Tests: has_activated flag is per branch, not shared
+    // Tests: each branch starts off cooldown
 
     let skill = make_skill(
         "test_independent_tracking",
@@ -183,7 +183,7 @@ fn test_or_branches_independent_activation_tracking() {
     // Should create 2 skill logics
     assert_eq!(scheduler.skill_logics.len(), 2);
 
-    // Each logic has its own has_activated field (implicit in SkillLogic structure)
+    // Each logic has its own cooldown_until field
     // This test verifies they are separate entries in skill_logics
     // They share the same skill_index and alternative_index, but are distinct array entries
     assert_eq!(
@@ -196,8 +196,8 @@ fn test_or_branches_independent_activation_tracking() {
     );
 
     // But they are different objects with independent state tracking
-    assert!(!scheduler.skill_logics[0].has_activated);
-    assert!(!scheduler.skill_logics[1].has_activated);
+    assert_eq!(scheduler.skill_logics[0].cooldown_until, 0.0);
+    assert_eq!(scheduler.skill_logics[1].cooldown_until, 0.0);
 }
 
 // ============================================================================

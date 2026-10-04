@@ -73,8 +73,12 @@ pub struct SkillActivationLogic {
     /// What happens when the trigger fires and the guards pass.
     pub action: LogicAction,
 
-    /// Whether the logic already succeeded. It's never checked again afterwards.
-    pub has_activated: bool,
+    /// Race time (in seconds) until which the logic can't succeed again.
+    ///
+    /// Set when the skill alternative activates, and shared by all its OR
+    /// branches. Infinite for a satisfied precondition, which is never checked
+    /// again.
+    pub cooldown_until: f64,
 }
 
 /// What a [`SkillActivationLogic`] does when it succeeds.
@@ -171,7 +175,7 @@ impl SkillActivationLogic {
             guards,
             precondition,
             action,
-            has_activated: false,
+            cooldown_until: 0.0,
         }
     }
 }

@@ -14,6 +14,7 @@ fn skill_with_alternatives(id: &str, alternatives: Vec<(&str, SkillType, i32)>) 
                 .into_iter()
                 .map(|(condition, skill_type, modifier)| SkillAlternative {
                     base_duration: 0,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     condition: condition.to_string(),
                     effects: vec![SkillEffect {
                         skill_type,

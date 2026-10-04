@@ -22,6 +22,7 @@ fn skill(condition: &str) -> Skill {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
                 base_duration: 10000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 condition: condition.to_string(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,

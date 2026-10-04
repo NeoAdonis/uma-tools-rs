@@ -21,6 +21,7 @@ fn full_throttle_skill() -> Skill {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
                 base_duration: 20000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 condition: "run_at_full_speed_random==1&distance_type==3".to_string(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::AccelerationFullThrottle,

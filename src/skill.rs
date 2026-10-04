@@ -180,11 +180,21 @@ pub struct SkillEffect {
     pub modifier: i32,
 }
 
+/// Base cooldown used by most skills, long enough that they never reactivate.
+pub const DEFAULT_COOLDOWN: i32 = 500_0000; // 500 seconds.
+
+fn default_cooldown() -> i32 {
+    DEFAULT_COOLDOWN
+}
+
 /// Represents an alternative version of a skill, with its own conditions and
 /// effects.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
+    /// Base cooldown duration in 10000ths of a second.
+    #[serde(default = "default_cooldown")]
+    pub base_cooldown: i32,
     /// Base duration before any modifiers in 10000ths of a second.
     pub base_duration: i32,
     /// Condition string that determines when this alternative can be triggered.

@@ -295,6 +295,7 @@ fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str)
                 condition: condition.to_string(),
                 precondition: precondition.to_string(),
                 base_duration: 40000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,
                     target: SkillTarget::Oneself,
@@ -399,6 +400,7 @@ fn test_precondition_only_in_alternative_zero() {
                     // Has precondition.
                     precondition: "phase>=2".to_string(),
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
@@ -410,6 +412,7 @@ fn test_precondition_only_in_alternative_zero() {
                     // No precondition.
                     precondition: "".to_string(),
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,

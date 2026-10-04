@@ -2356,8 +2356,7 @@ impl Runner {
 
         let mut any_unlocked = false;
         for logic_idx in inside {
-            self.try_activate_skill(logic_idx, state);
-            any_unlocked |= self.trigger_scheduler.skill_logics[logic_idx].has_activated;
+            any_unlocked |= self.try_activate_skill(logic_idx, state);
         }
 
         // Stop checking every branch whose preconditions were just satisfied.
@@ -2507,9 +2506,10 @@ impl Runner {
         let alternative =
             self.available_skills[skill_index].alternatives[alternative_index].clone();
 
-        // Calculate scaled duration; convert from 10000ths of a second first.
+        // Convert from 10000ths of a second, then scale with distance and effects.
         let base_duration = alternative.base_duration as f64 / 10000.0;
-        let scaled_duration = base_duration * self.skill_modifiers.duration_scaling;
+        let scaled_duration = base_duration * state.course.distance as f64 / 1000.0
+            * self.skill_modifiers.duration_scaling;
 
         // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward).
         let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
@@ -2534,6 +2534,8 @@ impl Runner {
 
         // Recalculate skill modifiers from active effects.
         self.recalculate_skill_modifiers();
+
+        self.start_cooldown(skill_index, alternative_index, state);
 
         // Track skill activation.
         self.activated_skill_ids.insert(skill_id.clone());
@@ -2560,7 +2562,9 @@ impl Runner {
     }
 
     /// Given a trigger index, attempt to activate the associated skill.
-    fn try_activate_skill(&mut self, trigger_index: usize, state: &RaceState) {
+    ///
+    /// Returns whether the logic succeeded.
+    fn try_activate_skill(&mut self, trigger_index: usize, state: &RaceState) -> bool {
         // Get skill logic and conditions.
         let logic = &self.trigger_scheduler.skill_logics[trigger_index];
 
@@ -2568,11 +2572,11 @@ impl Runner {
         if let Some(id) = logic.precondition
             && !self.trigger_scheduler.precondition_satisfied[id]
         {
-            return;
+            return false;
         }
 
-        if logic.has_activated {
-            return;
+        if state.elapsed_time < logic.cooldown_until {
+            return false;
         }
         let skill_index = logic.skill_index;
         let alternative_index = logic.alternative_index;
@@ -2582,11 +2586,37 @@ impl Runner {
 
         if should_activate {
             match action {
+                // Starts the cooldown.
                 LogicAction::Activate => self.activate_skill(skill_index, alternative_index, state),
-                LogicAction::Unlock(id) => self.trigger_scheduler.precondition_satisfied[id] = true,
+                LogicAction::Unlock(id) => {
+                    self.trigger_scheduler.precondition_satisfied[id] = true;
+                    // Never checked again.
+                    self.trigger_scheduler.skill_logics[trigger_index].cooldown_until =
+                        f64::INFINITY;
+                }
             }
-            // Never checked again.
-            self.trigger_scheduler.skill_logics[trigger_index].has_activated = true;
+        }
+        should_activate
+    }
+
+    /// Start the cooldown of a skill alternative, shared by all its OR branches.
+    ///
+    /// The base cooldown scales with the course distance by a factor of *course
+    /// distance / 1000*.
+    fn start_cooldown(&mut self, skill_index: usize, alternative_index: usize, state: &RaceState) {
+        let base_cooldown = self.available_skills[skill_index].alternatives[alternative_index]
+            .base_cooldown as f64
+            / 10000.0;
+        let cooldown = base_cooldown * state.course.distance as f64 / 1000.0;
+        let cooldown_until = state.elapsed_time + cooldown;
+
+        for logic in &mut self.trigger_scheduler.skill_logics {
+            if logic.skill_index == skill_index
+                && logic.alternative_index == alternative_index
+                && logic.action == LogicAction::Activate
+            {
+                logic.cooldown_until = cooldown_until;
+            }
         }
     }
 

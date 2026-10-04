@@ -96,6 +96,7 @@ fn test_skills_see_state_after_the_move() {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
                 base_duration: 30000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 condition: "remain_distance<=800&phase>=2".to_string(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,

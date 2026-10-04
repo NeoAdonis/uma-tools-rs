@@ -3,6 +3,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
+use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
 use crate::test_utils::race_params;
@@ -64,6 +65,7 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
             rarity,
             alternatives: vec![SkillAlternative {
                 base_duration: 30000,
+                base_cooldown: DEFAULT_COOLDOWN,
                 condition: String::new(),
                 precondition: String::new(),
                 effects: vec![SkillEffect {
@@ -77,10 +79,9 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
     )
 }
 
-/// Activate the only skill of a single runner with high wiz and return
-/// (target speed modifier, current speed modifier, expected Wiz Limit Break
-/// bonus rate).
-fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
+/// Build a ready race with a single high-wiz runner that only has the given
+/// skill.
+fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
     let params = race_params(42);
@@ -102,7 +103,14 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
     };
     let mut solver = RaceSolver::new(course, params, &config);
     solver.add_runner(uma, Motivation::Normal, vec![skill]);
-    let mut solver = solver.ready_runners();
+    solver.ready_runners()
+}
+
+/// Activate the only skill of a single runner with high wiz and return
+/// (target speed modifier, current speed modifier, expected Wiz Limit Break
+/// bonus rate).
+fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
+    let mut solver = high_wiz_race(skill);
     let runner = &mut solver.runners[0];
 
     let bonus = wiz_limit_break_phase_coefficient(runner.adjusted.style, runner.phase)
@@ -113,6 +121,22 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
         runner.skill_modifiers.current_speed,
         bonus,
     )
+}
+
+#[test]
+fn test_skill_duration_scales_with_course_distance() {
+    let mut solver = high_wiz_race(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
+    let runner = &mut solver.runners[0];
+    runner.activate_skill(0, 0, &solver.state);
+
+    // 3 s base duration.
+    let expected = 3.0 * solver.state.course.distance as f64 / 1000.0;
+    let effect = &runner.active_timed_effects[0];
+    let duration = effect.expires_at - solver.state.elapsed_time;
+    assert!(
+        (duration - expected).abs() < EPSILON,
+        "expected {expected} s, got {duration} s"
+    );
 }
 
 fn boosted(bonus: f64) -> f64 {

@@ -214,7 +214,7 @@ mod tests {
 
     /// Create a skill with a single alternative with the given effects.
     fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, i32)]) -> Skill {
-        use crate::skill::{SkillAlternative, SkillData};
+        use crate::skill::{DEFAULT_COOLDOWN, SkillAlternative, SkillData};
 
         Skill::new(
             id.to_string(),
@@ -222,6 +222,7 @@ mod tests {
                 rarity,
                 alternatives: vec![SkillAlternative {
                     base_duration: 30000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     condition: "".to_string(),
                     precondition: "".to_string(),
                     effects: effects

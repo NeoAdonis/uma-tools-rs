@@ -39,6 +39,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                     condition: condition.to_string(),
                     precondition: precondition.to_string(),
                     base_duration: 40000,
+                    base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
