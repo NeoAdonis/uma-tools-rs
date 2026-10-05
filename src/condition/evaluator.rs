@@ -596,8 +596,8 @@ fn get_activation_value(
             }
         }
 
-        // Duel-related counts.
-        CompeteFightCount => runner.duel_count as i32,
+        // Times involved in a duel: 0 or 1; you can duel once at most.
+        CompeteFightCount => runner.duel.has_dueled() as i32,
 
         // Special cases: these variables use the comparison value as parameter instead
         // of comparing against it.

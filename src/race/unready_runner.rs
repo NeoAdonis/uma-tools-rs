@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use rand::RngExt;
@@ -9,6 +9,7 @@ use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::parser::parse_condition;
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt;
+use crate::race::duel::Duel;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
@@ -493,15 +494,13 @@ impl UnreadyRunner {
             finish_time: None,
             finish_margin: None,
             spot_struggle: SpotStruggle::Pending,
-            dueling: None,
+            duel: Duel::Pending,
             secure_lead: None,
             next_secure_lead_check: 0.0,
             compete_before_spurt: None,
             next_compete_check: 0.0,
             stamina_keep_ratio,
             is_stamina_keep: false,
-            duel_targets: HashMap::new(),
-            duel_count: 0,
             overtake_state: None,
             overtake_target_time: 0.0,
             being_overtake_target_time: 0.0,

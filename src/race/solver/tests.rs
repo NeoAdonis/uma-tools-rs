@@ -901,6 +901,291 @@ fn test_spot_struggle_not_before_first_anniversary() {
     assert_eq!(strugglers(&solver), [false, false]);
 }
 
+/// Frames at 15 FPS until a duel starts: the first frame two runners are close
+/// (frame 0), then 2s worth of frames.
+const DUEL_FRAMES: usize = 31;
+
+/// Solver with one runner per `(position, lane)` on a 1200m course, whose final
+/// straight starts at 934m. Runners must be given in descending position order.
+fn duel_solver(runners: &[(f64, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
+    let styles: Vec<_> = runners
+        .iter()
+        .map(|&(position, _)| (Style::Pace, position))
+        .collect();
+    let mut solver = positioning_solver(&styles, game_version);
+    for (i, &(position, lane)) in runners.iter().enumerate() {
+        place_on_straight(&mut solver, i, position, lane);
+    }
+    solver
+}
+
+/// Move runner `i` to `position` and `lane`, keeping its section and straight
+/// consistent. Only moving forward is supported.
+fn place_on_straight(solver: &mut RaceSolver<Runner>, i: usize, position: f64, lane: f64) {
+    place(solver, i, position, lane);
+    let RaceSolver { runners, state, .. } = solver;
+    runners[i].check_straight_start(&state.course.straights);
+}
+
+/// Run `frames` duel updates at 15 FPS, with up-to-date order rates.
+fn update_duels(solver: &mut RaceSolver<Runner>, frames: usize) {
+    for _ in 0..frames {
+        solver.assert_runners_sorted();
+        solver.update_order_values();
+        solver.update_duels(1.0 / 15.0);
+    }
+}
+
+/// Set the HP percentage of runner `i`.
+fn set_hp_percent(solver: &mut RaceSolver<Runner>, i: usize, percent: f64) {
+    let hp = &mut solver.runners[i].hp;
+    hp.current = hp.maximum * percent / 100.0;
+}
+
+/// Whether each runner (in position order) is currently dueling.
+fn duelists(solver: &RaceSolver<Runner>) -> Vec<bool> {
+    solver
+        .runners
+        .iter()
+        .map(|runner| runner.duel.is_dueling())
+        .collect()
+}
+
+#[test]
+fn test_duel_starts_after_two_seconds_close() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES - 1);
+    assert_eq!(duelists(&solver), [false, false]);
+
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+    for runner in &solver.runners {
+        let guts = runner.adjusted.guts;
+        assert_eq!(runner.duel.speed_bonus(), duel::target_speed_bonus(guts));
+        assert_eq!(
+            runner.duel.acceleration_bonus(),
+            duel::acceleration_bonus(guts)
+        );
+    }
+}
+
+#[test]
+fn test_duel_needs_continuous_proximity() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES - 1);
+
+    // Being apart for a single frame resets the time.
+    place_on_straight(&mut solver, 0, 1001.0, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false]);
+
+    place_on_straight(&mut solver, 1, 999.0, 1.0);
+    update_duels(&mut solver, DUEL_FRAMES - 1);
+    assert_eq!(duelists(&solver), [false, false]);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
+fn test_duel_proximity_in_course_widths() {
+    // 0.25 course widths = 2.8125m.
+    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 2.81)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true]);
+
+    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 2.82)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [false, false]);
+
+    let mut solver = duel_solver(&[(1000.0, 0.0), (997.0, 0.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [false, false]);
+}
+
+#[test]
+fn test_duel_speed_difference() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    solver.runners[0].speed = 20.0;
+    solver.runners[1].speed = 19.4;
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true]);
+
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    solver.runners[0].speed = 20.0;
+    solver.runners[1].speed = 19.3;
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    assert_eq!(duelists(&solver), [false, false]);
+
+    // Only proximity needs to last; speeds just need to match for a frame.
+    solver.runners[1].speed = 19.5;
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
+fn test_duel_needs_both_runners_with_enough_hp() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    set_hp_percent(&mut solver, 1, 14.9);
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    assert_eq!(duelists(&solver), [false, false]);
+
+    set_hp_percent(&mut solver, 1, 15.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
+fn test_duel_needs_one_runner_in_top_half() {
+    // 2nd and 3rd out of 4: top 50% and top 75%.
+    let mut solver = duel_solver(
+        &[(1100.0, 1.0), (1050.0, 1.0), (1048.0, 1.0), (1000.0, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [false, true, true, false]);
+
+    // 3rd and 4th out of 4: top 75% and top 100%.
+    let mut solver = duel_solver(
+        &[(1100.0, 1.0), (1050.0, 1.0), (1000.0, 1.0), (998.0, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [false, false, false, false]);
+}
+
+#[test]
+fn test_duel_only_on_final_straight() {
+    // On a corner, before the final straight.
+    let mut solver = duel_solver(&[(900.0, 1.0), (898.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    assert_eq!(duelists(&solver), [false, false]);
+}
+
+#[test]
+fn test_duel_exits_below_five_percent_hp() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+
+    set_hp_percent(&mut solver, 1, 5.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+
+    set_hp_percent(&mut solver, 1, 4.9);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, false]);
+    assert!(solver.runners[1].duel.has_ended());
+}
+
+#[test]
+fn test_duel_exits_when_separated_ahead_or_behind() {
+    // The last runner duels with the leader, who is in the top 50%.
+    let mut solver = duel_solver(
+        &[(1000.0, 1.0), (998.5, 1.0), (997.5, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, true]);
+
+    // The leader gets ahead, but not 5m ahead of the second one.
+    place_on_straight(&mut solver, 0, 1003.4, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true, true]);
+
+    // Getting 5m ahead of everyone is enough to exit.
+    place_on_straight(&mut solver, 0, 1003.5, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, true, true]);
+
+    // So is falling 5m behind everyone.
+    let mut solver = duel_solver(
+        &[(1000.0, 1.0), (998.5, 1.0), (997.5, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    place_on_straight(&mut solver, 0, 1006.0, 1.0);
+    place_on_straight(&mut solver, 1, 1004.0, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true, false]);
+}
+
+#[test]
+fn test_duel_exit_counts_former_duelists() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+
+    // The second runner exits, but the leader keeps dueling while close to her.
+    set_hp_percent(&mut solver, 1, 4.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, false]);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, false]);
+
+    place_on_straight(&mut solver, 0, 1003.0, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false]);
+}
+
+#[test]
+fn test_duel_exit_ignores_runners_who_never_dueled() {
+    let mut solver = duel_solver(
+        &[(1000.0, 1.0), (998.0, 1.0), (980.0, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, false]);
+
+    // The second runner falls 5m behind the leader, right next to the third
+    // runner, who never dueled. Lanes keep them from starting a new duel.
+    place_on_straight(&mut solver, 1, 995.0, 5.0);
+    place_on_straight(&mut solver, 2, 994.0, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_former_duelists_cannot_duel_again() {
+    // The last runner only keeps the third one out of the top 50%.
+    let mut solver = duel_solver(
+        &[(1000.0, 1.0), (998.0, 1.0), (980.0, 1.0), (950.0, 1.0)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    set_hp_percent(&mut solver, 1, 4.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, false, false, false]);
+
+    // The third runner stays close to the one who left, even after she
+    // recovers, but neither starts dueling.
+    set_hp_percent(&mut solver, 1, 100.0);
+    place_on_straight(&mut solver, 2, 997.0, 1.0);
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    assert_eq!(duelists(&solver), [true, false, false, false]);
+    assert!(!solver.runners[2].duel.has_dueled());
+
+    // She can still duel with the one who is still dueling.
+    place_on_straight(&mut solver, 2, 998.0, 1.0);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, false, true, false]);
+}
+
+#[test]
+fn test_compete_fight_count_after_duel() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+    set_hp_percent(&mut solver, 1, 4.0);
+    update_duels(&mut solver, 1);
+    for runner in &solver.runners {
+        assert!(runner.duel.has_dueled());
+    }
+}
+
+#[test]
+fn test_duel_not_before_first_anniversary() {
+    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::Original);
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    assert_eq!(duelists(&solver), [false, false]);
+}
+
 #[test]
 fn test_force_in_applies_only_away_from_inner_fence() {
     let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);

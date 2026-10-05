@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use rand::prelude::*;
@@ -11,6 +11,7 @@ use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
 use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
 use crate::race::compete_before_spurt;
+use crate::race::duel::Duel;
 use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
@@ -111,22 +112,6 @@ pub struct SecureLeadState {
 pub struct CompeteState {
     pub modifier: f64,
     pub expires_at: f64,
-}
-
-/// Modifiers applied during dueling.
-pub struct DuelingState {
-    target_speed_modifier: f64,
-    acceleration_modifier: f64,
-}
-
-/// Information about a duel target.
-pub struct DuelTarget {
-    /// Whether this target has been checked in the current update cycle.
-    is_checked: bool,
-    /// Whether the runner is currently dueling with this target.
-    is_dueling: bool,
-    /// Time spent engaging with this target in seconds.
-    engagement_time: f64,
 }
 
 /// Information about an overtake target ahead of this runner.
@@ -401,8 +386,8 @@ pub struct Runner {
     pub is_start_dash: bool,
     /// State related to spot struggle (位置取り争い).
     pub spot_struggle: SpotStruggle,
-    /// State related to dueling. If `None`, the runner is not currently dueling.
-    pub dueling: Option<DuelingState>,
+    /// State related to dueling (追い比べ).
+    pub duel: Duel,
     /// State related to secure lead mechanics. If `None`, the runner is not
     /// securing the lead.
     pub secure_lead: Option<SecureLeadState>,
@@ -419,10 +404,6 @@ pub struct Runner {
     /// Whether the runner is in Stamina Keep mode. While in it, she won't compete
     /// before spurt. Reset by recovery skills.
     pub is_stamina_keep: bool,
-    /// Duel targets tracked for potential dueling. Gate number is used as key.
-    pub duel_targets: HashMap<u8, DuelTarget>,
-    /// Count of duels the runner has engaged in.
-    pub duel_count: u8,
     /// Overtake targets being tracked. If `None`, no overtake mode active.
     pub overtake_state: Option<OvertakeState>,
     /// Time spent having at least one overtake target in seconds.
@@ -593,10 +574,7 @@ impl Runner {
 
         let start_dash_modifier = if self.is_start_dash { 24.0 } else { 0.0 };
 
-        let dueling_modifier = self
-            .dueling
-            .as_ref()
-            .map_or(0.0, |d| d.acceleration_modifier);
+        let dueling_modifier = self.duel.acceleration_bonus();
 
         let charge_up_modifier = self
             .charge_up
@@ -766,10 +744,7 @@ impl Runner {
             0.0
         };
 
-        let dueling_modifier = self
-            .dueling
-            .as_ref()
-            .map_or(0.0, |d| d.target_speed_modifier);
+        let dueling_modifier = self.duel.speed_bonus();
 
         let struggle_modifier = self.spot_struggle.speed_bonus(state.elapsed_time);
 
@@ -1260,10 +1235,6 @@ impl Runner {
                 self.full_throttle = FullThrottle::Ended;
             }
         }
-        // Exit dueling state if HP is below 5%.
-        if self.hp.percent() < 5.0 {
-            self.dueling = None;
-        }
     }
 
     /// Get the current style used for positioning strategy decisions.
@@ -1484,60 +1455,12 @@ impl Runner {
             elapsed_time + compete_before_spurt::DURATION + compete_before_spurt::COOLDOWN;
     }
 
-    /// Uncheck all duel targets at the start of an update cycle.
-    pub fn uncheck_duel_targets(&mut self) {
-        for target in self.duel_targets.values_mut() {
-            target.is_checked = false;
+    /// Start dueling (追い比べ), unless the runner already is.
+    pub fn start_duel(&mut self) {
+        if self.duel.is_dueling() {
+            return;
         }
-    }
-
-    /// Update duel target engagement time and start dueling if conditions are met.
-    pub fn update_duel_target(&mut self, target: &Self, delta_time: f64) {
-        let target_entry = self
-            .duel_targets
-            .entry(target.gate_roll)
-            .or_insert(DuelTarget {
-                is_checked: true,
-                is_dueling: false,
-                engagement_time: 0.0,
-            });
-        target_entry.engagement_time += delta_time;
-
-        if !target_entry.is_dueling
-            && target_entry.engagement_time > 2.0
-            && target.order.rate <= 50
-            && (self.speed - target.speed).abs() < 0.6
-        {
-            target_entry.is_dueling = true;
-            self.start_dueling();
-        }
-    }
-
-    /// Remove duel targets that were not checked in the current update cycle.
-    pub fn filter_duel_targets(&mut self) {
-        self.duel_targets.retain(|_k, v| v.is_checked);
-    }
-
-    /// Start a duel (Compete Fight, 追い比べ).
-    ///
-    /// On the final straight, a duel may occur between multiple runners that are
-    /// close together.
-    ///
-    /// During a duel, runners gain target speed and acceleration boosts based on
-    /// their guts stat.
-    pub fn start_dueling(&mut self) {
-        let target_speed_modifier = (200.0 * self.adjusted.guts as f64).powf(0.708) * 0.0001;
-        let acceleration_modifier = (160.0 * self.adjusted.guts as f64).powf(0.59) * 0.0001;
-        self.dueling = Some(DuelingState {
-            target_speed_modifier,
-            acceleration_modifier,
-        });
-        self.duel_count += 1;
-    }
-
-    /// Check if the runner is currently dueling (追い比べ).
-    pub fn is_dueling(&self) -> bool {
-        self.dueling.is_some()
+        self.duel = Duel::start(self.adjusted.guts);
     }
 
     /// Uncheck all overtake targets at the start of an update cycle.
@@ -1950,7 +1873,7 @@ impl Runner {
     }
 
     /// Check if runner is currently on the final straight.
-    fn is_on_final_straight(&self, course: &Course) -> bool {
+    pub fn is_on_final_straight(&self, course: &Course) -> bool {
         if course.straights.is_empty() {
             return false;
         }

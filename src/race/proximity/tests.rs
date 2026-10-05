@@ -28,18 +28,6 @@ fn test_is_near() {
 }
 
 #[test]
-fn test_check_dueling() {
-    // 0.25 course widths = 2.8125m.
-    assert!(check_dueling(0.0, 0.0));
-    assert!(check_dueling(2.9, 2.81));
-    assert!(check_dueling(2.9, -2.81));
-    assert!(!check_dueling(3.0, 0.0));
-    assert!(!check_dueling(-0.1, 0.0));
-    assert!(!check_dueling(0.0, 2.82));
-    assert!(!check_dueling(0.0, -2.82));
-}
-
-#[test]
 fn test_check_front_blocked_lane_side() {
     let lane = HORSE_LANE_TO_METERS;
     assert!(check_front_blocked(0.0, 0.7 * lane));

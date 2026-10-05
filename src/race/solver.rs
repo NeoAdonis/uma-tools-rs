@@ -9,6 +9,7 @@ use rand::prelude::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::compete_before_spurt;
+use crate::race::duel;
 use crate::race::parameters::RaceParameters;
 use crate::race::proximity;
 use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
@@ -65,6 +66,9 @@ pub struct RaceSolver<T> {
     // determines how the shared RNG is consumed).
     builders: BTreeMap<u8, UnreadyRunner>,
     pub state: RaceState,
+    /// Time (s) each pair of runners has been close in a row, keyed by their gates
+    /// (lowest first). Only pairs that may still start a duel are tracked.
+    duel_close_times: HashMap<(u8, u8), f64>,
     _marker: PhantomData<T>,
 }
 
@@ -94,6 +98,7 @@ impl RaceSolver<UnreadyRunner> {
             runners: vec![],
             builders: BTreeMap::new(),
             state,
+            duel_close_times: HashMap::new(),
             _marker: PhantomData,
         }
     }
@@ -170,6 +175,7 @@ impl RaceSolver<UnreadyRunner> {
             runners,
             builders: BTreeMap::new(),
             state,
+            duel_close_times: HashMap::new(),
             _marker: PhantomData,
         }
     }
@@ -278,6 +284,7 @@ impl RaceSolver<Runner> {
         self.resolve_overlaps();
         self.update_blocking_status(delta_time);
         self.update_spot_struggle();
+        self.update_duels(delta_time);
         self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
@@ -334,7 +341,6 @@ impl RaceSolver<Runner> {
 
         for runner in self.runners.iter_mut() {
             runner.reset_blocking_status();
-            runner.uncheck_duel_targets();
             runner.reset_overtake_checks();
         }
 
@@ -395,21 +401,12 @@ impl RaceSolver<Runner> {
                 if proximity::check_side_blocked(distance, lane_diff) {
                     runner_j.update_side_blocked_by(runner_i);
                 }
-
-                // Update dueling status.
-                if game_version >= GameVersion::FirstAnniversary
-                    && proximity::check_dueling(distance, lane_diff)
-                {
-                    runner_i.update_duel_target(runner_j, delta_time);
-                    runner_j.update_duel_target(runner_i, delta_time);
-                }
             }
 
             // Checked all runners behind i within a reasonable distance.
-            // runner_i's block, near and dueling statuses can be updated now.
+            // runner_i's block and near statuses can be updated now.
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
-            runner_i.filter_duel_targets();
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
@@ -716,6 +713,101 @@ impl RaceSolver<Runner> {
                 self.runners[i].spot_struggle.stop();
             }
         }
+    }
+
+    /// Update duel (追い比べ) state for all runners.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn update_duels(&mut self, delta_time: f64) {
+        if self.state.config.game_version < GameVersion::FirstAnniversary {
+            return;
+        }
+        self.exit_duels();
+        self.try_start_duels(delta_time);
+    }
+
+    /// Make duelists exit if their HP runs low or they're separated from every
+    /// other runner who has dueled, ahead or behind.
+    ///
+    /// Runners who already exited still count, so exits never cascade.
+    fn exit_duels(&mut self) {
+        let exiting: Vec<usize> = (0..self.runners.len())
+            .filter(|&i| {
+                let runner = &self.runners[i];
+                runner.duel.is_dueling()
+                    && (runner.hp.percent() < duel::EXIT_HP_PERCENT
+                        || self.runners.iter().enumerate().all(|(j, other)| {
+                            i == j
+                                || !other.duel.has_dueled()
+                                || duel::is_separated(runner.position - other.position)
+                        }))
+            })
+            .collect();
+        for i in exiting {
+            self.runners[i].duel.stop();
+        }
+    }
+
+    /// Track how long each pair of runners has been close, and start a duel
+    /// between those close for long enough that also meet the other conditions.
+    ///
+    /// Runners who already exited a duel can't start another one, nor be dueled.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn try_start_duels(&mut self, delta_time: f64) {
+        let mut close_times = HashMap::with_capacity(self.duel_close_times.len());
+        let mut starting = Vec::new();
+        for i in 0..self.runners.len() {
+            let ahead = &self.runners[i];
+            if ahead.duel.has_ended() {
+                continue;
+            }
+            for (j, behind) in self.runners.iter().enumerate().skip(i + 1) {
+                let distance = ahead.position - behind.position;
+                if distance >= duel::TRIGGER_DISTANCE {
+                    // Too far behind; move to next i.
+                    break;
+                }
+                let lane_diff = ahead.lane.current - behind.lane.current;
+                if behind.duel.has_ended() || !duel::is_close(distance, lane_diff) {
+                    continue;
+                }
+
+                let gates = (ahead.gate_roll, behind.gate_roll);
+                let key = (gates.0.min(gates.1), gates.0.max(gates.1));
+                // Time starts counting from the first frame they're close.
+                let close_time = self
+                    .duel_close_times
+                    .get(&key)
+                    .map_or(0.0, |time| time + delta_time);
+                close_times.insert(key, close_time);
+                if duel::is_close_long_enough(close_time) && self.can_start_duel(i, j) {
+                    starting.extend([i, j]);
+                }
+            }
+        }
+        // Pairs no longer close are dropped, which resets their time.
+        self.duel_close_times = close_times;
+        for i in starting {
+            self.runners[i].start_duel();
+        }
+    }
+
+    /// Check if runners `i` and `j`, already close for long enough, meet the
+    /// remaining conditions to start dueling. These only need to hold for a single
+    /// frame.
+    fn can_start_duel(&self, i: usize, j: usize) -> bool {
+        let course = &self.state.course;
+        let can_duel = |runner: &Runner| {
+            !runner.has_finished()
+                && runner.is_on_final_straight(course)
+                && runner.hp.percent() >= duel::MIN_START_HP_PERCENT
+        };
+        let (a, b) = (&self.runners[i], &self.runners[j]);
+        can_duel(a)
+            && can_duel(b)
+            && duel::are_speeds_similar(a.speed, b.speed)
+            && (a.order.rate <= duel::MAX_ORDER_RATE || b.order.rate <= duel::MAX_ORDER_RATE)
     }
 
     /// Update compete before spurt (位置取り調整) state for all runners.

@@ -5,7 +5,7 @@
 //! doesn't matter.
 
 use crate::configuration::GameVersion;
-use crate::units::{course_widths_to_meters, horse_lanes_to_meters};
+use crate::units::horse_lanes_to_meters;
 
 /// Check if a runner is blocked by another runner from the front based on
 /// distance and lane difference.
@@ -77,15 +77,6 @@ pub fn is_front_surrounded(distance: f64, lane_diff: f64) -> bool {
 /// This is checked by certain skills.
 pub fn is_side_surrounded(distance: f64, lane_diff: f64) -> bool {
     is_near_by(distance, lane_diff, 1.5, 3.0)
-}
-
-/// Check if a runner is within dueling range of another runner based on
-/// distance and lane difference.
-///
-/// Two runners are in range if they are less than 3m apart and less than
-/// 0.25 course widths to either side.
-pub fn check_dueling(distance: f64, lane_diff: f64) -> bool {
-    (0.0..3.0).contains(&distance) && lane_diff.abs() < course_widths_to_meters(0.25)
 }
 
 /// Distance (m) below which two runners may overlap.
