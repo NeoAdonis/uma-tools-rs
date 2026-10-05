@@ -981,3 +981,78 @@ fn test_normal_mode_lane_targets_in_course_widths() {
     solver.runners[0].positioning_strategy = PositioningStrategy::PaceDown(0.0);
     assert!((target(&solver) - 2.025).abs() < 1e-9);
 }
+
+#[test]
+fn test_overlap_bumps_outer_runner_ahead() {
+    // 0.4 horse lanes = 0.25m.
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.8, 1.9)],
+        GameVersion::LATEST,
+    );
+    solver.resolve_overlaps();
+    let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
+    assert!((ahead.lane.current - 2.15).abs() < 1e-9);
+    assert_eq!(ahead.lane.target, ahead.lane.current);
+    assert!(ahead.force_lane_update);
+    assert_eq!(behind.lane.current, 1.9);
+    assert!(!behind.force_lane_update);
+}
+
+#[test]
+fn test_overlap_bumps_outer_runner_behind() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 1.9), (Style::Front, 199.8, 2.0)],
+        GameVersion::LATEST,
+    );
+    solver.resolve_overlaps();
+    let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
+    assert_eq!(ahead.lane.current, 1.9);
+    assert!(!ahead.force_lane_update);
+    assert!((behind.lane.current - 2.15).abs() < 1e-9);
+    assert!(behind.force_lane_update);
+}
+
+#[test]
+fn test_no_bump_without_overlap() {
+    // Too far apart.
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.6, 1.9)],
+        GameVersion::LATEST,
+    );
+    solver.resolve_overlaps();
+    assert_eq!(solver.runners[0].lane.current, 2.0);
+    assert_eq!(solver.runners[1].lane.current, 1.9);
+
+    // Too far apart laterally.
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 2.16), (Style::Front, 199.8, 1.9)],
+        GameVersion::LATEST,
+    );
+    solver.resolve_overlaps();
+    assert_eq!(solver.runners[0].lane.current, 2.16);
+    assert_eq!(solver.runners[1].lane.current, 1.9);
+    assert!(solver.runners.iter().all(|r| !r.force_lane_update));
+}
+
+#[test]
+fn test_bumped_runner_updates_target_lane_while_side_blocked() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.8, 1.9)],
+        GameVersion::LATEST,
+    );
+    for runner in &mut solver.runners {
+        runner.phase = Phase::Mid;
+    }
+    // Heading inward, right into the other runner.
+    solver.runners[0].lane.target = 0.0;
+
+    solver.resolve_overlaps();
+    solver.update_blocking_status(1.0 / 15.0);
+    let bumped = &solver.runners[0];
+    assert!(bumped.blocked.side);
+    assert!(!bumped.force_lane_update);
+    // Too close to the runner inside in mid-race, so she targets 2 horse lanes
+    // (1.25m) away from her. Without the forced update, the target would have
+    // stayed at the bumped lane.
+    assert!((bumped.lane.target - 3.15).abs() < 1e-9);
+}

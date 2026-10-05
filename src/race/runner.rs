@@ -442,6 +442,9 @@ pub struct Runner {
     pub nearby: NearbyState,
     /// Blocking state information.
     pub blocked: BlockedState,
+    /// Whether the target lane must be updated this frame even if side-blocked,
+    /// e.g. after being bumped by an overlapping runner.
+    pub force_lane_update: bool,
     /// Surrounding state information.
     pub surrounded: SurroundState,
     /// Number of runners ahead and behind currently rushing.

@@ -88,10 +88,16 @@ pub fn check_dueling(distance: f64, lane_diff: f64) -> bool {
     (0.0..3.0).contains(&distance) && lane_diff.abs() < course_widths_to_meters(0.25)
 }
 
+/// Distance (m) below which two runners may overlap.
+pub const OVERLAP_DISTANCE: f64 = 0.4;
+/// Lane difference (in horse lanes) below which two runners may overlap. An
+/// overlapping runner is bumped to exactly this far from the other one.
+pub const OVERLAP_LANE_GAP: f64 = 0.4;
+
 /// Check if a runner is overlapping with another runner based on position and
 /// lane difference.
 pub fn is_overlapping(distance: f64, lane_diff: f64) -> bool {
-    is_near_by(distance, lane_diff, 0.4, 0.4)
+    is_near_by(distance, lane_diff, OVERLAP_DISTANCE, OVERLAP_LANE_GAP)
 }
 
 /// Check if a runner is near another runner within a specified distance

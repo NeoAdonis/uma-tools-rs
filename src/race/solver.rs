@@ -17,6 +17,7 @@ use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
+use crate::units::horse_lanes_to_meters;
 
 /// Scale applied to raw finish times to get displayed times.
 pub const FINISH_TIME_SCALE: f64 = 1.18;
@@ -274,6 +275,7 @@ impl RaceSolver<Runner> {
             .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
 
         self.update_order_values();
+        self.resolve_overlaps();
         self.update_blocking_status(delta_time);
         self.update_spot_struggle();
         self.update_positioning_strategy();
@@ -426,8 +428,8 @@ impl RaceSolver<Runner> {
             let all_runners = &self.runners;
             let runner = &all_runners[i];
 
-            // Skip if side-blocked (can't change lanes anyway).
-            if runner.blocked.side {
+            // Skip if side-blocked (can't change lanes anyway), unless forced.
+            if runner.blocked.side && !runner.force_lane_update {
                 continue;
             }
 
@@ -451,6 +453,66 @@ impl RaceSolver<Runner> {
             let runner = &mut self.runners[i];
             runner.lane.target = decision.target;
             runner.extra_move_lane = decision.extra_move_lane;
+            runner.force_lane_update = false;
+        }
+    }
+
+    /// Bump the outer runner of each overlapping pair to `OVERLAP_LANE_GAP` horse
+    /// lanes away from the inner one, and force her to update her target lane.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn resolve_overlaps(&mut self) {
+        // Debug: check sorting.
+        self.assert_runners_sorted();
+
+        let course_width = self.state.course.width();
+        let num_runners = self.runners.len();
+        // ? What if a bump causes a new overlap with a third runner?
+        // ? For now, resolve all overlaps on the same frame.
+        loop {
+            let mut bumps = Vec::new();
+            for i in 0..num_runners {
+                let ahead = &self.runners[i];
+                for (j, behind) in self.runners.iter().enumerate().skip(i + 1) {
+                    let distance = ahead.position - behind.position;
+                    if distance >= proximity::OVERLAP_DISTANCE {
+                        // Too far behind; move to next i.
+                        break;
+                    }
+                    let lane_diff = ahead.lane.current - behind.lane.current;
+                    if !proximity::is_overlapping(distance, lane_diff) {
+                        continue;
+                    }
+
+                    // ? Assume the runner behind is bumped if both are in the same line.
+                    let (inner_lane, outer) = if lane_diff > 0.0 {
+                        (behind.lane.current, i)
+                    } else {
+                        (ahead.lane.current, j)
+                    };
+                    let bumped_lane =
+                        inner_lane + horse_lanes_to_meters(proximity::OVERLAP_LANE_GAP);
+                    bumps.push((outer, bumped_lane.min(course_width)));
+                }
+            }
+
+            let mut moved = false;
+            for (outer, bumped_lane) in bumps {
+                let runner = &mut self.runners[outer];
+                // A runner overlapping several others ends up away from the outermost.
+                // Nobody moves if already at the outer edge, which ends the loop.
+                if bumped_lane > runner.lane.current {
+                    runner.lane.current = bumped_lane;
+                    moved = true;
+                }
+                // Keep the new lane unless the target lane update decides otherwise;
+                // the old target may lead right back into the other runner.
+                runner.lane.target = runner.lane.current;
+                runner.force_lane_update = true;
+            }
+            if !moved {
+                return;
+            }
         }
     }
 

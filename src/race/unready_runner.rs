@@ -444,6 +444,7 @@ impl UnreadyRunner {
             visible_count: 0,
             nearby: NearbyState::default(),
             blocked: BlockedState::default(),
+            force_lane_update: false,
             surrounded: SurroundState::default(),
             start_delay: self.start_delay,
             available_skills: self.runtime_skills,
