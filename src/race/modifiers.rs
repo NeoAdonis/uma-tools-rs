@@ -217,8 +217,10 @@ pub fn track_power_modifier(track: Track, track_condition: TrackCondition) -> u1
     }
 }
 
-/// Calculate wiz multiplier based on style aptitude.
-pub fn wiz_style_multiplier(style_aptitude: Aptitude) -> f64 {
+/// Strategy (style) proficiency multiplier based on style aptitude.
+///
+/// Applied to the wiz stat and to the spot struggle duration.
+pub fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
     match style_aptitude {
         Aptitude::S => 1.1,
         Aptitude::A => 1.0,
@@ -254,7 +256,7 @@ pub fn calculate_adjusted_power(
 
 /// Calculate adjusted wiz after applying style aptitude modifier.
 pub fn calculate_adjusted_wiz(base_wiz: u16, style_aptitude: Aptitude) -> u16 {
-    let aptitude_mod = wiz_style_multiplier(style_aptitude);
+    let aptitude_mod = strategy_proficiency_multiplier(style_aptitude);
     ((base_wiz as f64 * aptitude_mod) as u16).max(1)
 }
 

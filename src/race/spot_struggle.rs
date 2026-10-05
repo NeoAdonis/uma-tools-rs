@@ -7,7 +7,7 @@
 
 use std::ops::RangeInclusive;
 
-use crate::race::modifiers::wiz_style_multiplier;
+use crate::race::modifiers::strategy_proficiency_multiplier;
 use crate::uma::{Aptitude, Style};
 use crate::units::course_widths_to_meters;
 
@@ -112,7 +112,7 @@ pub fn target_speed_bonus(guts: u16) -> f64 {
 
 /// Duration of the spot struggle in seconds.
 pub fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
-    (700.0 * guts as f64).sqrt() * 0.012 * wiz_style_multiplier(style_aptitude)
+    (700.0 * guts as f64).sqrt() * 0.012 * strategy_proficiency_multiplier(style_aptitude)
 }
 
 /// HP consumption multiplier during the spot struggle.

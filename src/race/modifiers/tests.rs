@@ -264,10 +264,10 @@ fn test_stamina_limit_break_waits_for_last_spurt_speed() {
 #[test]
 fn test_aptitude_multipliers() {
     // Test that aptitude multipliers are ordered correctly.
-    let s_coef = wiz_style_multiplier(Aptitude::S);
-    let a_coef = wiz_style_multiplier(Aptitude::A);
-    let b_coef = wiz_style_multiplier(Aptitude::B);
-    let c_coef = wiz_style_multiplier(Aptitude::C);
+    let s_coef = strategy_proficiency_multiplier(Aptitude::S);
+    let a_coef = strategy_proficiency_multiplier(Aptitude::A);
+    let b_coef = strategy_proficiency_multiplier(Aptitude::B);
+    let c_coef = strategy_proficiency_multiplier(Aptitude::C);
 
     assert!(s_coef > a_coef);
     assert!(a_coef > b_coef);
