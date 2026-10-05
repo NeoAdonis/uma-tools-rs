@@ -18,6 +18,7 @@ use crate::race::modifiers::*;
 use crate::race::popularity::JudgeScores;
 use crate::race::secure_lead;
 use crate::race::solver::RaceState;
+use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
@@ -91,12 +92,6 @@ pub struct RushState {
     pub max_duration: f64,
     pub is_rushed: bool,
     pub style: Style,
-}
-
-/// Modifier applied during spot struggle and its expiration time.
-pub struct StruggleState {
-    modifier: f64,
-    expires_at: f64,
 }
 
 /// Speed boost applied while securing the lead (リード確保) and its expiration time.
@@ -398,8 +393,8 @@ pub struct Runner {
     pub rush_state: Option<RushState>,
     /// Flag indicating if the runner is currently in start dash mode.
     pub is_start_dash: bool,
-    /// State related to spot struggle. If `None`, the runner is not in a struggle.
-    pub spot_struggle: Option<StruggleState>,
+    /// State related to spot struggle (位置取り争い).
+    pub spot_struggle: SpotStruggle,
     /// State related to dueling. If `None`, the runner is not currently dueling.
     pub dueling: Option<DuelingState>,
     /// State related to secure lead mechanics. If `None`, the runner is not
@@ -766,7 +761,7 @@ impl Runner {
             .as_ref()
             .map_or(0.0, |d| d.target_speed_modifier);
 
-        let struggle_modifier = self.spot_struggle.as_ref().map_or(0.0, |s| s.modifier);
+        let struggle_modifier = self.spot_struggle.speed_bonus(state.elapsed_time);
 
         let secure_lead_modifier = self.secure_lead.as_ref().map_or(0.0, |s| s.modifier);
 
@@ -1128,9 +1123,8 @@ impl Runner {
                 self.start_rush(state);
             }
 
-            // Stop spot struggle if 9th section is entered.
-            if self.section == 8 {
-                self.stop_spot_struggle(state.elapsed_time);
+            if self.section == spot_struggle::END_SECTION {
+                self.spot_struggle.stop();
             }
 
             // Phase can only advance at section boundaries.
@@ -1167,8 +1161,10 @@ impl Runner {
         let outcome = if duration < charge_up::MIN_DURATION {
             ChargeUpOutcome::Insufficient
         } else {
-            let activity =
-                charge_up::activity_coefficient(self.spot_struggle.is_some(), self.has_rushed());
+            let activity = charge_up::activity_coefficient(
+                self.spot_struggle.has_struggled(),
+                self.has_rushed(),
+            );
             ChargeUpOutcome::Released(ChargeUpRelease {
                 conserved: charge_up.conserved,
                 acceleration: charge_up::release_acceleration(
@@ -1195,10 +1191,7 @@ impl Runner {
             return;
         }
         let blocked = self.is_rushed()
-            || self
-                .spot_struggle
-                .as_ref()
-                .is_some_and(|s| elapsed_time < s.expires_at)
+            || self.spot_struggle.is_active(elapsed_time)
             || matches!(
                 self.positioning_strategy,
                 PositioningStrategy::FrontSpeedUp
@@ -1227,18 +1220,8 @@ impl Runner {
 
     /// Update HP based on current speed, phase, and modifiers.
     pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
-        let mut multiplier = if self
-            .spot_struggle
-            .as_ref()
-            .is_some_and(|struggle| state.elapsed_time < struggle.expires_at)
-        {
-            if self.adjusted.style == Style::Runaway {
-                if self.is_rushed() { 7.7 } else { 3.5 }
-            } else if self.adjusted.style == Style::Front {
-                if self.is_rushed() { 3.6 } else { 1.4 }
-            } else {
-                panic!("BUG: spot struggle should only apply to Runaway and Front styles");
-            }
+        let mut multiplier = if self.spot_struggle.is_active(state.elapsed_time) {
+            spot_struggle::hp_multiplier(self.adjusted.style, self.is_rushed())
         } else if self.is_rushed() {
             1.5
         } else {
@@ -1352,66 +1335,17 @@ impl Runner {
         self.rush_state.as_ref().is_some_and(|s| s.start_time > 0.0)
     }
 
-    /// Check if a spot struggle (位置取り争い) can occur with another runner.
-    pub fn can_spot_struggle(
-        &self,
-        other: &Self,
-        distance: f64,
-        lane_diff: f64,
-        course: &Course,
-    ) -> bool {
-        if self.position <= 150.0 || other.position <= 150.0 {
-            return false;
-        }
-        if self.section > 6 || other.section > 6 {
-            return false;
-        }
-        // ? Can rushed runners behaving like front-runners enter spot struggle?
-        // ? Assume no for now; use adjusted style only.
-        match self.adjusted.style {
-            Style::Front => {
-                matches!(other.adjusted.style, Style::Front)
-                    && course.is_near_by(distance, lane_diff, 3.75, 0.165)
-            }
-            Style::Runaway => {
-                matches!(other.adjusted.style, Style::Runaway)
-                    && course.is_near_by(distance, lane_diff, 5.0, 0.416)
-            }
-            _ => false,
-        }
-    }
-
-    /// Start a spot struggle (Lead competition, 位置取り争い).
-    ///
-    /// When there are 2 or more front runners early in the race, a spot struggle
-    /// may begin.
-    ///
-    /// During a spot struggle, runners gain a speed boost based on their guts stat,
-    /// but also consume HP at a higher rate.
+    /// Start a spot struggle (位置取り争い), unless the runner already struggled.
     pub fn start_spot_struggle(&mut self, elapsed_time: f64) {
-        if self.is_spot_struggling() {
+        if self.spot_struggle.has_struggled() {
             return;
         }
-        let modifier = (500.0 * self.adjusted.guts as f64).powf(0.6) * 0.0001;
-        let duration = (700.0 * self.adjusted.guts as f64).sqrt() * 0.012;
-        self.spot_struggle = Some(StruggleState {
-            modifier,
-            expires_at: elapsed_time + duration,
-        });
+        self.spot_struggle = SpotStruggle::start(
+            self.adjusted.guts,
+            self.adjusted.style_aptitude,
+            elapsed_time,
+        );
         self.penalize_charge_up(charge_up::STRUGGLE_PENALTY);
-    }
-
-    /// Stop the spot struggle (位置取り争い).
-    pub fn stop_spot_struggle(&mut self, elapsed_time: f64) {
-        if let Some(struggle) = &mut self.spot_struggle {
-            // Set to expire immediately.
-            struggle.expires_at = elapsed_time;
-        }
-    }
-
-    /// Check if the runner is currently in a spot struggle (位置取り争い).
-    pub fn is_spot_struggling(&self) -> bool {
-        self.spot_struggle.is_some()
     }
 
     /// End the secure lead (リード確保) speed boost once it expires.

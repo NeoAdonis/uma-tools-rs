@@ -12,6 +12,7 @@ use crate::race::compete_before_spurt;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
+use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
@@ -273,6 +274,7 @@ impl RaceSolver<Runner> {
 
         self.update_order_values();
         self.update_blocking_status(delta_time);
+        self.update_spot_struggle();
         self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
@@ -391,17 +393,12 @@ impl RaceSolver<Runner> {
                     runner_j.update_side_blocked_by(runner_i);
                 }
 
-                // Update spot struggle and dueling status.
-                if game_version >= GameVersion::FirstAnniversary {
-                    if runner_j.can_spot_struggle(runner_i, distance, lane_diff, &self.state.course)
-                    {
-                        runner_i.start_spot_struggle(self.state.elapsed_time);
-                        runner_j.start_spot_struggle(self.state.elapsed_time);
-                    }
-                    if self.state.course.check_dueling(distance, lane_diff) {
-                        runner_i.update_duel_target(runner_j, delta_time);
-                        runner_j.update_duel_target(runner_i, delta_time);
-                    }
+                // Update dueling status.
+                if game_version >= GameVersion::FirstAnniversary
+                    && self.state.course.check_dueling(distance, lane_diff)
+                {
+                    runner_i.update_duel_target(runner_j, delta_time);
+                    runner_j.update_duel_target(runner_i, delta_time);
                 }
             }
 
@@ -554,6 +551,107 @@ impl RaceSolver<Runner> {
             let is_alone = self.is_alone(i, 10.0);
 
             self.runners[i].try_secure_lead(lead_insufficient, is_alone, &self.state);
+        }
+    }
+
+    /// Update spot struggle (位置取り争い) state for all runners.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn update_spot_struggle(&mut self) {
+        if self.state.config.game_version < GameVersion::FirstAnniversary {
+            return;
+        }
+        for style in spot_struggle::STYLES {
+            let has_struggled = self
+                .runners
+                .iter()
+                .any(|r| r.adjusted.style == style && r.spot_struggle.has_struggled());
+            if has_struggled {
+                self.exit_spot_struggle(style);
+            } else {
+                self.try_start_spot_struggle(style);
+            }
+        }
+    }
+
+    /// Start a spot struggle between the frontmost runner with `style` and every
+    /// runner with the same style close behind her, if any.
+    fn try_start_spot_struggle(&mut self, style: Style) {
+        let Some(leader_index) = self.runners.iter().position(|r| r.adjusted.style == style) else {
+            return;
+        };
+        // Any runner past the minimum position will do; the first one is the furthest.
+        if self.runners[0].position < spot_struggle::MIN_POSITION {
+            return;
+        }
+        let leader = &self.runners[leader_index];
+        // Can't start if a runner whose strategy should be behind is ahead.
+        if self.runners[..leader_index]
+            .iter()
+            .any(|r| r.adjusted.style > style)
+        {
+            return;
+        }
+
+        let leader_in_sections = spot_struggle::SECTIONS.contains(&leader.section);
+        let members: Vec<usize> = (leader_index + 1..self.runners.len())
+            .filter(|&j| {
+                let other = &self.runners[j];
+                other.adjusted.style == style
+                    && (leader_in_sections || spot_struggle::SECTIONS.contains(&other.section))
+                    && spot_struggle::is_close_to_leader(
+                        leader.position - other.position,
+                        leader.lane.current - other.lane.current,
+                    )
+            })
+            .collect();
+        if members.is_empty() {
+            return;
+        }
+
+        let elapsed_time = self.state.elapsed_time;
+        self.runners[leader_index].start_spot_struggle(elapsed_time);
+        for j in members {
+            self.runners[j].start_spot_struggle(elapsed_time);
+        }
+    }
+
+    /// Make strugglers with `style` exit the spot struggle if they're too far from
+    /// every other struggler.
+    ///
+    /// Strugglers whose effects have expired still count (and can exit too), but
+    /// those who have already exited don't. Exits cascade within the same frame,
+    /// e.g. the last remaining struggler exits right away.
+    fn exit_spot_struggle(&mut self, style: Style) {
+        loop {
+            let strugglers: Vec<usize> = (0..self.runners.len())
+                .filter(|&i| {
+                    let runner = &self.runners[i];
+                    runner.adjusted.style == style && runner.spot_struggle.is_struggler()
+                })
+                .collect();
+            // Decide every exit before applying them, so that the order doesn't matter.
+            let exiting: Vec<usize> = strugglers
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    let runner = &self.runners[i];
+                    strugglers.iter().all(|&j| {
+                        let other = &self.runners[j];
+                        i == j
+                            || spot_struggle::is_too_far(
+                                runner.position - other.position,
+                                runner.lane.current - other.lane.current,
+                            )
+                    })
+                })
+                .collect();
+            if exiting.is_empty() {
+                return;
+            }
+            for i in exiting {
+                self.runners[i].spot_struggle.stop();
+            }
         }
     }
 

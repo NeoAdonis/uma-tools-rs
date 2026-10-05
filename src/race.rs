@@ -10,5 +10,6 @@ pub mod popularity;
 pub mod runner;
 pub mod secure_lead;
 pub mod solver;
+pub mod spot_struggle;
 pub mod transitions;
 pub mod unready_runner;

@@ -17,6 +17,7 @@ use crate::race::modifiers::{
 };
 use crate::race::popularity::JudgeScores;
 use crate::race::runner::*;
+use crate::race::spot_struggle::SpotStruggle;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
 use crate::trigger::skill_activation::SkillActivationRecord;
@@ -490,7 +491,7 @@ impl UnreadyRunner {
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
             finish_margin: None,
-            spot_struggle: None,
+            spot_struggle: SpotStruggle::Pending,
             dueling: None,
             secure_lead: None,
             next_secure_lead_check: 0.0,

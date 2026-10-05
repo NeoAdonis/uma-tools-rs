@@ -1,4 +1,5 @@
 use super::*;
+use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::race_params;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -517,4 +518,384 @@ fn test_all_runners_finish_with_margins() {
         assert!(margin >= 0.0);
         assert!((margin - expected).abs() < 1e-9);
     }
+}
+
+/// Solver with one runner per `(style, position, lane)` on a 1200m course (50m
+/// sections). Runners must be given in descending position order.
+fn struggle_solver(runners: &[(Style, f64, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
+    let styles: Vec<_> = runners
+        .iter()
+        .map(|&(style, position, _)| (style, position))
+        .collect();
+    let mut solver = positioning_solver(&styles, game_version);
+    for (i, &(_, position, lane)) in runners.iter().enumerate() {
+        place(&mut solver, i, position, lane);
+    }
+    solver
+}
+
+/// Move runner `i` to `position` and `lane`, keeping its section consistent.
+fn place(solver: &mut RaceSolver<Runner>, i: usize, position: f64, lane: f64) {
+    let section = solver.state.course.section_from_position(position);
+    let runner = &mut solver.runners[i];
+    runner.position = position;
+    runner.section = section;
+    runner.lane.current = lane;
+}
+
+fn update_struggle(solver: &mut RaceSolver<Runner>) {
+    solver.assert_runners_sorted();
+    solver.update_spot_struggle();
+}
+
+/// Whether each runner (in position order) counts as a struggler.
+fn strugglers(solver: &RaceSolver<Runner>) -> Vec<bool> {
+    solver
+        .runners
+        .iter()
+        .map(|runner| runner.spot_struggle.is_struggler())
+        .collect()
+}
+
+/// Whether each runner (in position order) has ever struggled.
+fn has_struggled(solver: &RaceSolver<Runner>) -> Vec<bool> {
+    solver
+        .runners
+        .iter()
+        .map(|runner| runner.spot_struggle.has_struggled())
+        .collect()
+}
+
+#[test]
+fn test_spot_struggle_starts_between_close_front_runners() {
+    // 1.8m apart laterally is within 0.165 course widths (~1.86m).
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 1.0), (Style::Front, 197.0, 2.8)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    let elapsed_time = solver.state.elapsed_time;
+    for runner in &solver.runners {
+        assert!(runner.spot_struggle.is_active(elapsed_time));
+        let bonus = spot_struggle::target_speed_bonus(runner.adjusted.guts);
+        assert_eq!(runner.spot_struggle.speed_bonus(elapsed_time), bonus);
+    }
+
+    // Too far apart laterally.
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 1.0), (Style::Front, 197.0, 2.9)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+}
+
+#[test]
+fn test_spot_struggle_runaways_use_trigger_distance() {
+    let mut solver = struggle_solver(
+        &[(Style::Runaway, 200.0, 0.0), (Style::Runaway, 196.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+
+    place(&mut solver, 1, 197.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true]);
+}
+
+#[test]
+fn test_spot_struggle_needs_any_runner_past_min_position() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 149.0, 0.0), (Style::Front, 147.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+
+    // Only the leader needs to be past it.
+    place(&mut solver, 0, 150.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true]);
+
+    // Any runner ahead past it will do, even with another strategy.
+    let mut solver = struggle_solver(
+        &[
+            (Style::Runaway, 150.0, 5.0),
+            (Style::Front, 137.0, 0.0),
+            (Style::Front, 135.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, true, true]);
+
+    let mut solver = struggle_solver(
+        &[
+            (Style::Runaway, 149.0, 5.0),
+            (Style::Front, 137.0, 0.0),
+            (Style::Front, 135.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_spot_struggle_needs_one_runner_before_end_of_sixth_section() {
+    // Both in section 6 (0-indexed).
+    let mut solver = struggle_solver(
+        &[(Style::Front, 310.0, 0.0), (Style::Front, 307.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+
+    // Leader in section 6, the other still in section 5.
+    let mut solver = struggle_solver(
+        &[(Style::Front, 302.0, 0.0), (Style::Front, 299.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true]);
+}
+
+#[test]
+fn test_spot_struggle_blocked_by_later_strategy_ahead() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Pace, 210.0, 5.0),
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false, false]);
+
+    // Runaways are expected to be ahead of front runners.
+    let mut solver = struggle_solver(
+        &[
+            (Style::Runaway, 210.0, 5.0),
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, true, true]);
+
+    // But front runners are not expected to be ahead of runaways.
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 210.0, 5.0),
+            (Style::Runaway, 200.0, 0.0),
+            (Style::Runaway, 198.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_spot_struggle_strategies_do_not_mix() {
+    let mut solver = struggle_solver(
+        &[(Style::Runaway, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+}
+
+#[test]
+fn test_spot_struggle_latecomers_do_not_join() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+            (Style::Front, 197.0, 1.0),
+            (Style::Front, 190.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, true, false]);
+
+    place(&mut solver, 3, 196.5, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, true, false]);
+}
+
+#[test]
+fn test_spot_struggle_once_per_strategy() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true]);
+
+    // Falling behind ends it for the second runner, and the leader exits in the
+    // same frame as the last struggler.
+    place(&mut solver, 1, 194.9, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+    assert_eq!(has_struggled(&solver), [true, true]);
+
+    // Getting close again doesn't start another one.
+    place(&mut solver, 1, 198.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+}
+
+#[test]
+fn test_spot_struggle_exit_when_far_from_every_struggler() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+            (Style::Front, 197.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, true]);
+
+    // The leader running away from both doesn't make anyone exit.
+    place(&mut solver, 0, 209.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, true]);
+
+    // Being more than 5m behind only the leader is not enough.
+    place(&mut solver, 0, 204.0, 0.0);
+    place(&mut solver, 1, 198.0, 0.0);
+    place(&mut solver, 2, 197.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, true]);
+
+    // Being more than 5m behind both others is.
+    place(&mut solver, 0, 202.0, 0.0);
+    place(&mut solver, 2, 192.9, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true, false]);
+
+    // The second runner falls 6m behind the leader. The third one is right
+    // behind her, but already exited, so the second one exits too, and the
+    // leader exits in the same frame as the last struggler.
+    place(&mut solver, 0, 204.0, 0.0);
+    place(&mut solver, 2, 197.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_spot_struggle_exits_cascade_in_same_frame() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+            (Style::Front, 197.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+
+    // The third runner falls behind both. That leaves the second one 6m behind
+    // the only remaining partner, so she exits, and then the leader does.
+    place(&mut solver, 1, 194.0, 0.0);
+    place(&mut solver, 2, 188.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_spot_struggle_lateral_exit_in_both_directions() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+
+    // 0.416 course widths = 4.68m.
+    place(&mut solver, 1, 198.0, 4.7);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
+}
+
+#[test]
+fn test_spot_struggle_expired_strugglers_still_count() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+            (Style::Front, 197.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    let elapsed_time = solver.state.elapsed_time;
+    solver.runners[0].spot_struggle = SpotStruggle::Active {
+        speed_bonus: 0.1,
+        expires_at: elapsed_time,
+    };
+
+    // The second runner is only close to the leader, whose effects expired.
+    place(&mut solver, 2, 191.0, 0.0);
+    update_struggle(&mut solver);
+    assert!(solver.runners[1].spot_struggle.is_active(elapsed_time));
+    assert_eq!(strugglers(&solver), [true, true, false]);
+}
+
+#[test]
+fn test_spot_struggle_expired_strugglers_can_exit() {
+    let mut solver = struggle_solver(
+        &[
+            (Style::Front, 200.0, 0.0),
+            (Style::Front, 198.0, 0.0),
+            (Style::Front, 197.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    let elapsed_time = solver.state.elapsed_time;
+    solver.runners[2].spot_struggle = SpotStruggle::Active {
+        speed_bonus: 0.1,
+        expires_at: elapsed_time,
+    };
+
+    // The third runner, whose effects expired, falls behind both others.
+    place(&mut solver, 2, 191.0, 0.0);
+    update_struggle(&mut solver);
+    assert_eq!(solver.runners[2].spot_struggle, SpotStruggle::Ended);
+    assert_eq!(strugglers(&solver), [true, true, false]);
+}
+
+#[test]
+fn test_spot_struggle_ends_upon_entering_tenth_section() {
+    let mut solver = struggle_solver(&[(Style::Front, 380.0, 0.0)], GameVersion::LATEST);
+    let elapsed_time = solver.state.elapsed_time;
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.start_spot_struggle(elapsed_time);
+
+    // Section 8 (0-indexed) is still fine.
+    runner.position = 405.0;
+    runner.update_phase(state);
+    assert!(runner.spot_struggle.is_active(elapsed_time));
+
+    runner.position = 455.0;
+    runner.update_phase(state);
+    assert_eq!(runner.spot_struggle, SpotStruggle::Ended);
+}
+
+#[test]
+fn test_spot_struggle_not_before_first_anniversary() {
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        GameVersion::Original,
+    );
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [false, false]);
 }
