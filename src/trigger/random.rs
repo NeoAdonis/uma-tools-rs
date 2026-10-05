@@ -246,9 +246,6 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
             // "all_corner_random==1".
             // Picks up to 4 random segments on corners (see `random_all_corner_segments`).
-            // TODO: The skill can activate in each of them if it's off cooldown, but
-            // cooldowns aren't implemented yet, so it only activates in the first one where
-            // the other conditions are met.
             // No corners on course fails the roll.
             let points = random_all_corner_segments(course, rng);
             (!points.is_empty()).then_some(points)
