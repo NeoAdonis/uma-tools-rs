@@ -10,6 +10,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::{Course, Phase};
 use crate::race::compete_before_spurt;
 use crate::race::parameters::RaceParameters;
+use crate::race::proximity;
 use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
@@ -357,7 +358,7 @@ impl RaceSolver<Runner> {
                     break;
                 }
 
-                if runner_j.is_visible(runner_i, &self.state.course) {
+                if runner_j.is_visible(runner_i) {
                     runner_j.visible_count += 1;
                     // Check if runner_i is an overtake target for runner_j.
                     if runner_j.check_overtake_target(runner_i, delta_time) {
@@ -371,31 +372,31 @@ impl RaceSolver<Runner> {
                 }
 
                 // Update surrounding and blocking status.
-                if self.state.course.is_front_surrounded(distance, lane_diff) {
+                if proximity::is_front_surrounded(distance, lane_diff) {
                     runner_j.update_front_surrounded_by(runner_i);
                 }
-                if self.state.course.is_side_surrounded(distance, lane_diff) {
+                if proximity::is_side_surrounded(distance, lane_diff) {
                     runner_j.update_side_surrounded_by(runner_i);
                 }
-                if self.state.course.is_near(distance, lane_diff, game_version) {
+                if proximity::is_near(distance, lane_diff, game_version) {
                     runner_j.update_near_behind(runner_i);
                 }
-                if self.state.course.is_near_same_lane(distance, lane_diff) {
+                if proximity::is_near_same_lane(distance, lane_diff) {
                     runner_j.update_near_same_lane_behind(runner_i);
                 }
-                if self.state.course.is_near_behind_set1(distance, lane_diff) {
+                if proximity::is_near_behind_set1(distance, lane_diff) {
                     runner_i.nearby.behind_set1_count += 1;
                 }
-                if self.state.course.check_front_blocked(distance, lane_diff) {
+                if proximity::check_front_blocked(distance, lane_diff) {
                     runner_j.update_front_blocked_by(runner_i);
                 }
-                if self.state.course.check_side_blocked(distance, lane_diff) {
+                if proximity::check_side_blocked(distance, lane_diff) {
                     runner_j.update_side_blocked_by(runner_i);
                 }
 
                 // Update dueling status.
                 if game_version >= GameVersion::FirstAnniversary
-                    && self.state.course.check_dueling(distance, lane_diff)
+                    && proximity::check_dueling(distance, lane_diff)
                 {
                     runner_i.update_duel_target(runner_j, delta_time);
                     runner_j.update_duel_target(runner_i, delta_time);

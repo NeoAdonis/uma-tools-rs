@@ -1,4 +1,5 @@
 use super::*;
+use crate::course::LaneType;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::race_params;
 
@@ -898,4 +899,85 @@ fn test_spot_struggle_not_before_first_anniversary() {
     );
     update_struggle(&mut solver);
     assert_eq!(strugglers(&solver), [false, false]);
+}
+
+#[test]
+fn test_force_in_applies_only_away_from_inner_fence() {
+    let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.phase = Phase::Early;
+    let force_in = runner.force_in_modifier;
+    assert!(force_in > 0.0);
+
+    // 0.12 course widths = 1.35m.
+    let target_speed_at = |runner: &mut Runner, lane: f64| {
+        runner.lane.current = lane;
+        runner.update_target_speed(state);
+        runner.target_speed
+    };
+    let near_fence = target_speed_at(runner, 1.34);
+    let away_from_fence = target_speed_at(runner, 1.36);
+    assert!((away_from_fence - near_fence - force_in).abs() < 1e-9);
+    assert_eq!(target_speed_at(runner, 0.0), near_fence);
+
+    // Only in the early phase.
+    runner.phase = Phase::Mid;
+    let mid_near = target_speed_at(runner, 0.0);
+    let mid_away = target_speed_at(runner, 5.0);
+    assert_eq!(mid_near, mid_away);
+}
+
+#[test]
+fn test_lane_type_in_course_widths() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let runner = &mut solver.runners[0];
+    // Thresholds are 0.2, 0.4 and 0.6 course widths (2.25m, 4.5m and 6.75m),
+    // regardless of the course's total width.
+    let cases = [
+        (0.0, LaneType::Inner),
+        (2.2, LaneType::Inner),
+        (2.3, LaneType::Middle),
+        (4.4, LaneType::Middle),
+        (4.6, LaneType::Outer),
+        (6.7, LaneType::Outer),
+        (6.8, LaneType::Outside),
+    ];
+    for (lane, expected) in cases {
+        runner.lane.current = lane;
+        assert_eq!(runner.lane_type(), expected, "lane {lane}");
+    }
+}
+
+#[test]
+fn test_skill_target_lane_in_course_widths() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.lane.current = 5.0;
+    runner.skill_modifiers.target_lane = Some(0.5);
+    for _ in 0..2000 {
+        runner.update_lane(&state.course, 1.0 / 15.0);
+    }
+    assert!((runner.lane.current - 5.625).abs() < 1e-9);
+}
+
+#[test]
+fn test_normal_mode_lane_targets_in_course_widths() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let target = |solver: &RaceSolver<Runner>| {
+        solver.runners[0]
+            .normal_mode_lane_decision(&solver.state.course, &solver.runners)
+            .target
+    };
+
+    // Move inward by 0.05 course widths (0.5625m) in the early phase.
+    let runner = &mut solver.runners[0];
+    runner.phase = Phase::Early;
+    runner.lane.current = 5.0;
+    assert!((target(&solver) - 4.4375).abs() < 1e-9);
+
+    // Pace down targets 0.18 course widths (2.025m) from the inner fence.
+    solver.runners[0].positioning_strategy = PositioningStrategy::PaceDown(0.0);
+    assert!((target(&solver) - 2.025).abs() < 1e-9);
 }

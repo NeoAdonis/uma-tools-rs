@@ -7,6 +7,7 @@ pub mod margin;
 pub mod modifiers;
 pub mod parameters;
 pub mod popularity;
+pub mod proximity;
 pub mod runner;
 pub mod secure_lead;
 pub mod solver;

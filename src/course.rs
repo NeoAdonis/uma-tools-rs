@@ -11,9 +11,8 @@ include!("course/track_names.rs");
 
 pub mod geometry;
 
-use crate::configuration::GameVersion;
 use crate::course::geometry::*;
-use crate::units::course_widths_to_meters;
+use crate::units::{course_widths_to_meters, horse_lanes_to_meters};
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -309,17 +308,12 @@ impl Course {
                 }
             }
         };
-        gate_roll as f64 * self.lane_width() + adjustor
+        horse_lanes_to_meters(gate_roll as f64 + adjustor)
     }
 
     /// Get the total course width in meters.
     pub fn width(&self) -> f64 {
         course_widths_to_meters(self.lane_max as f64 / 10000.0)
-    }
-
-    /// Get the width of a single lane in meters.
-    pub fn lane_width(&self) -> f64 {
-        self.width() / 18.0
     }
 
     /// Get the track name in the specified language, or `None` if the track name is
@@ -389,105 +383,6 @@ impl Course {
             .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
 
         Ok(Course { id, data })
-    }
-
-    /// Check if a runner is blocked by another runner from the front based on
-    /// distance and lane difference.
-    ///
-    /// When front-blocked, the runner's speed is capped.
-    pub fn check_front_blocked(&self, distance: f64, lane_diff: f64) -> bool {
-        if !(0.0..2.0).contains(&distance) {
-            return false;
-        }
-        // Lane difference threshold decreases linearly with distance between runners.
-        // At 0m, threshold is 0.75 lanes.
-        // At 2m, threshold is 0.3 lanes.
-        lane_diff.abs() <= (1.0 - 0.3 * distance) * 0.75 * self.lane_width()
-    }
-
-    /// Check if a runner is blocking another runner from the side based on distance
-    /// and lane difference.
-    ///
-    /// When side-blocked, the runner cannot change lanes.
-    pub fn check_side_blocked(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 1.05, 2.0)
-    }
-
-    /// Check if a runner is near another runner based on distance and lane
-    /// difference.
-    ///
-    /// Two runners are near if they are less than 3m apart and less than 3 lanes to
-    /// either side. Before the 1st anniversary update, both thresholds were 1.5
-    /// (1.5m and 1.5 lanes).
-    ///
-    /// This is checked by certain skills (`near_count`).
-    pub fn is_near(&self, distance: f64, lane_diff: f64, game_version: GameVersion) -> bool {
-        let threshold = if game_version >= GameVersion::FirstAnniversary {
-            3.0
-        } else {
-            1.5
-        };
-        self.is_near_by(distance, lane_diff, threshold, threshold)
-    }
-
-    /// Check if a runner is near another runner and in the same lane based on
-    /// distance and lane difference.
-    ///
-    /// This is checked by certain skills.
-    pub fn is_near_same_lane(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 2.5, 1.0)
-    }
-
-    /// Check if a runner is behind another runner within a reasonable distance and
-    /// lane difference.
-    ///
-    /// This is checked by certain skills.
-    pub fn is_near_behind_set1(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 5.0, 2.7)
-    }
-
-    /// Check if a runner is surrounding another runner from the front (and
-    /// conversely, being surrounded by the other runner from behind) based on
-    /// distance and lane difference.
-    ///
-    /// This is checked by certain skills.
-    pub fn is_front_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 3.0, 1.5)
-    }
-
-    /// Check if a runner is surrounding (and being surrounded by) another runner
-    /// from the side based on distance and lane difference.
-    ///
-    /// This is checked by certain skills.
-    pub fn is_side_surrounded(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 1.5, 3.0)
-    }
-
-    /// Check if a runner is within dueling range of another runner based on
-    /// distance and lane difference.
-    pub fn check_dueling(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 3.0, 0.25)
-    }
-
-    /// Check if a runner is overlapping with another runner based on position and
-    /// lane difference.
-    pub fn is_overlapping(&self, distance: f64, lane_diff: f64) -> bool {
-        self.is_near_by(distance, lane_diff, 0.4, 0.4)
-    }
-
-    /// Check if a runner is near another runner within a specified distance
-    /// and lane difference.
-    pub fn is_near_by(
-        &self,
-        distance: f64,
-        lane_diff: f64,
-        max_distance: f64,
-        max_lane_diff: f64,
-    ) -> bool {
-        if !(0.0..max_distance).contains(&distance) {
-            return false;
-        }
-        lane_diff.abs() < max_lane_diff * self.lane_width()
     }
 }
 
@@ -585,43 +480,5 @@ mod tests {
             let numbers: Vec<u8> = (0..count).map(|idx| course.corner_number(idx)).collect();
             assert_eq!(numbers, expected, "{count} corners");
         }
-    }
-
-    #[test]
-    fn test_is_near_by() {
-        let course = create_test_course(10001);
-        let lane = course.lane_width();
-        // Within range, on either side.
-        assert!(course.is_near_by(0.0, 0.0, 3.0, 3.0));
-        assert!(course.is_near_by(2.9, 2.9 * lane, 3.0, 3.0));
-        assert!(course.is_near_by(2.9, -2.9 * lane, 3.0, 3.0));
-        // Out of distance range.
-        assert!(!course.is_near_by(3.0, 0.0, 3.0, 3.0));
-        assert!(!course.is_near_by(-0.1, 0.0, 3.0, 3.0));
-        // Out of lane range, on either side.
-        assert!(!course.is_near_by(1.0, 3.0 * lane, 3.0, 3.0));
-        assert!(!course.is_near_by(1.0, -3.0 * lane, 3.0, 3.0));
-    }
-
-    #[test]
-    fn test_is_near() {
-        let course = create_test_course(10001);
-        let lane = course.lane_width();
-        let version = GameVersion::LATEST;
-        assert!(course.is_near(2.9, 2.9 * lane, version));
-        assert!(course.is_near(2.9, -2.9 * lane, version));
-        assert!(!course.is_near(3.0, 0.0, version));
-        assert!(!course.is_near(0.0, 3.0 * lane, version));
-        assert!(!course.is_near(0.0, -3.0 * lane, version));
-    }
-
-    #[test]
-    fn test_check_front_blocked_lane_side() {
-        let course = create_test_course(10001);
-        let lane = course.lane_width();
-        assert!(course.check_front_blocked(0.0, 0.7 * lane));
-        assert!(course.check_front_blocked(0.0, -0.7 * lane));
-        assert!(!course.check_front_blocked(0.0, 0.8 * lane));
-        assert!(!course.check_front_blocked(0.0, -0.8 * lane));
     }
 }

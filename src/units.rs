@@ -11,6 +11,20 @@ pub fn course_widths_to_meters(widths: f64) -> f64 {
     widths * COURSE_WIDTH_TO_METERS
 }
 
+/// Horse lane to meters conversion unit. 1 horse lane = 1/18 course width =
+/// 0.625 meters.
+pub const HORSE_LANE_TO_METERS: f64 = COURSE_WIDTH_TO_METERS / 18.0;
+
+/// Convert horse lanes to meters.
+pub fn horse_lanes_to_meters(lanes: f64) -> f64 {
+    lanes * HORSE_LANE_TO_METERS
+}
+
+/// Convert meters to horse lanes.
+pub fn meters_to_horse_lanes(meters: f64) -> f64 {
+    meters / HORSE_LANE_TO_METERS
+}
+
 /// Bashin (バ身, horse-length) to meters conversion unit. 1 bashin = 2.5 meters.
 pub const BASHIN_TO_METERS: f64 = 2.5;
 
@@ -41,6 +55,13 @@ pub fn meters_to_furlongs(meters: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_horse_lane_conversion() {
+        assert_eq!(HORSE_LANE_TO_METERS, 0.625);
+        assert_eq!(horse_lanes_to_meters(18.0), COURSE_WIDTH_TO_METERS);
+        assert_eq!(meters_to_horse_lanes(1.25), 2.0);
+    }
 
     #[test]
     fn test_bashin_conversion() {

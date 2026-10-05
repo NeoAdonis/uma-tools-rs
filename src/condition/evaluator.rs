@@ -490,7 +490,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         }
 
         // Current lane: 0=inner, 1=middle, 2=outer, 3=outside.
-        LaneType => runner.lane_type(course) as i32,
+        LaneType => runner.lane_type() as i32,
 
         // Slope: 0=flat, 1=uphill, 2=downhill.
         Slope => {

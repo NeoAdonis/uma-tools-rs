@@ -16,6 +16,7 @@ use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::popularity::JudgeScores;
+use crate::race::proximity;
 use crate::race::secure_lead;
 use crate::race::solver::RaceState;
 use crate::race::spot_struggle::{self, SpotStruggle};
@@ -26,6 +27,7 @@ use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{ActiveTimedEffect, LogicAction, SkillActivationRecord};
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::uma::*;
+use crate::units::*;
 
 /// Skill modifiers that are applied during race calculations.
 #[derive(Debug, Clone)]
@@ -66,6 +68,10 @@ impl Default for SkillModifiers {
 
 /// Maximum target speed a runner can reach in m/s.
 pub const MAX_TARGET_SPEED: f64 = 30.0;
+
+/// Distance from the inner fence (in course widths) above which the force-in
+/// modifier applies.
+pub const FORCE_IN_MIN_LANE: f64 = 0.12;
 
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
@@ -520,14 +526,14 @@ impl Runner {
         self.adjusted.style.base_style()
     }
 
-    /// Determine the lane type based on target lane position.
-    pub fn lane_type(&self, course: &Course) -> LaneType {
-        let percent = self.lane.current / course.width();
-        if percent <= 0.2 {
+    /// Determine the lane type based on the current lane position.
+    pub fn lane_type(&self) -> LaneType {
+        let course_widths = self.lane.current / COURSE_WIDTH_TO_METERS;
+        if course_widths <= 0.2 {
             LaneType::Inner
-        } else if percent <= 0.4 {
+        } else if course_widths <= 0.4 {
             LaneType::Middle
-        } else if percent <= 0.6 {
+        } else if course_widths <= 0.6 {
             LaneType::Outer
         } else {
             LaneType::Outside
@@ -748,9 +754,10 @@ impl Runner {
             0.0
         };
 
-        // TODO: Apply only when an uma is more than 0.12 course width away from the
-        // inner fence and inside is open.
-        let force_in_modifier = if matches!(self.phase, Phase::Early) {
+        // TODO: Apply only when inside is open.
+        let force_in_modifier = if self.phase == Phase::Early
+            && self.lane.current > course_widths_to_meters(FORCE_IN_MIN_LANE)
+        {
             self.force_in_modifier
         } else {
             0.0
@@ -812,9 +819,9 @@ impl Runner {
     pub fn update_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.03; // In m/s².
 
-        // Skill modifiers override target lane if present.
+        // Skill modifiers (in course widths) override target lane if present.
         let target_lane = if let Some(skill_target) = self.skill_modifiers.target_lane {
-            skill_target * course.width()
+            course_widths_to_meters(skill_target)
         } else {
             self.lane.target
         };
@@ -1661,9 +1668,9 @@ impl Runner {
         }
 
         // Position keeping mode is pace-down.
-        // Set target to 0.18 of course width (18% from inside).
+        // Set target to 0.18 course widths from the inner fence.
         if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
-            return (0.18 * course.width()).clamp(0.0, course.width());
+            return course_widths_to_meters(0.18).clamp(0.0, course.width());
         }
 
         // On final straight AND extra move lane is on the outside.
@@ -1677,7 +1684,7 @@ impl Runner {
 
         // In early-race or mid-race - move inward by 0.05 course width.
         if matches!(self.phase, Phase::Early | Phase::Mid) {
-            let target = self.lane.current - 0.05 * course.width();
+            let target = self.lane.current - course_widths_to_meters(0.05);
             if target >= 0.0 && self.has_lane_space_to(target, all_runners) {
                 return target;
             }
@@ -1685,12 +1692,11 @@ impl Runner {
 
         // In mid-race AND less than 1.75 horse lane from inside runner.
         if self.phase == Phase::Mid
-            && let Some((inside_lane, distance_in_lanes)) =
-                self.find_inside_runner(all_runners, course)
+            && let Some((inside_lane, distance_in_lanes)) = self.find_inside_runner(all_runners)
             && distance_in_lanes < 1.75
         {
             // Move to 2.0 horse lanes away from inside runner.
-            let target = inside_lane + 2.0 * course.lane_width();
+            let target = inside_lane + horse_lanes_to_meters(2.0);
             if self.has_lane_space_to(target, all_runners) {
                 return target.clamp(0.0, course.width());
             }
@@ -1714,16 +1720,16 @@ impl Runner {
             return decision;
         }
 
-        decision.extra_move_lane = self.next_extra_move_lane(course, all_runners);
+        decision.extra_move_lane = self.next_extra_move_lane(all_runners);
 
         // Build candidate list from overtake targets and extra candidate.
         let mut candidates = Vec::with_capacity(32);
         if let Some(state) = &self.overtake_state {
             for &gate_roll in state.targets.keys() {
-                self.add_target_candidates(&mut candidates, gate_roll, course, all_runners);
+                self.add_target_candidates(&mut candidates, gate_roll, all_runners);
             }
         }
-        self.add_extra_candidate(&mut candidates, course, all_runners);
+        self.add_extra_candidate(&mut candidates, all_runners);
 
         // Filter by lane space.
         candidates.retain(|c| self.has_lane_space_to(c.lane, all_runners));
@@ -1753,12 +1759,7 @@ impl Runner {
 
     /// Find the innermost and outermost uma in a target's crowd.
     /// Crowd members are within 3m distance and less than 2 horse lanes away.
-    fn find_crowd_boundaries(
-        &self,
-        target: &Runner,
-        course: &Course,
-        all_runners: &[Runner],
-    ) -> (f64, f64) {
+    fn find_crowd_boundaries(&self, target: &Runner, all_runners: &[Runner]) -> (f64, f64) {
         let mut inner_lane = target.lane.current;
         let mut outer_lane = target.lane.current;
 
@@ -1770,7 +1771,7 @@ impl Runner {
             let distance_gap = (other.position - target.position).abs();
             let lane_gap = (other.lane.current - target.lane.current).abs();
 
-            if course.is_near_by(distance_gap, lane_gap, 3.0, 2.0) {
+            if proximity::is_near_by(distance_gap, lane_gap, 3.0, 2.0) {
                 inner_lane = inner_lane.min(other.lane.current);
                 outer_lane = outer_lane.max(other.lane.current);
             }
@@ -1784,29 +1785,23 @@ impl Runner {
         &self,
         candidates: &mut Vec<OvertakeLaneCandidate>,
         target_gate: u8,
-        course: &Course,
         all_runners: &[Runner],
     ) {
         let Some(target) = all_runners.iter().find(|r| r.gate_roll == target_gate) else {
             return;
         };
 
-        let (inner, outer) = self.find_crowd_boundaries(target, course, all_runners);
+        let (inner, outer) = self.find_crowd_boundaries(target, all_runners);
         let reference_distance = target.position - self.position;
 
         // Try lane positions at ±1 horse lane from inner and outer boundaries.
         for &offset in &[-1.0, 1.0] {
-            let offset_meters = offset * course.lane_width();
+            let offset_meters = horse_lanes_to_meters(offset);
 
             for &base_lane in &[inner, outer] {
                 let candidate_lane = base_lane + offset_meters;
 
-                if self.is_lane_candidate_valid(
-                    candidate_lane,
-                    reference_distance,
-                    course,
-                    all_runners,
-                ) {
+                if self.is_lane_candidate_valid(candidate_lane, reference_distance, all_runners) {
                     candidates.push(OvertakeLaneCandidate {
                         lane: candidate_lane,
                         score: 0.0,
@@ -1820,7 +1815,6 @@ impl Runner {
     fn add_extra_candidate(
         &self,
         candidates: &mut Vec<OvertakeLaneCandidate>,
-        course: &Course,
         all_runners: &[Runner],
     ) {
         let furthest_target_distance = self
@@ -1836,18 +1830,18 @@ impl Runner {
             })
             .unwrap_or(self.position);
 
-        let candidate_lane = if self.phase <= Phase::Mid && self.lane.current >= course.lane_width()
-        {
-            // Check 1 horse lane inward.
-            self.lane.current - course.lane_width()
-        } else {
-            // Check going straight.
-            self.lane.current
-        };
+        let candidate_lane =
+            if self.phase <= Phase::Mid && self.lane.current >= HORSE_LANE_TO_METERS {
+                // Check 1 horse lane inward.
+                self.lane.current - HORSE_LANE_TO_METERS
+            } else {
+                // Check going straight.
+                self.lane.current
+            };
 
         let check_distance = furthest_target_distance + 3.0;
 
-        if self.is_lane_candidate_valid(candidate_lane, check_distance, course, all_runners) {
+        if self.is_lane_candidate_valid(candidate_lane, check_distance, all_runners) {
             candidates.push(OvertakeLaneCandidate {
                 lane: candidate_lane,
                 score: 0.0,
@@ -1860,7 +1854,6 @@ impl Runner {
         &self,
         candidate_lane: f64,
         reference_distance: f64,
-        course: &Course,
         all_runners: &[Runner],
     ) -> bool {
         for other in all_runners {
@@ -1870,7 +1863,7 @@ impl Runner {
 
             // Check distance window: OwnerDistance <= Distance <= ReferenceDistance + 0.5.
             // Check lane window: CandidateLane ± 0.8 HorseLane.
-            if course.is_near_by(
+            if proximity::is_near_by(
                 other.position - self.position,
                 (other.lane.current - candidate_lane).abs(),
                 reference_distance + 0.5,
@@ -1940,7 +1933,7 @@ impl Runner {
     ///
     /// Only active during Early and Mid phases. Keeps the current value if no
     /// runner ahead is visible.
-    fn next_extra_move_lane(&self, course: &Course, all_runners: &[Runner]) -> Option<f64> {
+    fn next_extra_move_lane(&self, all_runners: &[Runner]) -> Option<f64> {
         if self.phase > Phase::Mid {
             return None;
         }
@@ -1948,7 +1941,7 @@ impl Runner {
         // Find furthest visible runner ahead.
         all_runners
             .iter()
-            .filter(|r| r.position > self.position && self.is_visible(r, course))
+            .filter(|r| r.position > self.position && self.is_visible(r))
             .max_by(|a, b| a.position.partial_cmp(&b.position).unwrap())
             .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
@@ -1964,7 +1957,7 @@ impl Runner {
 
     /// Find the closest uma on the inside (lower lane value).
     /// Returns (inside_uma_lane, distance_in_horse_lanes) if found.
-    fn find_inside_runner(&self, all_runners: &[Runner], course: &Course) -> Option<(f64, f64)> {
+    fn find_inside_runner(&self, all_runners: &[Runner]) -> Option<(f64, f64)> {
         let mut closest_inside: Option<(f64, f64)> = None;
 
         for other in all_runners {
@@ -1986,7 +1979,7 @@ impl Runner {
 
             // Calculate lane distance in horse lanes.
             let lane_diff_in_horse_lanes =
-                (self.lane.current - other.lane.current) / course.lane_width();
+                meters_to_horse_lanes(self.lane.current - other.lane.current);
 
             // Only consider if within 3 horse lanes.
             if lane_diff_in_horse_lanes > 3.0 {
@@ -2176,13 +2169,13 @@ impl Runner {
     }
 
     /// Check if another runner is visible to this runner.
-    pub fn is_visible(&self, other: &Self, course: &Course) -> bool {
+    pub fn is_visible(&self, other: &Self) -> bool {
         let distance = (self.position - other.position).abs();
         // Visibility starts at 20m, modified by skill bonuses.
         let visible_distance = 20.0 + self.skill_modifiers.visible_distance;
         distance <= visible_distance
             && (self.lane.current - other.lane.current).abs()
-                <= ((distance / visible_distance) * 11.5 + 2.0) * course.lane_width() / 2.0
+                <= horse_lanes_to_meters((distance / visible_distance) * 11.5 + 2.0) / 2.0
     }
 
     /// Update front-blocked state for this runner based on another runner.
