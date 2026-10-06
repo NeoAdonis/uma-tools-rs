@@ -69,6 +69,7 @@ pub struct RaceSolver<T> {
     /// Time (s) each pair of runners has been close in a row, keyed by their gates
     /// (lowest first). Only pairs that may still start a duel are tracked.
     duel_close_times: HashMap<(u8, u8), f64>,
+    /// Marker to indicate whether the solver is in the "unready" or "ready" phase.
     _marker: PhantomData<T>,
 }
 
