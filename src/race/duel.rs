@@ -119,12 +119,12 @@ pub fn is_separated(distance: f64) -> bool {
 }
 
 /// Target speed increase (m/s) while dueling.
-pub fn target_speed_bonus(guts: u16) -> f64 {
+fn target_speed_bonus(guts: u16) -> f64 {
     (200.0 * guts as f64).powf(0.708) * 0.0001
 }
 
 /// Acceleration increase (m/s²) while dueling.
-pub fn acceleration_bonus(guts: u16) -> f64 {
+fn acceleration_bonus(guts: u16) -> f64 {
     (160.0 * guts as f64).powf(0.59) * 0.0001
 }
 

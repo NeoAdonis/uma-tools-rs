@@ -118,7 +118,7 @@ pub fn style_coefficient(style: Style) -> f64 {
 
 /// Strategy-distance coefficient of the release acceleration.
 // ? Unknown for Runaway; assumed to be the same as Front.
-pub fn strategy_distance_coefficient(style: Style, distance_type: DistanceType) -> f64 {
+fn strategy_distance_coefficient(style: Style, distance_type: DistanceType) -> f64 {
     use DistanceType::*;
     match (style.base_style(), distance_type) {
         (Style::Pace, Short) => 0.7,
@@ -137,7 +137,7 @@ pub fn strategy_distance_coefficient(style: Style, distance_type: DistanceType) 
 }
 
 /// Distance type coefficient of the release duration.
-pub fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
+fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
     match distance_type {
         DistanceType::Short => 0.45,
         DistanceType::Mile => 1.0,

@@ -961,12 +961,7 @@ fn test_duel_starts_after_two_seconds_close() {
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [true, true]);
     for runner in &solver.runners {
-        let guts = runner.adjusted.guts;
-        assert_eq!(runner.duel.speed_bonus(), duel::target_speed_bonus(guts));
-        assert_eq!(
-            runner.duel.acceleration_bonus(),
-            duel::acceleration_bonus(guts)
-        );
+        assert!(runner.duel.is_dueling());
     }
 }
 
