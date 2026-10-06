@@ -468,5 +468,13 @@ pub fn parse_condition(input: &str) -> Result<Condition, Box<dyn std::error::Err
     Ok(condition)
 }
 
+impl std::str::FromStr for Condition {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_condition(s)
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -1,11 +1,14 @@
 //! Skill-related data structures and logic for race simulation.
 
 use num_enum::TryFromPrimitive;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error};
 use serde_repr::Deserialize_repr;
 use serde_with::{BoolFromInt, serde_as};
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crate::condition::parser::{CompOp, Comparison, ComparisonTree, Condition};
+use crate::condition::variables::VarType;
 use crate::uma::Style;
 
 /// Represents the type of skill effect.
@@ -192,13 +195,40 @@ pub struct SkillAlternative {
     pub base_cooldown: i32,
     /// Base duration before any modifiers in 10000ths of a second.
     pub base_duration: i32,
-    /// Condition string that determines when this alternative can be triggered.
-    pub condition: String,
+    /// Condition that determines when this alternative can be triggered.
+    #[serde(deserialize_with = "deserialize_condition")]
+    pub condition: Condition,
     /// List of effects that this alternative applies when triggered.
     pub effects: Vec<SkillEffect>,
     /// Precondition that must be satisfied before this alternative can be
-    /// considered.
-    pub precondition: String,
+    /// considered, if any.
+    #[serde(deserialize_with = "deserialize_precondition")]
+    pub precondition: Option<Condition>,
+}
+
+/// Parse a condition string while deserializing.
+fn deserialize_condition<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Condition, D::Error> {
+    let condition = String::deserialize(deserializer)?;
+    condition
+        .parse()
+        .map_err(|e| D::Error::custom(format!("invalid condition '{condition}': {e}")))
+}
+
+/// Parse a precondition string while deserializing. An empty string means
+/// there's no precondition.
+fn deserialize_precondition<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Condition>, D::Error> {
+    let precondition = String::deserialize(deserializer)?;
+    if precondition.is_empty() {
+        return Ok(None);
+    }
+    precondition
+        .parse()
+        .map(Some)
+        .map_err(|e| D::Error::custom(format!("invalid precondition '{precondition}': {e}")))
 }
 
 /// Stat that can receive popularity points from a skill.
@@ -224,10 +254,12 @@ pub struct SkillPopularity {
 }
 
 /// Represents a skill with its ID and data.
+///
+/// The data is shared, so cloning a skill is cheap.
 #[derive(Clone, Debug)]
 pub struct Skill {
     pub id: String,
-    data: SkillData,
+    data: Arc<SkillData>,
 }
 
 impl std::ops::Deref for Skill {
@@ -261,7 +293,10 @@ pub struct SkillData {
 impl Skill {
     /// Create a new Skill from ID and SkillData.
     pub fn new(id: String, data: SkillData) -> Self {
-        Skill { id, data }
+        Skill {
+            id,
+            data: Arc::new(data),
+        }
     }
 
     /// Check if this skill is a "green" (stat boosting) skill.
@@ -381,7 +416,13 @@ impl Skill {
 
         // Skills with always==1 condition activate at start.
         if let Some(alt) = self.alternatives.first() {
-            if alt.condition == "always==1" {
+            if alt.condition.comp_tree
+                == ComparisonTree::Single(Comparison {
+                    var: VarType::Always,
+                    op: CompOp::Equal,
+                    value: 1,
+                })
+            {
                 return true;
             }
 
@@ -414,9 +455,11 @@ impl Skill {
         state: &crate::race::solver::RaceState,
         runner: &crate::race::unready_runner::UnreadyRunner,
     ) -> bool {
-        self.alternatives
-            .iter()
-            .any(|alternative| is_alternative_popularity_eligible(alternative, state, runner))
+        use crate::condition::evaluator::check_popularity_guards;
+
+        self.alternatives.iter().any(|alternative| {
+            check_popularity_guards(&alternative.condition.comp_tree, state, runner)
+        })
     }
 
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
@@ -435,35 +478,6 @@ impl Skill {
 
         Ok(skills_map)
     }
-}
-
-/// Check if a specific skill alternative passes the popularity guards.
-///
-/// Parses the alternative's condition and returns `true` if all popularity
-/// guards pass or there are no popularity guards.
-fn is_alternative_popularity_eligible(
-    alternative: &SkillAlternative,
-    state: &crate::race::solver::RaceState,
-    runner: &crate::race::unready_runner::UnreadyRunner,
-) -> bool {
-    use crate::condition::evaluator::check_popularity_guards;
-    use crate::condition::parser::parse_condition;
-
-    // Empty condition means always eligible.
-    if alternative.condition.is_empty() {
-        return true;
-    }
-
-    // Parse condition.
-    let condition = match parse_condition(&alternative.condition) {
-        Ok(cond) => cond,
-        Err(_) => {
-            // If parsing fails, conservatively assume eligible.
-            return true;
-        }
-    };
-
-    check_popularity_guards(&condition.comp_tree, state, runner)
 }
 
 #[cfg(test)]
@@ -517,5 +531,59 @@ mod tests {
         assert!(skill(SkillRarity::UniqueUpgraded).is_wiz_limit_break_eligible());
         assert!(skill(SkillRarity::UniqueNatural).is_wiz_limit_break_eligible());
         assert!(skill(SkillRarity::Evolution).is_wiz_limit_break_eligible());
+    }
+
+    /// Deserialize an alternative with the given condition and precondition.
+    fn alternative(condition: &str, precondition: &str) -> serde_json::Result<SkillAlternative> {
+        let json = format!(
+            r#"{{"baseDuration": 30000, "condition": "{condition}",
+                "effects": [{{"type": 27, "target": 1, "modifier": 3500}}],
+                "precondition": "{precondition}"}}"#
+        );
+        serde_json::from_str(&json)
+    }
+
+    #[test]
+    fn test_alternative_conditions_are_parsed() {
+        let parsed = alternative("phase>=2&order<=3", "").unwrap();
+        assert_eq!(parsed.condition, "phase>=2&order<=3".parse().unwrap());
+        assert_eq!(parsed.precondition, None);
+
+        let parsed = alternative("phase>=2", "is_overtake==1").unwrap();
+        assert_eq!(parsed.precondition, Some("is_overtake==1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_invalid_alternative_conditions_are_errors() {
+        // Empty conditions are not allowed.
+        assert!(alternative("", "").is_err());
+        assert!(alternative("phase>=", "").is_err());
+        assert!(alternative("phase>=2&", "").is_err());
+        assert!(alternative("phase>=2", "order<=").is_err());
+    }
+
+    #[test]
+    fn test_skill_data_loads() {
+        // Every condition in the skill data must parse.
+        let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+        assert!(!skills.is_empty());
+    }
+
+    #[test]
+    fn test_always_condition_activates_out_of_gate() {
+        let skill = |condition: &str| {
+            Skill::new(
+                "test".to_string(),
+                SkillData {
+                    rarity: SkillRarity::White,
+                    alternatives: vec![alternative(condition, "").unwrap()],
+                    popularity: None,
+                    wisdom_check: false,
+                },
+            )
+        };
+        assert!(skill("always==1").should_activate_out_of_gate());
+        assert!(!skill("always==1&phase>=2").should_activate_out_of_gate());
+        assert!(!skill("phase>=2").should_activate_out_of_gate());
     }
 }

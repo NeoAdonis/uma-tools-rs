@@ -100,13 +100,13 @@ fn test_skills_see_state_after_the_move() {
             alternatives: vec![SkillAlternative {
                 base_duration: 30000,
                 base_cooldown: DEFAULT_COOLDOWN,
-                condition: "remain_distance<=800&phase>=2".to_string(),
+                condition: "remain_distance<=800&phase>=2".parse().unwrap(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,
                     target: SkillTarget::Oneself,
                     modifier: 3500,
                 }],
-                precondition: String::new(),
+                precondition: None,
             }],
             popularity: None,
             wisdom_check: false,

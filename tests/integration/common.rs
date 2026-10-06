@@ -36,8 +36,8 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
             alternatives: alternatives
                 .iter()
                 .map(|(condition, precondition)| SkillAlternative {
-                    condition: condition.to_string(),
-                    precondition: precondition.to_string(),
+                    condition: condition.parse().unwrap(),
+                    precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {

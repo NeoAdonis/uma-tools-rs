@@ -56,7 +56,6 @@
 //!     `hp_per>=20 & ground_type==2`.
 //!   - **If guards pass**: Activate skill.
 
-use crate::condition::parser::*;
 use crate::course::Course;
 use crate::skill::*;
 use crate::trigger::random::roll_condition;
@@ -85,30 +84,18 @@ pub fn build_trigger_scheduler(
 
     for (skill_idx, skill) in skills.iter().enumerate() {
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
-            // Parse condition.
-            let condition = match parse_condition(&alternative.condition) {
-                Ok(cond) => cond,
-                // Skip unparseable conditions.
-                Err(_) => continue,
-            };
-
             // One logic per OR branch, except the ones whose random roll failed.
-            let rolls = roll_condition(&condition, course, rng);
-            let branches = compile_condition(&condition, &rolls, course);
+            let condition = &alternative.condition;
+            let rolls = roll_condition(condition, course, rng);
+            let branches = compile_condition(condition, &rolls, course);
             if branches.is_empty() {
                 // Condition can't be satisfied, skill never activates.
                 continue;
             }
 
             // Compile precondition (if any).
-            let precondition = if alternative.precondition.is_empty() {
-                None
-            } else {
-                let Ok(parsed) = parse_condition(&alternative.precondition) else {
-                    // Skip unparseable preconditions.
-                    continue;
-                };
-                let branches = compile_condition(&parsed, &[], course);
+            let precondition = if let Some(parsed) = &alternative.precondition {
+                let branches = compile_condition(parsed, &[], course);
                 if branches.is_empty() {
                     // Precondition can't be satisfied, skill never activates.
                     continue;
@@ -119,6 +106,8 @@ pub fn build_trigger_scheduler(
                     alt_idx,
                     &mut scheduler,
                 ))
+            } else {
+                None
             };
 
             for branch in branches {

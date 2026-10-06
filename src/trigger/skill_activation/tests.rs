@@ -292,8 +292,8 @@ fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str)
         SkillData {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
-                condition: condition.to_string(),
-                precondition: precondition.to_string(),
+                condition: condition.parse().unwrap(),
+                precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
                 base_duration: 40000,
                 base_cooldown: DEFAULT_COOLDOWN,
                 effects: vec![SkillEffect {
@@ -397,9 +397,9 @@ fn test_precondition_only_in_alternative_zero() {
             rarity: SkillRarity::White,
             alternatives: vec![
                 SkillAlternative {
-                    condition: "distance_rate>=80".to_string(),
+                    condition: "distance_rate>=80".parse().unwrap(),
                     // Has precondition.
-                    precondition: "phase>=2".to_string(),
+                    precondition: Some("phase>=2".parse().unwrap()),
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
@@ -409,9 +409,9 @@ fn test_precondition_only_in_alternative_zero() {
                     }],
                 },
                 SkillAlternative {
-                    condition: "hp_per<=50".to_string(),
+                    condition: "hp_per<=50".parse().unwrap(),
                     // No precondition.
-                    precondition: "".to_string(),
+                    precondition: None,
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {

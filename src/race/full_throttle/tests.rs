@@ -22,13 +22,15 @@ fn full_throttle_skill() -> Skill {
             alternatives: vec![SkillAlternative {
                 base_duration: 20000,
                 base_cooldown: DEFAULT_COOLDOWN,
-                condition: "run_at_full_speed_random==1&distance_type==3".to_string(),
+                condition: "run_at_full_speed_random==1&distance_type==3"
+                    .parse()
+                    .unwrap(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::AccelerationFullThrottle,
                     target: SkillTarget::Oneself,
                     modifier: 2000,
                 }],
-                precondition: String::new(),
+                precondition: None,
             }],
             popularity: None,
             wisdom_check: false,

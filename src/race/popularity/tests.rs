@@ -14,8 +14,8 @@ fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, i32)
             alternatives: vec![SkillAlternative {
                 base_duration: 30000,
                 base_cooldown: DEFAULT_COOLDOWN,
-                condition: "".to_string(),
-                precondition: "".to_string(),
+                condition: "always==1".parse().unwrap(),
+                precondition: None,
                 effects: effects
                     .iter()
                     .map(|&(skill_type, target, modifier)| SkillEffect {
@@ -159,8 +159,8 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
                 .map(|condition| SkillAlternative {
                     base_duration: 30000,
                     base_cooldown: DEFAULT_COOLDOWN,
-                    condition: condition.to_string(),
-                    precondition: "".to_string(),
+                    condition: condition.parse().unwrap(),
+                    precondition: None,
                     effects: vec![],
                 })
                 .collect(),
@@ -204,8 +204,8 @@ fn speed_bonus(skill: &Skill) -> f64 {
 fn test_skill_bonus_popularity_guards() {
     let bonus = |conditions: &[&str]| speed_bonus(&popularity_skill(conditions, false));
 
-    // No condition: always eligible.
-    assert_eq!(bonus(&[""]), 100.0);
+    // No guards: always eligible.
+    assert_eq!(bonus(&["always==1"]), 100.0);
     // Listed guards are evaluated.
     assert_eq!(bonus(&["distance_type==3"]), 100.0);
     assert_eq!(bonus(&["distance_type==1"]), 0.0);
@@ -226,7 +226,7 @@ fn test_skill_bonus_popularity_guards() {
 #[test]
 fn test_skill_bonus_activation_chance() {
     // With 1000 raw wisdom, the activation chance is 91%.
-    let bonus = speed_bonus(&popularity_skill(&[""], true));
+    let bonus = speed_bonus(&popularity_skill(&["always==1"], true));
     assert!((bonus - 91.0).abs() < 1e-9);
 }
 

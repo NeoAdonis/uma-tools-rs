@@ -15,13 +15,13 @@ fn skill_with_alternatives(id: &str, alternatives: Vec<(&str, SkillType, i32)>) 
                 .map(|(condition, skill_type, modifier)| SkillAlternative {
                     base_duration: 0,
                     base_cooldown: DEFAULT_COOLDOWN,
-                    condition: condition.to_string(),
+                    condition: condition.parse().unwrap(),
                     effects: vec![SkillEffect {
                         skill_type,
                         target: SkillTarget::Oneself,
                         modifier,
                     }],
-                    precondition: String::new(),
+                    precondition: None,
                 })
                 .collect(),
             popularity: None,

@@ -118,9 +118,10 @@ fn test_multiple_alternatives_precondition_independence() {
         SkillData {
             rarity: SkillRarity::White,
             alternatives: vec![
+                // Has precondition (phase>=2)
                 SkillAlternative {
-                    condition: "distance_rate>=80".to_string(),
-                    precondition: "phase>=2".to_string(), // Has precondition
+                    condition: "distance_rate>=80".parse().unwrap(),
+                    precondition: Some("phase>=2".parse().unwrap()),
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
@@ -129,9 +130,10 @@ fn test_multiple_alternatives_precondition_independence() {
                         modifier: 4000,
                     }],
                 },
+                // Another precondition (accumulatetime>=10)
                 SkillAlternative {
-                    condition: "hp_per<=50".to_string(),
-                    precondition: "accumulatetime>=10".to_string(), // Different precondition
+                    condition: "hp_per<=50".parse().unwrap(),
+                    precondition: Some("accumulatetime>=10".parse().unwrap()),
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
@@ -140,9 +142,10 @@ fn test_multiple_alternatives_precondition_independence() {
                         modifier: 3000,
                     }],
                 },
+                // No precondition
                 SkillAlternative {
-                    condition: "is_last_straight==1".to_string(),
-                    precondition: String::new(), // No precondition
+                    condition: "is_last_straight==1".parse().unwrap(),
+                    precondition: None,
                     base_duration: 40000,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
@@ -207,8 +210,8 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
         SkillData {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
-                condition: condition.to_string(),
-                precondition: precondition.to_string(),
+                condition: condition.parse().unwrap(),
+                precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
                 base_duration: 30000,
                 base_cooldown: DEFAULT_COOLDOWN,
                 effects: vec![SkillEffect {

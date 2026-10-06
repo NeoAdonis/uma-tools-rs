@@ -6,7 +6,6 @@ use rand::RngExt;
 
 use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
-use crate::parser::parse_condition;
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt;
 use crate::race::duel::Duel;
@@ -342,16 +341,17 @@ impl UnreadyRunner {
 
             // Apply the first alternative whose condition is satisfied, if any.
             let alt_index = skill.alternatives.iter().position(|alternative| {
-                let Ok(condition) = parse_condition(&alternative.condition) else {
-                    // Skip unparseable conditions.
-                    return false;
-                };
                 // Satisfied if all comparisons of any OR branch are true.
-                condition.comp_tree.or_branches().iter().any(|branch| {
-                    branch
-                        .iter()
-                        .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
-                })
+                alternative
+                    .condition
+                    .comp_tree
+                    .or_branches()
+                    .iter()
+                    .any(|branch| {
+                        branch
+                            .iter()
+                            .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
+                    })
             });
             if let Some(alt_index) = alt_index {
                 self.apply_out_of_gate_skill_effect(skill, alt_index);

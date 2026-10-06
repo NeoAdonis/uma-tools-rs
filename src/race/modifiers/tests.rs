@@ -66,8 +66,8 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
             alternatives: vec![SkillAlternative {
                 base_duration: 30000,
                 base_cooldown: DEFAULT_COOLDOWN,
-                condition: String::new(),
-                precondition: String::new(),
+                condition: "phase==3".parse().unwrap(),
+                precondition: None,
                 effects: vec![SkillEffect {
                     skill_type,
                     target: SkillTarget::Oneself,

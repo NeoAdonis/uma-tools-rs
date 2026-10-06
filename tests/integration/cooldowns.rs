@@ -20,13 +20,13 @@ fn skill(condition: &str, base_cooldown: i32) -> Skill {
             alternatives: vec![SkillAlternative {
                 base_duration: 10000,
                 base_cooldown,
-                condition: condition.to_string(),
+                condition: condition.parse().unwrap(),
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,
                     target: SkillTarget::Oneself,
                     modifier: 1,
                 }],
-                precondition: String::new(),
+                precondition: None,
             }],
             popularity: None,
             wisdom_check: false,
