@@ -16,7 +16,7 @@ use crate::race::modifiers::{
     calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wiz,
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
-use crate::race::popularity::JudgeScores;
+use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::runner::*;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::transitions::*;
@@ -98,8 +98,8 @@ pub struct UnreadyRunner {
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
     /// skills.
     pub base: Uma,
-    /// Raw power stat, before halving and motivation. Used for Charge Up.
-    raw_power: u16,
+    /// Raw stats, before halving and motivation. Used for popularity and Charge Up.
+    pub raw: Uma,
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.
     pub gate_roll: u8,
@@ -132,6 +132,9 @@ pub struct UnreadyRunner {
     pub runtime_skills: Vec<Skill>,
     /// Skills that activate out of gate as soon as the race starts.
     pub out_of_gate_skills: Vec<Skill>,
+    /// Popularity points added to stats by all skills, including those that
+    /// failed the wisdom check.
+    pub(crate) popularity_bonus: SkillPopularity,
     /// Indices of golden skills in `runtime_skills` for activation by skills that
     /// activate golden skills.
     golden_skill_indices: Vec<usize>,
@@ -160,19 +163,16 @@ impl UnreadyRunner {
 
         // Calculate base stats.
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
-        let raw_power = uma.power;
         let base_uma = Uma::raw_to_base(uma, motivation);
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
-        let available_skills = skills
-            .into_iter()
-            .filter(|skill| {
+        let (available_skills, failed_check_skills): (Vec<_>, Vec<_>) =
+            skills.into_iter().partition(|skill| {
                 rng.borrow_mut()
                     .random_bool(skill.activation_chance(base_uma.wiz))
-            })
-            .collect::<Vec<Skill>>();
+            });
 
         // Partition skills into out-of-gate and runtime skills.
         let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
@@ -200,9 +200,9 @@ impl UnreadyRunner {
             .map(|(i, _)| i)
             .collect::<Vec<usize>>();
 
-        UnreadyRunner {
+        let mut runner = UnreadyRunner {
             base: base_uma,
-            raw_power,
+            raw: uma,
             gate_roll,
             adjusted: adjusted_uma,
             initial_state: InitialState {
@@ -222,10 +222,22 @@ impl UnreadyRunner {
             golden_skill_indices,
             out_of_gate_skills,
             runtime_skills,
+            popularity_bonus: SkillPopularity::default(),
             same_skill_count: 0,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
-        }
+        };
+
+        // Popularity guards are known before the race, so the skill bonus can be
+        // calculated now. The runner is needed to evaluate the guards.
+        let all_skills = runner
+            .out_of_gate_skills
+            .iter()
+            .chain(&runner.runtime_skills)
+            .chain(&failed_check_skills);
+        runner.popularity_bonus = popularity::skill_bonus(all_skills, &runner, state);
+
+        runner
     }
 
     /// Apply a single out-of-gate skill's effects.
@@ -482,7 +494,7 @@ impl UnreadyRunner {
             ),
             full_throttle: FullThrottle::Pending,
             charge_up: ChargeUp::new(
-                charge_up::charge_power(self.base.power, self.raw_power, self.power_skill_bonus),
+                charge_up::charge_power(self.base.power, self.raw.power, self.power_skill_bonus),
                 game_version,
             ),
             rng: self.rng,

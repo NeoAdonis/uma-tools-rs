@@ -146,28 +146,124 @@ fn test_skill_popularity_deserialization() {
     );
 }
 
+/// Build a skill with one alternative per condition, giving 100 speed points.
+fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
+    use crate::skill::SkillPopularity as Entry;
+
+    Skill::new(
+        "1".to_string(),
+        SkillData {
+            rarity: SkillRarity::White,
+            alternatives: conditions
+                .iter()
+                .map(|condition| SkillAlternative {
+                    base_duration: 30000,
+                    base_cooldown: DEFAULT_COOLDOWN,
+                    condition: condition.to_string(),
+                    precondition: "".to_string(),
+                    effects: vec![],
+                })
+                .collect(),
+            popularity: Some(vec![Entry {
+                stat: Stat::Speed,
+                value: 100,
+            }]),
+            wisdom_check,
+        },
+    )
+}
+
+/// Get the speed points a skill adds to a Pace runner with 1000 wisdom on a
+/// 2000m (medium distance) course.
+fn speed_bonus(skill: &Skill) -> f64 {
+    use crate::configuration::Configuration;
+    use crate::course::Course;
+    use crate::race::solver::RaceSolver;
+    use crate::test_utils::race_params;
+    use crate::uma::{Aptitude, Motivation, Style, Uma};
+
+    let course = Course::from_json_file("data/course_data.json", "10104")
+        .expect("Failed to load course data");
+    let state = RaceSolver::new(course, race_params(0), &Configuration::default()).state;
+    let uma = Uma {
+        speed: 1000,
+        stamina: 1000,
+        power: 1000,
+        guts: 1000,
+        wiz: 1000,
+        style: Style::Pace,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    };
+    let runner = UnreadyRunner::new(uma, 1, Motivation::Normal, &state, vec![]);
+    skill_bonus([skill], &runner, &state).speed
+}
+
 #[test]
-fn test_popularity_mark_points() {
-    assert_eq!(PopularityMark::None.points(), 0.0);
-    assert_eq!(PopularityMark::First.points(), 4.0);
-    assert_eq!(PopularityMark::Second.points(), 4.0);
-    assert_eq!(PopularityMark::Third.points(), 4.0);
-    assert_eq!(PopularityMark::Fourth.points(), 4.0);
+fn test_skill_bonus_popularity_guards() {
+    let bonus = |conditions: &[&str]| speed_bonus(&popularity_skill(conditions, false));
+
+    // No condition: always eligible.
+    assert_eq!(bonus(&[""]), 100.0);
+    // Listed guards are evaluated.
+    assert_eq!(bonus(&["distance_type==3"]), 100.0);
+    assert_eq!(bonus(&["distance_type==1"]), 0.0);
+    assert_eq!(bonus(&["running_style==2"]), 100.0);
+    assert_eq!(bonus(&["running_style==4"]), 0.0);
+    // Other variables are assumed to be satisfiable, even static ones.
+    assert_eq!(bonus(&["course_distance==1200"]), 100.0);
+    assert_eq!(bonus(&["motivation==5&base_speed>=1200"]), 100.0);
+    assert_eq!(bonus(&["phase==3&hp_per<=30"]), 100.0);
+    // Mixed with other variables in AND/OR.
+    assert_eq!(bonus(&["distance_type==1@hp_per<=30"]), 100.0);
+    assert_eq!(bonus(&["distance_type==1&hp_per<=30"]), 0.0);
+    // Eligible if any alternative is eligible.
+    assert_eq!(bonus(&["distance_type==1", "distance_type==3"]), 100.0);
+    assert_eq!(bonus(&["distance_type==1", "distance_type==2"]), 0.0);
+}
+
+#[test]
+fn test_skill_bonus_activation_chance() {
+    // With 1000 raw wisdom, the activation chance is 91%.
+    let bonus = speed_bonus(&popularity_skill(&[""], true));
+    assert!((bonus - 91.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_judge_impact() {
+    use PopularityMark::*;
+
+    // Above 55, the score is used as-is.
+    assert_eq!(judge_impact(60.0, First, false), 62.0);
+    assert_eq!(judge_impact(60.0, None, true), 60.0);
+    // At or below 55 with the high flag, the exponent is 0.8.
+    assert_eq!(judge_impact(50.0, Second, true), 50f64.powf(0.8) + 1.0);
+    assert_eq!(judge_impact(55.0, None, true), 55f64.powf(0.8));
+    // Otherwise, the exponent is the score minus 54.
+    assert_eq!(judge_impact(55.0, Third, false), 55.5);
+    assert_eq!(judge_impact(54.5, None, false), 54.5f64.sqrt());
+    assert_eq!(judge_impact(54.0, Fourth, false), 1.2);
 }
 
 #[test]
 fn test_judge_scores_total() {
-    let scores = JudgeScores {
-        left_score: 1.5,
+    let scores = |left_score, center_score, right_score| JudgeScores {
+        left_score,
         left_mark: PopularityMark::First,
-        center_score: 0.8,
+        center_score,
         center_mark: PopularityMark::Second,
-        right_score: -0.3,
+        right_score,
         right_mark: PopularityMark::None,
     };
-    // Judge scores: 1.5 + 0.8 - 0.3 = 2.0.
-    // Mark points: 4 + 4 + 0 = 8.
-    assert_eq!(scores.total_points(), 10.0);
+
+    // No score above 70: no high flag.
+    let total = scores(60.0, 54.5, 56.0).total_points();
+    assert_eq!(total, 62.0 * (54.5f64.sqrt() + 1.0) * 56.0);
+
+    // A score above 70 sets the high flag for all judges.
+    let total = scores(60.0, 54.5, 75.0).total_points();
+    assert_eq!(total, 62.0 * (54.5f64.powf(0.8) + 1.0) * 75.0);
 }
 
 #[test]

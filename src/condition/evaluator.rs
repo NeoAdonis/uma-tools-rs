@@ -813,71 +813,32 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
     }
 }
 
-/// Recursively check static guards in a condition tree.
+/// Recursively check popularity guards in a condition tree.
 ///
-/// Returns true if all static guards pass. Runtime guards are ignored (assumed
-/// possible). Uses short-circuit evaluation for AND/OR logic.
-///
-/// This is useful for determining if a skill CAN activate on a course,
-/// independent of runtime conditions like HP, order, or phase.
-pub fn check_static_guards(
+/// Returns true if all popularity guards pass (see
+/// [`VarType::is_popularity_guard`]). Comparisons on any other variable are
+/// assumed to be satisfiable. Uses short-circuit evaluation for AND/OR logic.
+pub fn check_popularity_guards(
     tree: &ComparisonTree,
     state: &RaceState,
     runner: &UnreadyRunner,
 ) -> bool {
     match tree {
-        ComparisonTree::Single(comp) => evaluate_static_comparison(comp, state, runner),
+        ComparisonTree::Single(comp) => {
+            !comp.var.is_popularity_guard()
+                || EvaluatorOutOfGate::evaluate(&EvaluatorOutOfGate, comp, None, state, runner)
+        }
         ComparisonTree::Binary { left, op, right } => match op {
             BinOp::And => {
-                check_static_guards(left, state, runner)
-                    && check_static_guards(right, state, runner)
+                check_popularity_guards(left, state, runner)
+                    && check_popularity_guards(right, state, runner)
             }
             BinOp::Or => {
-                check_static_guards(left, state, runner)
-                    || check_static_guards(right, state, runner)
+                check_popularity_guards(left, state, runner)
+                    || check_popularity_guards(right, state, runner)
             }
         },
     }
-}
-
-/// Evaluates comparisons with static variables (no runtime variables).
-///
-/// Runtime variables are assumed to be satisfiable and are ignored. This is
-/// used for checking if a skill can activate on a course, independent of
-/// runtime conditions like HP, order or phase.
-///
-/// A comparison is skipped and evaluated as `true` if:
-///
-/// - Its variable is runtime-only (assumed possible to satisfy).
-/// - Its variable is related to popularity (special case to avoid circular
-///   dependency).
-///
-/// Otherwise, if its variable is static, the comparison is evaluated and the
-/// result is returned.
-pub fn evaluate_static_comparison(
-    comp: &Comparison,
-    state: &RaceState,
-    runner: &UnreadyRunner,
-) -> bool {
-    use VarType::*;
-
-    // Special case: popularity variables return true to avoid circular dependency.
-    if matches!(
-        comp.var,
-        InitialState(InitialStateVar::Popularity)
-            | RunningStyle(RunningStyleVar::RunningStyleEqualPopularityOne)
-    ) {
-        return true;
-    }
-
-    // Check if this is a static guard.
-    if !comp.var.is_static() {
-        // Runtime variable - assume it could be satisfied.
-        return true;
-    }
-
-    // Static guard - evaluate it.
-    EvaluatorOutOfGate::evaluate(&EvaluatorOutOfGate, comp, None, state, runner)
 }
 
 #[cfg(test)]

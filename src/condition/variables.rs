@@ -574,6 +574,34 @@ impl VarType {
             _ => false,
         }
     }
+
+    /// Whether an unmet condition on this variable prevents a skill from adding
+    /// popularity points.
+    ///
+    /// These are the variables known before the race about the race itself and
+    /// the runner's strategy and gate. Conditions on any other variable are
+    /// assumed to be satisfiable.
+    pub fn is_popularity_guard(&self) -> bool {
+        use VarType::*;
+
+        matches!(
+            self,
+            Course(
+                CourseVar::DistanceType
+                    | CourseVar::GroundType
+                    | CourseVar::Rotation
+                    | CourseVar::TrackId
+                    | CourseVar::IsBasisDistance
+            ) | RaceParam(
+                RaceParamVar::GroundCondition
+                    | RaceParamVar::Season
+                    | RaceParamVar::Weather
+                    | RaceParamVar::Time
+                    | RaceParamVar::Grade
+            ) | RunningStyle(RunningStyleVar::RunningStyle)
+                | InitialState(InitialStateVar::PostNumber)
+        )
+    }
 }
 
 #[cfg(test)]

@@ -399,26 +399,24 @@ impl Skill {
         false
     }
 
-    /// Check if this skill can activate on a specific course (ignoring wisdom-based
-    /// activation chance).
+    /// Check if this skill adds popularity points to a runner in a race.
     ///
-    /// This evaluates only course-static guards (ground type, distance type, etc.)
-    /// and ignores runtime guards (hp percentage, phase, order, etc.) that are
-    /// assumed to be potentially satisfiable during the race.
+    /// This evaluates only popularity guards (distance type, ground type,
+    /// running style, etc.; see [`VarType::is_popularity_guard`]). Any other
+    /// condition is assumed to be satisfiable.
     ///
-    /// Returns `true` if at least one alternative can activate on this course.
-    pub fn is_activable_on_course(
+    /// Returns `true` if the guards pass for at least one alternative.
+    ///
+    /// [`VarType::is_popularity_guard`]:
+    /// crate::condition::variables::VarType::is_popularity_guard
+    pub fn is_popularity_eligible(
         &self,
         state: &crate::race::solver::RaceState,
         runner: &crate::race::unready_runner::UnreadyRunner,
     ) -> bool {
-        // A skill is activable if at least one of its alternatives can activate.
-        for alternative in &self.alternatives {
-            if can_alternative_activate(alternative, state, runner) {
-                return true;
-            }
-        }
-        false
+        self.alternatives
+            .iter()
+            .any(|alternative| is_alternative_popularity_eligible(alternative, state, runner))
     }
 
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
@@ -439,19 +437,19 @@ impl Skill {
     }
 }
 
-/// Check if a specific skill alternative can activate on this course.
+/// Check if a specific skill alternative passes the popularity guards.
 ///
-/// Parses the alternative's condition and evaluates only static guards and
-/// returns `true` if all static guards pass or there are no static guards.
-fn can_alternative_activate(
+/// Parses the alternative's condition and returns `true` if all popularity
+/// guards pass or there are no popularity guards.
+fn is_alternative_popularity_eligible(
     alternative: &SkillAlternative,
     state: &crate::race::solver::RaceState,
     runner: &crate::race::unready_runner::UnreadyRunner,
 ) -> bool {
-    use crate::condition::evaluator::check_static_guards;
+    use crate::condition::evaluator::check_popularity_guards;
     use crate::condition::parser::parse_condition;
 
-    // Empty condition means always activable.
+    // Empty condition means always eligible.
     if alternative.condition.is_empty() {
         return true;
     }
@@ -460,13 +458,12 @@ fn can_alternative_activate(
     let condition = match parse_condition(&alternative.condition) {
         Ok(cond) => cond,
         Err(_) => {
-            // If parsing fails, conservatively assume activable.
+            // If parsing fails, conservatively assume eligible.
             return true;
         }
     };
 
-    // Check static guards only.
-    check_static_guards(&condition.comp_tree, state, runner)
+    check_popularity_guards(&condition.comp_tree, state, runner)
 }
 
 #[cfg(test)]

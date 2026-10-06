@@ -154,7 +154,7 @@ impl RaceSolver<UnreadyRunner> {
         let mut state = self.state;
 
         // Calculate popularity for all runners.
-        let popularity_ranks = crate::race::popularity::calculate_popularity(&mut builders, &state);
+        let popularity_ranks = crate::race::popularity::calculate_popularity(&mut builders);
 
         // Assign popularity ranks to each runner.
         for (i, builder) in builders.iter_mut().enumerate() {
