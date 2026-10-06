@@ -172,11 +172,15 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
         };
     }
 
-    // Build list of candidates by lowering speed by 0.1 m/s each step.
+    // Build list of candidates by lowering speed by 0.1 m/s each step. Max speed is
+    // always above late-race base target speed, so the list is never empty.
     let mut candidates = Vec::new();
-    let mut test_speed = max_last_spurt_speed;
+    for step in 0.. {
+        let test_speed = max_last_spurt_speed - 0.1 * step as f64;
+        if test_speed < late_base_target_speed {
+            break;
+        }
 
-    while test_speed >= late_base_target_speed {
         let hp_rate_spurt = estimate_hp_per_meter_last_spurt(
             test_speed,
             course,
@@ -224,11 +228,9 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
             distance: last_spurt_distance_with_final,
             time,
         });
-
-        test_speed -= 0.1;
     }
 
-    let acceptance_chance = (15.0 + 0.05 * runner.adjusted.wiz as f64) / 100.0;
+    let acceptance_chance = (0.15 + 0.0005 * runner.adjusted.wiz as f64).min(1.0);
     let mut rng = runner.rng.borrow_mut();
 
     // Try each candidate from best to worst.
@@ -244,18 +246,13 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     }
 
     // If all checks fail, use the slowest (last) candidate.
-    if let Some(last) = candidates.last() {
-        LastSpurt {
-            max_speed: last.speed,
-            target_distance: course.distance as f64 - last.distance,
-            category: LastSpurtCategory::AboveBase,
-        }
-    } else {
-        // Fallback: use late-race base speed for full distance.
-        LastSpurt {
-            max_speed: late_base_target_speed,
-            target_distance: runner.position,
-            category: LastSpurtCategory::AboveBase,
-        }
+    let last = candidates.last().expect("max speed is always a candidate");
+    LastSpurt {
+        max_speed: last.speed,
+        target_distance: course.distance as f64 - last.distance,
+        category: LastSpurtCategory::AboveBase,
     }
 }
+
+#[cfg(test)]
+mod tests;

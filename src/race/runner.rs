@@ -1160,7 +1160,7 @@ impl Runner {
             // Phase can only advance at section boundaries.
             let prev_phase = self.phase;
             self.phase = Phase::from_position(self.position, &state.course);
-            if prev_phase != self.phase && self.phase >= Phase::Mid && self.last_spurt.is_none() {
+            if prev_phase != self.phase && self.phase >= Phase::Late && self.last_spurt.is_none() {
                 self.last_spurt = Some(calculate_last_spurt(self, state));
             }
         }
@@ -2562,21 +2562,24 @@ impl Runner {
                 expires_at,
             });
         }
-        // Recovery (HP restoration).
+        // Recovery (HP restoration, or HP loss if negative).
         else if matches!(effect_type, SkillType::Recovery) {
             self.hp.recover(effect.modifier as f64);
 
-            // Increment heal skill count.
-            self.trigger_scheduler.activation_counts.increment_heal();
+            // HP loss (e.g., a skill's drawback) is not a heal.
+            if effect.modifier > 0 {
+                // Increment heal skill count.
+                self.trigger_scheduler.activation_counts.increment_heal();
 
-            // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
-            self.is_stamina_keep = false;
+                // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
+                self.is_stamina_keep = false;
 
-            // Recalculate last spurt if in Mid phase or later (1st Anniv. onward).
-            if state.config.game_version >= GameVersion::FirstAnniversary
-                && self.phase >= Phase::Mid
-            {
-                self.last_spurt = Some(calculate_last_spurt(self, state));
+                // Recalculate last spurt if in Late phase or later (1st Anniv. onward).
+                if state.config.game_version >= GameVersion::FirstAnniversary
+                    && self.phase >= Phase::Late
+                {
+                    self.last_spurt = Some(calculate_last_spurt(self, state));
+                }
             }
         }
         // Activate random gold skill.
@@ -2623,13 +2626,13 @@ impl Runner {
 
     /// Check if a skill at the given index is a heal skill.
     ///
-    /// A heal skill has an alternative that contains a Recovery effect.
+    /// A heal skill has an alternative that contains a positive Recovery effect.
     fn is_heal_skill_by_index(&self, skill_index: usize) -> bool {
         let skill = &self.available_skills[skill_index];
         skill.alternatives.iter().any(|alt| {
             alt.effects
                 .iter()
-                .any(|eff| matches!(eff.skill_type, SkillType::Recovery))
+                .any(|eff| matches!(eff.skill_type, SkillType::Recovery) && eff.modifier > 0)
         })
     }
 
