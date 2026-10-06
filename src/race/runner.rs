@@ -45,8 +45,7 @@ pub struct SkillModifiers {
     pub lane_speed: f64,
     /// Modifies visible distance. Positive values increase it.
     pub visible_distance: f64,
-    /// Sets the target lane directly (0.0 to 1.0, relative to course width).
-    /// `None` means no change.
+    /// Sets the target lane directly in course widths, or `None` if no change.
     pub target_lane: Option<f64>,
     /// Affects duration of timed effects. Multiplicative - 1.0 means no change.
     pub duration_scaling: f64,
@@ -239,14 +238,24 @@ pub struct RushCounter {
     pub behind: u8,
 }
 
-/// Lane state including current and target lane positions in meters.
+/// Lane state including current and target lane positions in course widths.
+///
+/// Use [`course_widths_to_meters`] to convert them to meters for reporting.
 pub struct LaneState {
-    /// Current lane position in meters.
+    /// Current lane position in course widths.
     pub current: f64,
-    /// Target lane position in meters.
+    /// Target lane position in course widths.
     pub target: f64,
-    /// Current lateral speed in m/s.
+    /// Lateral speed applied on the last lane update in course widths per second.
+    ///
+    /// Positive values move outward, negative values move inward and zero means the
+    /// runner didn't change lanes on the last frame.
     pub speed: f64,
+    /// Non-directional lane change speed in course widths per second.
+    ///
+    /// It changes towards the lane change target speed, before skills and direction
+    /// are accounted for, and resets when the target lane is reached.
+    pub current_speed: f64,
 }
 
 impl LaneState {
@@ -255,6 +264,7 @@ impl LaneState {
             current: lane,
             target: lane,
             speed: 0.0,
+            current_speed: 0.0,
         }
     }
 }
@@ -273,12 +283,21 @@ pub struct BlockedState {
     /// Speed limit imposed by front blocking, if any.
     /// This also determines whether the runner is front-blocked.
     pub speed_limit: Option<f64>,
-    /// Whether the runner is currently side-blocked.
-    pub side: bool,
+    /// Whether the runner is currently side-blocked towards the inside.
+    pub side_in: bool,
+    /// Whether the runner is currently side-blocked towards the outside.
+    pub side_out: bool,
     /// Time spent being front-blocked in seconds.
     pub front_time: f64,
     /// Time spent being side-blocked in seconds.
     pub side_time: f64,
+}
+
+impl BlockedState {
+    /// Whether the runner is currently side-blocked in either direction.
+    pub fn side(&self) -> bool {
+        self.side_in || self.side_out
+    }
 }
 
 /// Information about nearby runners.
@@ -351,7 +370,7 @@ pub struct Runner {
     /// Speed modifier applied early in the race to encourage running towards the
     /// inner fence. Calculated before race begins based on running style.
     pub force_in_modifier: f64,
-    /// Lane state including current and target lane positions in meters.
+    /// Lane state including current and target lane positions in course widths.
     pub lane: LaneState,
     /// Speed modifier for the current section in m/s.
     pub section_speed_modifier: f64,
@@ -410,8 +429,10 @@ pub struct Runner {
     pub overtake_target_time: f64,
     /// Time spent being an overtake target of someone else in seconds.
     pub being_overtake_target_time: f64,
-    /// Extra move lane position in meters. Set during early/mid phase based on
-    /// furthest visible runner. Used as fallback in overtake mode lane selection.
+    /// Extra move lane position in course widths.
+    ///
+    /// It's set during early/mid phase based on furthest visible runner. Used as
+    /// fallback in overtake mode lane selection.
     pub extra_move_lane: Option<f64>,
     /// State related to order (rank) in the race.
     pub order: OrderState,
@@ -436,21 +457,27 @@ pub struct Runner {
     pub next_positioning_check: f64,
     /// Current slope acceleration in m/s², if any.
     pub slope_acceleration: Option<f64>,
-    /// Time spent going downhill in seconds. Used to determine chance of downhill
-    /// acceleration each second.
+    /// Time spent going downhill in seconds.
+    ///
+    /// It's used to determine chance of downhill acceleration each second.
     pub downhill_time: f64,
     /// Current section index (0-23).
     pub section: u8,
     /// Current race phase.
     pub phase: Phase,
-    /// Information about the last spurt phase. It is calculated when entering the
-    /// Mid phase. It indicates when the last spurt can start and its max speed.
+    /// Information about the last spurt phase.
+    ///
+    /// It indicates when the last spurt can start and its max speed, and it's
+    /// calculated when entering the Mid phase.
     pub last_spurt: Option<LastSpurt>,
     /// Stamina Limit Break (スタミナ勝負) buff before its random factor, in m/s.
+    ///
     /// Calculated before race begins; zero if the runner is not eligible.
     pub stamina_limit_break_base: f64,
-    /// Active Stamina Limit Break target speed buff in m/s. It is set once the
-    /// runner reaches its last spurt speed and lasts until the end of the race.
+    /// Active Stamina Limit Break target speed buff in m/s.
+    ///
+    /// It's set once the runner reaches its last spurt speed and lasts until the
+    /// end of the race.
     pub stamina_limit_break: f64,
     /// Full-Throttle Sprint (全開スパート) acceleration in m/s² before skill modifiers.
     ///
@@ -512,12 +539,12 @@ impl Runner {
 
     /// Determine the lane type based on the current lane position.
     pub fn lane_type(&self) -> LaneType {
-        let course_widths = self.lane.current / COURSE_WIDTH_TO_METERS;
-        if course_widths <= 0.2 {
+        let lane = self.lane.current;
+        if lane <= 0.2 {
             LaneType::Inner
-        } else if course_widths <= 0.4 {
+        } else if lane <= 0.4 {
             LaneType::Middle
-        } else if course_widths <= 0.6 {
+        } else if lane <= 0.6 {
             LaneType::Outer
         } else {
             LaneType::Outside
@@ -726,9 +753,11 @@ impl Runner {
             self.schedule_full_throttle_triggers(state);
         }
 
-        // TODO: Also check if runner changed lanes on last frame.
+        // Lane state is updated after target speed within a frame, so `speed` still
+        // holds the lane movement from the previous frame.
         let move_lane_modifier = if game_version >= GameVersion::FirstAnniversary
             && self.skill_modifiers.lane_speed > 0.0
+            && self.lane.speed != 0.0
         {
             (0.0002 * self.adjusted.power as f64).sqrt()
         } else {
@@ -736,13 +765,12 @@ impl Runner {
         };
 
         // TODO: Apply only when inside is open.
-        let force_in_modifier = if self.phase == Phase::Early
-            && self.lane.current > course_widths_to_meters(FORCE_IN_MIN_LANE)
-        {
-            self.force_in_modifier
-        } else {
-            0.0
-        };
+        let force_in_modifier =
+            if self.phase == Phase::Early && self.lane.current > FORCE_IN_MIN_LANE {
+                self.force_in_modifier
+            } else {
+                0.0
+            };
 
         let dueling_modifier = self.duel.speed_bonus();
 
@@ -795,56 +823,70 @@ impl Runner {
 
     /// Update lane position towards target lane.
     pub fn update_lane(&mut self, course: &Course, delta_time: f64) {
-        const LANE_ACCELERATION: f64 = 0.03; // In m/s².
+        const LANE_ACCELERATION: f64 = 0.02 * 1.5;
+        const MAX_SPEED: f64 = 0.6;
 
-        // Skill modifiers (in course widths) override target lane if present.
-        let target_lane = if let Some(skill_target) = self.skill_modifiers.target_lane {
-            course_widths_to_meters(skill_target)
-        } else {
-            self.lane.target
-        };
+        // Skill modifiers override target lane if present.
+        let target_lane = self.skill_modifiers.target_lane.unwrap_or(self.lane.target);
 
         let lane_diff = target_lane - self.lane.current;
         if lane_diff.abs() < 0.0001 {
             self.lane.current = target_lane;
+            self.lane.current_speed = 0.0;
             self.lane.speed = 0.0;
             return;
         }
 
+        let first_move_modifier =
+            if self.phase <= Phase::Mid && self.position < course.move_lane_point() {
+                1.0 + self.lane.current / course.width() * 0.05
+            } else {
+                1.0
+            };
         let order_modifier = if self.phase >= Phase::Late {
             1.0 + self.order.order as f64 * 0.01
         } else {
             1.0
         };
-        // TODO: obtain proper first move lane point.
-        let first_move_modifier = if self.phase == Phase::Early {
-            1.0 + self.lane.current / course.width() * 0.05
-        } else {
-            1.0
-        };
-
         let target_speed = 0.02
             * (0.3 + 0.001 * self.adjusted.power as f64)
             * first_move_modifier
             * order_modifier;
-        self.lane.speed = (self.lane.speed + LANE_ACCELERATION * delta_time).min(target_speed);
 
-        let skill_modifier = self.skill_modifiers.lane_speed;
-        let direction_modifier = if lane_diff > 0.0 {
+        // Current speed keeps changing towards the target speed even when blocked.
+        let speed_step = LANE_ACCELERATION * delta_time;
+        self.lane.current_speed = if self.lane.current_speed < target_speed {
+            (self.lane.current_speed + speed_step).min(target_speed)
+        } else {
+            (self.lane.current_speed - speed_step).max(target_speed)
+        };
+
+        let moving_out = lane_diff > 0.0;
+        let blocked = if moving_out {
+            self.blocked.side_out
+        } else {
+            self.blocked.side_in
+        };
+        if blocked {
+            self.lane.speed = 0.0;
+            return;
+        }
+
+        let direction_modifier = if moving_out {
             1.0
         } else {
             -(1.0 + self.lane.current)
         };
+        self.lane.speed = (self.lane.current_speed + self.skill_modifiers.lane_speed)
+            .clamp(0.0, MAX_SPEED)
+            * direction_modifier;
 
-        let actual_speed = (self.lane.speed + skill_modifier).clamp(0.0, 0.6) * direction_modifier;
-        let actual_change = actual_speed * delta_time;
-
-        // TODO: check if blocked from lane change.
-        if actual_change.abs() >= lane_diff.abs() {
+        let lane_change = self.lane.speed * delta_time;
+        if lane_change.abs() >= lane_diff.abs() {
             self.lane.current = target_lane;
-            self.lane.speed = 0.0;
+            self.lane.current_speed = 0.0;
         } else {
-            self.lane.current += actual_change;
+            self.lane.current += lane_change;
         }
     }
 
@@ -1594,9 +1636,9 @@ impl Runner {
         }
 
         // Position keeping mode is pace-down.
-        // Set target to 0.18 course widths from the inner fence.
+        // Set lane target to fixed point.
         if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
-            return course_widths_to_meters(0.18).clamp(0.0, course.width());
+            return f64::min(0.18, course.width());
         }
 
         // On final straight AND extra move lane is on the outside.
@@ -1608,21 +1650,21 @@ impl Runner {
             return extra.clamp(0.0, course.width());
         }
 
-        // In early-race or mid-race - move inward by 0.05 course width.
+        // In early-race or mid-race, move inward.
         if matches!(self.phase, Phase::Early | Phase::Mid) {
-            let target = self.lane.current - course_widths_to_meters(0.05);
+            let target = self.lane.current - 0.05;
             if target >= 0.0 && self.has_lane_space_to(target, all_runners) {
                 return target;
             }
         }
 
-        // In mid-race AND less than 1.75 horse lane from inside runner.
+        // In mid-race and close to inside runner.
         if self.phase == Phase::Mid
             && let Some((inside_lane, distance_in_lanes)) = self.find_inside_runner(all_runners)
             && distance_in_lanes < 1.75
         {
-            // Move to 2.0 horse lanes away from inside runner.
-            let target = inside_lane + horse_lanes_to_meters(2.0);
+            // Move away from inside runner.
+            let target = inside_lane + horse_lanes_to_course_widths(2.0);
             if self.has_lane_space_to(target, all_runners) {
                 return target.clamp(0.0, course.width());
             }
@@ -1642,7 +1684,7 @@ impl Runner {
         };
 
         // Early exit if not in overtake mode or side-blocked.
-        if !self.is_in_overtake_mode() || self.blocked.side {
+        if !self.is_in_overtake_mode() || self.blocked.side() {
             return decision;
         }
 
@@ -1722,10 +1764,10 @@ impl Runner {
 
         // Try lane positions at ±1 horse lane from inner and outer boundaries.
         for &offset in &[-1.0, 1.0] {
-            let offset_meters = horse_lanes_to_meters(offset);
+            let offset = horse_lanes_to_course_widths(offset);
 
             for &base_lane in &[inner, outer] {
-                let candidate_lane = base_lane + offset_meters;
+                let candidate_lane = base_lane + offset;
 
                 if self.is_lane_candidate_valid(candidate_lane, reference_distance, all_runners) {
                     candidates.push(OvertakeLaneCandidate {
@@ -1757,9 +1799,9 @@ impl Runner {
             .unwrap_or(self.position);
 
         let candidate_lane =
-            if self.phase <= Phase::Mid && self.lane.current >= HORSE_LANE_TO_METERS {
+            if self.phase <= Phase::Mid && self.lane.current >= horse_lanes_to_course_widths(1.0) {
                 // Check 1 horse lane inward.
-                self.lane.current - HORSE_LANE_TO_METERS
+                self.lane.current - horse_lanes_to_course_widths(1.0)
             } else {
                 // Check going straight.
                 self.lane.current
@@ -1905,7 +1947,7 @@ impl Runner {
 
             // Calculate lane distance in horse lanes.
             let lane_diff_in_horse_lanes =
-                meters_to_horse_lanes(self.lane.current - other.lane.current);
+                course_widths_to_horse_lanes(self.lane.current - other.lane.current);
 
             // Only consider if within 3 horse lanes.
             if lane_diff_in_horse_lanes > 3.0 {
@@ -2101,7 +2143,7 @@ impl Runner {
         let visible_distance = 20.0 + self.skill_modifiers.visible_distance;
         distance <= visible_distance
             && (self.lane.current - other.lane.current).abs()
-                <= horse_lanes_to_meters((distance / visible_distance) * 11.5 + 2.0) / 2.0
+                <= horse_lanes_to_course_widths((distance / visible_distance) * 11.5 + 2.0) / 2.0
     }
 
     /// Update front-blocked state for this runner based on another runner.
@@ -2111,9 +2153,18 @@ impl Runner {
     }
 
     /// Update side-blocked state for this runner and another.
-    pub fn update_side_blocked_by(&mut self, other: &mut Self) {
-        self.blocked.side = true;
-        other.blocked.side = true;
+    ///
+    /// `lane_diff` is the other runner's lane minus this runner's lane. Runners in
+    /// the same lane block each other in both directions.
+    pub fn update_side_blocked_by(&mut self, other: &mut Self, lane_diff: f64) {
+        if lane_diff >= 0.0 {
+            self.blocked.side_out = true;
+            other.blocked.side_in = true;
+        }
+        if lane_diff <= 0.0 {
+            self.blocked.side_in = true;
+            other.blocked.side_out = true;
+        }
     }
 
     /// Update front-surrounded state for this runner and another.
@@ -2160,7 +2211,8 @@ impl Runner {
         self.nearby.behind_same_lane_count = 0;
         self.nearby.behind_set1_count = 0;
         self.blocked.speed_limit = None;
-        self.blocked.side = false;
+        self.blocked.side_in = false;
+        self.blocked.side_out = false;
         self.surrounded = SurroundState::default();
     }
 
@@ -2190,7 +2242,7 @@ impl Runner {
         } else {
             self.blocked.front_time = 0.0;
         }
-        if self.blocked.side {
+        if self.blocked.side() {
             self.blocked.side_time += delta_time;
         } else {
             self.blocked.side_time = 0.0;

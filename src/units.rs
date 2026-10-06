@@ -2,8 +2,8 @@
 
 /// Course width to meters conversion unit. 1 course width = 11.25 meters.
 ///
-/// Used as unit to measure course width relatively. For example, a turf
-/// course in Tokyo is 1.5 courses wide, which is 16.875 meters.
+/// Lane positions are measured in course widths. For example, a turf course in
+/// Tokyo is 1.5 courses wide, which is 16.875 meters.
 pub const COURSE_WIDTH_TO_METERS: f64 = 11.25;
 
 /// Convert course widths to meters.
@@ -11,18 +11,18 @@ pub fn course_widths_to_meters(widths: f64) -> f64 {
     widths * COURSE_WIDTH_TO_METERS
 }
 
-/// Horse lane to meters conversion unit. 1 horse lane = 1/18 course width =
-/// 0.625 meters.
-pub const HORSE_LANE_TO_METERS: f64 = COURSE_WIDTH_TO_METERS / 18.0;
+/// Horse lanes per course width. 1 horse lane = 1/18 course width = 0.625
+/// meters.
+pub const HORSE_LANES_PER_COURSE_WIDTH: f64 = 18.0;
 
-/// Convert horse lanes to meters.
-pub fn horse_lanes_to_meters(lanes: f64) -> f64 {
-    lanes * HORSE_LANE_TO_METERS
+/// Convert horse lanes to course widths.
+pub fn horse_lanes_to_course_widths(lanes: f64) -> f64 {
+    lanes / HORSE_LANES_PER_COURSE_WIDTH
 }
 
-/// Convert meters to horse lanes.
-pub fn meters_to_horse_lanes(meters: f64) -> f64 {
-    meters / HORSE_LANE_TO_METERS
+/// Convert course widths to horse lanes.
+pub fn course_widths_to_horse_lanes(widths: f64) -> f64 {
+    widths * HORSE_LANES_PER_COURSE_WIDTH
 }
 
 /// Bashin (バ身, horse-length) to meters conversion unit. 1 bashin = 2.5 meters.
@@ -58,9 +58,12 @@ mod tests {
 
     #[test]
     fn test_horse_lane_conversion() {
-        assert_eq!(HORSE_LANE_TO_METERS, 0.625);
-        assert_eq!(horse_lanes_to_meters(18.0), COURSE_WIDTH_TO_METERS);
-        assert_eq!(meters_to_horse_lanes(1.25), 2.0);
+        assert_eq!(
+            course_widths_to_meters(horse_lanes_to_course_widths(1.0)),
+            0.625
+        );
+        assert_eq!(horse_lanes_to_course_widths(18.0), 1.0);
+        assert_eq!(course_widths_to_horse_lanes(0.5), 9.0);
     }
 
     #[test]

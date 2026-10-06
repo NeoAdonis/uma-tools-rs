@@ -18,7 +18,7 @@ use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
-use crate::units::horse_lanes_to_meters;
+use crate::units::horse_lanes_to_course_widths;
 
 /// Scale applied to raw finish times to get displayed times.
 pub const FINISH_TIME_SCALE: f64 = 1.18;
@@ -399,7 +399,7 @@ impl RaceSolver<Runner> {
                     runner_j.update_front_blocked_by(runner_i);
                 }
                 if proximity::check_side_blocked(distance, lane_diff) {
-                    runner_j.update_side_blocked_by(runner_i);
+                    runner_j.update_side_blocked_by(runner_i, lane_diff);
                 }
             }
 
@@ -410,14 +410,7 @@ impl RaceSolver<Runner> {
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
-        // STUB: Using first corner as move lane point; should use
-        // course.move_lane_point when available.
-        let move_lane_point = self
-            .state
-            .course
-            .corners
-            .first()
-            .map_or(self.state.course.halfway(), |c| c.start);
+        let move_lane_point = self.state.course.move_lane_point();
 
         // Calculate lane targets.
         for i in 0..num_runners {
@@ -426,7 +419,7 @@ impl RaceSolver<Runner> {
             let runner = &all_runners[i];
 
             // Skip if side-blocked (can't change lanes anyway), unless forced.
-            if runner.blocked.side && !runner.force_lane_update {
+            if runner.blocked.side() && !runner.force_lane_update {
                 continue;
             }
 
@@ -488,7 +481,7 @@ impl RaceSolver<Runner> {
                         (ahead.lane.current, j)
                     };
                     let bumped_lane =
-                        inner_lane + horse_lanes_to_meters(proximity::OVERLAP_LANE_GAP);
+                        inner_lane + horse_lanes_to_course_widths(proximity::OVERLAP_LANE_GAP);
                     bumps.push((outer, bumped_lane.min(course_width)));
                 }
             }

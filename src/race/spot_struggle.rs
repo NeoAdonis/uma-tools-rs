@@ -9,7 +9,6 @@ use std::ops::RangeInclusive;
 
 use crate::race::modifiers::strategy_proficiency_multiplier;
 use crate::uma::{Aptitude, Style};
-use crate::units::course_widths_to_meters;
 
 /// Strategies that can struggle. Runners only struggle against others with
 /// the same strategy.
@@ -90,19 +89,19 @@ impl SpotStruggle {
     }
 }
 
-/// Check if a runner `distance` meters and `lane_diff` meters away from the
-/// frontmost runner of her strategy is close enough to struggle with her.
+/// Check if a runner `distance` meters and `lane_diff` course widths away from
+/// the frontmost runner of her strategy is close enough to struggle with her.
 pub fn is_close_to_leader(distance: f64, lane_diff: f64) -> bool {
-    distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < course_widths_to_meters(TRIGGER_LANE_GAP)
+    distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 
-/// Check if a struggler is too far from another struggler to keep struggling.
-/// given her `distance` (positive if ahead) and `lane_diff` from the other, in
-/// meters.
+/// Check if a struggler is too far from another struggler to keep struggling,
+/// given her `distance` in meters (positive if ahead) and `lane_diff` in course
+/// widths from the other.
 ///
 /// Only falling behind counts; getting ahead doesn't.
 pub fn is_too_far(distance: f64, lane_diff: f64) -> bool {
-    distance < -EXIT_DISTANCE || lane_diff.abs() > course_widths_to_meters(EXIT_LANE_GAP)
+    distance < -EXIT_DISTANCE || lane_diff.abs() > EXIT_LANE_GAP
 }
 
 /// Target speed increase (m/s) during the spot struggle.

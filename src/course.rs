@@ -12,7 +12,7 @@ include!("course/track_names.rs");
 pub mod geometry;
 
 use crate::course::geometry::*;
-use crate::units::{course_widths_to_meters, horse_lanes_to_meters};
+use crate::units::horse_lanes_to_course_widths;
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -240,6 +240,14 @@ impl Course {
         self.distance as f64 / 2.0
     }
 
+    /// Get the move lane point in meters.
+    ///
+    /// STUB: Uses the first corner start (or halfway if there are no corners)
+    /// until the actual move lane point is available.
+    pub fn move_lane_point(&self) -> f64 {
+        self.corners.first().map_or(self.halfway(), |c| c.start)
+    }
+
     /// Get the corner number (1-4) of the corner at `idx` in the course corners.
     ///
     /// Corners are numbered backwards from the final corner, which is always the
@@ -289,7 +297,7 @@ impl Course {
         (position / self.section_length()).floor() as u8
     }
 
-    /// Get the starting lane position in meters based on the gate roll.
+    /// Get the starting lane position in course widths based on the gate roll.
     pub fn starting_lane(&self, gate_roll: u8) -> f64 {
         let adjustor = match self.id {
             TRACK_ID_OOI => 0.0,
@@ -308,12 +316,12 @@ impl Course {
                 }
             }
         };
-        horse_lanes_to_meters(gate_roll as f64 + adjustor)
+        horse_lanes_to_course_widths(gate_roll as f64 + adjustor)
     }
 
-    /// Get the total course width in meters.
+    /// Get the total course width in course widths (the maximum lane distance).
     pub fn width(&self) -> f64 {
-        course_widths_to_meters(self.lane_max as f64 / 10000.0)
+        self.lane_max as f64 / 10000.0
     }
 
     /// Get the track name in the specified language, or `None` if the track name is

@@ -1,11 +1,11 @@
 //! Proximity checks between two runners.
 //!
 //! Each check takes the `distance` (m) from the runner behind to the runner
-//! ahead, which must be non-negative, and their `lane_diff` (m), whose sign
-//! doesn't matter.
+//! ahead, which must be non-negative, and their `lane_diff` (in course widths),
+//! whose sign doesn't matter.
 
 use crate::configuration::GameVersion;
-use crate::units::horse_lanes_to_meters;
+use crate::units::horse_lanes_to_course_widths;
 
 /// Check if a runner is blocked by another runner from the front based on
 /// distance and lane difference.
@@ -18,7 +18,7 @@ pub fn check_front_blocked(distance: f64, lane_diff: f64) -> bool {
     // Lane difference threshold decreases linearly with distance between runners.
     // At 0m, threshold is 0.75 lanes.
     // At 2m, threshold is 0.3 lanes.
-    lane_diff.abs() <= horse_lanes_to_meters((1.0 - 0.3 * distance) * 0.75)
+    lane_diff.abs() <= horse_lanes_to_course_widths((1.0 - 0.3 * distance) * 0.75)
 }
 
 /// Check if a runner is blocking another runner from the side based on distance
@@ -94,13 +94,13 @@ pub fn is_overlapping(distance: f64, lane_diff: f64) -> bool {
 /// Check if a runner is near another runner within a specified distance
 /// and lane difference.
 ///
-/// `distance`, `lane_diff` and `max_distance` are in meters, while
-/// `max_lane_diff` is in horse lanes.
+/// `distance` and `max_distance` are in meters, `lane_diff` is in course widths
+/// and `max_lane_diff` is in horse lanes.
 pub fn is_near_by(distance: f64, lane_diff: f64, max_distance: f64, max_lane_diff: f64) -> bool {
     if !(0.0..max_distance).contains(&distance) {
         return false;
     }
-    lane_diff.abs() < horse_lanes_to_meters(max_lane_diff)
+    lane_diff.abs() < horse_lanes_to_course_widths(max_lane_diff)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@ use super::*;
 use crate::course::LaneType;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::race_params;
+use crate::units::horse_lanes_to_course_widths;
 
 /// Index of the course feature containing `position`, given `(start, end)`
 /// ranges.
@@ -569,9 +570,9 @@ fn has_struggled(solver: &RaceSolver<Runner>) -> Vec<bool> {
 
 #[test]
 fn test_spot_struggle_starts_between_close_front_runners() {
-    // 1.8m apart laterally is within 0.165 course widths (~1.86m).
+    // 0.16 course widths apart laterally is within 0.165 course widths.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 1.0), (Style::Front, 197.0, 2.8)],
+        &[(Style::Front, 200.0, 0.1), (Style::Front, 197.0, 0.26)],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -584,7 +585,7 @@ fn test_spot_struggle_starts_between_close_front_runners() {
 
     // Too far apart laterally.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 1.0), (Style::Front, 197.0, 2.9)],
+        &[(Style::Front, 200.0, 0.1), (Style::Front, 197.0, 0.27)],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -622,7 +623,7 @@ fn test_spot_struggle_needs_any_runner_past_min_position() {
     // Any runner ahead past it will do, even with another strategy.
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 150.0, 5.0),
+            (Style::Runaway, 150.0, 0.5),
             (Style::Front, 137.0, 0.0),
             (Style::Front, 135.0, 0.0),
         ],
@@ -633,7 +634,7 @@ fn test_spot_struggle_needs_any_runner_past_min_position() {
 
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 149.0, 5.0),
+            (Style::Runaway, 149.0, 0.5),
             (Style::Front, 137.0, 0.0),
             (Style::Front, 135.0, 0.0),
         ],
@@ -666,7 +667,7 @@ fn test_spot_struggle_needs_one_runner_before_end_of_sixth_section() {
 fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 210.0, 5.0),
+            (Style::Pace, 210.0, 0.5),
             (Style::Front, 200.0, 0.0),
             (Style::Front, 198.0, 0.0),
         ],
@@ -678,7 +679,7 @@ fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     // Runaways are expected to be ahead of front runners.
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 210.0, 5.0),
+            (Style::Runaway, 210.0, 0.5),
             (Style::Front, 200.0, 0.0),
             (Style::Front, 198.0, 0.0),
         ],
@@ -690,7 +691,7 @@ fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     // But front runners are not expected to be ahead of runaways.
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 210.0, 5.0),
+            (Style::Front, 210.0, 0.5),
             (Style::Runaway, 200.0, 0.0),
             (Style::Runaway, 198.0, 0.0),
         ],
@@ -716,7 +717,7 @@ fn test_spot_struggle_latecomers_do_not_join() {
         &[
             (Style::Front, 200.0, 0.0),
             (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 1.0),
+            (Style::Front, 197.0, 0.1),
             (Style::Front, 190.0, 0.0),
         ],
         GameVersion::LATEST,
@@ -819,8 +820,8 @@ fn test_spot_struggle_lateral_exit_in_both_directions() {
     );
     update_struggle(&mut solver);
 
-    // 0.416 course widths = 4.68m.
-    place(&mut solver, 1, 198.0, 4.7);
+    // Beyond 0.416 course widths.
+    place(&mut solver, 1, 198.0, 0.42);
     update_struggle(&mut solver);
     assert_eq!(strugglers(&solver), [false, false]);
 }
@@ -953,7 +954,7 @@ fn duelists(solver: &RaceSolver<Runner>) -> Vec<bool> {
 
 #[test]
 fn test_duel_starts_after_two_seconds_close() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES - 1);
     assert_eq!(duelists(&solver), [false, false]);
 
@@ -971,15 +972,15 @@ fn test_duel_starts_after_two_seconds_close() {
 
 #[test]
 fn test_duel_needs_continuous_proximity() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES - 1);
 
     // Being apart for a single frame resets the time.
-    place_on_straight(&mut solver, 0, 1001.0, 1.0);
+    place_on_straight(&mut solver, 0, 1001.0, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [false, false]);
 
-    place_on_straight(&mut solver, 1, 999.0, 1.0);
+    place_on_straight(&mut solver, 1, 999.0, 0.1);
     update_duels(&mut solver, DUEL_FRAMES - 1);
     assert_eq!(duelists(&solver), [false, false]);
     update_duels(&mut solver, 1);
@@ -988,12 +989,12 @@ fn test_duel_needs_continuous_proximity() {
 
 #[test]
 fn test_duel_proximity_in_course_widths() {
-    // 0.25 course widths = 2.8125m.
-    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 2.81)], GameVersion::LATEST);
+    // Lane gap threshold is 0.25 course widths.
+    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 0.249)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, true]);
 
-    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 2.82)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 0.251)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [false, false]);
 
@@ -1004,13 +1005,13 @@ fn test_duel_proximity_in_course_widths() {
 
 #[test]
 fn test_duel_speed_difference() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     solver.runners[0].speed = 20.0;
     solver.runners[1].speed = 19.4;
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, true]);
 
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     solver.runners[0].speed = 20.0;
     solver.runners[1].speed = 19.3;
     update_duels(&mut solver, DUEL_FRAMES * 2);
@@ -1024,7 +1025,7 @@ fn test_duel_speed_difference() {
 
 #[test]
 fn test_duel_needs_both_runners_with_enough_hp() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     set_hp_percent(&mut solver, 1, 14.9);
     update_duels(&mut solver, DUEL_FRAMES * 2);
     assert_eq!(duelists(&solver), [false, false]);
@@ -1038,7 +1039,7 @@ fn test_duel_needs_both_runners_with_enough_hp() {
 fn test_duel_needs_one_runner_in_top_half() {
     // 2nd and 3rd out of 4: top 50% and top 75%.
     let mut solver = duel_solver(
-        &[(1100.0, 1.0), (1050.0, 1.0), (1048.0, 1.0), (1000.0, 1.0)],
+        &[(1100.0, 0.1), (1050.0, 0.1), (1048.0, 0.1), (1000.0, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
@@ -1046,7 +1047,7 @@ fn test_duel_needs_one_runner_in_top_half() {
 
     // 3rd and 4th out of 4: top 75% and top 100%.
     let mut solver = duel_solver(
-        &[(1100.0, 1.0), (1050.0, 1.0), (1000.0, 1.0), (998.0, 1.0)],
+        &[(1100.0, 0.1), (1050.0, 0.1), (1000.0, 0.1), (998.0, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
@@ -1056,14 +1057,14 @@ fn test_duel_needs_one_runner_in_top_half() {
 #[test]
 fn test_duel_only_on_final_straight() {
     // On a corner, before the final straight.
-    let mut solver = duel_solver(&[(900.0, 1.0), (898.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(900.0, 0.1), (898.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES * 2);
     assert_eq!(duelists(&solver), [false, false]);
 }
 
 #[test]
 fn test_duel_exits_below_five_percent_hp() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
 
     set_hp_percent(&mut solver, 1, 5.0);
@@ -1080,37 +1081,37 @@ fn test_duel_exits_below_five_percent_hp() {
 fn test_duel_exits_when_separated_ahead_or_behind() {
     // The last runner duels with the leader, who is in the top 50%.
     let mut solver = duel_solver(
-        &[(1000.0, 1.0), (998.5, 1.0), (997.5, 1.0)],
+        &[(1000.0, 0.1), (998.5, 0.1), (997.5, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, true, true]);
 
     // The leader gets ahead, but not 5m ahead of the second one.
-    place_on_straight(&mut solver, 0, 1003.4, 1.0);
+    place_on_straight(&mut solver, 0, 1003.4, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [true, true, true]);
 
     // Getting 5m ahead of everyone is enough to exit.
-    place_on_straight(&mut solver, 0, 1003.5, 1.0);
+    place_on_straight(&mut solver, 0, 1003.5, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [false, true, true]);
 
     // So is falling 5m behind everyone.
     let mut solver = duel_solver(
-        &[(1000.0, 1.0), (998.5, 1.0), (997.5, 1.0)],
+        &[(1000.0, 0.1), (998.5, 0.1), (997.5, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
-    place_on_straight(&mut solver, 0, 1006.0, 1.0);
-    place_on_straight(&mut solver, 1, 1004.0, 1.0);
+    place_on_straight(&mut solver, 0, 1006.0, 0.1);
+    place_on_straight(&mut solver, 1, 1004.0, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [true, true, false]);
 }
 
 #[test]
 fn test_duel_exit_counts_former_duelists() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
 
     // The second runner exits, but the leader keeps dueling while close to her.
@@ -1120,7 +1121,7 @@ fn test_duel_exit_counts_former_duelists() {
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, false]);
 
-    place_on_straight(&mut solver, 0, 1003.0, 1.0);
+    place_on_straight(&mut solver, 0, 1003.0, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [false, false]);
 }
@@ -1128,7 +1129,7 @@ fn test_duel_exit_counts_former_duelists() {
 #[test]
 fn test_duel_exit_ignores_runners_who_never_dueled() {
     let mut solver = duel_solver(
-        &[(1000.0, 1.0), (998.0, 1.0), (980.0, 1.0)],
+        &[(1000.0, 0.1), (998.0, 0.1), (980.0, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
@@ -1136,8 +1137,8 @@ fn test_duel_exit_ignores_runners_who_never_dueled() {
 
     // The second runner falls 5m behind the leader, right next to the third
     // runner, who never dueled. Lanes keep them from starting a new duel.
-    place_on_straight(&mut solver, 1, 995.0, 5.0);
-    place_on_straight(&mut solver, 2, 994.0, 1.0);
+    place_on_straight(&mut solver, 1, 995.0, 0.5);
+    place_on_straight(&mut solver, 2, 994.0, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [false, false, false]);
 }
@@ -1146,7 +1147,7 @@ fn test_duel_exit_ignores_runners_who_never_dueled() {
 fn test_former_duelists_cannot_duel_again() {
     // The last runner only keeps the third one out of the top 50%.
     let mut solver = duel_solver(
-        &[(1000.0, 1.0), (998.0, 1.0), (980.0, 1.0), (950.0, 1.0)],
+        &[(1000.0, 0.1), (998.0, 0.1), (980.0, 0.1), (950.0, 0.1)],
         GameVersion::LATEST,
     );
     update_duels(&mut solver, DUEL_FRAMES);
@@ -1157,20 +1158,20 @@ fn test_former_duelists_cannot_duel_again() {
     // The third runner stays close to the one who left, even after she
     // recovers, but neither starts dueling.
     set_hp_percent(&mut solver, 1, 100.0);
-    place_on_straight(&mut solver, 2, 997.0, 1.0);
+    place_on_straight(&mut solver, 2, 997.0, 0.1);
     update_duels(&mut solver, DUEL_FRAMES * 2);
     assert_eq!(duelists(&solver), [true, false, false, false]);
     assert!(!solver.runners[2].duel.has_dueled());
 
     // She can still duel with the one who is still dueling.
-    place_on_straight(&mut solver, 2, 998.0, 1.0);
+    place_on_straight(&mut solver, 2, 998.0, 0.1);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, false, true, false]);
 }
 
 #[test]
 fn test_compete_fight_count_after_duel() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::LATEST);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
     set_hp_percent(&mut solver, 1, 4.0);
     update_duels(&mut solver, 1);
@@ -1181,7 +1182,7 @@ fn test_compete_fight_count_after_duel() {
 
 #[test]
 fn test_duel_not_before_first_anniversary() {
-    let mut solver = duel_solver(&[(1000.0, 1.0), (998.0, 1.0)], GameVersion::Original);
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::Original);
     update_duels(&mut solver, DUEL_FRAMES * 2);
     assert_eq!(duelists(&solver), [false, false]);
 }
@@ -1195,21 +1196,21 @@ fn test_force_in_applies_only_away_from_inner_fence() {
     let force_in = runner.force_in_modifier;
     assert!(force_in > 0.0);
 
-    // 0.12 course widths = 1.35m.
+    // Threshold is 0.12 course widths.
     let target_speed_at = |runner: &mut Runner, lane: f64| {
         runner.lane.current = lane;
         runner.update_target_speed(state);
         runner.target_speed
     };
-    let near_fence = target_speed_at(runner, 1.34);
-    let away_from_fence = target_speed_at(runner, 1.36);
+    let near_fence = target_speed_at(runner, 0.119);
+    let away_from_fence = target_speed_at(runner, 0.121);
     assert!((away_from_fence - near_fence - force_in).abs() < 1e-9);
     assert_eq!(target_speed_at(runner, 0.0), near_fence);
 
     // Only in the early phase.
     runner.phase = Phase::Mid;
     let mid_near = target_speed_at(runner, 0.0);
-    let mid_away = target_speed_at(runner, 5.0);
+    let mid_away = target_speed_at(runner, 0.5);
     assert_eq!(mid_near, mid_away);
 }
 
@@ -1217,16 +1218,16 @@ fn test_force_in_applies_only_away_from_inner_fence() {
 fn test_lane_type_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let runner = &mut solver.runners[0];
-    // Thresholds are 0.2, 0.4 and 0.6 course widths (2.25m, 4.5m and 6.75m),
-    // regardless of the course's total width.
+    // Thresholds are 0.2, 0.4 and 0.6 course widths, regardless of the course's
+    // total width.
     let cases = [
         (0.0, LaneType::Inner),
-        (2.2, LaneType::Inner),
-        (2.3, LaneType::Middle),
-        (4.4, LaneType::Middle),
-        (4.6, LaneType::Outer),
-        (6.7, LaneType::Outer),
-        (6.8, LaneType::Outside),
+        (0.2, LaneType::Inner),
+        (0.21, LaneType::Middle),
+        (0.4, LaneType::Middle),
+        (0.41, LaneType::Outer),
+        (0.6, LaneType::Outer),
+        (0.61, LaneType::Outside),
     ];
     for (lane, expected) in cases {
         runner.lane.current = lane;
@@ -1239,12 +1240,102 @@ fn test_skill_target_lane_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
-    runner.lane.current = 5.0;
+    runner.lane.current = 0.4;
     runner.skill_modifiers.target_lane = Some(0.5);
     for _ in 0..2000 {
         runner.update_lane(&state.course, 1.0 / 15.0);
     }
-    assert!((runner.lane.current - 5.625).abs() < 1e-9);
+    assert!((runner.lane.current - 0.5).abs() < 1e-9);
+}
+
+#[test]
+fn test_move_lane_modifier_requires_lane_movement() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.skill_modifiers.lane_speed = 0.1;
+    runner.lane.current = 0.4;
+    runner.lane.target = 0.4;
+
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert_eq!(runner.lane.speed, 0.0);
+    runner.update_target_speed(state);
+    let still_speed = runner.target_speed;
+
+    runner.lane.target = 0.7;
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert!(runner.lane.speed > 0.0);
+    runner.update_target_speed(state);
+    let expected = (0.0002 * runner.adjusted.power as f64).sqrt();
+    assert!((runner.target_speed - still_speed - expected).abs() < 1e-9);
+}
+
+#[test]
+fn test_lane_speed_is_directional_in_course_widths() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    let delta_time = 1.0 / 15.0;
+    runner.lane.current = 0.4;
+    runner.skill_modifiers.lane_speed = 0.1;
+
+    // Moving out: (current speed + skill modifier) course widths per second.
+    runner.lane.target = 0.7;
+    runner.update_lane(&state.course, delta_time);
+    let current_speed = runner.lane.current_speed;
+    assert!((current_speed - 0.03 * delta_time).abs() < 1e-9);
+    assert!((runner.lane.speed - (current_speed + 0.1)).abs() < 1e-9);
+    let moved = runner.lane.current - 0.4;
+    assert!((moved - runner.lane.speed * delta_time).abs() < 1e-9);
+
+    // Moving in: faster the further out the runner is.
+    runner.lane.target = 0.0;
+    let lane = runner.lane.current;
+    runner.update_lane(&state.course, delta_time);
+    let direction_modifier = -(1.0 + lane);
+    let expected = (runner.lane.current_speed + 0.1) * direction_modifier;
+    assert!((runner.lane.speed - expected).abs() < 1e-9);
+}
+
+#[test]
+fn test_lane_change_reaching_target_resets_current_speed() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.lane.current = 0.4;
+    runner.lane.target = 0.401;
+    runner.lane.current_speed = 0.02;
+
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert_eq!(runner.lane.current, 0.401);
+    assert_eq!(runner.lane.current_speed, 0.0);
+    // The runner still moved on this frame.
+    assert!(runner.lane.speed > 0.0);
+
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert_eq!(runner.lane.speed, 0.0);
+}
+
+#[test]
+fn test_side_blocked_runner_keeps_accelerating_without_moving() {
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.lane.current = 0.4;
+    runner.lane.target = 0.7;
+    runner.blocked.side_out = true;
+
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert_eq!(runner.lane.current, 0.4);
+    assert_eq!(runner.lane.speed, 0.0);
+    assert!((runner.lane.current_speed - 0.03 * 2.0 / 15.0).abs() < 1e-9);
+
+    // Blocked only towards the outside, so moving in is still possible.
+    runner.lane.target = 0.0;
+    runner.update_lane(&state.course, 1.0 / 15.0);
+    assert!(runner.lane.current < 0.4);
+    assert!(runner.lane.speed < 0.0);
 }
 
 #[test]
@@ -1256,44 +1347,44 @@ fn test_normal_mode_lane_targets_in_course_widths() {
             .target
     };
 
-    // Move inward by 0.05 course widths (0.5625m) in the early phase.
+    // Move inward by 0.05 course widths in the early phase.
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Early;
-    runner.lane.current = 5.0;
-    assert!((target(&solver) - 4.4375).abs() < 1e-9);
+    runner.lane.current = 0.4;
+    assert!((target(&solver) - 0.35).abs() < 1e-9);
 
-    // Pace down targets 0.18 course widths (2.025m) from the inner fence.
+    // Pace down targets 0.18 course widths from the inner fence.
     solver.runners[0].positioning_strategy = PositioningStrategy::PaceDown(0.0);
-    assert!((target(&solver) - 2.025).abs() < 1e-9);
+    assert!((target(&solver) - 0.18).abs() < 1e-9);
 }
 
 #[test]
 fn test_overlap_bumps_outer_runner_ahead() {
-    // 0.4 horse lanes = 0.25m.
+    // Bumped 0.4 horse lanes away from the inner runner.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.8, 1.9)],
+        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.8, 0.19)],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert!((ahead.lane.current - 2.15).abs() < 1e-9);
+    assert!((ahead.lane.current - (0.19 + horse_lanes_to_course_widths(0.4))).abs() < 1e-9);
     assert_eq!(ahead.lane.target, ahead.lane.current);
     assert!(ahead.force_lane_update);
-    assert_eq!(behind.lane.current, 1.9);
+    assert_eq!(behind.lane.current, 0.19);
     assert!(!behind.force_lane_update);
 }
 
 #[test]
 fn test_overlap_bumps_outer_runner_behind() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 1.9), (Style::Front, 199.8, 2.0)],
+        &[(Style::Front, 200.0, 0.19), (Style::Front, 199.8, 0.2)],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert_eq!(ahead.lane.current, 1.9);
+    assert_eq!(ahead.lane.current, 0.19);
     assert!(!ahead.force_lane_update);
-    assert!((behind.lane.current - 2.15).abs() < 1e-9);
+    assert!((behind.lane.current - (0.19 + horse_lanes_to_course_widths(0.4))).abs() < 1e-9);
     assert!(behind.force_lane_update);
 }
 
@@ -1301,28 +1392,28 @@ fn test_overlap_bumps_outer_runner_behind() {
 fn test_no_bump_without_overlap() {
     // Too far apart.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.6, 1.9)],
+        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.6, 0.19)],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
-    assert_eq!(solver.runners[0].lane.current, 2.0);
-    assert_eq!(solver.runners[1].lane.current, 1.9);
+    assert_eq!(solver.runners[0].lane.current, 0.2);
+    assert_eq!(solver.runners[1].lane.current, 0.19);
 
     // Too far apart laterally.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 2.16), (Style::Front, 199.8, 1.9)],
+        &[(Style::Front, 200.0, 0.215), (Style::Front, 199.8, 0.19)],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
-    assert_eq!(solver.runners[0].lane.current, 2.16);
-    assert_eq!(solver.runners[1].lane.current, 1.9);
+    assert_eq!(solver.runners[0].lane.current, 0.215);
+    assert_eq!(solver.runners[1].lane.current, 0.19);
     assert!(solver.runners.iter().all(|r| !r.force_lane_update));
 }
 
 #[test]
 fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 2.0), (Style::Front, 199.8, 1.9)],
+        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.8, 0.19)],
         GameVersion::LATEST,
     );
     for runner in &mut solver.runners {
@@ -1334,10 +1425,11 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     solver.resolve_overlaps();
     solver.update_blocking_status(1.0 / 15.0);
     let bumped = &solver.runners[0];
-    assert!(bumped.blocked.side);
+    assert!(bumped.blocked.side_in);
     assert!(!bumped.force_lane_update);
     // Too close to the runner inside in mid-race, so she targets 2 horse lanes
-    // (1.25m) away from her. Without the forced update, the target would have
-    // stayed at the bumped lane.
-    assert!((bumped.lane.target - 3.15).abs() < 1e-9);
+    // away from her. Without the forced update, the target would have stayed at
+    // the bumped lane.
+    let expected = 0.19 + horse_lanes_to_course_widths(2.0);
+    assert!((bumped.lane.target - expected).abs() < 1e-9);
 }

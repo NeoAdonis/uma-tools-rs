@@ -22,14 +22,13 @@ fn test_formulas() {
 
 #[test]
 fn test_trigger_proximity_in_course_widths() {
-    // 0.25 course widths = 2.8125 m.
     assert!(is_close(0.0, 0.0));
-    assert!(is_close(2.9, 2.81));
-    assert!(is_close(-2.9, -2.81));
+    assert!(is_close(2.9, 0.249));
+    assert!(is_close(-2.9, -0.249));
     assert!(!is_close(3.0, 0.0));
     assert!(!is_close(-3.0, 0.0));
-    assert!(!is_close(0.0, 2.82));
-    assert!(!is_close(0.0, -2.82));
+    assert!(!is_close(0.0, 0.251));
+    assert!(!is_close(0.0, -0.251));
 }
 
 #[test]

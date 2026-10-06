@@ -43,21 +43,19 @@ fn test_duration_scales_with_style_aptitude() {
 
 #[test]
 fn test_trigger_proximity_in_course_widths() {
-    // 0.165 course widths = 1.85625 m.
-    assert!(is_close_to_leader(3.7, 1.85));
-    assert!(is_close_to_leader(0.0, -1.85));
+    assert!(is_close_to_leader(3.7, 0.164));
+    assert!(is_close_to_leader(0.0, -0.164));
     assert!(!is_close_to_leader(3.75, 0.0));
-    assert!(!is_close_to_leader(0.0, 1.86));
+    assert!(!is_close_to_leader(0.0, 0.166));
 }
 
 #[test]
 fn test_exit_proximity_in_course_widths() {
-    // 0.416 course widths = 4.68 m.
-    assert!(!is_too_far(-5.0, -4.67));
-    assert!(!is_too_far(0.0, 4.67));
+    assert!(!is_too_far(-5.0, -0.415));
+    assert!(!is_too_far(0.0, 0.415));
     assert!(is_too_far(-5.01, 0.0));
-    assert!(is_too_far(0.0, 4.69));
-    assert!(is_too_far(0.0, -4.69));
+    assert!(is_too_far(0.0, 0.417));
+    assert!(is_too_far(0.0, -0.417));
     assert!(is_too_far(5.0, 4.69));
 }
 
