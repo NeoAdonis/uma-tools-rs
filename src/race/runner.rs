@@ -367,8 +367,10 @@ pub struct Runner {
     pub min_speed: f64,
     /// Target speed in m/s.
     pub target_speed: f64,
-    /// Speed modifier applied early in the race to encourage running towards the
-    /// inner fence. Calculated before race begins based on running style.
+    /// Speed modifier applied early in the race when away from the inner fence and
+    /// blocked on the inside.
+    ///
+    /// Its value is rolled before the race begins based on running style.
     pub force_in_modifier: f64,
     /// Lane state including current and target lane positions in course widths.
     pub lane: LaneState,
@@ -764,13 +766,14 @@ impl Runner {
             0.0
         };
 
-        // TODO: Apply only when inside is open.
-        let force_in_modifier =
-            if self.phase == Phase::Early && self.lane.current > FORCE_IN_MIN_LANE {
-                self.force_in_modifier
-            } else {
-                0.0
-            };
+        let force_in_modifier = if self.phase == Phase::Early
+            && self.lane.current > FORCE_IN_MIN_LANE
+            && self.blocked.side_in
+        {
+            self.force_in_modifier
+        } else {
+            0.0
+        };
 
         let dueling_modifier = self.duel.speed_bonus();
 

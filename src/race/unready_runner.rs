@@ -415,7 +415,7 @@ impl UnreadyRunner {
                 + match self.adjusted.style {
                     Style::Runaway | Style::Front => 0.02,
                     Style::Pace | Style::Late => 0.01,
-                    Style::End => 0.3,
+                    Style::End => 0.03,
                 }
         };
 

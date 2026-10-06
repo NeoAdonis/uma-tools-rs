@@ -1188,11 +1188,31 @@ fn test_duel_not_before_first_anniversary() {
 }
 
 #[test]
+fn test_force_in_modifier_strategy_ranges() {
+    let cases = [
+        (Style::Runaway, 0.02),
+        (Style::Front, 0.02),
+        (Style::Pace, 0.01),
+        (Style::Late, 0.01),
+        (Style::End, 0.03),
+    ];
+    for (style, strategy_modifier) in cases {
+        let solver = positioning_solver(&[(style, 100.0)], GameVersion::LATEST);
+        let force_in = solver.runners[0].force_in_modifier;
+        assert!(
+            (strategy_modifier..strategy_modifier + 0.1).contains(&force_in),
+            "{style:?}: {force_in}"
+        );
+    }
+}
+
+#[test]
 fn test_force_in_applies_only_away_from_inner_fence() {
     let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.phase = Phase::Early;
+    runner.blocked.side_in = true;
     let force_in = runner.force_in_modifier;
     assert!(force_in > 0.0);
 
@@ -1212,6 +1232,27 @@ fn test_force_in_applies_only_away_from_inner_fence() {
     let mid_near = target_speed_at(runner, 0.0);
     let mid_away = target_speed_at(runner, 0.5);
     assert_eq!(mid_near, mid_away);
+}
+
+#[test]
+fn test_force_in_applies_only_when_inside_is_blocked() {
+    let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.phase = Phase::Early;
+    runner.lane.current = 0.5;
+    let mut target_speed_with = |side_in: bool, side_out: bool| {
+        runner.blocked.side_in = side_in;
+        runner.blocked.side_out = side_out;
+        runner.update_target_speed(state);
+        runner.target_speed
+    };
+
+    let open = target_speed_with(false, false);
+    assert_eq!(target_speed_with(false, true), open);
+    let blocked_in = target_speed_with(true, false);
+    let force_in = solver.runners[0].force_in_modifier;
+    assert!((blocked_in - open - force_in).abs() < 1e-9);
 }
 
 #[test]
