@@ -4,7 +4,7 @@ use super::*;
 use crate::course::geometry::*;
 use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, skill_data};
+use crate::test_utils::{alternative, assert_close, course_data, skill_data};
 use crate::trigger::builder::build_trigger_scheduler;
 
 /// Create a simple test course for testing spatial triggers.
@@ -12,13 +12,6 @@ fn create_test_course() -> Course {
     Course::new_test(
         10001,
         CourseData {
-            distance: 2000,
-            distance_type: DistanceType::Medium,
-            surface: Track::Turf,
-            turn: Direction::Left,
-            course_set_status: vec![],
-            finish_time_min: 140000,
-            finish_time_max: 160000,
             corners: vec![
                 Corner {
                     start: 100.0,
@@ -46,8 +39,7 @@ fn create_test_course() -> Course {
                     front_type: FrontType::Audience,
                 },
             ],
-            race_track_id: 1,
-            lane_max: 10000,
+            ..course_data()
         },
     )
 }

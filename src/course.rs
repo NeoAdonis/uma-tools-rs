@@ -397,22 +397,13 @@ impl Course {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::course_data;
 
     /// Create a minimal course at the given racetrack.
     fn create_test_course(track_id: u16) -> Course {
         let data = CourseData {
-            distance: 2000,
-            distance_type: DistanceType::Mile,
-            surface: Track::Dirt,
-            turn: Direction::Left,
-            course_set_status: vec![],
-            finish_time_min: 120000,
-            finish_time_max: 150000,
-            lane_max: 10000,
-            corners: vec![],
-            slopes: vec![],
-            straights: vec![],
             race_track_id: track_id,
+            ..course_data()
         };
         Course::new_test(track_id, data)
     }

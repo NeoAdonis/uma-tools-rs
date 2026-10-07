@@ -1,7 +1,7 @@
 //! Shared helpers for unit tests.
 
 use crate::configuration::Configuration;
-use crate::course::Course;
+use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
@@ -32,6 +32,27 @@ pub(crate) use assert_close;
 pub(crate) fn load_course(course_id: u32) -> Course {
     Course::from_json_file("data/course_data.json", &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
+}
+
+/// Synthetic 2000m (Medium) turf course data at Tokyo, without corners, slopes
+/// or straights.
+///
+/// Override fields with `CourseData { distance: 2400, ..course_data() }`.
+pub(crate) fn course_data() -> CourseData {
+    CourseData {
+        distance: 2000,
+        distance_type: DistanceType::Medium,
+        surface: Track::Turf,
+        turn: Direction::Left,
+        course_set_status: vec![],
+        corners: vec![],
+        slopes: vec![],
+        straights: vec![],
+        race_track_id: 10006,
+        finish_time_min: 120000,
+        finish_time_max: 150000,
+        lane_max: 10000,
+    }
 }
 
 /// Standard race parameters (firm turf, sunny spring G1 with 9 gates).

@@ -1,6 +1,7 @@
 use super::*;
 use crate::course::geometry::*;
 use crate::course::*;
+use crate::test_utils::course_data;
 
 fn create_test_course() -> Course {
     create_test_course_with(
@@ -42,17 +43,10 @@ fn create_test_course_with(
         10001,
         CourseData {
             distance: 2400,
-            distance_type: DistanceType::Medium,
-            surface: Track::Turf,
-            turn: Direction::Left,
-            course_set_status: vec![],
-            finish_time_min: 140000,
-            finish_time_max: 160000,
             corners,
             slopes,
             straights,
-            race_track_id: 1,
-            lane_max: 10000,
+            ..course_data()
         },
     )
 }

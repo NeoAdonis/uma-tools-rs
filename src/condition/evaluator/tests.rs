@@ -1,61 +1,17 @@
 use super::*;
-use crate::course::*;
-use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
-use crate::skill::*;
-use crate::test_utils::seeded_config;
+use crate::skill::Skill;
+use crate::test_utils::{ready_solver, seeded_config, skill_data, uma};
 
-/// Helper to create a minimal test race state.
-fn create_test_race_solver() -> RaceSolver<Runner> {
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1200,
-        power: 1200,
-        guts: 1200,
-        wiz: 1200,
-        style: Style::Late,
-        distance_aptitude: Aptitude::S,
-        track_aptitude: Aptitude::S,
-        style_aptitude: Aptitude::S,
-    };
-
-    let course_data = CourseData {
-        distance: 2000,
-        distance_type: DistanceType::Mile,
-        surface: Track::Turf,
-        turn: Direction::Left,
-        course_set_status: vec![],
-        finish_time_min: 120000,
-        finish_time_max: 150000,
-        lane_max: 10000,
-        corners: vec![],
-        slopes: vec![],
-        straights: vec![],
-        race_track_id: 10006,
-    };
-
-    let course = Course::new_test(10006, course_data);
-
-    let params = RaceParameters {
-        track_condition: TrackCondition::Good,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        grade: Grade::G1,
-        time: Time::Noon,
-        gates: 18,
-    };
-
-    let skills = vec![];
-
-    let mut solver = RaceSolver::new(course, params, &seeded_config(12345));
-    solver.add_runner(uma, Motivation::Good, skills);
-    solver.ready_runners()
+/// Ready race with a single Late Surger with the given skills.
+fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
+    ready_solver(10101, uma(Style::Late), skills, &seeded_config(12345))
 }
 
 #[test]
 fn test_is_used_skill_id_with_activated_skill() {
-    let mut solver = create_test_race_solver();
+    let mut solver = create_test_race_solver(vec![]);
 
     // Add skill ID "202051" to activated_skill_ids.
     solver.runners[0]
@@ -75,7 +31,7 @@ fn test_is_used_skill_id_with_activated_skill() {
 
 #[test]
 fn test_is_used_skill_id_without_activated_skill() {
-    let state = create_test_race_solver();
+    let state = create_test_race_solver(vec![]);
 
     // No skills in activated_skills.
 
@@ -92,7 +48,7 @@ fn test_is_used_skill_id_without_activated_skill() {
 
 #[test]
 fn test_is_used_skill_id_with_different_skill() {
-    let mut solver = create_test_race_solver();
+    let mut solver = create_test_race_solver(vec![]);
 
     // Add skill ID "203781" to activated_skill_ids (different from what we're
     // checking).
@@ -113,7 +69,7 @@ fn test_is_used_skill_id_with_different_skill() {
 
 #[test]
 fn test_is_used_skill_id_not_equal() {
-    let mut state = create_test_race_solver();
+    let mut state = create_test_race_solver(vec![]);
 
     // Add skill ID "202051" to activated_skill_ids.
     state.runners[0]
@@ -133,58 +89,8 @@ fn test_is_used_skill_id_not_equal() {
 
 #[test]
 fn test_is_exist_skill_id_in_available_skills() {
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1200,
-        power: 1200,
-        guts: 1200,
-        wiz: 1200,
-        style: Style::Late,
-        distance_aptitude: Aptitude::S,
-        track_aptitude: Aptitude::S,
-        style_aptitude: Aptitude::S,
-    };
-
-    let course_data = CourseData {
-        distance: 2000,
-        distance_type: DistanceType::Mile,
-        surface: Track::Turf,
-        turn: Direction::Left,
-        course_set_status: vec![],
-        finish_time_min: 120000,
-        finish_time_max: 150000,
-        lane_max: 10000,
-        corners: vec![],
-        slopes: vec![],
-        straights: vec![],
-        race_track_id: 10006,
-    };
-
-    let course = Course::new_test(10006, course_data);
-
-    let params = RaceParameters {
-        track_condition: TrackCondition::Good,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        grade: Grade::G1,
-        time: Time::Noon,
-        gates: 18,
-    };
-
-    // Create a skill with ID "203061".
-    let skill_data = SkillData {
-        rarity: SkillRarity::White,
-        alternatives: vec![],
-        popularity: None,
-        wisdom_check: true,
-    };
-    let skill = Skill::new("203061".to_string(), skill_data);
-
-    let skills = vec![skill];
-
-    let mut solver = RaceSolver::new(course, params, &seeded_config(12345));
-    solver.add_runner(uma, Motivation::Good, skills);
-    let solver = solver.ready_runners();
+    let skill = Skill::new("203061".to_string(), skill_data(vec![]));
+    let solver = create_test_race_solver(vec![skill]);
 
     // Create comparison: is_exist_skill_id == 203061.
     let comp = Comparison {
@@ -201,7 +107,7 @@ fn test_is_exist_skill_id_in_available_skills() {
 fn test_phase_values_by_position() {
     use crate::course::Phase as CoursePhase;
 
-    let mut solver = create_test_race_solver();
+    let mut solver = create_test_race_solver(vec![]);
     let section = solver.state.course.section_length();
 
     // (position in sections, phase, phase_firstquarter, phase_firsthalf,
