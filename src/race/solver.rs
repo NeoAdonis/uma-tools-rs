@@ -77,8 +77,10 @@ pub struct RaceSolver<T> {
 /// calculated and out-of-gate skills have been applied).
 impl RaceSolver<UnreadyRunner> {
     /// Create a new RaceSolver for a given course and parameters.
+    ///
+    /// If the configuration has no seed, a random one is used.
     pub fn new(course: Course, params: RaceParameters, config: &Configuration) -> Self {
-        let seed = params.rng_seed;
+        let seed = config.seed.unwrap_or_else(rand::random);
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
 
         let state = RaceState {

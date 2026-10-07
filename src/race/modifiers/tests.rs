@@ -85,7 +85,7 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
 fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let params = race_params(42);
+    let params = race_params();
     let uma = Uma {
         speed: 1200,
         stamina: 1000,
@@ -100,6 +100,7 @@ fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
 
     let config = Configuration {
         game_version: GameVersion::LATEST,
+        seed: Some(42),
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);
@@ -208,7 +209,7 @@ fn test_stamina_limit_break_base_buff() {
 fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
     let course = Course::from_json_file("data/course_data.json", "10105")
         .expect("Failed to load course data");
-    let params = race_params(42);
+    let params = race_params();
     let uma = Uma {
         speed: 1200,
         stamina: 1600,
@@ -223,6 +224,7 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
 
     let config = Configuration {
         game_version: GameVersion::LATEST,
+        seed: Some(42),
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);

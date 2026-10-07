@@ -36,9 +36,10 @@ fn solver(
         .expect("Failed to load course data");
     let config = Configuration {
         game_version,
+        seed: Some(rng_seed),
         ..Default::default()
     };
-    let mut solver = RaceSolver::new(course, race_params(rng_seed), &config);
+    let mut solver = RaceSolver::new(course, race_params(), &config);
     solver.add_runner(uma(power, style), motivation, vec![]);
     solver.ready_runners()
 }

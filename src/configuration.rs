@@ -1,4 +1,8 @@
-//! Configuration for the game mechanics and language settings.
+//! Configuration for the simulation behavior, game mechanics and language
+//! settings.
+
+use rand::{Rng, RngExt};
+use serde::Deserialize;
 
 /// Represents different versions of the game.
 ///
@@ -7,7 +11,7 @@
 /// update, allowing to compare if a certain version is before or after a
 /// certain update. The list is not exhaustive, and only includes the versions
 /// that have a significant impact on the game mechanics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub enum GameVersion {
     /// When the game was first released.
     Original,
@@ -53,17 +57,59 @@ impl GameVersion {
 }
 
 /// Supported languages for track names, skill names, etc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum Language {
     Japanese,
     English,
 }
 
+/// How a random check is resolved.
+///
+/// Used to force the outcome of random checks (e.g. wisdom checks or rushing)
+/// for analysis purposes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+pub enum Roll {
+    /// The check succeeds randomly with the given probability.
+    #[default]
+    Random,
+    /// The check always succeeds.
+    Always,
+    /// The check always fails.
+    Never,
+}
+
+impl Roll {
+    /// Resolve a check that succeeds with probability `p`.
+    ///
+    /// The RNG is consumed even if the outcome is forced, so that changing the
+    /// mode doesn't shift unrelated random outcomes for the same seed.
+    pub fn resolve<R: Rng + ?Sized>(self, rng: &mut R, p: f64) -> bool {
+        let roll = rng.random_bool(p);
+        match self {
+            Roll::Random => roll,
+            Roll::Always => true,
+            Roll::Never => false,
+        }
+    }
+}
+
 /// Runtime configuration shared by everything in a race.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Every field is optional when deserialized; missing fields take their
+/// default value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Configuration {
     pub game_version: GameVersion,
     pub language: Language,
+    /// Seed for pseudo-random number generation. Ensures reproducibility.
+    ///
+    /// If `None`, a random seed is used.
+    pub seed: Option<u64>,
+    /// How skill wisdom checks are resolved before the race.
+    pub wisdom_checks: Roll,
+    /// How runners' rush checks are resolved before the race.
+    pub rushing: Roll,
 }
 
 impl Default for Configuration {
@@ -71,6 +117,54 @@ impl Default for Configuration {
         Configuration {
             game_version: GameVersion::LATEST,
             language: Language::English,
+            seed: None,
+            wisdom_checks: Roll::Random,
+            rushing: Roll::Random,
         }
+    }
+}
+
+impl Configuration {
+    /// Parse `Configuration` from a JSON string.
+    ///
+    /// Returns an error if the JSON is invalid.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    /// Parse `Configuration` from a JSON file.
+    ///
+    /// Returns an error if the file can't be read or JSON is invalid.
+    pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        Ok(Self::from_json(&content)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_fields_take_default_values() {
+        let config = Configuration::from_json(r#"{ "seed": 7, "rushing": "Never" }"#).unwrap();
+        assert_eq!(
+            config,
+            Configuration {
+                seed: Some(7),
+                rushing: Roll::Never,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_unknown_fields_are_rejected() {
+        assert!(Configuration::from_json(r#"{ "wisdomCheck": "Always" }"#).is_err());
+    }
+
+    #[test]
+    fn test_repository_config_file_is_valid() {
+        Configuration::from_json_file("config.json").unwrap();
     }
 }

@@ -31,7 +31,6 @@ fn test_basic_race_simulation() {
         time: Time::Noon,
         grade: Grade::G1,
         gates: 18,
-        rng_seed: 12345,
     };
 
     // Create a test course (this would normally be loaded from JSON)
@@ -72,6 +71,7 @@ fn test_multi_runner_race_simulation() {
     {
         let config = Configuration {
             game_version,
+            seed: Some(seed),
             ..Default::default()
         };
         let params = RaceParameters {
@@ -81,7 +81,6 @@ fn test_multi_runner_race_simulation() {
             time: Time::None,
             grade: Grade::G1,
             gates: styles.len() as u8,
-            rng_seed: seed,
         };
         let mut solver = RaceSolver::new(course.clone(), params, &config);
         for style in styles {
@@ -132,9 +131,12 @@ fn test_same_seed_gives_same_race() {
             time: Time::None,
             grade: Grade::G1,
             gates: styles.len() as u8,
-            rng_seed: seed,
         };
-        let mut solver = RaceSolver::new(course, params, &Configuration::default());
+        let config = Configuration {
+            seed: Some(seed),
+            ..Default::default()
+        };
+        let mut solver = RaceSolver::new(course, params, &config);
         for style in styles {
             let uma = Uma {
                 speed: 1200,

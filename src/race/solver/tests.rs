@@ -1,7 +1,7 @@
 use super::*;
 use crate::course::LaneType;
 use crate::race::spot_struggle::SpotStruggle;
-use crate::test_utils::race_params;
+use crate::test_utils::{race_params, seeded_config};
 use crate::units::horse_lanes_to_course_widths;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -20,7 +20,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
     for course_id in ["10101", "10104", "10606", "10913"] {
         let course = Course::from_json_file("data/course_data.json", course_id)
             .expect("Failed to load course data");
-        let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+        let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
         for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
             let uma = Uma {
                 speed: 1200,
@@ -113,7 +113,7 @@ fn test_skills_see_state_after_the_move() {
         },
     );
 
-    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
     let uma = Uma {
         speed: 1200,
         stamina: 1200,
@@ -145,9 +145,10 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
         .expect("Failed to load course data");
     let config = Configuration {
         game_version,
+        seed: Some(0),
         ..Configuration::default()
     };
-    let mut solver = RaceSolver::new(course, race_params(0), &config);
+    let mut solver = RaceSolver::new(course, race_params(), &config);
     for &(style, _) in runners {
         let uma = Uma {
             speed: 1200,
@@ -327,7 +328,7 @@ const FRAME: f64 = 1.0 / 15.0;
 fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(rng_seed), &Configuration::default());
+    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(rng_seed));
     let uma = Uma {
         speed: 1200,
         stamina: 1000,
@@ -445,7 +446,7 @@ fn test_position_never_decreases_regardless_of_start_delay() {
 fn test_runners_bound_to_rush_do_rush() {
     let course = Course::from_json_file("data/course_data.json", "10204")
         .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
     for _ in 0..9 {
         // Low wisdom for a high rush chance.
         let uma = Uma {
@@ -479,7 +480,7 @@ fn test_runners_bound_to_rush_do_rush() {
 fn test_all_runners_finish_with_margins() {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
     for (i, style) in [Style::Front, Style::Pace, Style::Late, Style::End]
         .into_iter()
         .enumerate()

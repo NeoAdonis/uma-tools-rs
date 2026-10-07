@@ -169,8 +169,10 @@ impl UnreadyRunner {
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
         let (available_skills, failed_check_skills): (Vec<_>, Vec<_>) =
             skills.into_iter().partition(|skill| {
-                rng.borrow_mut()
-                    .random_bool(skill.activation_chance(base_uma.wiz))
+                state.config.wisdom_checks.resolve(
+                    &mut *rng.borrow_mut(),
+                    skill.activation_chance(base_uma.wiz),
+                )
             });
 
         // Partition skills into out-of-gate and runtime skills.
@@ -371,7 +373,10 @@ impl UnreadyRunner {
         // Determine rush chance.
         let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier;
-        let can_rush = self.rng.borrow_mut().random_bool(rush_chance / 100.0);
+        let can_rush = state
+            .config
+            .rushing
+            .resolve(&mut *self.rng.borrow_mut(), rush_chance / 100.0);
         let rush_state = if can_rush {
             let style = match self.adjusted.style {
                 // Front-like styles (Front and Runaway) keep their style when rushing.

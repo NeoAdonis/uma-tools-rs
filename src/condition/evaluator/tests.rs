@@ -1,10 +1,10 @@
 use super::*;
-use crate::configuration::Configuration;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
+use crate::test_utils::seeded_config;
 
 /// Helper to create a minimal test race state.
 fn create_test_race_solver() -> RaceSolver<Runner> {
@@ -44,12 +44,11 @@ fn create_test_race_solver() -> RaceSolver<Runner> {
         grade: Grade::G1,
         time: Time::Noon,
         gates: 18,
-        rng_seed: 12345,
     };
 
     let skills = vec![];
 
-    let mut solver = RaceSolver::new(course, params, &Configuration::default());
+    let mut solver = RaceSolver::new(course, params, &seeded_config(12345));
     solver.add_runner(uma, Motivation::Good, skills);
     solver.ready_runners()
 }
@@ -170,7 +169,6 @@ fn test_is_exist_skill_id_in_available_skills() {
         grade: Grade::G1,
         time: Time::Noon,
         gates: 18,
-        rng_seed: 12345,
     };
 
     // Create a skill with ID "203061".
@@ -184,7 +182,7 @@ fn test_is_exist_skill_id_in_available_skills() {
 
     let skills = vec![skill];
 
-    let mut solver = RaceSolver::new(course, params, &Configuration::default());
+    let mut solver = RaceSolver::new(course, params, &seeded_config(12345));
     solver.add_runner(uma, Motivation::Good, skills);
     let solver = solver.ready_runners();
 

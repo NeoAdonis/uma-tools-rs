@@ -98,7 +98,7 @@ fn test_stamina_keep_chance() {
 fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) {
     let course = Course::from_json_file("data/course_data.json", "10101")
         .expect("Failed to load course data");
-    let params = race_params(42);
+    let params = race_params();
     let uma = Uma {
         speed: 1200,
         stamina: 1000,
@@ -112,6 +112,7 @@ fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) 
     };
     let config = Configuration {
         game_version,
+        seed: Some(42),
         ..Default::default()
     };
     let mut solver = RaceSolver::new(course, params, &config);

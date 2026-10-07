@@ -1,8 +1,7 @@
 //! Runtime tests for conditions combining several comparisons: every comparison
 //! must hold when the skill activates, wherever it is checked.
 
-use crate::common::{load_course, race_params};
-use uma_tools::configuration::Configuration;
+use crate::common::{load_course, race_params, seeded_config};
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
 use uma_tools::uma::*;
@@ -45,11 +44,8 @@ fn activation_positions(course_id: u32, condition: &str) -> Vec<Vec<f64>> {
                 track_aptitude: Aptitude::A,
                 style_aptitude: Aptitude::A,
             };
-            let mut solver = RaceSolver::new(
-                load_course(course_id),
-                race_params(seed),
-                &Configuration::default(),
-            );
+            let mut solver =
+                RaceSolver::new(load_course(course_id), race_params(), &seeded_config(seed));
             solver.add_runner(uma, Motivation::Normal, vec![skill(condition)]);
             let mut solver = solver.ready_runners();
             solver.run();

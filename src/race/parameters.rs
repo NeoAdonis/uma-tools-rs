@@ -94,8 +94,6 @@ pub struct RaceParameters {
     pub grade: Grade,
     /// Number of gates (participants) in the race.
     pub gates: u8,
-    /// Seed for pseudo-random number generation. Ensures reproducibility.
-    pub rng_seed: u64,
 }
 
 /// On-disk representation of `parameters.json`.

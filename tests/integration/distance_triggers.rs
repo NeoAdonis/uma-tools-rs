@@ -39,7 +39,7 @@ fn skill(condition: &str) -> Skill {
 
 /// Run a single-runner race with the given skill condition and return the runner.
 fn run_race(condition: &str, rng_seed: u64) -> Runner {
-    let params = race_params(rng_seed);
+    let params = race_params();
     let uma = Uma {
         speed: 1200,
         stamina: 1200,
@@ -53,6 +53,7 @@ fn run_race(condition: &str, rng_seed: u64) -> Runner {
     };
     let config = Configuration {
         game_version: GameVersion::LATEST,
+        seed: Some(rng_seed),
         ..Default::default()
     };
     let mut solver = RaceSolver::new(load_course(10104), params, &config);

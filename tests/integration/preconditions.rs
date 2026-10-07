@@ -4,10 +4,9 @@
 //! by focusing on precondition-trigger interaction, edge cases and unlocking skills
 //! during a race.
 
-use crate::common::{activation_logics, load_course, make_skill, race_params};
+use crate::common::{activation_logics, load_course, make_skill, race_params, seeded_config};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-use uma_tools::configuration::Configuration;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
@@ -246,8 +245,8 @@ fn ready_runner(skills: Vec<Skill>) -> (RaceSolver<Runner>, usize) {
     };
     let mut solver = RaceSolver::new(
         load_course(RUNTIME_COURSE),
-        race_params(42),
-        &Configuration::default(),
+        race_params(),
+        &seeded_config(42),
     );
     solver.add_runner(uma, Motivation::Normal, skills);
     (solver.ready_runners(), 0)

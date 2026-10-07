@@ -1,5 +1,6 @@
 //! Shared helpers for integration tests.
 
+use uma_tools::configuration::Configuration;
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
 use uma_tools::skill::*;
@@ -12,9 +13,8 @@ pub fn load_course(course_id: u32) -> Course {
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
-/// Standard race parameters (firm turf, sunny spring G1 with 9 gates) with the
-/// given RNG seed.
-pub fn race_params(rng_seed: u64) -> RaceParameters {
+/// Standard race parameters (firm turf, sunny spring G1 with 9 gates).
+pub fn race_params() -> RaceParameters {
     RaceParameters {
         track_condition: TrackCondition::Firm,
         weather: Weather::Sunny,
@@ -22,7 +22,14 @@ pub fn race_params(rng_seed: u64) -> RaceParameters {
         time: Time::None,
         grade: Grade::G1,
         gates: 9,
-        rng_seed,
+    }
+}
+
+/// Default configuration with the given RNG seed.
+pub fn seeded_config(seed: u64) -> Configuration {
+    Configuration {
+        seed: Some(seed),
+        ..Default::default()
     }
 }
 

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use uma_tools::configuration::{Configuration, GameVersion, Language};
+use uma_tools::configuration::Configuration;
 use uma_tools::course::*;
 use uma_tools::race::charge_up::ChargeUpOutcome;
 use uma_tools::race::parameters::*;
@@ -9,12 +9,7 @@ use uma_tools::skill::*;
 use uma_tools::uma::*;
 
 fn main() {
-    // TODO: Load configuration from a config file or command-line arguments.
-    let config = Configuration {
-        game_version: GameVersion::OnePointFiveAnniversary,
-        language: Language::English,
-    };
-
+    let mut config_path = PathBuf::from("config.json");
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
 
@@ -22,6 +17,10 @@ fn main() {
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--config" => {
+                let value = args.next().expect("--config requires a file path");
+                config_path = PathBuf::from(value);
+            }
             "--uma" => {
                 let value = args.next().expect("--uma requires a file path");
                 uma_path = PathBuf::from(value);
@@ -33,6 +32,15 @@ fn main() {
             other => panic!("Unrecognized argument: {other}"),
         }
     }
+
+    // Load configuration from JSON file.
+    let mut config =
+        Configuration::from_json_file(config_path.to_str().expect("Invalid --config path"))
+            .expect("Failed to parse config JSON");
+
+    // Resolve the seed so that the race can be reproduced.
+    let seed = *config.seed.get_or_insert_with(rand::random);
+    println!("RNG seed: {seed}");
 
     // Load Uma data from JSON file.
     let uma_data = UmaData::from_json_file(uma_path.to_str().expect("Invalid --uma path"))

@@ -1,7 +1,7 @@
 use super::*;
-use crate::configuration::Configuration;
+use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
-use crate::test_utils::race_params;
+use crate::test_utils::{race_params, seeded_config};
 
 /// Build a skill with one `(condition, effect type, modifier)` per alternative,
 /// without wisdom check so it is always available.
@@ -40,7 +40,7 @@ fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Ski
 fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
     let course = Course::from_json_file("data/course_data.json", "10104")
         .expect("Failed to load course data");
-    let state = RaceSolver::new(course, race_params(0), &Configuration::default()).state;
+    let state = RaceSolver::new(course, race_params(), &seeded_config(0)).state;
     let runner = UnreadyRunner::new(uma(), 1, Motivation::Normal, &state, skills);
     assert!(
         runner.runtime_skills.is_empty(),
@@ -178,7 +178,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // scheduler refers to.
     let course = Course::from_json_file("data/course_data.json", "10104")
         .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(0), &Configuration::default());
+    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
     solver.add_runner(
         uma(),
         Motivation::Normal,
@@ -200,4 +200,73 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     assert_eq!(&activations[..2], &[("speed", 0.0), ("delay", 0.0)]);
     assert_eq!(activations[2].0, "late");
     assert!(activations[2].1 >= 1000.0, "{activations:?}");
+}
+
+/// Build a ready runner with low wisdom and the given skills, which all require
+/// a wisdom check.
+fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
+    let course = Course::from_json_file("data/course_data.json", "10104")
+        .expect("Failed to load course data");
+    let skills = (0..skill_count)
+        .map(|i| {
+            let skill = skill(
+                &i.to_string(),
+                "distance_rate>=50",
+                SkillType::TargetSpeed,
+                1,
+            );
+            let data = SkillData {
+                wisdom_check: true,
+                ..(*skill).clone()
+            };
+            Skill::new(skill.id.clone(), data)
+        })
+        .collect();
+    let mut solver = RaceSolver::new(course, race_params(), &config);
+    solver.add_runner(Uma { wiz: 100, ..uma() }, Motivation::Normal, skills);
+    let mut solver = solver.ready_runners();
+    solver.runners.remove(0)
+}
+
+fn config(wisdom_checks: Roll, rushing: Roll) -> Configuration {
+    Configuration {
+        wisdom_checks,
+        rushing,
+        ..seeded_config(0)
+    }
+}
+
+#[test]
+fn test_wisdom_checks_can_be_forced() {
+    // With 100 wisdom, each skill has a 20% chance to pass the check.
+    let runner = checked_runner(config(Roll::Always, Roll::Random), 20);
+    assert_eq!(runner.available_skills.len(), 20);
+    let runner = checked_runner(config(Roll::Never, Roll::Random), 20);
+    assert!(runner.available_skills.is_empty());
+}
+
+#[test]
+fn test_rushing_can_be_forced() {
+    for seed in 0..10 {
+        let always = Configuration {
+            seed: Some(seed),
+            ..config(Roll::Random, Roll::Always)
+        };
+        let never = Configuration {
+            seed: Some(seed),
+            ..config(Roll::Random, Roll::Never)
+        };
+        assert!(
+            checked_runner(always, 0).rush_state.is_some(),
+            "seed {seed}"
+        );
+        assert!(checked_runner(never, 0).rush_state.is_none(), "seed {seed}");
+    }
+}
+
+#[test]
+fn test_forced_rolls_do_not_shift_other_random_outcomes() {
+    let random = checked_runner(config(Roll::Random, Roll::Random), 20);
+    let forced = checked_runner(config(Roll::Always, Roll::Random), 20);
+    assert_eq!(random.start_delay, forced.start_delay);
 }

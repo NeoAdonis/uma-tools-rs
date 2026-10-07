@@ -2,8 +2,7 @@
 //! its OR branches can activate again until the cooldown, scaled by the course
 //! distance, is over.
 
-use crate::common::{load_course, race_params};
-use uma_tools::configuration::Configuration;
+use crate::common::{load_course, race_params, seeded_config};
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
@@ -47,11 +46,7 @@ fn run(condition: &str, base_cooldown: i32) -> Runner {
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
     };
-    let mut solver = RaceSolver::new(
-        load_course(COURSE_ID),
-        race_params(0),
-        &Configuration::default(),
-    );
+    let mut solver = RaceSolver::new(load_course(COURSE_ID), race_params(), &seeded_config(0));
     solver.add_runner(
         uma,
         Motivation::Normal,
