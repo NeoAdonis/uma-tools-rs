@@ -1,7 +1,7 @@
 use super::*;
 use crate::course::LaneType;
 use crate::race::spot_struggle::SpotStruggle;
-use crate::test_utils::{race_params, seeded_config};
+use crate::test_utils::{load_course, race_params, ready_solver, seeded_config, uma};
 use crate::units::horse_lanes_to_course_widths;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -17,23 +17,10 @@ fn feature_at(position: f64, ranges: impl Iterator<Item = (f64, f64)>) -> Option
 fn test_position_derived_state_is_consistent_after_each_frame() {
     // Skills are checked against the runner's state; everything derived from the
     // position must match the position at the end of each frame.
-    for course_id in ["10101", "10104", "10606", "10913"] {
-        let course = Course::from_json_file("data/course_data.json", course_id)
-            .expect("Failed to load course data");
-        let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
+    for course_id in [10101, 10104, 10606, 10913] {
+        let mut solver = RaceSolver::new(load_course(course_id), race_params(), &seeded_config(0));
         for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
-            let uma = Uma {
-                speed: 1200,
-                stamina: 1000,
-                power: 1000,
-                guts: 800,
-                wiz: 1000,
-                style,
-                distance_aptitude: Aptitude::A,
-                track_aptitude: Aptitude::A,
-                style_aptitude: Aptitude::A,
-            };
-            solver.add_runner(uma, Motivation::Normal, vec![]);
+            solver.add_runner(uma(style), Motivation::Normal, vec![]);
         }
         let mut solver = solver.ready_runners();
 
@@ -90,9 +77,7 @@ fn test_skills_see_state_after_the_move() {
     // On a 2400m course, Late phase starts at 1600m, i.e. with 800m remaining.
     // The distance trigger and the phase guard become true on the same frame, so
     // both must be seen at once.
-    let course = Course::from_json_file("data/course_data.json", "10108")
-        .expect("Failed to load course data");
-    assert_eq!(course.distance, 2400);
+
     let skill = Skill::new(
         "late".to_string(),
         SkillData {
@@ -113,20 +98,12 @@ fn test_skills_see_state_after_the_move() {
         },
     );
 
-    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
     let uma = Uma {
-        speed: 1200,
         stamina: 1200,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
-    solver.add_runner(uma, Motivation::Normal, vec![skill]);
-    let mut solver = solver.ready_runners();
+    let mut solver = ready_solver(10108, uma, vec![skill], &seeded_config(0));
+    assert_eq!(solver.state.course.distance, 2400);
     solver.run();
 
     let activations = &solver.runners[0].activated_skills;
@@ -141,27 +118,13 @@ fn test_skills_see_state_after_the_move() {
 /// Solver with one runner per `(style, position)` pair, sorted by position and
 /// past every start delay, ready for positioning strategy updates.
 fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
     let config = Configuration {
         game_version,
-        seed: Some(0),
-        ..Configuration::default()
+        ..seeded_config(0)
     };
-    let mut solver = RaceSolver::new(course, race_params(), &config);
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &config);
     for &(style, _) in runners {
-        let uma = Uma {
-            speed: 1200,
-            stamina: 1000,
-            power: 1000,
-            guts: 800,
-            wiz: 1000,
-            style,
-            distance_aptitude: Aptitude::A,
-            track_aptitude: Aptitude::A,
-            style_aptitude: Aptitude::A,
-        };
-        solver.add_runner(uma, Motivation::Normal, vec![]);
+        solver.add_runner(uma(style), Motivation::Normal, vec![]);
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
@@ -326,22 +289,7 @@ const FRAME: f64 = 1.0 / 15.0;
 
 /// Solver with a single runner whose start delay is overridden.
 fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(rng_seed));
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    };
-    solver.add_runner(uma, Motivation::Normal, vec![]);
-    let mut solver = solver.ready_runners();
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], &seeded_config(rng_seed));
     solver.runners[0].start_delay = start_delay;
     solver
 }
@@ -444,21 +392,12 @@ fn test_position_never_decreases_regardless_of_start_delay() {
 
 #[test]
 fn test_runners_bound_to_rush_do_rush() {
-    let course = Course::from_json_file("data/course_data.json", "10204")
-        .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
     for _ in 0..9 {
         // Low wisdom for a high rush chance.
         let uma = Uma {
-            speed: 1200,
-            stamina: 1000,
-            power: 1000,
-            guts: 800,
             wiz: 100,
-            style: Style::Late,
-            distance_aptitude: Aptitude::A,
-            track_aptitude: Aptitude::A,
-            style_aptitude: Aptitude::A,
+            ..uma(Style::Late)
         };
         solver.add_runner(uma, Motivation::Normal, vec![]);
     }
@@ -478,23 +417,14 @@ fn test_runners_bound_to_rush_do_rush() {
 
 #[test]
 fn test_all_runners_finish_with_margins() {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     for (i, style) in [Style::Front, Style::Pace, Style::Late, Style::End]
         .into_iter()
         .enumerate()
     {
         let uma = Uma {
             speed: 1000 + 50 * i as u16,
-            stamina: 1000,
-            power: 1000,
-            guts: 800,
-            wiz: 1000,
-            style,
-            distance_aptitude: Aptitude::A,
-            track_aptitude: Aptitude::A,
-            style_aptitude: Aptitude::A,
+            ..uma(style)
         };
         solver.add_runner(uma, Motivation::Normal, vec![]);
     }

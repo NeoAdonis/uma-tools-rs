@@ -1,28 +1,14 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
-use crate::course::{Course, DistanceType};
+use crate::course::DistanceType;
 use crate::race::last_spurt::*;
 use crate::race::runner::{PositioningStrategy, Runner};
 use crate::race::solver::RaceSolver;
-use crate::test_utils::race_params;
+use crate::test_utils::{load_course, race_params, seeded_config, uma};
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
 const DELTA_TIME: f64 = 1.0 / 15.0;
-
-fn uma(power: u16, style: Style) -> Uma {
-    Uma {
-        speed: 1200,
-        stamina: 1200,
-        power,
-        guts: 800,
-        wiz: 1000,
-        style,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    }
-}
 
 /// Build a solver with a single runner on a 2000m (Medium) course.
 fn solver(
@@ -32,15 +18,17 @@ fn solver(
     game_version: GameVersion,
     rng_seed: u64,
 ) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10204")
-        .expect("Failed to load course data");
+    let uma = Uma {
+        stamina: 1200,
+        power,
+        ..uma(style)
+    };
     let config = Configuration {
         game_version,
-        seed: Some(rng_seed),
-        ..Default::default()
+        ..seeded_config(rng_seed)
     };
-    let mut solver = RaceSolver::new(course, race_params(), &config);
-    solver.add_runner(uma(power, style), motivation, vec![]);
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), &config);
+    solver.add_runner(uma, motivation, vec![]);
     solver.ready_runners()
 }
 

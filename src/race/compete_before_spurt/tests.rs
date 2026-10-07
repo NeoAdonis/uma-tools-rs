@@ -1,10 +1,9 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
-use crate::course::Course;
 use crate::race::runner::Runner;
-use crate::race::solver::{RaceSolver, RaceState};
+use crate::race::solver::RaceState;
 use crate::skill::{SkillEffect, SkillTarget, SkillType};
-use crate::test_utils::race_params;
+use crate::test_utils::{ready_solver, seeded_config, uma};
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
@@ -96,28 +95,11 @@ fn test_stamina_keep_chance() {
 }
 
 fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let params = race_params();
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    };
     let config = Configuration {
         game_version,
-        seed: Some(42),
-        ..Default::default()
+        ..seeded_config(42)
     };
-    let mut solver = RaceSolver::new(course, params, &config);
-    solver.add_runner(uma, Motivation::Normal, vec![]);
-    let solver = solver.ready_runners();
+    let solver = ready_solver(10101, uma(style), vec![], &config);
     let runner = solver.runners.into_iter().next().unwrap();
     (runner, solver.state)
 }

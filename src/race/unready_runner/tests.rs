@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
-use crate::test_utils::{race_params, seeded_config};
+use crate::test_utils::{load_course, race_params, ready_solver, seeded_config, uma};
 
 /// Build a skill with one `(condition, effect type, modifier)` per alternative,
 /// without wisdom check so it is always available.
@@ -38,29 +38,13 @@ fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Ski
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
 /// race state it was built with.
 fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
-    let course = Course::from_json_file("data/course_data.json", "10104")
-        .expect("Failed to load course data");
-    let state = RaceSolver::new(course, race_params(), &seeded_config(0)).state;
-    let runner = UnreadyRunner::new(uma(), 1, Motivation::Normal, &state, skills);
+    let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
+    let runner = UnreadyRunner::new(uma(Style::Pace), 1, Motivation::Normal, &state, skills);
     assert!(
         runner.runtime_skills.is_empty(),
         "All skills should be out-of-gate"
     );
     (runner, state)
-}
-
-fn uma() -> Uma {
-    Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    }
 }
 
 /// IDs of the skills recorded as activated.
@@ -176,19 +160,12 @@ fn test_first_satisfied_alternative_is_applied() {
 fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // Out-of-gate skills listed first must not shift the skills the trigger
     // scheduler refers to.
-    let course = Course::from_json_file("data/course_data.json", "10104")
-        .expect("Failed to load course data");
-    let mut solver = RaceSolver::new(course, race_params(), &seeded_config(0));
-    solver.add_runner(
-        uma(),
-        Motivation::Normal,
-        vec![
-            skill("speed", "always==1", SkillType::SpeedUp, 400000),
-            skill("delay", "always==1", SkillType::SetStartDelay, 0),
-            skill("late", "distance_rate>=50", SkillType::TargetSpeed, 3500),
-        ],
-    );
-    let mut solver = solver.ready_runners();
+    let skills = vec![
+        skill("speed", "always==1", SkillType::SpeedUp, 400000),
+        skill("delay", "always==1", SkillType::SetStartDelay, 0),
+        skill("late", "distance_rate>=50", SkillType::TargetSpeed, 3500),
+    ];
+    let mut solver = ready_solver(10104, uma(Style::Pace), skills, &seeded_config(0));
     solver.run();
 
     let activations: Vec<_> = solver.runners[0]
@@ -205,8 +182,6 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
 /// Build a ready runner with low wisdom and the given skills, which all require
 /// a wisdom check.
 fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
-    let course = Course::from_json_file("data/course_data.json", "10104")
-        .expect("Failed to load course data");
     let skills = (0..skill_count)
         .map(|i| {
             let skill = skill(
@@ -222,9 +197,11 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
             Skill::new(skill.id.clone(), data)
         })
         .collect();
-    let mut solver = RaceSolver::new(course, race_params(), &config);
-    solver.add_runner(Uma { wiz: 100, ..uma() }, Motivation::Normal, skills);
-    let mut solver = solver.ready_runners();
+    let uma = Uma {
+        wiz: 100,
+        ..uma(Style::Pace)
+    };
+    let mut solver = ready_solver(10104, uma, skills, &config);
     solver.runners.remove(0)
 }
 

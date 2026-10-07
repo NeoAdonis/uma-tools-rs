@@ -176,24 +176,15 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
 /// Get the speed points a skill adds to a Pace runner with 1000 wisdom on a
 /// 2000m (medium distance) course.
 fn speed_bonus(skill: &Skill) -> f64 {
-    use crate::course::Course;
     use crate::race::solver::RaceSolver;
-    use crate::test_utils::{race_params, seeded_config};
-    use crate::uma::{Aptitude, Motivation, Style, Uma};
+    use crate::test_utils::{load_course, race_params, seeded_config, uma};
+    use crate::uma::{Motivation, Style, Uma};
 
-    let course = Course::from_json_file("data/course_data.json", "10104")
-        .expect("Failed to load course data");
-    let state = RaceSolver::new(course, race_params(), &seeded_config(0)).state;
+    let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
     let uma = Uma {
         speed: 1000,
-        stamina: 1000,
-        power: 1000,
         guts: 1000,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
     let runner = UnreadyRunner::new(uma, 1, Motivation::Normal, &state, vec![]);
     skill_bonus([skill], &runner, &state).speed

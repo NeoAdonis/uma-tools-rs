@@ -1,11 +1,10 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
-use crate::course::Course;
 use crate::race::last_spurt::*;
 use crate::race::runner::{MAX_TARGET_SPEED, Runner};
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
-use crate::test_utils::race_params;
+use crate::test_utils::{ready_solver, seeded_config, uma};
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 
@@ -38,20 +37,6 @@ fn full_throttle_skill() -> Skill {
     )
 }
 
-fn uma(speed: u16) -> Uma {
-    Uma {
-        speed,
-        stamina: 1600,
-        power: 1200,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Late,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    }
-}
-
 /// Build a solver with a single runner on a 2000m course whose threshold stat
 /// is speed. Raw speed 2500 gives an adjusted speed of 1850 * 1.2 = 2220.
 fn solver(
@@ -60,16 +45,17 @@ fn solver(
     skills: Vec<Skill>,
     rng_seed: u64,
 ) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10204")
-        .expect("Failed to load course data");
+    let uma = Uma {
+        speed,
+        stamina: 1600,
+        power: 1200,
+        ..uma(Style::Late)
+    };
     let config = Configuration {
         game_version,
-        seed: Some(rng_seed),
-        ..Default::default()
+        ..seeded_config(rng_seed)
     };
-    let mut solver = RaceSolver::new(course, race_params(), &config);
-    solver.add_runner(uma(speed), Motivation::Normal, skills);
-    solver.ready_runners()
+    ready_solver(10204, uma, skills, &config)
 }
 
 /// Put the runner in her last spurt (20 m/s) with the given current speed.

@@ -1,12 +1,12 @@
 use super::*;
-use crate::configuration::{Configuration, GameVersion};
-use crate::course::{Course, Phase};
+use crate::configuration::GameVersion;
+use crate::course::Phase;
 use crate::race::last_spurt::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
-use crate::test_utils::race_params;
+use crate::test_utils::{ready_solver, seeded_config, uma};
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
@@ -83,29 +83,11 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
 /// Build a ready race with a single high-wiz runner that only has the given
 /// skill.
 fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let params = race_params();
     let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
         wiz: 1500,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
-
-    let config = Configuration {
-        game_version: GameVersion::LATEST,
-        seed: Some(42),
-        ..Default::default()
-    };
-    let mut solver = RaceSolver::new(course, params, &config);
-    solver.add_runner(uma, Motivation::Normal, vec![skill]);
-    solver.ready_runners()
+    ready_solver(10101, uma, vec![skill], &seeded_config(42))
 }
 
 /// Activate the only skill of a single runner with high wiz and return
@@ -207,29 +189,11 @@ fn test_stamina_limit_break_base_buff() {
 /// Build a single high-stamina runner on a long course, in its last spurt with
 /// the given current speed and a last spurt speed of 20 m/s.
 fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
-    let course = Course::from_json_file("data/course_data.json", "10105")
-        .expect("Failed to load course data");
-    let params = race_params();
     let uma = Uma {
-        speed: 1200,
         stamina: 1600,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
-
-    let config = Configuration {
-        game_version: GameVersion::LATEST,
-        seed: Some(42),
-        ..Default::default()
-    };
-    let mut solver = RaceSolver::new(course, params, &config);
-    solver.add_runner(uma, Motivation::Normal, vec![]);
-    let mut solver = solver.ready_runners();
+    let mut solver = ready_solver(10105, uma, vec![], &seeded_config(42));
     let runner = &mut solver.runners[0];
 
     runner.position = 2000.0;

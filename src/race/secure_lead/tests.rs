@@ -1,9 +1,8 @@
 use super::*;
-use crate::configuration::{Configuration, GameVersion};
-use crate::course::Course;
+use crate::configuration::GameVersion;
 use crate::race::runner::Runner;
-use crate::race::solver::{RaceSolver, RaceState};
-use crate::test_utils::race_params;
+use crate::race::solver::RaceState;
+use crate::test_utils::{ready_solver, seeded_config, uma};
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
@@ -120,28 +119,7 @@ fn test_hp_cost_style_coefficients() {
 }
 
 fn ready_runner(style: Style) -> (Runner, RaceState) {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
-    let params = race_params();
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    };
-    let config = Configuration {
-        game_version: GameVersion::LATEST,
-        seed: Some(42),
-        ..Default::default()
-    };
-    let mut solver = RaceSolver::new(course, params, &config);
-    solver.add_runner(uma, Motivation::Normal, vec![]);
-    let solver = solver.ready_runners();
+    let solver = ready_solver(10101, uma(style), vec![], &seeded_config(42));
     let runner = solver.runners.into_iter().next().unwrap();
     (runner, solver.state)
 }

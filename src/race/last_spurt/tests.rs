@@ -1,39 +1,27 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
-use crate::course::Course;
 use crate::race::solver::RaceSolver;
 use crate::skill::{SkillEffect, SkillTarget, SkillType};
-use crate::test_utils::race_params;
+use crate::test_utils::{ready_solver, seeded_config, uma};
 use crate::uma::*;
 
 const EPSILON: f64 = 1e-9;
 
-fn uma(wiz: u16) -> Uma {
-    Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz,
-        style: Style::Late,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    }
-}
-
 /// Build a solver with a single runner on a 2000m course.
 fn solver(wiz: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runner> {
-    let course = Course::from_json_file("data/course_data.json", "10204")
-        .expect("Failed to load course data");
     let config = Configuration {
         game_version,
-        seed: Some(rng_seed),
-        ..Default::default()
+        ..seeded_config(rng_seed)
     };
-    let mut solver = RaceSolver::new(course, race_params(), &config);
-    solver.add_runner(uma(wiz), Motivation::Normal, vec![]);
-    solver.ready_runners()
+    ready_solver(
+        10204,
+        Uma {
+            wiz,
+            ..uma(Style::Late)
+        },
+        vec![],
+        &config,
+    )
 }
 
 /// Move the runner just past the start of `section` and update her phase.
