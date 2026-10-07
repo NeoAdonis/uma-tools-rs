@@ -299,7 +299,7 @@ impl Course {
 
     /// Get the starting lane position in course widths based on the gate roll.
     pub fn starting_lane(&self, gate_roll: u8) -> f64 {
-        let adjustor = match self.id {
+        let adjustor = match self.race_track_id {
             TRACK_ID_OOI => 0.0,
             TRACK_ID_LONGCHAMP => {
                 if gate_roll >= 13 {
@@ -400,12 +400,15 @@ mod tests {
     use crate::test_utils::course_data;
 
     /// Create a minimal course at the given racetrack.
+    ///
+    /// The course ID is unrelated to the racetrack ID, so that checks on the
+    /// wrong one fail.
     fn create_test_course(track_id: u16) -> Course {
         let data = CourseData {
             race_track_id: track_id,
             ..course_data()
         };
-        Course::new_test(track_id, data)
+        Course::new_test(0, data)
     }
 
     /// Racetrack IDs of every course in the course data.
@@ -451,6 +454,38 @@ mod tests {
                 "track {track_id}"
             );
         }
+    }
+
+    #[test]
+    fn test_starting_lane_adjustment_by_racetrack() {
+        let lane = horse_lanes_to_course_widths;
+        // (racetrack, gate roll, expected lane in horse lanes)
+        let cases = [
+            // Ooi: never adjusted.
+            (TRACK_ID_OOI, 9, 9.0),
+            (TRACK_ID_OOI, 12, 12.0),
+            // Longchamp: adjusted from gate roll 13.
+            (TRACK_ID_LONGCHAMP, 12, 12.0),
+            (TRACK_ID_LONGCHAMP, 13, 13.0 + 1.86),
+            // Anywhere else: adjusted from gate roll 10.
+            (10001, 9, 9.0),
+            (10001, 10, 10.0 + 0.6),
+        ];
+        for (track_id, gate_roll, expected) in cases {
+            assert_eq!(
+                create_test_course(track_id).starting_lane(gate_roll),
+                lane(expected),
+                "track {track_id}, gate roll {gate_roll}"
+            );
+        }
+
+        // Course 10101 is at Sapporo, not at Ooi (racetrack 10101).
+        let sapporo = CourseData {
+            race_track_id: 10001,
+            ..course_data()
+        };
+        let course = Course::new_test(10101, sapporo);
+        assert_eq!(course.starting_lane(12), lane(12.0 + 0.6));
     }
 
     #[test]
