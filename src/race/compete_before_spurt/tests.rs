@@ -3,10 +3,8 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
 use crate::skill::{SkillEffect, SkillTarget, SkillType};
-use crate::test_utils::{ready_solver, seeded_config, uma};
+use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
 
 #[test]
 fn test_lead_threshold_table() {
@@ -21,17 +19,14 @@ fn test_lead_threshold_table() {
     ];
     for (style, expected) in cases {
         let actual = lead_threshold(style, -1000.0);
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "{style:?}: expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "{style:?}");
     }
 }
 
 #[test]
 fn test_lead_threshold_distance_term() {
     let threshold = lead_threshold(Style::Late, 2000.0);
-    assert!((threshold - 5.9).abs() < EPSILON);
+    assert_close!(threshold, 5.9);
 }
 
 #[test]
@@ -50,15 +45,12 @@ fn test_target_speed_bonus() {
     ];
     for (style, is_alone, expected) in cases {
         let actual = target_speed_bonus(style, 1500, 3000, is_alone);
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "{style:?} (alone: {is_alone}): expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "{style:?} (alone: {is_alone})");
     }
 
     // Power 375 -> sqrt(0.25) * 2 = 1; guts 3000 * 2^-5 -> 0.5.
     let actual = target_speed_bonus(Style::Pace, 375, 3000 / 32, false);
-    assert!((actual - 1.5 * 0.1).abs() < 1e-3);
+    assert_close!(actual, 1.5 * 0.1, tolerance = 1e-3);
 }
 
 #[test]
@@ -73,25 +65,22 @@ fn test_hp_cost() {
     for (style, coef) in cases {
         // 2400m -> distance coefficient 1.0.
         let far = hp_cost(style, 2400, true);
-        assert!((far - 20.0 * coef).abs() < EPSILON, "{style:?} far");
+        assert_close!(far, 20.0 * coef, "{style:?} far");
         let near = hp_cost(style, 2400, false);
-        assert!(
-            (near - 20.0 * (coef + NEAR_FACTOR)).abs() < EPSILON,
-            "{style:?} near"
-        );
+        assert_close!(near, 20.0 * (coef + NEAR_FACTOR), "{style:?} near");
     }
 
     // 1200m -> distance coefficient 0.3.
     let actual = hp_cost(Style::Front, 1200, false);
-    assert!((actual - 20.0 * (1.2 * 0.3 + 0.5)).abs() < EPSILON);
+    assert_close!(actual, 20.0 * (1.2 * 0.3 + 0.5));
 }
 
 #[test]
 fn test_stamina_keep_chance() {
     let expected = 0.3 * (1.0 + 1000f64.powf(0.03));
-    assert!((stamina_keep_chance(1000) - expected).abs() < EPSILON);
+    assert_close!(stamina_keep_chance(1000), expected);
     assert!(stamina_keep_chance(300) < stamina_keep_chance(1000));
-    assert!((stamina_keep_chance(2500) - 1.0).abs() < EPSILON);
+    assert_close!(stamina_keep_chance(2500), 1.0);
 }
 
 fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) {
@@ -141,7 +130,7 @@ fn test_compete_activation_and_expiry() {
     state.elapsed_time = 10.0;
     runner.try_compete_before_spurt(false, true, &state);
     assert!(runner.compete_before_spurt.is_none());
-    assert!((runner.next_compete_check - (10.0 + CHECK_INTERVAL)).abs() < EPSILON);
+    assert_close!(runner.next_compete_check, 10.0 + CHECK_INTERVAL);
 
     // Far from lead.
     let hp_before = runner.hp.current;
@@ -154,11 +143,11 @@ fn test_compete_activation_and_expiry() {
         runner.adjusted.guts,
         true,
     );
-    assert!((compete.modifier - expected_modifier).abs() < EPSILON);
-    assert!((compete.expires_at - (12.0 + DURATION)).abs() < EPSILON);
+    assert_close!(compete.modifier, expected_modifier);
+    assert_close!(compete.expires_at, 12.0 + DURATION);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, true);
-    assert!((runner.hp.current - expected_hp).abs() < EPSILON);
-    assert!((runner.next_compete_check - (12.0 + DURATION + COOLDOWN)).abs() < EPSILON);
+    assert_close!(runner.hp.current, expected_hp);
+    assert_close!(runner.next_compete_check, 12.0 + DURATION + COOLDOWN);
 
     // Boost is applied to target speed.
     runner.update_target_speed(&state);
@@ -168,7 +157,7 @@ fn test_compete_activation_and_expiry() {
     runner.expire_compete_before_spurt(12.0 + DURATION);
     assert!(runner.compete_before_spurt.is_none());
     runner.update_target_speed(&state);
-    assert!((boosted - runner.target_speed - expected_modifier).abs() < EPSILON);
+    assert_close!(boosted - runner.target_speed, expected_modifier);
 
     // Nearby runners only: near factor is added to the HP cost.
     let hp_before = runner.hp.current;
@@ -177,7 +166,7 @@ fn test_compete_activation_and_expiry() {
     runner.try_compete_before_spurt(false, false, &state);
     assert!(runner.compete_before_spurt.is_some());
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, false);
-    assert!((runner.hp.current - expected_hp).abs() < EPSILON);
+    assert_close!(runner.hp.current, expected_hp);
 }
 
 #[test]

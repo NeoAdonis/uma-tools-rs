@@ -483,17 +483,14 @@ impl Skill {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{assert_close, skill_data};
 
     fn skill_with_wisdom_check(wisdom_check: bool) -> Skill {
-        Skill::new(
-            "test".to_string(),
-            SkillData {
-                rarity: SkillRarity::White,
-                alternatives: vec![],
-                popularity: None,
-                wisdom_check,
-            },
-        )
+        let data = SkillData {
+            wisdom_check,
+            ..skill_data(vec![])
+        };
+        Skill::new("test".to_string(), data)
     }
 
     #[test]
@@ -506,7 +503,7 @@ mod tests {
     #[test]
     fn test_activation_chance_with_wisdom_check() {
         let skill = skill_with_wisdom_check(true);
-        assert!((skill.activation_chance(900) - 0.9).abs() < 1e-9);
+        assert_close!(skill.activation_chance(900), 0.9);
         // Low wisdom is clamped to the minimum chance.
         assert_eq!(skill.activation_chance(100), 0.2);
         assert_eq!(skill.activation_chance(0), 0.2);
@@ -515,15 +512,11 @@ mod tests {
     #[test]
     fn test_wiz_limit_break_eligibility() {
         let skill = |rarity| {
-            Skill::new(
-                "test".to_string(),
-                SkillData {
-                    rarity,
-                    alternatives: vec![],
-                    popularity: None,
-                    wisdom_check: true,
-                },
-            )
+            let data = SkillData {
+                rarity,
+                ..skill_data(vec![])
+            };
+            Skill::new("test".to_string(), data)
         };
         assert!(!skill(SkillRarity::White).is_wiz_limit_break_eligible());
         assert!(skill(SkillRarity::Gold).is_wiz_limit_break_eligible());
@@ -572,15 +565,8 @@ mod tests {
     #[test]
     fn test_always_condition_activates_out_of_gate() {
         let skill = |condition: &str| {
-            Skill::new(
-                "test".to_string(),
-                SkillData {
-                    rarity: SkillRarity::White,
-                    alternatives: vec![alternative(condition, "").unwrap()],
-                    popularity: None,
-                    wisdom_check: false,
-                },
-            )
+            let alternatives = vec![alternative(condition, "").unwrap()];
+            Skill::new("test".to_string(), skill_data(alternatives))
         };
         assert!(skill("always==1").should_activate_out_of_gate());
         assert!(!skill("always==1&phase>=2").should_activate_out_of_gate());

@@ -5,7 +5,7 @@ use crate::common::{load_course, race_params};
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::course::Phase;
 use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::RaceSolver;
+use uma_tools::race::solver::{DELTA_TIME, RaceSolver};
 use uma_tools::skill::*;
 use uma_tools::trigger::skill_activation::TriggerCondition;
 use uma_tools::uma::*;
@@ -90,8 +90,8 @@ fn assert_activates_within(condition: &str, min: f64, max: f64) {
     }
 }
 
-/// Maximum distance covered in a single frame (15 FPS) at a generous speed.
-const FRAME_DISTANCE: f64 = 30.0 / 15.0;
+/// Maximum distance covered in a single frame at a generous speed (30 m/s).
+const FRAME_DISTANCE: f64 = 30.0 * DELTA_TIME;
 
 #[test]
 fn test_random_point_activates_within_phase() {

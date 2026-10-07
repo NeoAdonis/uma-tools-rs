@@ -2,10 +2,8 @@ use super::*;
 use crate::configuration::GameVersion;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
-use crate::test_utils::{ready_solver, seeded_config, uma};
+use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
 
 #[test]
 fn test_desirable_lead_table() {
@@ -25,10 +23,7 @@ fn test_desirable_lead_table() {
     ];
     for (style, other, expected) in cases {
         let actual = desirable_lead(style, other, -1000.0).unwrap();
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "{style:?} -> {other:?}: expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "{style:?} -> {other:?}");
     }
 }
 
@@ -47,7 +42,7 @@ fn test_desirable_lead_only_for_later_styles() {
 #[test]
 fn test_desirable_lead_distance_term() {
     let lead = desirable_lead(Style::Front, Style::Pace, 2000.0).unwrap();
-    assert!((lead - 4.9).abs() < EPSILON);
+    assert_close!(lead, 4.9);
 }
 
 #[test]
@@ -66,14 +61,11 @@ fn test_target_speed_bonus() {
     ];
     for (style, is_alone, expected) in cases {
         let actual = target_speed_bonus(style, 2000, is_alone, GameVersion::LATEST);
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "{style:?} (alone: {is_alone}): expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "{style:?} (alone: {is_alone})");
     }
 
     let actual = target_speed_bonus(Style::Pace, 500, false, GameVersion::LATEST);
-    assert!((actual - 0.5 * 0.3).abs() < EPSILON);
+    assert_close!(actual, 0.5 * 0.3);
 }
 
 #[test]
@@ -97,10 +89,7 @@ fn test_hp_cost_distance_brackets() {
     for (distance, coef) in cases {
         let actual = hp_cost(Style::Front, distance);
         let expected = 20.0 * coef;
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "{distance}m: expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "{distance}m");
     }
 }
 
@@ -114,7 +103,7 @@ fn test_hp_cost_style_coefficients() {
     ];
     for (style, coef) in cases {
         let actual = hp_cost(style, 2400);
-        assert!((actual - 20.0 * coef).abs() < EPSILON, "{style:?}");
+        assert_close!(actual, 20.0 * coef, "{style:?}");
     }
 }
 
@@ -154,7 +143,7 @@ fn test_secure_lead_activation_and_expiry() {
         state.elapsed_time = elapsed;
         runner.try_secure_lead(false, false, &state);
         assert!(runner.secure_lead.is_none());
-        assert!((runner.next_secure_lead_check - (elapsed + CHECK_INTERVAL)).abs() < EPSILON);
+        assert_close!(runner.next_secure_lead_check, elapsed + CHECK_INTERVAL);
     }
 
     // Insufficient lead eventually triggers.
@@ -174,11 +163,11 @@ fn test_secure_lead_activation_and_expiry() {
         false,
         GameVersion::LATEST,
     );
-    assert!((secure_lead.modifier - expected_modifier).abs() < EPSILON);
-    assert!((secure_lead.expires_at - (elapsed + DURATION)).abs() < EPSILON);
+    assert_close!(secure_lead.modifier, expected_modifier);
+    assert_close!(secure_lead.expires_at, elapsed + DURATION);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
-    assert!((runner.hp.current - expected_hp).abs() < EPSILON);
-    assert!((runner.next_secure_lead_check - (elapsed + DURATION + COOLDOWN)).abs() < EPSILON);
+    assert_close!(runner.hp.current, expected_hp);
+    assert_close!(runner.next_secure_lead_check, elapsed + DURATION + COOLDOWN);
 
     // Boost is applied to target speed.
     runner.update_target_speed(&state);
@@ -188,5 +177,5 @@ fn test_secure_lead_activation_and_expiry() {
     runner.expire_secure_lead(elapsed + DURATION);
     assert!(runner.secure_lead.is_none());
     runner.update_target_speed(&state);
-    assert!((boosted - runner.target_speed - expected_modifier).abs() < EPSILON);
+    assert_close!(boosted - runner.target_speed, expected_modifier);
 }

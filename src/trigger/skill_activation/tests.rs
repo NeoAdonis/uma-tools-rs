@@ -4,6 +4,7 @@ use super::*;
 use crate::course::geometry::*;
 use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
+use crate::test_utils::{alternative, assert_close, skill_data};
 use crate::trigger::builder::build_trigger_scheduler;
 
 /// Create a simple test course for testing spatial triggers.
@@ -81,14 +82,6 @@ fn window(branch: &CompiledBranch) -> (WindowVariable, f64, f64) {
 /// Guards as strings, for readable assertions.
 fn guards(branch: &CompiledBranch) -> Vec<String> {
     branch.guards.iter().map(|comp| comp.to_string()).collect()
-}
-
-/// Assert that two floats are (almost) equal.
-fn assert_close(actual: f64, expected: f64, context: &str) {
-    assert!(
-        actual == expected || (actual - expected).abs() < 1e-9,
-        "{context}: expected {expected}, got {actual}"
-    );
 }
 
 #[test]
@@ -200,8 +193,8 @@ fn test_position_window_ranges() {
     for (condition, (min, max)) in cases {
         let (variable, actual_min, actual_max) = window(&compile_one(condition));
         assert_eq!(variable, WindowVariable::Position, "{condition}");
-        assert_close(actual_min, min, condition);
-        assert_close(actual_max, max, condition);
+        assert_close!(actual_min, min, "{condition}");
+        assert_close!(actual_max, max, "{condition}");
     }
 }
 
@@ -229,8 +222,8 @@ fn test_time_and_hp_windows() {
     for (condition, expected_variable, (min, max)) in cases {
         let (variable, actual_min, actual_max) = window(&compile_one(condition));
         assert_eq!(variable, expected_variable, "{condition}");
-        assert_close(actual_min, min, condition);
-        assert_close(actual_max, max, condition);
+        assert_close!(actual_min, min, "{condition}");
+        assert_close!(actual_max, max, "{condition}");
     }
 
     // Position windows take precedence; time and HP stay as guards.
@@ -263,8 +256,8 @@ fn test_unsatisfiable_branches_are_dropped() {
 fn test_phase_equality_is_a_window() {
     let branch = compile_one("phase==1&distance_rate>=60");
     let (_, min, max) = window(&branch);
-    assert_close(min, 1200.0, "min");
-    assert_close(max, 2000.0 / 24.0 * 16.0, "max");
+    assert_close!(min, 1200.0, "min");
+    assert_close!(max, 2000.0 / 24.0 * 16.0, "max");
 }
 
 #[test]
@@ -287,25 +280,11 @@ fn test_multiple_trigger_comparisons_are_combined() {
 
 /// Helper function to create a test skill with precondition.
 fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                condition: condition.parse().unwrap(),
-                precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-                base_duration: 40000,
-                base_cooldown: DEFAULT_COOLDOWN,
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 4000,
-                }],
-            }],
-            popularity: None,
-            wisdom_check: true,
-        },
-    )
+    let alternative = SkillAlternative {
+        precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
+        ..alternative(condition, SkillType::TargetSpeed, 4000)
+    };
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
 }
 
 /// Build a scheduler for the given skills on the test course.
@@ -391,40 +370,14 @@ fn test_or_precondition_creates_one_unlock_logic_per_branch() {
 #[test]
 fn test_precondition_only_in_alternative_zero() {
     // Create a skill with 2 alternatives - only first has precondition.
-    let skill = Skill::new(
-        "test_multi_alt".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![
-                SkillAlternative {
-                    condition: "distance_rate>=80".parse().unwrap(),
-                    // Has precondition.
-                    precondition: Some("phase>=2".parse().unwrap()),
-                    base_duration: 40000,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 4000,
-                    }],
-                },
-                SkillAlternative {
-                    condition: "hp_per<=50".parse().unwrap(),
-                    // No precondition.
-                    precondition: None,
-                    base_duration: 40000,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 3000,
-                    }],
-                },
-            ],
-            popularity: None,
-            wisdom_check: true,
+    let alternatives = vec![
+        SkillAlternative {
+            precondition: Some("phase>=2".parse().unwrap()),
+            ..alternative("distance_rate>=80", SkillType::TargetSpeed, 4000)
         },
-    );
+        alternative("hp_per<=50", SkillType::TargetSpeed, 3000),
+    ];
+    let skill = Skill::new("test_multi_alt".to_string(), skill_data(alternatives));
     let scheduler = build_test_scheduler(&[skill]);
 
     // Unlock logic, then one logic per alternative.

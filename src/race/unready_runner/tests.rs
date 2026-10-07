@@ -1,39 +1,9 @@
 use super::*;
 use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
-use crate::test_utils::{load_course, race_params, ready_solver, seeded_config, uma};
-
-/// Build a skill with one `(condition, effect type, modifier)` per alternative,
-/// without wisdom check so it is always available.
-fn skill_with_alternatives(id: &str, alternatives: Vec<(&str, SkillType, i32)>) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: alternatives
-                .into_iter()
-                .map(|(condition, skill_type, modifier)| SkillAlternative {
-                    base_duration: 0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    condition: condition.parse().unwrap(),
-                    effects: vec![SkillEffect {
-                        skill_type,
-                        target: SkillTarget::Oneself,
-                        modifier,
-                    }],
-                    precondition: None,
-                })
-                .collect(),
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
-}
-
-/// Build a skill with a single alternative and effect.
-fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Skill {
-    skill_with_alternatives(id, vec![(condition, skill_type, modifier)])
-}
+use crate::test_utils::{
+    alternative, load_course, race_params, ready_solver, seeded_config, skill, skill_data, uma,
+};
 
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
 /// race state it was built with.
@@ -140,14 +110,13 @@ fn test_unsatisfied_stat_boost_is_not_applied() {
 fn test_first_satisfied_alternative_is_applied() {
     // Course 10104 is turf (ground_type==1); only the second alternative holds, and
     // the third one must not be applied on top of it.
-    let (mut runner, state) = unready_runner(vec![skill_with_alternatives(
-        "speed",
-        vec![
-            ("ground_type==2", SkillType::SpeedUp, 1000000),
-            ("ground_type==1", SkillType::SpeedUp, 400000),
-            ("always==1", SkillType::SpeedUp, 800000),
-        ],
-    )]);
+    let alternatives = vec![
+        alternative("ground_type==2", SkillType::SpeedUp, 1000000),
+        alternative("ground_type==1", SkillType::SpeedUp, 400000),
+        alternative("always==1", SkillType::SpeedUp, 800000),
+    ];
+    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
@@ -184,17 +153,12 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
 fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
     let skills = (0..skill_count)
         .map(|i| {
-            let skill = skill(
-                &i.to_string(),
-                "distance_rate>=50",
-                SkillType::TargetSpeed,
-                1,
-            );
+            let alternative = alternative("distance_rate>=50", SkillType::TargetSpeed, 1);
             let data = SkillData {
                 wisdom_check: true,
-                ..(*skill).clone()
+                ..skill_data(vec![alternative])
             };
-            Skill::new(skill.id.clone(), data)
+            Skill::new(i.to_string(), data)
         })
         .collect();
     let uma = Uma {

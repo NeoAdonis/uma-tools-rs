@@ -1,6 +1,5 @@
 use super::*;
-
-const EPSILON: f64 = 1e-9;
+use crate::test_utils::assert_close;
 
 #[test]
 fn test_formulas() {
@@ -11,12 +10,16 @@ fn test_formulas() {
         (1200, 0.2930, 10.9982),
     ];
     for (guts, bonus, secs) in cases {
-        assert!(
-            (target_speed_bonus(guts) - bonus).abs() < 1e-4,
+        assert_close!(
+            target_speed_bonus(guts),
+            bonus,
+            tolerance = 1e-4,
             "guts {guts}"
         );
-        assert!(
-            (duration(guts, Aptitude::A) - secs).abs() < 1e-4,
+        assert_close!(
+            duration(guts, Aptitude::A),
+            secs,
+            tolerance = 1e-4,
             "guts {guts}"
         );
     }
@@ -37,7 +40,7 @@ fn test_duration_scales_with_style_aptitude() {
     ];
     for (aptitude, coef) in cases {
         let actual = duration(1000, aptitude);
-        assert!((actual - base * coef).abs() < EPSILON, "{aptitude:?}");
+        assert_close!(actual, base * coef, "{aptitude:?}");
     }
 }
 
@@ -91,7 +94,7 @@ fn test_speed_bonus_expires() {
     assert!(state.has_struggled());
 
     assert!(state.is_active(10.0));
-    assert!((state.speed_bonus(10.0) - target_speed_bonus(guts)).abs() < EPSILON);
+    assert_close!(state.speed_bonus(10.0), target_speed_bonus(guts));
     assert!(state.is_active(expires_at - 0.01));
 
     assert!(!state.is_active(expires_at));

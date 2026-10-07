@@ -23,6 +23,10 @@ use crate::units::horse_lanes_to_course_widths;
 /// Scale applied to raw finish times to get displayed times.
 pub const FINISH_TIME_SCALE: f64 = 1.18;
 
+/// Duration of a single frame in seconds (race state is updated 15 times per
+/// second).
+pub const DELTA_TIME: f64 = 1.0 / 15.0;
+
 /// Speed used to convert scaled finish time differences into margins, in m/s.
 const MARGIN_SPEED: f64 = 15.0;
 
@@ -202,12 +206,9 @@ impl RaceSolver<Runner> {
     }
 
     /// Run simulation until every runner finishes, then record finish margins.
-    ///
-    /// Race state is updated 15 times per second.
     pub fn run(&mut self) {
-        let dt = 1.0 / 15.0; // 15 FPS
         while !self.runners.iter().all(Runner::has_finished) {
-            self.step(dt);
+            self.step(DELTA_TIME);
         }
         self.update_finish_margins();
     }

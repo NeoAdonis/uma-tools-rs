@@ -1,4 +1,6 @@
 use super::*;
+use crate::race::solver::DELTA_TIME;
+use crate::test_utils::assert_close;
 
 #[test]
 fn test_formulas() {
@@ -9,12 +11,16 @@ fn test_formulas() {
         (1200, 0.6445, 0.1310),
     ];
     for (guts, speed, acceleration) in cases {
-        assert!(
-            (target_speed_bonus(guts) - speed).abs() < 1e-4,
+        assert_close!(
+            target_speed_bonus(guts),
+            speed,
+            tolerance = 1e-4,
             "guts {guts}"
         );
-        assert!(
-            (acceleration_bonus(guts) - acceleration).abs() < 1e-4,
+        assert_close!(
+            acceleration_bonus(guts),
+            acceleration,
+            tolerance = 1e-4,
             "guts {guts}"
         );
     }
@@ -35,10 +41,10 @@ fn test_trigger_proximity_in_course_widths() {
 fn test_trigger_time_reached_after_two_seconds_of_frames() {
     let mut close_time = 0.0;
     for _ in 0..29 {
-        close_time += 1.0 / 15.0;
+        close_time += DELTA_TIME;
     }
     assert!(!is_close_long_enough(close_time));
-    close_time += 1.0 / 15.0;
+    close_time += DELTA_TIME;
     assert!(is_close_long_enough(close_time));
 }
 

@@ -3,6 +3,7 @@ use crate::skill::{
     DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData, SkillEffect,
     SkillRarity, SkillTarget, SkillType,
 };
+use crate::test_utils::assert_close;
 
 /// Create a skill with a single alternative with the given effects and no
 /// popularity data.
@@ -217,7 +218,7 @@ fn test_skill_bonus_popularity_guards() {
 fn test_skill_bonus_activation_chance() {
     // With 1000 raw wisdom, the activation chance is 91%.
     let bonus = speed_bonus(&popularity_skill(&["always==1"], true));
-    assert!((bonus - 91.0).abs() < 1e-9);
+    assert_close!(bonus, 91.0);
 }
 
 #[test]
@@ -261,7 +262,7 @@ fn test_phi_calculation() {
     // Test normal case.
     let phi = calculate_phi(15.0, 10.0, 5.0);
     // 1 std dev above mean = 50 + 10 = 60.
-    assert!((phi - 60.0).abs() < 0.001);
+    assert_close!(phi, 60.0, tolerance = 0.001);
 
     // Test zero std dev (all values same).
     let phi = calculate_phi(10.0, 10.0, 0.0);
@@ -274,6 +275,6 @@ fn test_calculate_stats() {
     let values = vec![10.0, 20.0, 30.0];
     let (mean, std_dev) = calculate_stats(&values);
 
-    assert!((mean - 20.0).abs() < 0.001);
+    assert_close!(mean, 20.0, tolerance = 0.001);
     assert!(std_dev > 0.0);
 }

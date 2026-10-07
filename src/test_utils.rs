@@ -5,8 +5,28 @@ use crate::course::Course;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
-use crate::skill::Skill;
+use crate::skill::*;
 use crate::uma::*;
+
+/// Assert that two floats are equal, or within `1e-9` of each other.
+///
+/// Takes an optional `tolerance = ...` and an optional format string with
+/// arguments, which is prepended to the failure message as context.
+macro_rules! assert_close {
+    ($actual:expr, $expected:expr, tolerance = $tolerance:expr $(, $($arg:tt)+)?) => {{
+        let (actual, expected): (f64, f64) = ($actual, $expected);
+        let message = format!("expected {expected}, got {actual}");
+        $(let message = format!("{}: {message}", format_args!($($arg)+));)?
+        assert!(
+            actual == expected || (actual - expected).abs() < $tolerance,
+            "{message}"
+        );
+    }};
+    ($actual:expr, $expected:expr $(, $($arg:tt)+)?) => {
+        $crate::test_utils::assert_close!($actual, $expected, tolerance = 1e-9 $(, $($arg)+)?)
+    };
+}
+pub(crate) use assert_close;
 
 /// Load a course from `data/course_data.json`.
 pub(crate) fn load_course(course_id: u32) -> Course {
@@ -62,4 +82,45 @@ pub(crate) fn ready_solver(
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
     solver.add_runner(uma, Motivation::Normal, skills);
     solver.ready_runners()
+}
+
+/// Skill alternative with a single effect on oneself, a base duration of 3
+/// seconds and no precondition.
+pub(crate) fn alternative(
+    condition: &str,
+    skill_type: SkillType,
+    modifier: i32,
+) -> SkillAlternative {
+    SkillAlternative {
+        base_duration: 30000,
+        base_cooldown: DEFAULT_COOLDOWN,
+        condition: condition.parse().unwrap(),
+        precondition: None,
+        effects: vec![SkillEffect {
+            skill_type,
+            target: SkillTarget::Oneself,
+            modifier,
+        }],
+    }
+}
+
+/// White skill data without popularity data or wisdom check, so the skill is
+/// always available.
+///
+/// Override fields with `SkillData { rarity, ..skill_data(...) }`.
+pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
+    SkillData {
+        rarity: SkillRarity::White,
+        alternatives,
+        popularity: None,
+        wisdom_check: false,
+    }
+}
+
+/// Always available white skill with a single [`alternative`].
+pub(crate) fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Skill {
+    Skill::new(
+        id.to_string(),
+        skill_data(vec![alternative(condition, skill_type, modifier)]),
+    )
 }

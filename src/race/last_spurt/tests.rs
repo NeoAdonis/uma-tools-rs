@@ -2,10 +2,8 @@ use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::solver::RaceSolver;
 use crate::skill::{SkillEffect, SkillTarget, SkillType};
-use crate::test_utils::{ready_solver, seeded_config, uma};
+use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
 
 /// Build a solver with a single runner on a 2000m course.
 fn solver(wiz: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runner> {
@@ -124,7 +122,7 @@ fn test_calculated_on_entering_late_phase() {
     // past the start of the Late phase, so the spurt starts at her position.
     assert_eq!(last_spurt.category, LastSpurtCategory::Full);
     let position = solver.runners[0].position;
-    assert!((last_spurt.target_distance - position).abs() < EPSILON);
+    assert_close!(last_spurt.target_distance, position);
 }
 
 #[test]
@@ -157,8 +155,10 @@ fn test_candidate_speeds_are_steps_from_max() {
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
         assert!(last_spurt.max_speed >= base && last_spurt.max_speed <= max);
         let steps = (max - last_spurt.max_speed) / 0.1;
-        assert!(
-            (steps - steps.round()).abs() < 1e-6,
+        assert_close!(
+            steps,
+            steps.round(),
+            tolerance = 1e-6,
             "seed {rng_seed}: {} is not a 0.1 step from {max}",
             last_spurt.max_speed
         );
@@ -216,7 +216,7 @@ fn test_hp_loss_is_not_a_heal() {
     let hp_before = runner.hp.current;
 
     runner.apply_skill_effect(&recovery(-200), 0.0, 0.0, &solver.state);
-    assert!((runner.hp.current - (hp_before - 200.0)).abs() < EPSILON);
+    assert_close!(runner.hp.current, hp_before - 200.0);
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
     assert_eq!(runner.trigger_scheduler.activation_counts.heal, 0);
     assert!(runner.is_stamina_keep);

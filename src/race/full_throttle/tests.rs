@@ -2,39 +2,24 @@ use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::last_spurt::*;
 use crate::race::runner::{MAX_TARGET_SPEED, Runner};
-use crate::race::solver::RaceSolver;
+use crate::race::solver::{DELTA_TIME, RaceSolver};
 use crate::skill::*;
-use crate::test_utils::{ready_solver, seeded_config, uma};
+use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, skill_data, uma};
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
-const DELTA_TIME: f64 = 1.0 / 15.0;
 
 /// Same as skill 204222, but without wisdom check so it is always available.
 // TODO: Replace with a global switch to disable wisdom checks.
 fn full_throttle_skill() -> Skill {
-    Skill::new(
-        "204222".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                base_duration: 20000,
-                base_cooldown: DEFAULT_COOLDOWN,
-                condition: "run_at_full_speed_random==1&distance_type==3"
-                    .parse()
-                    .unwrap(),
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::AccelerationFullThrottle,
-                    target: SkillTarget::Oneself,
-                    modifier: 2000,
-                }],
-                precondition: None,
-            }],
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
+    let alternative = SkillAlternative {
+        base_duration: 20000,
+        ..alternative(
+            "run_at_full_speed_random==1&distance_type==3",
+            SkillType::AccelerationFullThrottle,
+            2000,
+        )
+    };
+    Skill::new("204222".to_string(), skill_data(vec![alternative]))
 }
 
 /// Build a solver with a single runner on a 2000m course whose threshold stat
@@ -81,8 +66,8 @@ fn test_base_acceleration() {
     );
     // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5.
     let expected = 0.068 * 0.0006 * 600000f64.sqrt() / 8f64.sqrt();
-    assert!((base_acceleration(2001, 1200, 2000, latest) - expected).abs() < EPSILON);
-    assert!((expected - 0.011173).abs() < 1e-6);
+    assert_close!(base_acceleration(2001, 1200, 2000, latest), expected);
+    assert_close!(expected, 0.011173, tolerance = 1e-6);
     // Longer courses accelerate less.
     assert!(base_acceleration(2001, 1200, 3000, latest) < expected);
 }
@@ -128,10 +113,10 @@ fn test_speed_bonus_increases_target_speed() {
     runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
 
     let expected = (runner.full_throttle_base + 0.04) * DELTA_TIME;
-    assert!((runner.full_throttle.speed_bonus() - expected).abs() < EPSILON);
+    assert_close!(runner.full_throttle.speed_bonus(), expected);
 
     runner.update_target_speed(&solver.state);
-    assert!((runner.target_speed - target_before - expected).abs() < EPSILON);
+    assert_close!(runner.target_speed - target_before, expected);
 }
 
 #[test]

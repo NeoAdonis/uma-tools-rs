@@ -6,10 +6,8 @@ use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
-use crate::test_utils::{ready_solver, seeded_config, uma};
+use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, skill_data, uma};
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
 
 #[test]
 fn test_wiz_limit_break_multiplier_brackets() {
@@ -33,10 +31,7 @@ fn test_wiz_limit_break_multiplier_brackets() {
     ];
     for (wiz, expected) in cases {
         let actual = wiz_limit_break_multiplier(wiz);
-        assert!(
-            (actual - expected).abs() < EPSILON,
-            "wiz {wiz}: expected {expected}, got {actual}"
-        );
+        assert_close!(actual, expected, "wiz {wiz}");
     }
 }
 
@@ -59,23 +54,12 @@ fn test_wiz_limit_break_phase_coefficient() {
 }
 
 fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
+    let alternatives = vec![alternative("phase==3", skill_type, 3500)];
     Skill::new(
         "test".to_string(),
         SkillData {
             rarity,
-            alternatives: vec![SkillAlternative {
-                base_duration: 30000,
-                base_cooldown: DEFAULT_COOLDOWN,
-                condition: "phase==3".parse().unwrap(),
-                precondition: None,
-                effects: vec![SkillEffect {
-                    skill_type,
-                    target: SkillTarget::Oneself,
-                    modifier: 3500,
-                }],
-            }],
-            popularity: None,
-            wisdom_check: false,
+            ..skill_data(alternatives)
         },
     )
 }
@@ -117,10 +101,7 @@ fn test_skill_duration_scales_with_course_distance() {
     let expected = 3.0 * solver.state.course.distance as f64 / 1000.0;
     let effect = &runner.active_timed_effects[0];
     let duration = effect.expires_at - solver.state.elapsed_time;
-    assert!(
-        (duration - expected).abs() < EPSILON,
-        "expected {expected} s, got {duration} s"
-    );
+    assert_close!(duration, expected);
 }
 
 fn boosted(bonus: f64) -> f64 {
@@ -132,7 +113,7 @@ fn test_wiz_limit_break_boosts_gold_target_speed() {
     let (target_speed, _, bonus) =
         activate_on_high_wiz_runner(speed_skill(SkillRarity::Gold, SkillType::TargetSpeed));
     assert!(bonus > 0.0);
-    assert!((target_speed - boosted(bonus)).abs() < EPSILON);
+    assert_close!(target_speed, boosted(bonus));
 }
 
 #[test]
@@ -141,21 +122,21 @@ fn test_wiz_limit_break_boosts_unique_current_speed_with_deceleration() {
         SkillRarity::UniqueNatural,
         SkillType::CurrentSpeedWithNaturalDeceleration,
     ));
-    assert!((current_speed - boosted(bonus)).abs() < EPSILON);
+    assert_close!(current_speed, boosted(bonus));
 }
 
 #[test]
 fn test_wiz_limit_break_ignores_white_skills() {
     let (target_speed, _, _) =
         activate_on_high_wiz_runner(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
-    assert!((target_speed - 0.35).abs() < EPSILON);
+    assert_close!(target_speed, 0.35);
 }
 
 #[test]
 fn test_wiz_limit_break_ignores_plain_current_speed() {
     let (_, current_speed, _) =
         activate_on_high_wiz_runner(speed_skill(SkillRarity::Gold, SkillType::CurrentSpeed));
-    assert!((current_speed - 0.35).abs() < EPSILON);
+    assert_close!(current_speed, 0.35);
 }
 
 #[test]
@@ -183,7 +164,7 @@ fn test_stamina_limit_break_base_buff() {
     assert_eq!(buff(1000, 2400), 0.0);
     assert_eq!(buff(1200, 2400), 0.0);
     assert_eq!(buff(1600, 2100), 0.0);
-    assert!((buff(1300, 2400) - 10.0 * 0.0085).abs() < EPSILON);
+    assert_close!(buff(1300, 2400), 10.0 * 0.0085);
 }
 
 /// Build a single high-stamina runner on a long course, in its last spurt with

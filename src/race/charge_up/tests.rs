@@ -3,12 +3,9 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::DistanceType;
 use crate::race::last_spurt::*;
 use crate::race::runner::{PositioningStrategy, Runner};
-use crate::race::solver::RaceSolver;
-use crate::test_utils::{load_course, race_params, seeded_config, uma};
+use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::test_utils::{assert_close, load_course, race_params, seeded_config, uma};
 use crate::uma::*;
-
-const EPSILON: f64 = 1e-9;
-const DELTA_TIME: f64 = 1.0 / 15.0;
 
 /// Build a solver with a single runner on a 2000m (Medium) course.
 fn solver(
@@ -93,7 +90,7 @@ fn test_motivation_affects_base_part_only() {
     );
     // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without motivation.
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
-    assert!((charge_up.power - 1656.0).abs() < EPSILON);
+    assert_close!(charge_up.power, 1656.0);
 }
 
 #[test]
@@ -164,7 +161,7 @@ fn test_coefficients() {
     assert_eq!(activity_coefficient(false, false), 1.0);
     assert_eq!(activity_coefficient(true, false), 0.98);
     assert_eq!(activity_coefficient(false, true), 0.8);
-    assert!((activity_coefficient(true, true) - 0.784).abs() < EPSILON);
+    assert_close!(activity_coefficient(true, true), 0.784);
 }
 
 #[test]
@@ -172,12 +169,12 @@ fn test_release_formulas() {
     // Expected: sqrt(400 * 130) * 0.001 * 0.875 * 0.8.
     let expected = 52000f64.sqrt() * 0.001 * 0.875 * 0.8;
     let acceleration = release_acceleration(1600.0, Style::Late, DistanceType::Medium, 0.8);
-    assert!((acceleration - expected).abs() < EPSILON);
-    assert!((acceleration - 0.159625).abs() < 1e-6);
+    assert_close!(acceleration, expected);
+    assert_close!(acceleration, 0.159625, tolerance = 1e-6);
 
     // 100 * sqrt(1600) * 1.0 / 1450.
     let duration = release_duration(100.0, 1600, DistanceType::Mile);
-    assert!((duration - 4000.0 / 1450.0).abs() < EPSILON);
+    assert_close!(duration, 4000.0 / 1450.0);
 }
 
 #[test]
@@ -185,12 +182,12 @@ fn test_conservation_rate() {
     let mut late_surger = eligible_solver();
     let runner = &mut late_surger.runners[0];
     conserve_for(runner, 0.0, 1.0);
-    assert!((conserved(runner) - 4.2).abs() < 1e-6);
+    assert_close!(conserved(runner), 4.2, tolerance = 1e-6);
 
     runner.charge_up.as_mut().unwrap().conserved = 0.0;
     runner.positioning_strategy = PositioningStrategy::PaceDown(5.0);
     conserve_for(runner, 1.0, 1.0);
-    assert!((conserved(runner) - 6.7).abs() < 1e-6);
+    assert_close!(conserved(runner), 6.7, tolerance = 1e-6);
 
     let mut end_closer = solver(
         1600,
@@ -201,7 +198,7 @@ fn test_conservation_rate() {
     );
     let runner = &mut end_closer.runners[0];
     conserve_for(runner, 0.0, 1.0);
-    assert!((conserved(runner) - 4.2 * 0.7).abs() < 1e-6);
+    assert_close!(conserved(runner), 4.2 * 0.7, tolerance = 1e-6);
 }
 
 #[test]
@@ -253,14 +250,14 @@ fn test_spot_struggle_penalty() {
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
     runner.start_spot_struggle(10.0);
-    assert!((conserved(runner) - 95.0).abs() < EPSILON);
+    assert_close!(conserved(runner), 95.0);
     // Already struggling: no further penalty.
     runner.start_spot_struggle(10.1);
-    assert!((conserved(runner) - 95.0).abs() < EPSILON);
+    assert_close!(conserved(runner), 95.0);
 
     // Struggling blocks conservation.
     conserve_for(runner, 10.1, 1.0);
-    assert!((conserved(runner) - 95.0).abs() < EPSILON);
+    assert_close!(conserved(runner), 95.0);
 }
 
 #[test]
@@ -288,11 +285,11 @@ fn test_rush_penalty() {
     solver.state.elapsed_time = 10.0;
     runner.update_phase(&mut solver.state);
     assert!(runner.is_rushed());
-    assert!((conserved(runner) - 80.0).abs() < EPSILON);
+    assert_close!(conserved(runner), 80.0);
 
     // Rushing blocks conservation.
     conserve_for(runner, 10.0, 1.0);
-    assert!((conserved(runner) - 80.0).abs() < EPSILON);
+    assert_close!(conserved(runner), 80.0);
 }
 
 #[test]
@@ -306,8 +303,8 @@ fn test_release() {
     };
     let duration = 100.0 * 2000f64.sqrt() * 0.875 / 1450.0;
     let acceleration = 52000f64.sqrt() * 0.001 * 0.875;
-    assert!((release.duration - duration).abs() < EPSILON);
-    assert!((release.acceleration - acceleration).abs() < EPSILON);
+    assert_close!(release.duration, duration);
+    assert_close!(release.acceleration, acceleration);
     assert_eq!(release.start_time, 60.0);
     assert_eq!(release.start_position, 1500.0);
 
@@ -344,7 +341,7 @@ fn test_release_increases_acceleration() {
     runner.update_acceleration(60.5);
     let with = runner.acceleration;
     let expected = 52000f64.sqrt() * 0.001 * 0.875;
-    assert!((with - without - expected).abs() < EPSILON);
+    assert_close!(with - without, expected);
 }
 
 #[test]
