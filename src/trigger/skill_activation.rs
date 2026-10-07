@@ -224,7 +224,14 @@ pub fn compile_condition(
             let points = match rolls.get(idx) {
                 // Failed roll: never satisfied.
                 Some(roll) => roll.as_deref()?,
-                None => &[],
+                // Not rolled: random variables would be ignored.
+                None => {
+                    debug_assert!(
+                        !comps.iter().any(|comp| is_random(comp)),
+                        "random variables in a condition without rolls: {comps:?}"
+                    );
+                    &[]
+                }
             };
             compile_branch(&comps, points, course)
         })
@@ -240,6 +247,13 @@ fn compile_branch(
 ) -> Option<CompiledBranch> {
     use VarType::*;
 
+    // The rolled points of a branch don't tell which comparison they come from,
+    // so they can only belong to its single event.
+    debug_assert!(
+        comps.iter().filter(|comp| is_event(comp)).count() <= 1,
+        "more than one event in a branch: {comps:?}"
+    );
+
     let mut event = None;
     let mut guards = Vec::new();
     let mut position = FULL_RANGE;
@@ -252,10 +266,9 @@ fn compile_branch(
             // If we're here, the roll succeeded.
             Random(_) => {}
 
-            // Random segments: checked while inside the rolled segments. A branch holds at
-            // most one event (checked against the skill data).
+            // Random segments: checked while inside the rolled segments.
             RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-                event.get_or_insert(TriggerCondition::FullThrottleStart);
+                event = Some(TriggerCondition::FullThrottleStart);
             }
             RandomSpatial(_) | RandomPhase(_) => {
                 // No activation points rolled: the branch can't be triggered.
@@ -263,29 +276,20 @@ fn compile_branch(
                     return None;
                 }
                 // Filled once the position range of the branch is known.
-                event.get_or_insert(TriggerCondition::Segments { ranges: Vec::new() });
+                event = Some(TriggerCondition::Segments { ranges: Vec::new() });
             }
 
             // Only true on the frame the last straight is entered.
             Spatial(SpatialVar::IsLastStraightOnetime) => {
                 course.straights.last()?;
-                event.get_or_insert(TriggerCondition::LastStraightEntry);
+                event = Some(TriggerCondition::LastStraightEntry);
             }
 
             // Skill activations: only true on frames where a skill activated.
             // Unlike the events above, these can be evaluated, so they stay as guards.
-            Activation(activation) => {
-                let activation_event = match (activation, comp.op, comp.value) {
-                    (ActivationVar::IsActivateAnySkill, CompOp::Equal, 1) => {
-                        Some(TriggerCondition::AnySkillActivation)
-                    }
-                    (ActivationVar::IsActivateHealSkill, CompOp::Equal, 1) => {
-                        Some(TriggerCondition::HealSkillActivation)
-                    }
-                    _ => None,
-                };
-                if let Some(activation_event) = activation_event {
-                    event.get_or_insert(activation_event);
+            Activation(_) => {
+                if let Some(activation_event) = activation_event(comp) {
+                    event = Some(activation_event);
                 }
                 guards.push((*comp).clone());
             }
@@ -335,6 +339,40 @@ fn compile_branch(
     });
 
     Some(CompiledBranch { trigger, guards })
+}
+
+/// Whether a comparison is on a random variable, rolled when building the
+/// scheduler.
+fn is_random(comp: &Comparison) -> bool {
+    use VarType::*;
+
+    matches!(comp.var, Random(_) | RandomSpatial(_) | RandomPhase(_))
+}
+
+/// Whether a comparison is an event: only true at specific points (random
+/// segments, entering the last straight, skill activations), so it's the
+/// trigger of its branch.
+fn is_event(comp: &Comparison) -> bool {
+    use VarType::*;
+
+    match comp.var {
+        RandomSpatial(_) | RandomPhase(_) | Spatial(SpatialVar::IsLastStraightOnetime) => true,
+        Activation(_) => activation_event(comp).is_some(),
+        _ => false,
+    }
+}
+
+/// Trigger of a comparison on skill activations, if it's an event.
+fn activation_event(comp: &Comparison) -> Option<TriggerCondition> {
+    match (&comp.var, comp.op, comp.value) {
+        (VarType::Activation(ActivationVar::IsActivateAnySkill), CompOp::Equal, 1) => {
+            Some(TriggerCondition::AnySkillActivation)
+        }
+        (VarType::Activation(ActivationVar::IsActivateHealSkill), CompOp::Equal, 1) => {
+            Some(TriggerCondition::HealSkillActivation)
+        }
+        _ => None,
+    }
 }
 
 /// Range of values `(min, max)` a variable can take (both inclusive).
