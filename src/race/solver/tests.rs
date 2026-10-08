@@ -3,7 +3,8 @@ use crate::course::LaneType;
 use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::{
-    assert_close, load_course, race_params, ready_solver, seeded_config, skill, uma,
+    alternative, assert_close, load_course, race_params, ready_solver, seeded_config, skill,
+    skill_data, uma,
 };
 use crate::trigger::skill_activation::PendingEffect;
 use crate::units::horse_lanes_to_course_widths;
@@ -1808,5 +1809,62 @@ fn test_used_recovery_targets_runners_that_healed_this_frame() {
     assert_eq!(
         targets(&solver, 1, SkillTarget::UsedRecovery { value: 1 }),
         [0]
+    );
+}
+
+/// Run a race with a single runner holding a skill with the given alternative
+/// conditions, and return the indices of the alternatives that activated.
+fn activated_alternatives(conditions: &[&str]) -> Vec<usize> {
+    let alternatives = conditions
+        .iter()
+        .map(|condition| alternative(condition, SkillType::TargetSpeed, 1500))
+        .collect();
+    let skill = Skill::new("test".to_string(), skill_data(alternatives));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    solver.run();
+
+    let mut activated: Vec<usize> = solver.runners[0]
+        .activated_alternatives
+        .iter()
+        .map(|&(_, alternative)| alternative)
+        .collect();
+    activated.sort();
+    activated
+}
+
+#[test]
+fn test_skill_activates_through_a_single_alternative() {
+    assert_eq!(
+        activated_alternatives(&["accumulatetime>=5", "accumulatetime>=10"]),
+        [0]
+    );
+    // Either alternative can be the one.
+    assert_eq!(
+        activated_alternatives(&["accumulatetime>=10", "accumulatetime>=5"]),
+        [1]
+    );
+    // When both are satisfied on the same frame, the first one wins.
+    assert_eq!(
+        activated_alternatives(&["accumulatetime>=5", "accumulatetime>=5"]),
+        [0]
+    );
+}
+
+#[test]
+fn test_continuation_activates_after_other_alternative() {
+    assert_eq!(
+        activated_alternatives(&[
+            "accumulatetime>=5",
+            "is_activate_other_skill_detail==1&accumulatetime>=10",
+        ]),
+        [0, 1]
+    );
+    // Never without the other alternative.
+    assert_eq!(
+        activated_alternatives(&[
+            "accumulatetime>=999",
+            "is_activate_other_skill_detail==1&accumulatetime>=10",
+        ]),
+        Vec::<usize>::new()
     );
 }

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::condition::parser::{CompOp, Comparison, ComparisonTree, Condition};
-use crate::condition::variables::VarType;
+use crate::condition::variables::{ActivationVar, VarType};
 use crate::uma::Style;
 
 /// Represents the type of skill effect.
@@ -269,6 +269,28 @@ pub struct SkillAlternative {
     /// considered, if any.
     #[serde(deserialize_with = "deserialize_precondition")]
     pub precondition: Option<Condition>,
+}
+
+impl SkillAlternative {
+    /// Check if this alternative is a continuation of another one of the same
+    /// skill, i.e. it requires another alternative to have activated
+    /// (`is_activate_other_skill_detail`).
+    ///
+    /// Unlike other alternatives, a continuation can still activate after another
+    /// alternative did.
+    pub fn is_continuation(&self) -> bool {
+        let requires_other = |condition: &Condition| {
+            condition
+                .comp_tree
+                .or_branches()
+                .iter()
+                .flatten()
+                .any(|comp| {
+                    comp.var == VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
+                })
+        };
+        requires_other(&self.condition) || self.precondition.as_ref().is_some_and(requires_other)
+    }
 }
 
 /// Parse a condition string while deserializing.
@@ -618,6 +640,22 @@ mod tests {
         assert!(alternative("phase>=", "").is_err());
         assert!(alternative("phase>=2&", "").is_err());
         assert!(alternative("phase>=2", "order<=").is_err());
+    }
+
+    #[test]
+    fn test_continuation_requires_other_alternative() {
+        assert!(!alternative("phase>=2", "").unwrap().is_continuation());
+        assert!(
+            alternative("phase>=2@is_activate_other_skill_detail==1", "")
+                .unwrap()
+                .is_continuation()
+        );
+        // Also in the precondition.
+        assert!(
+            alternative("phase>=2", "is_activate_other_skill_detail==1")
+                .unwrap()
+                .is_continuation()
+        );
     }
 
     /// Deserialize a skill target from its type and value.

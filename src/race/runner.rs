@@ -2466,6 +2466,7 @@ impl Runner {
         self.recalculate_skill_modifiers();
 
         self.start_cooldown(skill_index, alternative_index, state);
+        self.disable_other_alternatives(skill_index, alternative_index);
 
         // Track skill activation.
         self.activated_skill_ids.insert(skill_id.clone());
@@ -2546,6 +2547,29 @@ impl Runner {
                 && logic.action == LogicAction::Activate
             {
                 logic.cooldown_until = cooldown_until;
+            }
+        }
+    }
+
+    /// Disable the other alternatives of a skill once one of them activates, as a
+    /// skill activates through a single alternative.
+    ///
+    /// Continuations (see [`SkillAlternative::is_continuation`]) are the exception:
+    /// they can only activate after another alternative did.
+    ///
+    /// ? Alternatives should be checked in order, so that the first one wins when
+    /// several are satisfied on the same frame. Instead, the first one checked
+    /// wins: triggers are checked by type (windows, last straight entry,
+    /// activation-dependent...), and only by alternative within each type.
+    fn disable_other_alternatives(&mut self, skill_index: usize, alternative_index: usize) {
+        let alternatives = &self.available_skills[skill_index].alternatives;
+        for logic in &mut self.trigger_scheduler.skill_logics {
+            if logic.skill_index == skill_index
+                && logic.alternative_index != alternative_index
+                && !alternatives[logic.alternative_index].is_continuation()
+            {
+                // Never checked again.
+                logic.cooldown_until = f64::INFINITY;
             }
         }
     }
