@@ -128,7 +128,8 @@ pub enum TriggerCondition {
     /// Used for `is_activate_any_skill==1` conditions.
     AnySkillActivation,
 
-    /// Checked when a buff skill activates.
+    /// Checked once every runner has checked her skills, when any runner activated
+    /// an advantage (buff) skill.
     /// Used for `is_other_character_activate_advantage_skill` conditions.
     BuffSkillActivation,
 
@@ -385,6 +386,12 @@ fn activation_event(comp: &Comparison) -> Option<TriggerCondition> {
         (VarType::Activation(ActivationVar::IsActivateHealSkill), CompOp::Equal, 1) => {
             Some(TriggerCondition::HealSkillActivation)
         }
+        // The value is the effect type of the advantage skill.
+        (
+            VarType::Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill),
+            CompOp::Equal,
+            _,
+        ) => Some(TriggerCondition::BuffSkillActivation),
         _ => None,
     }
 }

@@ -1719,3 +1719,94 @@ fn test_pending_effects_apply_to_targets() {
     assert_close!(solver.runners[1].skill_modifiers.current_speed, -0.15);
     assert_close!(solver.runners[2].skill_modifiers.current_speed, 0.0);
 }
+
+/// Run a race with one runner per skill list and return, for each list, whether
+/// the runner activated `skill_id`.
+fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let ids: Vec<Vec<String>> = skills
+        .iter()
+        .map(|skills| skills.iter().map(|skill| skill.id.clone()).collect())
+        .collect();
+    for skills in skills {
+        solver.add_runner(uma(Style::Late), Motivation::Normal, skills);
+    }
+    let mut solver = solver.ready_runners();
+    solver.run();
+
+    // Runners are built in gate order, so find each one by her skills.
+    ids.iter()
+        .map(|ids| {
+            let runner = solver
+                .runners
+                .iter()
+                .find(|runner| {
+                    runner
+                        .available_skills
+                        .iter()
+                        .map(|skill| &skill.id)
+                        .eq(ids.iter())
+                })
+                .unwrap();
+            runner.activated_skill_ids.contains(skill_id)
+        })
+        .collect()
+}
+
+/// Heal skill activating 5 seconds into the race.
+fn heal() -> Skill {
+    skill("heal", "accumulatetime>=5", SkillType::Recovery, 550)
+}
+
+#[test]
+fn test_other_runner_advantage_skill_triggers_skill() {
+    let react = || {
+        skill(
+            "react",
+            "is_other_character_activate_advantage_skill==9",
+            SkillType::TargetSpeed,
+            3500,
+        )
+    };
+    // Own heals don't count.
+    assert_eq!(
+        activates(
+            vec![vec![heal()], vec![react()], vec![heal(), react()]],
+            "react"
+        ),
+        [false, true, true]
+    );
+    assert_eq!(activates(vec![vec![heal(), react()]], "react"), [false]);
+}
+
+#[test]
+fn test_other_runner_advantage_skill_is_only_seen_on_its_frame() {
+    // The heal activates long before the rest of the condition is true.
+    let react = skill(
+        "react",
+        "is_other_character_activate_advantage_skill==9&accumulatetime>=20",
+        SkillType::TargetSpeed,
+        3500,
+    );
+    assert_eq!(
+        activates(vec![vec![heal()], vec![react]], "react"),
+        [false, false]
+    );
+}
+
+#[test]
+fn test_used_recovery_targets_runners_that_healed_this_frame() {
+    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
+    solver.runners[0]
+        .activation_flags
+        .buff_activated
+        .insert(SkillType::Recovery);
+    solver.runners[2]
+        .activation_flags
+        .buff_activated
+        .insert(SkillType::TargetSpeed);
+    assert_eq!(
+        targets(&solver, 1, SkillTarget::UsedRecovery { value: 1 }),
+        [0]
+    );
+}

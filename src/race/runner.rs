@@ -341,7 +341,8 @@ pub struct SkillActivationFlags {
     pub any_activated: bool,
     /// Indicates if a healing skill was activated in the current update cycle.
     pub heal_activated: bool,
-    /// Indicates if a buff skill was activated in the current update cycle.
+    /// Effect types of the buff (advantage) skills activated in the current update
+    /// cycle. Only effects on oneself count.
     pub buff_activated: HashSet<SkillType>,
 }
 
@@ -2338,20 +2339,18 @@ impl Runner {
         self.check_last_straight_triggers(state);
         // Depend on the activations above.
         self.check_activation_dependent_triggers(state);
-        self.check_buff_dependent_triggers(state);
-        self.extract_buff_activations(state);
+        self.check_heal_dependent_triggers(state);
+    }
+
+    /// Check if the runner can activate skills: she has left the gate and hasn't
+    /// finished yet.
+    pub fn can_activate_skills(&self, elapsed_time: f64) -> bool {
+        self.start_delay <= elapsed_time && !self.has_finished()
     }
 
     /// Reset activation flags before checking skills.
     pub fn reset_activation_flags(&mut self) {
         self.activation_flags = SkillActivationFlags::default();
-    }
-
-    /// Extract activated buff skills from a runner and update race state.
-    pub fn extract_buff_activations(&mut self, state: &mut RaceState) {
-        state
-            .buffs_activated
-            .extend(self.activation_flags.buff_activated.drain());
     }
 
     /// Check activation-dependent triggers.
@@ -2367,25 +2366,28 @@ impl Runner {
         }
     }
 
-    /// Check activation-dependent triggers.
+    /// Check heal activation-dependent triggers.
     ///
     /// This should be called after all other triggers (and any-skill
     /// activation-dependent triggers) have been checked.
-    pub fn check_buff_dependent_triggers(&mut self, state: &RaceState) {
-        // Pass 2: Check is_other_character_activate_advantage_skill triggers.
-        if self.activation_flags.heal_activated {
-            let buff_activation_indices = self.trigger_scheduler.buff_activation_triggers.to_vec();
-            for trigger_index in buff_activation_indices {
-                self.try_activate_skill(trigger_index, state);
-            }
-        }
-
-        // Pass 3: Check is_activate_heal_skill triggers.
+    pub fn check_heal_dependent_triggers(&mut self, state: &RaceState) {
+        // Pass 2: Check is_activate_heal_skill triggers.
         if self.activation_flags.heal_activated {
             let heal_activation_indices = self.trigger_scheduler.heal_activation_triggers.to_vec();
             for trigger_index in heal_activation_indices {
                 self.try_activate_skill(trigger_index, state);
             }
+        }
+    }
+
+    /// Check `is_other_character_activate_advantage_skill` triggers.
+    ///
+    /// Other runners' activations are only known once every runner has checked
+    /// her skills, so this is called by the solver afterwards.
+    pub fn check_advantage_triggers(&mut self, state: &RaceState) {
+        let buff_activation_indices = self.trigger_scheduler.buff_activation_triggers.to_vec();
+        for trigger_index in buff_activation_indices {
+            self.try_activate_skill(trigger_index, state);
         }
     }
 
@@ -2446,6 +2448,11 @@ impl Runner {
         for effect in &alternative.effects {
             if effect.target == SkillTarget::Oneself {
                 self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state);
+                if Skill::is_effect_positive(effect) {
+                    self.activation_flags
+                        .buff_activated
+                        .insert(effect.skill_type);
+                }
             } else {
                 self.pending_effects.push(PendingEffect {
                     effect: effect.clone(),
@@ -2632,10 +2639,6 @@ impl Runner {
             {
                 self.activate_skill(skill_index, 0, state);
             }
-        }
-
-        if Skill::is_effect_positive(effect) {
-            self.activation_flags.buff_activated.insert(*effect_type);
         }
     }
 

@@ -197,12 +197,16 @@ impl CompEvaluator for EvaluatorFull {
                 state.existing_skills.contains_key(&comp.value.to_string())
             }
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
-                // Check if any other runner has activated a buff whose type is `comp.value`.
-                if let Ok(value) = SkillType::try_from(comp.value as u8) {
-                    state.buffs_activated.contains(&value)
-                } else {
-                    false
-                }
+                // Check if any other runner has activated a buff whose type is `comp.value`
+                // this frame, discounting the runner's own activation.
+                let Ok(value) = SkillType::try_from(comp.value as u8) else {
+                    return false;
+                };
+                let own = runner.activation_flags.buff_activated.contains(&value) as u8;
+                state
+                    .buffs_activated
+                    .get(&value)
+                    .is_some_and(|&count| count > own)
             }
             RaceParam(RaceParamVar::SameSkillHorseCount) => {
                 // Count of runners with same skill.

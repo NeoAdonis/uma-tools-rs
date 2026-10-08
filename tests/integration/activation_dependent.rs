@@ -253,12 +253,11 @@ fn test_other_character_skill_activation() {
 
     // All branches have is_other_character_activate_advantage_skill dependency
     for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
-        assert_eq!(1, 1);
-        // Final corner (starts at 1475m) and beyond, until the goal (phase>=2)
-        assert_eq!(
-            window(logic),
-            (WindowVariable::Position, 1475.0, 2000.0),
-            "Branch {} should have final corner window",
+        // Checked when other runners activate advantage skills; the final corner
+        // and phase comparisons are checked as guards then.
+        assert!(
+            matches!(logic.trigger, TriggerCondition::BuffSkillActivation),
+            "Branch {} should be triggered by other runners' activations",
             idx
         );
 
@@ -323,7 +322,8 @@ fn test_activation_dependency_variable_detection() {
         );
     }
 
-    // Test 3: is_other_character_activate_advantage_skill (checked during the whole race)
+    // Test 3: is_other_character_activate_advantage_skill (checked when other runners
+    // activate advantage skills)
     {
         let skill = make_skill(
             "test_dep3",
@@ -336,10 +336,9 @@ fn test_activation_dependency_variable_detection() {
 
         assert_eq!(scheduler.skill_logics.len(), 1);
         let logic = &scheduler.skill_logics[0];
-        assert_eq!(
-            window(logic),
-            (WindowVariable::Position, 0.0, f64::INFINITY),
-            "is_other_character_activate_advantage_skill should be checked during the whole race"
+        assert!(
+            matches!(logic.trigger, TriggerCondition::BuffSkillActivation),
+            "is_other_character_activate_advantage_skill should create BuffSkillActivation trigger"
         );
         assert_eq!(
             logic.guards.len(),

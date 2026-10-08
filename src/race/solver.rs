@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::vec;
@@ -61,8 +61,9 @@ pub struct RaceState {
     pub team_activations: Vec<usize>,
     /// Count of existing skill IDs among all runners.
     pub existing_skills: HashMap<String, u8>,
-    /// Set of activated buff skill types among all runners.
-    pub buffs_activated: HashSet<SkillType>,
+    /// Number of runners that activated a buff (advantage) skill in the current
+    /// frame, by effect type.
+    pub buffs_activated: HashMap<SkillType, u8>,
 }
 
 /// Race solver that manages the race simulation.
@@ -109,7 +110,7 @@ impl RaceSolver<UnreadyRunner> {
             rushed_by_team: Vec::new(),
             team_activations: Vec::new(),
             existing_skills: HashMap::new(),
-            buffs_activated: HashSet::new(),
+            buffs_activated: HashMap::new(),
         };
 
         RaceSolver {
@@ -287,14 +288,19 @@ impl RaceSolver<Runner> {
     /// advances and every runner is updated.
     fn step(&mut self, delta_time: f64) {
         self.update_team_activations();
+        self.state.buffs_activated.clear();
         for runner in &mut self.runners {
             // Runners still in the gate haven't reached any state worth checking, and
             // skills can't activate after the goal.
-            if runner.start_delay > self.state.elapsed_time || runner.has_finished() {
+            if !runner.can_activate_skills(self.state.elapsed_time) {
                 continue;
             }
             runner.check_skills(&mut self.state);
+            for &skill_type in &runner.activation_flags.buff_activated {
+                *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
+            }
         }
+        self.check_advantage_triggers();
         self.apply_pending_effects();
 
         self.state.elapsed_time += delta_time;
@@ -342,6 +348,22 @@ impl RaceSolver<Runner> {
         self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
+    }
+
+    /// Check `is_other_character_activate_advantage_skill` triggers of every runner,
+    /// now that this frame's activations are known.
+    ///
+    /// Skills activated here aren't counted as advantage skills for other runners.
+    fn check_advantage_triggers(&mut self) {
+        // ? Assume activations don't chain within a frame.
+        if self.state.buffs_activated.is_empty() {
+            return;
+        }
+        for runner in &mut self.runners {
+            if runner.can_activate_skills(self.state.elapsed_time) {
+                runner.check_advantage_triggers(&self.state);
+            }
+        }
     }
 
     /// Apply skill effects that target other runners to their targets.
@@ -413,9 +435,16 @@ impl RaceSolver<Runner> {
             SkillTarget::RushedStrategy { style } => others
                 .filter(|&i| is_rushed(&i) && runners[i].base_style() == style)
                 .collect(),
-            // TODO: Target the runners that activated a recovery skill this frame, once
-            // `is_other_character_activate_advantage_skill` is evaluated per frame.
-            SkillTarget::UsedRecovery { .. } => Vec::new(),
+            // Runners that activated a recovery skill this frame, matching
+            // `is_other_character_activate_advantage_skill==9`.
+            SkillTarget::UsedRecovery { .. } => others
+                .filter(|&i| {
+                    runners[i]
+                        .activation_flags
+                        .buff_activated
+                        .contains(&SkillType::Recovery)
+                })
+                .collect(),
             // Not used by any skill.
             SkillTarget::UmaId { .. } => Vec::new(),
         };
