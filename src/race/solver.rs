@@ -56,6 +56,9 @@ pub struct RaceState {
     /// Count of runners currently rushed, by team and base style (Runaways count
     /// as Front runners). Indexed as `[team][style as usize]`.
     pub rushed_by_team: Vec<[u8; Style::COUNT]>,
+    /// Skill activations by team (out-of-gate skills included), as of the start
+    /// of the current frame. Indexed by team.
+    pub team_activations: Vec<usize>,
     /// Count of existing skill IDs among all runners.
     pub existing_skills: HashMap<String, u8>,
     /// Set of activated buff skill types among all runners.
@@ -104,6 +107,7 @@ impl RaceSolver<UnreadyRunner> {
             style_most_popular: Style::Front,
             runners_by_style: HashMap::new(),
             rushed_by_team: Vec::new(),
+            team_activations: Vec::new(),
             existing_skills: HashMap::new(),
             buffs_activated: HashSet::new(),
         };
@@ -152,6 +156,7 @@ impl RaceSolver<UnreadyRunner> {
         let team = self.state.team_count;
         self.state.team_count += 1;
         self.state.rushed_by_team.push([0; Style::COUNT]);
+        self.state.team_activations.push(0);
         team
     }
 
@@ -281,6 +286,7 @@ impl RaceSolver<Runner> {
     /// previous step (including multi-runner values such as order). Then, time
     /// advances and every runner is updated.
     fn step(&mut self, delta_time: f64) {
+        self.update_team_activations();
         for runner in &mut self.runners {
             // Runners still in the gate haven't reached any state worth checking, and
             // skills can't activate after the goal.
@@ -335,6 +341,16 @@ impl RaceSolver<Runner> {
         self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
+    }
+
+    /// Recount skill activations by team from each runner's own counts.
+    fn update_team_activations(&mut self) {
+        let team_activations = &mut self.state.team_activations;
+        team_activations.fill(0);
+        for runner in &self.runners {
+            let team = runner.initial_state.team as usize;
+            team_activations[team] += runner.trigger_scheduler.activation_counts.all;
+        }
     }
 
     /// Update order (rank) and distance differences for all runners.

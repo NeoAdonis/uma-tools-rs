@@ -211,3 +211,13 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
     let forced = checked_runner(config(Roll::Always, Roll::Random), 20);
     assert_eq!(random.start_delay, forced.start_delay);
 }
+
+#[test]
+fn test_activation_counts_carry_over_to_runner() {
+    let speed = skill("speed", "always==1", SkillType::SpeedUp, 800000);
+    let solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
+
+    let counts = &solver.runners[0].trigger_scheduler.activation_counts;
+    assert_eq!(counts.all, 1);
+    assert_eq!(counts.start, 1);
+}

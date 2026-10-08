@@ -268,3 +268,16 @@ fn test_most_popular_runaway_counts_as_front_runner() {
         1
     );
 }
+
+#[test]
+fn test_activate_count_all_team_reads_own_team() {
+    let mut solver = create_team_race_solver();
+    solver.state.team_activations = vec![7, 2];
+
+    let var = ActivationVar::ActivateCountAllTeam;
+    for (team, expected) in [(0, 7), (1, 2)] {
+        let runner = team_runner(&solver, team);
+        let actual = get_activation_value(&var, &solver.state, runner, None);
+        assert_eq!(actual, expected, "team {team}");
+    }
+}

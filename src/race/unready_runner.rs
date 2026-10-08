@@ -117,8 +117,6 @@ pub struct UnreadyRunner {
     power_skill_bonus: i32,
 
     // === Activation tracking ===
-    /// Counts of skill activations by phase and type.
-    activation_counts: ActivationCounts,
     /// Set of activated skill IDs.
     activated_skill_ids: HashSet<String>,
     /// List of activated skills with their activation distances.
@@ -217,7 +215,6 @@ impl UnreadyRunner {
                 team: 0,
             },
             start_delay,
-            activation_counts: ActivationCounts::default(),
             activated_skill_ids: HashSet::new(),
             activated_skills: Vec::new(),
             rng,
@@ -285,7 +282,10 @@ impl UnreadyRunner {
         });
 
         // Increment activation counts (all out-of-gate skills count as "start" phase).
-        self.activation_counts.increment(Phase::Early, 0.0, 0.0);
+        // Tracked by the trigger scheduler so that they carry over to the runner.
+        self.trigger_scheduler
+            .activation_counts
+            .increment(Phase::Early, 0.0, 0.0);
     }
 
     /// Determine gate bracket from gate roll and total gates.

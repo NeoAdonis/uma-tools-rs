@@ -1550,3 +1550,60 @@ fn test_rushed_by_team_matches_runners() {
     assert!(max_rushed > 0, "no runner rushed");
     assert!(runaway_rushed, "no Runaway rushed");
 }
+
+#[test]
+fn test_team_activations_sum_team_members() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member()]);
+    solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    for runner in &mut solver.runners {
+        let all = match runner.initial_state.team {
+            0 => 3,
+            _ => 4,
+        };
+        runner.trigger_scheduler.activation_counts.all = all;
+    }
+
+    // Recounting is idempotent.
+    solver.update_team_activations();
+    solver.update_team_activations();
+    assert_eq!(solver.state.team_activations, [6, 4]);
+}
+
+#[test]
+fn test_team_activations_match_runners_each_frame() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let skills = || {
+        vec![
+            // Out-of-gate.
+            skill("speed", "always==1", SkillType::SpeedUp, 800000),
+            skill("mid", "phase==1", SkillType::TargetSpeed, 1000),
+            skill("late", "phase>=2", SkillType::TargetSpeed, 1000),
+        ]
+    };
+    let member = |style| (uma(style), Motivation::Normal, skills());
+    solver.add_team(vec![member(Style::Front), member(Style::Late)]);
+    solver.add_runner(uma(Style::Pace), Motivation::Normal, skills());
+    solver.add_runner(uma(Style::End), Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+
+    while solver.state.finish_time.is_none() {
+        // Each frame sees the activations up to the end of the previous one.
+        let mut expected = vec![0; solver.state.team_count as usize];
+        for runner in &solver.runners {
+            let team = runner.initial_state.team as usize;
+            expected[team] += runner.trigger_scheduler.activation_counts.all;
+        }
+        solver.step(DELTA_TIME);
+        assert_eq!(
+            solver.state.team_activations, expected,
+            "t={}",
+            solver.state.elapsed_time
+        );
+    }
+    // Every skill activated: 3 per runner with skills, none for the last runner.
+    solver.update_team_activations();
+    assert_eq!(solver.state.team_activations, [6, 3, 0]);
+}

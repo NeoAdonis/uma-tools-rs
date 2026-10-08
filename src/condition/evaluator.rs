@@ -63,7 +63,6 @@
 //!
 //! - `is_exist_chara_id`
 //! - `remain_distance_viewer_id`
-//! - `activate_count_all_team`
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
@@ -281,7 +280,7 @@ fn get_variable_value(
         Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
         Course(course_var) => get_course_value(course_var, &state.course),
         Spatial(location_var) => get_location_value(location_var, &state.course, runner),
-        Activation(act_var) => get_activation_value(act_var, runner, logic_ctx),
+        Activation(act_var) => get_activation_value(act_var, state, runner, logic_ctx),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
         Status(status_var) => get_status_value(status_var, runner),
@@ -564,6 +563,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 /// Get activation counter values.
 fn get_activation_value(
     var: &ActivationVar,
+    state: &RaceState,
     runner: &Runner,
     logic_ctx: Option<&SkillActivationLogic>,
 ) -> i32 {
@@ -611,10 +611,8 @@ fn get_activation_value(
             panic!("is_used_skill_id: should be handled in evaluate()")
         }
 
-        // Team-based checks - out of scope.
-        ActivateCountAllTeam => {
-            unimplemented!("activate_count_all_team not implemented")
-        }
+        // Skill activations by the runner's team (including the runner).
+        ActivateCountAllTeam => state.team_activations[runner.initial_state.team as usize] as i32,
     }
 }
 
