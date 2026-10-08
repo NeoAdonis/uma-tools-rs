@@ -11,7 +11,7 @@ use crate::uma::*;
 /// Same as skill 204222, but without wisdom check so it is always available.
 fn full_throttle_skill() -> Skill {
     let alternative = SkillAlternative {
-        base_duration: 20000,
+        base_duration: 2.0,
         ..alternative(
             "run_at_full_speed_random==1&distance_type==3",
             SkillType::AccelerationFullThrottle,

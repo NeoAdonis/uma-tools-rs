@@ -121,7 +121,7 @@ fn test_multiple_alternatives_precondition_independence() {
                 SkillAlternative {
                     condition: "distance_rate>=80".parse().unwrap(),
                     precondition: Some("phase>=2".parse().unwrap()),
-                    base_duration: 40000,
+                    base_duration: 4.0,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
@@ -133,7 +133,7 @@ fn test_multiple_alternatives_precondition_independence() {
                 SkillAlternative {
                     condition: "hp_per<=50".parse().unwrap(),
                     precondition: Some("accumulatetime>=10".parse().unwrap()),
-                    base_duration: 40000,
+                    base_duration: 4.0,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
@@ -145,7 +145,7 @@ fn test_multiple_alternatives_precondition_independence() {
                 SkillAlternative {
                     condition: "is_last_straight==1".parse().unwrap(),
                     precondition: None,
-                    base_duration: 40000,
+                    base_duration: 4.0,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
@@ -211,7 +211,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
             alternatives: vec![SkillAlternative {
                 condition: condition.parse().unwrap(),
                 precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-                base_duration: 30000,
+                base_duration: 3.0,
                 base_cooldown: DEFAULT_COOLDOWN,
                 effects: vec![SkillEffect {
                     skill_type: effect,

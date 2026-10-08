@@ -13,7 +13,7 @@ fn skill(condition: &str) -> Skill {
         SkillData {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
-                base_duration: 10000,
+                base_duration: 1.0,
                 base_cooldown: DEFAULT_COOLDOWN,
                 condition: condition.parse().unwrap(),
                 effects: vec![SkillEffect {

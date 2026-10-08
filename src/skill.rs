@@ -254,23 +254,35 @@ pub struct SkillEffect {
     /// type.
     ///
     /// Stored in 10000ths in the skill data, and converted when deserializing.
-    #[serde(deserialize_with = "deserialize_modifier")]
+    #[serde(deserialize_with = "deserialize_ten_thousandths")]
     pub modifier: f64,
 }
 
-/// Convert a modifier from 10000ths while deserializing.
-fn deserialize_modifier<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+/// Convert a value from 10000ths while deserializing.
+fn deserialize_ten_thousandths<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<f64, D::Error> {
     Ok(i32::deserialize(deserializer)? as f64 / 10000.0)
 }
 
-/// Base cooldown used by most skills, long enough that they never reactivate.
-pub const DEFAULT_COOLDOWN: i32 = 500_0000; // 500 seconds.
+/// Convert a base duration from 10000ths of a second while deserializing. A base
+/// duration of -1 means that effects last until the end of the race.
+fn deserialize_base_duration<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+    match i32::deserialize(deserializer)? {
+        -1 => Ok(f64::INFINITY),
+        duration => Ok(duration as f64 / 10000.0),
+    }
+}
+
+/// Base cooldown in seconds used by most skills, long enough that they never
+/// reactivate.
+pub const DEFAULT_COOLDOWN: f64 = 500.0;
 
 /// ID of the "Sympathy" skill, which skills with an
 /// [`SkillType::ActivateSympathy`] effect activate for every runner.
 pub const SYMPATHY_ID: &str = "201631";
 
-fn default_cooldown() -> i32 {
+fn default_cooldown() -> f64 {
     DEFAULT_COOLDOWN
 }
 
@@ -279,11 +291,22 @@ fn default_cooldown() -> i32 {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
-    /// Base cooldown duration in 10000ths of a second.
-    #[serde(default = "default_cooldown")]
-    pub base_cooldown: i32,
-    /// Base duration before any modifiers in 10000ths of a second.
-    pub base_duration: i32,
+    /// Base cooldown duration in seconds.
+    ///
+    /// Stored in 10000ths of a second in the skill data, and converted when
+    /// deserializing.
+    #[serde(
+        default = "default_cooldown",
+        deserialize_with = "deserialize_ten_thousandths"
+    )]
+    pub base_cooldown: f64,
+    /// Base duration in seconds before any modifiers, or infinity if effects last
+    /// until the end of the race.
+    ///
+    /// Stored in 10000ths of a second in the skill data (-1 for the end of the
+    /// race), and converted when deserializing.
+    #[serde(deserialize_with = "deserialize_base_duration")]
+    pub base_duration: f64,
     /// Condition that determines when this alternative can be triggered.
     #[serde(deserialize_with = "deserialize_condition")]
     pub condition: Condition,
@@ -604,6 +627,22 @@ mod tests {
                 "precondition": "{precondition}"}}"#
         );
         serde_json::from_str(&json)
+    }
+
+    #[test]
+    fn test_alternative_values_are_converted_from_ten_thousandths() {
+        let parsed = alternative("phase>=2", "").unwrap();
+        assert_eq!(parsed.base_duration, 3.0);
+        assert_eq!(parsed.effects[0].modifier, 0.35);
+        // Missing cooldown.
+        assert_eq!(parsed.base_cooldown, DEFAULT_COOLDOWN);
+
+        let json = r#"{"baseCooldown": 300000, "baseDuration": -1, "condition": "always==1",
+            "effects": [], "precondition": ""}"#;
+        let parsed: SkillAlternative = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.base_cooldown, 30.0);
+        // Until the end of the race.
+        assert_eq!(parsed.base_duration, f64::INFINITY);
     }
 
     #[test]

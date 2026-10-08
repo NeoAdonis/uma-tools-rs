@@ -11,13 +11,13 @@ use uma_tools::uma::*;
 const COURSE_ID: u32 = 10104;
 
 /// Build a skill with the given condition and base cooldown, w/o wisdom check.
-fn skill(condition: &str, base_cooldown: i32) -> Skill {
+fn skill(condition: &str, base_cooldown: f64) -> Skill {
     Skill::new(
         "999999".to_string(),
         SkillData {
             rarity: SkillRarity::White,
             alternatives: vec![SkillAlternative {
-                base_duration: 10000,
+                base_duration: 1.0,
                 base_cooldown,
                 condition: condition.parse().unwrap(),
                 effects: vec![SkillEffect {
@@ -34,7 +34,7 @@ fn skill(condition: &str, base_cooldown: i32) -> Skill {
 }
 
 /// Run a single-runner race and return the finished runner.
-fn run(condition: &str, base_cooldown: i32) -> Runner {
+fn run(condition: &str, base_cooldown: f64) -> Runner {
     let uma = Uma {
         speed: 1200,
         stamina: 1200,
@@ -66,12 +66,12 @@ fn test_default_cooldown_activates_once() {
 
 #[test]
 fn test_short_cooldown_reactivates() {
-    let base_cooldown = 50000; // 5 s.
+    let base_cooldown = 5.0;
     let runner = run("hp_per<=100", base_cooldown);
 
     // Scaled by the course distance.
     let distance = load_course(COURSE_ID).distance as f64;
-    let cooldown = base_cooldown as f64 / 10000.0 * distance / 1000.0;
+    let cooldown = base_cooldown * distance / 1000.0;
     let finish_time = runner.finish_time.expect("runner should finish");
     let expected = (finish_time / cooldown).floor() as usize;
 

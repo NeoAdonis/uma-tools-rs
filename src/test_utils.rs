@@ -113,7 +113,7 @@ pub(crate) fn alternative(
     modifier: f64,
 ) -> SkillAlternative {
     SkillAlternative {
-        base_duration: 30000,
+        base_duration: 3.0,
         base_cooldown: DEFAULT_COOLDOWN,
         condition: condition.parse().unwrap(),
         precondition: None,

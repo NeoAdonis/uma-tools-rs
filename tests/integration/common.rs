@@ -45,7 +45,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                 .map(|(condition, precondition)| SkillAlternative {
                     condition: condition.parse().unwrap(),
                     precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-                    base_duration: 40000,
+                    base_duration: 4.0,
                     base_cooldown: DEFAULT_COOLDOWN,
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,

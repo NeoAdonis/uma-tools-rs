@@ -2441,15 +2441,10 @@ impl Runner {
         let alternative =
             self.available_skills[skill_index].alternatives[alternative_index].clone();
 
-        // Convert from 10000ths of a second, then scale with distance and effects.
-        // A base duration of -1 means that effects last until the end of the race.
-        let scaled_duration = if alternative.base_duration == -1 {
-            f64::INFINITY
-        } else {
-            let base_duration = alternative.base_duration as f64 / 10000.0;
-            base_duration * state.course.distance as f64 / 1000.0
-                * self.skill_modifiers.duration_scaling
-        };
+        // Scale with distance and effects. Effects lasting until the end of the race
+        // have an infinite base duration, which stays infinite.
+        let scaled_duration = alternative.base_duration * state.course.distance as f64 / 1000.0
+            * self.skill_modifiers.duration_scaling;
 
         // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward).
         let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
@@ -2558,9 +2553,8 @@ impl Runner {
     /// The base cooldown scales with the course distance by a factor of *course
     /// distance / 1000*.
     fn start_cooldown(&mut self, skill_index: usize, alternative_index: usize, state: &RaceState) {
-        let base_cooldown = self.available_skills[skill_index].alternatives[alternative_index]
-            .base_cooldown as f64
-            / 10000.0;
+        let base_cooldown =
+            self.available_skills[skill_index].alternatives[alternative_index].base_cooldown;
         let cooldown = base_cooldown * state.course.distance as f64 / 1000.0;
         let cooldown_until = state.elapsed_time + cooldown;
 

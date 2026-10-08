@@ -1876,7 +1876,7 @@ fn test_continuation_activates_after_other_alternative() {
 
 /// Out-of-gate skill with the given effects on oneself, whose condition is
 /// always satisfied.
-fn out_of_gate_skill(id: &str, base_duration: i32, effects: &[(SkillType, f64)]) -> Skill {
+fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)]) -> Skill {
     let alternative = SkillAlternative {
         base_duration,
         effects: effects
@@ -1903,7 +1903,7 @@ fn activations(solver: &RaceSolver<Runner>) -> Vec<(&str, f64)> {
 
 #[test]
 fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
-    let speed = out_of_gate_skill("speed", -1, &[(SkillType::SpeedUp, 40.0)]);
+    let speed = out_of_gate_skill("speed", f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
     let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], &seeded_config(0));
     // Longer than a frame: the runner doesn't move during the first one.
     solver.runners[0].start_delay = 0.09;
@@ -1925,7 +1925,7 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
     // Like "Perfect Concentration": start delay before the race, then acceleration.
     let concentration = out_of_gate_skill(
         "concentration",
-        30000,
+        3.0,
         &[
             (SkillType::MultiplyStartDelay, 0.4),
             (SkillType::Acceleration, 0.2),
@@ -1956,10 +1956,10 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
 fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
     // Like the style-specific Fov whites, with a cooldown of 0.
     let fov = SkillAlternative {
-        base_cooldown: 0,
+        base_cooldown: 0.0,
         ..out_of_gate_skill(
             "fov",
-            -1,
+            f64::INFINITY,
             &[(SkillType::WizUp, 40.0), (SkillType::Fov, 10.0)],
         )
         .alternatives[0]
@@ -1983,7 +1983,7 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
 
 #[test]
 fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
-    let speed = out_of_gate_skill("speed", -1, &[(SkillType::SpeedUp, 40.0)]);
+    let speed = out_of_gate_skill("speed", f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
     let follow = skill(
         "follow",
         "is_activate_any_skill==1",
@@ -2110,7 +2110,7 @@ fn unique_skill(id: &str, alternatives: Vec<SkillAlternative>) -> Skill {
 /// Alternative whose effect lasts until the end of the race.
 fn lasting_alternative(condition: &str, skill_type: SkillType, modifier: f64) -> SkillAlternative {
     SkillAlternative {
-        base_duration: -1,
+        base_duration: f64::INFINITY,
         ..alternative(condition, skill_type, modifier)
     }
 }

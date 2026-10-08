@@ -13,7 +13,7 @@ fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, f64)
         SkillData {
             rarity,
             alternatives: vec![SkillAlternative {
-                base_duration: 30000,
+                base_duration: 3.0,
                 base_cooldown: DEFAULT_COOLDOWN,
                 condition: "always==1".parse().unwrap(),
                 precondition: None,
@@ -158,7 +158,7 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
             alternatives: conditions
                 .iter()
                 .map(|condition| SkillAlternative {
-                    base_duration: 30000,
+                    base_duration: 3.0,
                     base_cooldown: DEFAULT_COOLDOWN,
                     condition: condition.parse().unwrap(),
                     precondition: None,
