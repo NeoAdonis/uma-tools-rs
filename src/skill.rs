@@ -252,7 +252,15 @@ pub struct SkillEffect {
     pub target: SkillTarget,
     /// Modifier value for the skill effect. Interpretation depends on the skill
     /// type.
-    pub modifier: i32,
+    ///
+    /// Stored in 10000ths in the skill data, and converted when deserializing.
+    #[serde(deserialize_with = "deserialize_modifier")]
+    pub modifier: f64,
+}
+
+/// Convert a modifier from 10000ths while deserializing.
+fn deserialize_modifier<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+    Ok(i32::deserialize(deserializer)? as f64 / 10000.0)
 }
 
 /// Base cooldown used by most skills, long enough that they never reactivate.
@@ -413,11 +421,11 @@ impl Skill {
             // When a start delay is set, it's always to a bad start.
             SkillType::SetStartDelay => false,
             // Multiplier of less than or equal to 1.0 is a reduction in delay.
-            SkillType::MultiplyStartDelay => effect.modifier <= 10000,
+            SkillType::MultiplyStartDelay => effect.modifier <= 1.0,
             // Less chance or shorter rush time is good.
-            SkillType::RushChanceUp | SkillType::RushTimeUp => effect.modifier <= 0,
+            SkillType::RushChanceUp | SkillType::RushTimeUp => effect.modifier <= 0.0,
             // Positive modifier is good for other effects.
-            _ => effect.modifier >= 0,
+            _ => effect.modifier >= 0.0,
         }
     }
 
@@ -684,7 +692,7 @@ mod tests {
     #[test]
     fn test_pre_race_effects_activate_out_of_gate() {
         let skill = |skill_type| {
-            let alternatives = vec![test_utils::alternative("running_style==1", skill_type, 0)];
+            let alternatives = vec![test_utils::alternative("running_style==1", skill_type, 0.0)];
             Skill::new("test".to_string(), skill_data(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).should_activate_out_of_gate());

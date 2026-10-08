@@ -194,7 +194,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
     let recovery = SkillEffect {
         skill_type: SkillType::Recovery,
         target: SkillTarget::Oneself,
-        modifier: 10000,
+        modifier: 1.0,
     };
     runner.apply_skill_effect(&recovery, 0.0, 0.0, &state);
     assert!(!runner.is_stamina_keep);

@@ -54,7 +54,7 @@ fn test_wiz_limit_break_phase_coefficient() {
 }
 
 fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
-    let alternatives = vec![alternative("phase==3", skill_type, 3500)];
+    let alternatives = vec![alternative("phase==3", skill_type, 0.35)];
     Skill::new(
         "test".to_string(),
         SkillData {

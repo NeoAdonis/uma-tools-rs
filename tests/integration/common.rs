@@ -50,7 +50,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
-                        modifier: 4000,
+                        modifier: 0.4,
                     }],
                 })
                 .collect(),

@@ -7,7 +7,7 @@ use crate::test_utils::assert_close;
 
 /// Create a skill with a single alternative with the given effects and no
 /// popularity data.
-fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, i32)]) -> Skill {
+fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, f64)]) -> Skill {
     Skill::new(
         id.to_string(),
         SkillData {
@@ -71,7 +71,7 @@ fn test_skill_popularity_reads_data() {
     let base = skill(
         "1",
         SkillRarity::Gold,
-        &[(SkillType::TargetSpeed, SkillTarget::Oneself, 3500)],
+        &[(SkillType::TargetSpeed, SkillTarget::Oneself, 0.35)],
     );
     let with_popularity = |popularity| {
         Skill::new(

@@ -110,7 +110,7 @@ pub(crate) fn ready_solver(
 pub(crate) fn alternative(
     condition: &str,
     skill_type: SkillType,
-    modifier: i32,
+    modifier: f64,
 ) -> SkillAlternative {
     SkillAlternative {
         base_duration: 30000,
@@ -139,7 +139,7 @@ pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub(crate) fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Skill {
+pub(crate) fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
     Skill::new(
         id.to_string(),
         skill_data(vec![alternative(condition, skill_type, modifier)]),

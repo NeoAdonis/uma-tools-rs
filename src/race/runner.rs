@@ -2631,16 +2631,16 @@ impl Runner {
             };
             self.active_timed_effects.push(ActiveTimedEffect {
                 effect: effect.clone(),
-                value: effect.modifier as f64 / 10000.0 * (1.0 + bonus),
+                value: effect.modifier * (1.0 + bonus),
                 expires_at,
             });
         }
-        // Recovery (HP restoration, or HP loss if negative).
+        // Recovery (HP restoration, or HP loss if negative), as a fraction of max HP.
         else if matches!(effect_type, SkillType::Recovery) {
-            self.hp.recover(effect.modifier as f64);
+            self.hp.recover(self.hp.maximum * effect.modifier);
 
             // HP loss (e.g., a skill's drawback) is not a heal.
-            if effect.modifier > 0 {
+            if effect.modifier > 0.0 {
                 // Increment heal skill count.
                 self.trigger_scheduler.activation_counts.increment_heal();
 
@@ -2655,20 +2655,20 @@ impl Runner {
                 }
             }
         }
-        // Activate random gold skills (one per 10000 of modifier).
+        // Activate random gold skills (one per unit of modifier).
         else if matches!(effect_type, SkillType::ActivateRandomGold) {
-            self.activate_random_gold_skills(effect.modifier / 10000, state);
+            self.activate_random_gold_skills(effect.modifier as usize, state);
         }
-        // Activate unique skills again (one per 10000 of modifier).
+        // Activate unique skills again (one per unit of modifier).
         else if matches!(effect_type, SkillType::ActivateUnique) {
-            self.activate_unique_skills(effect.modifier / 10000, state);
+            self.activate_unique_skills(effect.modifier as usize, state);
         }
         // Rush time extension.
         else if matches!(effect_type, SkillType::RushTimeUp) {
             // Extend only if the Uma is bound to rush at all.
             // ? Assume it also applies if already rushing for now.
             if let Some(rush_state) = &mut self.rush_state {
-                rush_state.max_duration += effect.modifier as f64 / 10000.0;
+                rush_state.max_duration += effect.modifier;
             }
         }
     }
@@ -2678,7 +2678,7 @@ impl Runner {
     ///
     /// The first alternative of each skill is activated, so that later ones that
     /// continue it (see [`SkillAlternative::is_continuation`]) can still activate.
-    fn activate_random_gold_skills(&mut self, count: i32, state: &RaceState) {
+    fn activate_random_gold_skills(&mut self, count: usize, state: &RaceState) {
         let mut candidates: Vec<usize> = self
             .golden_skill_indices
             .iter()
@@ -2713,14 +2713,14 @@ impl Runner {
     ///
     /// N.B. Out-of-gate skills are skipped, as their effects are only applied
     /// before the race.
-    fn activate_unique_skills(&mut self, count: i32, state: &RaceState) {
+    fn activate_unique_skills(&mut self, count: usize, state: &RaceState) {
         let unique_indices: Vec<usize> = self
             .available_skills
             .iter()
             .enumerate()
             .filter(|(_, skill)| skill.is_unique() && !skill.should_activate_out_of_gate())
             .map(|(i, _)| i)
-            .take(count.max(0) as usize)
+            .take(count)
             .collect();
         for skill_index in unique_indices {
             let alternative_index = self
@@ -2749,7 +2749,7 @@ impl Runner {
         skill.alternatives.iter().any(|alt| {
             alt.effects
                 .iter()
-                .any(|eff| matches!(eff.skill_type, SkillType::Recovery) && eff.modifier > 0)
+                .any(|eff| matches!(eff.skill_type, SkillType::Recovery) && eff.modifier > 0.0)
         })
     }
 

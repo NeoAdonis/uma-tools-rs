@@ -274,7 +274,7 @@ fn test_multiple_trigger_comparisons_are_combined() {
 fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
     let alternative = SkillAlternative {
         precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-        ..alternative(condition, SkillType::TargetSpeed, 4000)
+        ..alternative(condition, SkillType::TargetSpeed, 0.4)
     };
     Skill::new(id.to_string(), skill_data(vec![alternative]))
 }
@@ -365,9 +365,9 @@ fn test_precondition_only_in_alternative_zero() {
     let alternatives = vec![
         SkillAlternative {
             precondition: Some("phase>=2".parse().unwrap()),
-            ..alternative("distance_rate>=80", SkillType::TargetSpeed, 4000)
+            ..alternative("distance_rate>=80", SkillType::TargetSpeed, 0.4)
         },
-        alternative("hp_per<=50", SkillType::TargetSpeed, 3000),
+        alternative("hp_per<=50", SkillType::TargetSpeed, 0.3),
     ];
     let skill = Skill::new("test_multi_alt".to_string(), skill_data(alternatives));
     let scheduler = build_test_scheduler(&[skill]);
@@ -560,8 +560,8 @@ fn test_alternatives_share_random_rolls() {
     let skill = Skill::new(
         "shared".to_string(),
         skill_data(vec![
-            alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 3500),
-            alternative("phase_random==1", SkillType::TargetSpeed, 1500),
+            alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 0.35),
+            alternative("phase_random==1", SkillType::TargetSpeed, 0.15),
         ]),
     );
     for seed in 0..20 {

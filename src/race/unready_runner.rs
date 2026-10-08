@@ -44,9 +44,9 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
 
 /// Apply a stat boost effect to an [`Uma`]'s stats.
 ///
-/// `modifier` is in 10000ths of a stat point.
-fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
-    let modifier = modifier / 10000;
+/// `modifier` is in stat points.
+fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: f64) {
+    let modifier = modifier as i32;
     match effect_type {
         SkillType::SpeedUp => modify_stat(&mut uma.speed, modifier),
         SkillType::StaminaUp => modify_stat(&mut uma.stamina, modifier),
@@ -66,13 +66,13 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: i32) {
 }
 
 /// Apply start delay modification effects.
-fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType, modifier: i32) {
+fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType, modifier: f64) {
     match effect_type {
         SkillType::MultiplyStartDelay => {
-            *start_delay *= modifier as f64 / 10000.0;
+            *start_delay *= modifier;
         }
         SkillType::SetStartDelay => {
-            *start_delay = modifier as f64 / 10000.0;
+            *start_delay = modifier;
         }
         // Not a start delay effect.
         _ => {}
@@ -242,7 +242,7 @@ impl UnreadyRunner {
             if effect_type.is_stat_boost() {
                 apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
                 if matches!(effect_type, SkillType::PowerUp | SkillType::AllStatsUp) {
-                    self.power_skill_bonus += effect.modifier / 10000;
+                    self.power_skill_bonus += effect.modifier as i32;
                 }
             }
             // Apply start delay modifications.
@@ -255,7 +255,7 @@ impl UnreadyRunner {
             }
             // Apply rush chance modifications.
             else if effect_type.is_rush_chance_effect() {
-                self.rush_chance_modifier += effect.modifier as f64 / 10000.0;
+                self.rush_chance_modifier += effect.modifier;
             }
             // "Sympathy" activation affects every runner, so it's left to the solver.
             else if matches!(effect_type, SkillType::ActivateSympathy) {

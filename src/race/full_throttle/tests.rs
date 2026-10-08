@@ -15,7 +15,7 @@ fn full_throttle_skill() -> Skill {
         ..alternative(
             "run_at_full_speed_random==1&distance_type==3",
             SkillType::AccelerationFullThrottle,
-            2000,
+            0.2,
         )
     };
     Skill::new("204222".to_string(), skill_data(vec![alternative]))

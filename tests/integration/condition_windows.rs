@@ -19,7 +19,7 @@ fn skill(condition: &str) -> Skill {
                 effects: vec![SkillEffect {
                     skill_type: SkillType::TargetSpeed,
                     target: SkillTarget::Oneself,
-                    modifier: 1,
+                    modifier: 0.0001,
                 }],
                 precondition: None,
             }],

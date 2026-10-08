@@ -37,13 +37,9 @@ fn activated_ids(runner: &UnreadyRunner) -> Vec<&str> {
 
 #[test]
 fn test_stat_boost_is_applied() {
-    // Green skills store stat boosts in 10000ths (e.g. 800000 = +80 speed).
-    let (mut runner, state) = unready_runner(vec![skill(
-        "speed",
-        "always==1",
-        SkillType::SpeedUp,
-        800000,
-    )]);
+    // Stat boosts are in stat points (800000 in the skill data = +80 speed).
+    let (mut runner, state) =
+        unready_runner(vec![skill("speed", "always==1", SkillType::SpeedUp, 80.0)]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
@@ -58,7 +54,7 @@ fn test_start_delay_is_set() {
         "delay",
         "always==1",
         SkillType::SetStartDelay,
-        0,
+        0.0,
     )]);
 
     runner.apply_out_of_gate_skills(&state);
@@ -70,8 +66,8 @@ fn test_start_delay_is_set() {
 #[test]
 fn test_every_out_of_gate_skill_is_applied() {
     let (mut runner, state) = unready_runner(vec![
-        skill("delay", "always==1", SkillType::SetStartDelay, 0),
-        skill("rush", "always==1", SkillType::RushChanceUp, -30000),
+        skill("delay", "always==1", SkillType::SetStartDelay, 0.0),
+        skill("rush", "always==1", SkillType::RushChanceUp, -3.0),
     ]);
 
     runner.apply_out_of_gate_skills(&state);
@@ -88,7 +84,7 @@ fn test_unsatisfied_condition_is_not_applied() {
         "dirt_delay",
         "ground_type==2",
         SkillType::SetStartDelay,
-        0,
+        0.0,
     )]);
     let start_delay = runner.start_delay;
 
@@ -105,7 +101,7 @@ fn test_unsatisfied_stat_boost_is_not_applied() {
         "dirt_speed",
         "ground_type==2",
         SkillType::SpeedUp,
-        800000,
+        80.0,
     )]);
     let speed = runner.adjusted.speed;
 
@@ -120,9 +116,9 @@ fn test_first_satisfied_alternative_is_applied() {
     // Course 10104 is turf (ground_type==1); only the second alternative holds, and
     // the third one must not be applied on top of it.
     let alternatives = vec![
-        alternative("ground_type==2", SkillType::SpeedUp, 1000000),
-        alternative("ground_type==1", SkillType::SpeedUp, 400000),
-        alternative("always==1", SkillType::SpeedUp, 800000),
+        alternative("ground_type==2", SkillType::SpeedUp, 100.0),
+        alternative("ground_type==1", SkillType::SpeedUp, 40.0),
+        alternative("always==1", SkillType::SpeedUp, 80.0),
     ];
     let skill = Skill::new("speed".to_string(), skill_data(alternatives));
     let (mut runner, state) = unready_runner(vec![skill]);
@@ -139,9 +135,9 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // Out-of-gate skills listed first must not shift the skills the trigger
     // scheduler refers to.
     let skills = vec![
-        skill("speed", "always==1", SkillType::SpeedUp, 400000),
-        skill("delay", "always==1", SkillType::SetStartDelay, 0),
-        skill("late", "distance_rate>=50", SkillType::TargetSpeed, 3500),
+        skill("speed", "always==1", SkillType::SpeedUp, 40.0),
+        skill("delay", "always==1", SkillType::SetStartDelay, 0.0),
+        skill("late", "distance_rate>=50", SkillType::TargetSpeed, 0.35),
     ];
     let mut solver = ready_solver(10104, uma(Style::Pace), skills, &seeded_config(0));
     solver.run();
@@ -162,7 +158,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
 fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
     let skills = (0..skill_count)
         .map(|i| {
-            let alternative = alternative("distance_rate>=50", SkillType::TargetSpeed, 1);
+            let alternative = alternative("distance_rate>=50", SkillType::TargetSpeed, 0.0001);
             let data = SkillData {
                 wisdom_check: true,
                 ..skill_data(vec![alternative])
@@ -223,7 +219,7 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
 
 #[test]
 fn test_out_of_gate_skills_are_counted_as_activated() {
-    let speed = skill("speed", "always==1", SkillType::SpeedUp, 800000);
+    let speed = skill("speed", "always==1", SkillType::SpeedUp, 80.0);
     let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
     solver.run();
 
@@ -327,8 +323,8 @@ fn test_sympathy_activates_once() {
 #[test]
 fn test_random_lot_is_rolled_before_the_race() {
     let (mut runner, state) = unready_runner(vec![
-        skill("never", "random_lot==0", SkillType::SpeedUp, 400000),
-        skill("always", "random_lot==100", SkillType::SpeedUp, 800000),
+        skill("never", "random_lot==0", SkillType::SpeedUp, 40.0),
+        skill("always", "random_lot==100", SkillType::SpeedUp, 80.0),
     ]);
     let speed = runner.adjusted.speed;
 
@@ -341,8 +337,8 @@ fn test_random_lot_is_rolled_before_the_race() {
 #[test]
 fn test_failed_random_lot_falls_through_to_next_alternative() {
     let alternatives = vec![
-        alternative("random_lot==0", SkillType::SpeedUp, 1000000),
-        alternative("always==1", SkillType::SpeedUp, 400000),
+        alternative("random_lot==0", SkillType::SpeedUp, 100.0),
+        alternative("always==1", SkillType::SpeedUp, 40.0),
     ];
     let skill = Skill::new("speed".to_string(), skill_data(alternatives));
     let (mut runner, state) = unready_runner(vec![skill]);
@@ -386,7 +382,7 @@ fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
         "speed",
         "ground_type==1@always==1",
         SkillType::SpeedUp,
-        400000,
+        40.0,
     )]);
     let speed = runner.adjusted.speed;
 
@@ -401,8 +397,8 @@ fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
 fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
     let condition = format!("{lottery}==50");
     let alternatives = vec![
-        alternative(&condition, SkillType::SpeedUp, 1000000),
-        alternative(&condition, SkillType::SpeedUp, 400000),
+        alternative(&condition, SkillType::SpeedUp, 100.0),
+        alternative(&condition, SkillType::SpeedUp, 40.0),
     ];
     let skill = Skill::new("speed".to_string(), skill_data(alternatives));
     let course = load_course(10104);
@@ -437,7 +433,7 @@ fn test_random_lot_shared_draw_is_shared_by_alternatives() {
 fn alternative_with_precondition(
     precondition: &str,
     condition: &str,
-    modifier: i32,
+    modifier: f64,
 ) -> SkillAlternative {
     SkillAlternative {
         precondition: Some(precondition.parse().unwrap()),
@@ -462,7 +458,7 @@ fn test_out_of_gate_precondition_is_required() {
         out_of_gate_speed_gain(vec![alternative_with_precondition(
             precondition,
             "always==1",
-            400000,
+            40.0,
         )])
     };
     assert_eq!(gain("ground_type==2"), 0);
@@ -477,7 +473,7 @@ fn test_out_of_gate_condition_is_required_with_satisfied_precondition() {
     let gain = out_of_gate_speed_gain(vec![alternative_with_precondition(
         "ground_type==1",
         "ground_type==2",
-        400000,
+        40.0,
     )]);
     assert_eq!(gain, 0);
 }
@@ -486,8 +482,8 @@ fn test_out_of_gate_condition_is_required_with_satisfied_precondition() {
 fn test_unsatisfied_precondition_falls_through_to_next_alternative() {
     // Like "All-in!!": a bonus alternative for specific tracks, then a default one.
     let gain = out_of_gate_speed_gain(vec![
-        alternative_with_precondition("ground_type==2", "always==1", 1000000),
-        alternative("always==1", SkillType::SpeedUp, 400000),
+        alternative_with_precondition("ground_type==2", "always==1", 100.0),
+        alternative("always==1", SkillType::SpeedUp, 40.0),
     ]);
     assert_eq!(gain, 40);
 }

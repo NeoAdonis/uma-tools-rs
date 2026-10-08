@@ -126,7 +126,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
-                        modifier: 4000,
+                        modifier: 0.4,
                     }],
                 },
                 // Another precondition (accumulatetime>=10)
@@ -138,7 +138,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
-                        modifier: 3000,
+                        modifier: 0.3,
                     }],
                 },
                 // No precondition
@@ -150,7 +150,7 @@ fn test_multiple_alternatives_precondition_independence() {
                     effects: vec![SkillEffect {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
-                        modifier: 5000,
+                        modifier: 0.5,
                     }],
                 },
             ],
@@ -216,7 +216,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
                 effects: vec![SkillEffect {
                     skill_type: effect,
                     target: SkillTarget::Oneself,
-                    modifier: 350,
+                    modifier: 0.035,
                 }],
             }],
             popularity: None,
