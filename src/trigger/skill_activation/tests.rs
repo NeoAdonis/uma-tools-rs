@@ -473,6 +473,8 @@ fn test_branches_use_their_own_rolls() {
     assert_eq!(guards(&branches[0]), vec!["distance_type == 2"]);
 }
 
+// Checked by a debug assertion.
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "random variables in a condition without rolls")]
 fn test_random_variables_need_rolls() {
@@ -513,12 +515,16 @@ fn test_one_event_per_branch() {
     compile_one("is_activate_any_skill==0&phase_random==1");
 }
 
+// Checked by a debug assertion.
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "more than one event in a branch")]
 fn test_multiple_events_in_a_branch_panic() {
     compile_one("is_activate_any_skill==1&phase_random==1");
 }
 
+// Checked by a debug assertion.
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "more than one event in a branch")]
 fn test_multiple_random_segments_in_a_branch_panic() {
