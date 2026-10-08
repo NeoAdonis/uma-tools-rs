@@ -254,8 +254,8 @@ impl RaceSolver<Runner> {
     /// Get the time as displayed on the scoreboard after a race finishes.
     pub fn scoreboard_time(&self) -> Option<f64> {
         let converted = self.state.finish_time? * FINISH_TIME_SCALE;
-        let min = self.state.course.finish_time_min();
-        let max = self.state.course.finish_time_max();
+        let min = self.state.course.finish_time_min;
+        let max = self.state.course.finish_time_max;
         let clamped = converted.clamp(min, max);
         if !(min..=max).contains(&converted) {
             // Add random offset between 0.0 and 1.0 seconds.
@@ -646,7 +646,7 @@ impl RaceSolver<Runner> {
         // Debug: check sorting.
         self.assert_runners_sorted();
 
-        let course_width = self.state.course.width();
+        let course_width = self.state.course.width;
         let num_runners = self.runners.len();
         // ? What if a bump causes a new overlap with a third runner?
         // ? For now, resolve all overlaps on the same frame.

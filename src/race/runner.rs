@@ -853,7 +853,7 @@ impl Runner {
 
         let first_move_modifier =
             if self.phase <= Phase::Mid && self.position < course.move_lane_point() {
-                1.0 + self.lane.current / course.width() * 0.05
+                1.0 + self.lane.current / course.width * 0.05
             } else {
                 1.0
             };
@@ -1654,7 +1654,7 @@ impl Runner {
         // Position keeping mode is pace-down.
         // Set lane target to fixed point.
         if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
-            return f64::min(0.18, course.width());
+            return f64::min(0.18, course.width);
         }
 
         // On final straight AND extra move lane is on the outside.
@@ -1663,7 +1663,7 @@ impl Runner {
             && extra > self.lane.current
             && self.has_lane_space_to(extra, all_runners)
         {
-            return extra.clamp(0.0, course.width());
+            return extra.clamp(0.0, course.width);
         }
 
         // In early-race or mid-race, move inward.
@@ -1682,7 +1682,7 @@ impl Runner {
             // Move away from inside runner.
             let target = inside_lane + horse_lanes_to_course_widths(2.0);
             if self.has_lane_space_to(target, all_runners) {
-                return target.clamp(0.0, course.width());
+                return target.clamp(0.0, course.width);
             }
         }
 
@@ -1735,7 +1735,7 @@ impl Runner {
                 target_lane = extra;
             }
 
-            decision.target = target_lane.clamp(0.0, course.width());
+            decision.target = target_lane.clamp(0.0, course.width);
         }
 
         decision
@@ -2045,7 +2045,7 @@ impl Runner {
         {
             // Entering slope - apply uphill deceleration if applicable.
             if slopes[slope_idx].is_uphill() {
-                self.start_uphill_deceleration(slopes[slope_idx].slope_percent());
+                self.start_uphill_deceleration(slopes[slope_idx].slope);
             } else {
                 // Downhill - reset downhill timer.
                 self.downhill_time = 0.0;
@@ -2072,7 +2072,7 @@ impl Runner {
                         // Wisdom * 0.04% chance to start each second.
                         let chance = self.adjusted.wiz as f64 * 0.0004;
                         if rng.random_bool(chance) {
-                            self.start_downhill_acceleration(slopes[idx].slope_percent());
+                            self.start_downhill_acceleration(slopes[idx].slope);
                         }
                     }
                 }

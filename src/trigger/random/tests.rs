@@ -15,7 +15,7 @@ fn create_test_course() -> Course {
                 length: 150.0,
             },
         ],
-        vec![Slope::new(800.0, 100.0, 500)],
+        vec![Slope::new(800.0, 100.0, 0.05)],
         vec![Straight {
             start: 0.0,
             end: 100.0,
@@ -550,9 +550,9 @@ fn test_phase_latter_half_straight_random() {
 fn test_up_slope_random() {
     // Uphills [800-900] and [1500-1550], downhill [1000-1200] (never picked).
     let course = create_test_course_with_slopes(vec![
-        Slope::new(800.0, 100.0, 500),
-        Slope::new(1000.0, 200.0, -500),
-        Slope::new(1500.0, 50.0, 200),
+        Slope::new(800.0, 100.0, 0.05),
+        Slope::new(1000.0, 200.0, -0.05),
+        Slope::new(1500.0, 50.0, 0.02),
     ]);
     let condition = parse_condition("up_slope_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
@@ -571,7 +571,7 @@ fn test_up_slope_random() {
     assert!(hit_first && hit_second);
 
     // Only downhills on course fails the roll.
-    let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, -500)]);
+    let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, -0.05)]);
     assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
@@ -582,10 +582,10 @@ fn test_up_slope_random_later_half() {
     // Downhill [2000-2100] is never picked.
     // Valid points: [1200-1300] and [1800-1900].
     let course = create_test_course_with_slopes(vec![
-        Slope::new(800.0, 100.0, 500),
-        Slope::new(1100.0, 200.0, 300),
-        Slope::new(1800.0, 100.0, 500),
-        Slope::new(2000.0, 100.0, -500),
+        Slope::new(800.0, 100.0, 0.05),
+        Slope::new(1100.0, 200.0, 0.03),
+        Slope::new(1800.0, 100.0, 0.05),
+        Slope::new(2000.0, 100.0, -0.05),
     ]);
     let condition = parse_condition("up_slope_random_later_half==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);

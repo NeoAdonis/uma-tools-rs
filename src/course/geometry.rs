@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use crate::units::deserialize_ten_thousandths;
+
 /// Represents a corner on the course.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Corner {
@@ -26,14 +28,18 @@ pub struct Slope {
     pub start: f64,
     /// Length of the slope in meters.
     pub length: f64,
-    /// Slope value (in ten-thousandths).
-    slope: i32,
+    /// Slope gradient as a percentage (positive uphill, negative downhill).
+    ///
+    /// Stored in 10000ths of a percent in the course data, and converted when
+    /// deserializing.
+    #[serde(deserialize_with = "deserialize_ten_thousandths")]
+    pub slope: f64,
 }
 
 impl Slope {
     /// Create a new Slope for testing purposes.
     #[cfg(test)]
-    pub fn new(start: f64, length: f64, slope: i32) -> Self {
+    pub fn new(start: f64, length: f64, slope: f64) -> Self {
         Slope {
             start,
             length,
@@ -43,24 +49,19 @@ impl Slope {
 
     /// Check if the slope is uphill.
     pub fn is_uphill(&self) -> bool {
-        self.slope > 0
+        self.slope > 0.0
     }
 
     /// Check if the slope is downhill.
     pub fn is_downhill(&self) -> bool {
-        self.slope < 0
-    }
-
-    /// Get the slope as a percentage.
-    pub fn slope_percent(&self) -> f64 {
-        self.slope as f64 / 10000.0
+        self.slope < 0.0
     }
 
     /// Get the slope type classification.
     pub fn slope_type(&self) -> SlopeType {
-        if self.slope > 0 {
+        if self.slope > 0.0 {
             SlopeType::Uphill
-        } else if self.slope < 0 {
+        } else if self.slope < 0.0 {
             SlopeType::Downhill
         } else {
             SlopeType::Flat

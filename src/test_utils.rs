@@ -49,9 +49,9 @@ pub(crate) fn course_data() -> CourseData {
         slopes: vec![],
         straights: vec![],
         race_track_id: 10006,
-        finish_time_min: 120000,
-        finish_time_max: 150000,
-        lane_max: 10000,
+        finish_time_min: 117.1,
+        finish_time_max: 123.0,
+        width: 1.0,
     }
 }
 

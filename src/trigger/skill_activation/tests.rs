@@ -26,7 +26,7 @@ fn create_test_course() -> Course {
                     length: 180.0,
                 },
             ],
-            slopes: vec![Slope::new(800.0, 100.0, 500)],
+            slopes: vec![Slope::new(800.0, 100.0, 0.05)],
             straights: vec![
                 Straight {
                     start: 0.0,

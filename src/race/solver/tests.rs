@@ -2057,7 +2057,7 @@ fn forced_gold_skill(id: &str) -> Skill {
 }
 
 #[test]
-fn test_activate_random_gold_activates_one_skill_per_10000() {
+fn test_activate_random_gold_activates_one_skill_per_unit() {
     let skills = vec![
         forced_gold_skill("a"),
         forced_gold_skill("b"),

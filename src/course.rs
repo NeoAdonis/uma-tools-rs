@@ -12,7 +12,7 @@ include!("course/track_names.rs");
 pub mod geometry;
 
 use crate::course::geometry::*;
-use crate::units::horse_lanes_to_course_widths;
+use crate::units::{deserialize_ten_thousandths, horse_lanes_to_course_widths};
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -206,14 +206,24 @@ pub struct CourseData {
     pub straights: Vec<Straight>,
     /// Race track ID associated with this course.
     pub race_track_id: u16,
-    /// Minimum finish time that can be displayed on the scoreboard in 1000ths of
-    /// seconds.
-    pub(crate) finish_time_min: u32,
-    /// Maximum finish time that can be displayed on the scoreboard in 1000ths of
-    /// seconds.
-    pub(crate) finish_time_max: u32,
-    /// Course width represented in its own units (not meters).
-    pub(crate) lane_max: u32,
+    /// Minimum finish time that can be displayed on the scoreboard in seconds.
+    ///
+    /// Stored in 10000ths of a second in the course data, and converted when
+    /// deserializing.
+    #[serde(deserialize_with = "deserialize_ten_thousandths")]
+    pub finish_time_min: f64,
+    /// Maximum finish time that can be displayed on the scoreboard in seconds.
+    ///
+    /// Stored in 10000ths of a second in the course data, and converted when
+    /// deserializing.
+    #[serde(deserialize_with = "deserialize_ten_thousandths")]
+    pub finish_time_max: f64,
+    /// Total course width in course widths (the maximum lane distance).
+    ///
+    /// Stored in 10000ths of a course width in the course data (as `laneMax`), and
+    /// converted when deserializing.
+    #[serde(rename = "laneMax", deserialize_with = "deserialize_ten_thousandths")]
+    pub width: f64,
 }
 
 impl Course {
@@ -269,18 +279,6 @@ impl Course {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
-    /// Get the maximum finish time that can be displayed on the scoreboard in
-    /// seconds.
-    pub fn finish_time_max(&self) -> f64 {
-        self.finish_time_max as f64 / 10000.0
-    }
-
-    /// Get the minimum finish time that can be displayed on the scoreboard in
-    /// seconds.
-    pub fn finish_time_min(&self) -> f64 {
-        self.finish_time_min as f64 / 10000.0
-    }
-
     /// Get remaining distance in meters from a given position.
     pub fn remain_distance(&self, position: f64) -> f64 {
         (self.distance as f64 - position).max(0.0)
@@ -317,11 +315,6 @@ impl Course {
             }
         };
         horse_lanes_to_course_widths(gate_roll as f64 + adjustor)
-    }
-
-    /// Get the total course width in course widths (the maximum lane distance).
-    pub fn width(&self) -> f64 {
-        self.lane_max as f64 / 10000.0
     }
 
     /// Get the track name in the specified language, or `None` if the track name is
@@ -416,6 +409,15 @@ mod tests {
         10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10101, 10103, 10104,
         10105, 10201, 10202, 10203,
     ];
+
+    #[test]
+    fn test_values_are_converted_from_ten_thousandths() {
+        let course = crate::test_utils::load_course(10201);
+        assert_eq!(course.finish_time_min, 54.7);
+        assert_eq!(course.finish_time_max, 57.0);
+        assert_eq!(course.width, 1.47);
+        assert_eq!(course.slopes[0].slope, 1.0);
+    }
 
     #[test]
     fn test_is_exchange_race() {

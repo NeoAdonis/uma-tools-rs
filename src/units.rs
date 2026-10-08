@@ -1,5 +1,15 @@
 //! Unit conversion utilities for race measurements.
 
+use serde::{Deserialize, Deserializer};
+
+/// Convert a value from 10000ths while deserializing, as most fractional values
+/// are stored in the game data.
+pub(crate) fn deserialize_ten_thousandths<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<f64, D::Error> {
+    Ok(f64::deserialize(deserializer)? / 10000.0)
+}
+
 /// Course width to meters conversion unit. 1 course width = 11.25 meters.
 ///
 /// Lane positions are measured in course widths. For example, a turf course in

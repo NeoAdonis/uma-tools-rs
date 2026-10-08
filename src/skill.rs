@@ -10,6 +10,7 @@ use std::sync::Arc;
 use crate::condition::parser::Condition;
 use crate::condition::variables::{ActivationVar, VarType};
 use crate::uma::Style;
+use crate::units::deserialize_ten_thousandths;
 
 /// Represents the type of skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, Hash, TryFromPrimitive)]
@@ -258,20 +259,15 @@ pub struct SkillEffect {
     pub modifier: f64,
 }
 
-/// Convert a value from 10000ths while deserializing.
-fn deserialize_ten_thousandths<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<f64, D::Error> {
-    Ok(i32::deserialize(deserializer)? as f64 / 10000.0)
-}
-
-/// Convert a base duration from 10000ths of a second while deserializing. A base
-/// duration of -1 means that effects last until the end of the race.
+/// Convert a base duration from 10000ths of a second while deserializing. A
+/// negative base duration (-1) means that effects last until the end.
 fn deserialize_base_duration<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
-    match i32::deserialize(deserializer)? {
-        -1 => Ok(f64::INFINITY),
-        duration => Ok(duration as f64 / 10000.0),
-    }
+    let duration = deserialize_ten_thousandths(deserializer)?;
+    Ok(if duration < 0.0 {
+        f64::INFINITY
+    } else {
+        duration
+    })
 }
 
 /// Base cooldown in seconds used by most skills, long enough that they never

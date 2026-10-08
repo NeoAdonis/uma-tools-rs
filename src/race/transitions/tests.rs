@@ -4,7 +4,7 @@ fn create_test_corner(start: f64, length: f64) -> Corner {
     Corner { start, length }
 }
 
-fn create_test_slope(start: f64, length: f64, slope: i32) -> Slope {
+fn create_test_slope(start: f64, length: f64, slope: f64) -> Slope {
     Slope::new(start, length, slope)
 }
 
@@ -74,7 +74,7 @@ fn test_multiple_corners() {
 fn test_slope_entry_uphill() {
     let mut manager = SlopeManager::new();
     // Positive = uphill.
-    let slopes = vec![create_test_slope(100.0, 50.0, 500)];
+    let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
 
     // Before slope.
     assert_eq!(manager.check_entry(50.0, &slopes), None);
@@ -91,7 +91,7 @@ fn test_slope_entry_uphill() {
 fn test_slope_entry_downhill() {
     let mut manager = SlopeManager::new();
     // Negative = downhill.
-    let slopes = vec![create_test_slope(100.0, 50.0, -500)];
+    let slopes = vec![create_test_slope(100.0, 50.0, -0.05)];
 
     let entry = manager.check_entry(100.0, &slopes);
     assert!(entry.is_some());
@@ -103,7 +103,7 @@ fn test_slope_entry_downhill() {
 #[test]
 fn test_slope_exit() {
     let mut manager = SlopeManager::new();
-    let slopes = vec![create_test_slope(100.0, 50.0, 500)];
+    let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
 
     // Enter slope.
     manager.check_entry(100.0, &slopes);
