@@ -2655,17 +2655,9 @@ impl Runner {
                 }
             }
         }
-        // Activate random gold skill.
+        // Activate random gold skills (one per 10000 of modifier).
         else if matches!(effect_type, SkillType::ActivateRandomGold) {
-            if !self.golden_skill_indices.is_empty() {
-                let idx = self
-                    .rng
-                    .borrow_mut()
-                    .random_range(0..self.golden_skill_indices.len());
-                let golden_skill_idx = self.golden_skill_indices[idx];
-                // Recursively activate the golden skill (use first alternative).
-                self.activate_skill(golden_skill_idx, 0, state);
-            }
+            self.activate_random_gold_skills(effect.modifier / 10000, state);
         }
         // Rush time extension.
         else if matches!(effect_type, SkillType::RushTimeUp) {
@@ -2674,6 +2666,35 @@ impl Runner {
             if let Some(rush_state) = &mut self.rush_state {
                 rush_state.max_duration += effect.modifier as f64 / 10000.0;
             }
+        }
+    }
+
+    /// Activate up to `count` random gold skills that haven't activated yet,
+    /// bypassing their conditions.
+    ///
+    /// The first alternative of each skill is activated, so that later ones that
+    /// continue it (see [`SkillAlternative::is_continuation`]) can still activate.
+    fn activate_random_gold_skills(&mut self, count: i32, state: &RaceState) {
+        let mut candidates: Vec<usize> = self
+            .golden_skill_indices
+            .iter()
+            .copied()
+            .filter(|&skill_index| {
+                !self
+                    .activated_alternatives
+                    .iter()
+                    .any(|&(activated, _)| activated == skill_index)
+            })
+            .collect();
+        for _ in 0..count {
+            if candidates.is_empty() {
+                break;
+            }
+            let idx = self.rng.borrow_mut().random_range(0..candidates.len());
+            let skill_index = candidates.swap_remove(idx);
+            // ? Assume the first alternative is activated, even when the others are
+            // variants for other courses or running styles (e.g. "Piercing Azure").
+            self.activate_skill(skill_index, 0, state);
         }
     }
 

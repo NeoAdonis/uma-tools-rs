@@ -2014,3 +2014,86 @@ fn test_out_of_gate_style_change_is_applied_before_the_race() {
     let solver = ready_solver(10101, uma(Style::Front), vec![escape], &seeded_config(0));
     assert_eq!(solver.runners[0].adjusted.style, Style::Runaway);
 }
+
+/// Gold skill with the given condition.
+fn gold_skill(id: &str, condition: &str, skill_type: SkillType, modifier: i32) -> Skill {
+    let data = SkillData {
+        rarity: SkillRarity::Gold,
+        ..skill_data(vec![alternative(condition, skill_type, modifier)])
+    };
+    Skill::new(id.to_string(), data)
+}
+
+/// Sorted IDs of the skills activated by the only runner after a whole race,
+/// with "Adventure of 564"-like skill activating `modifier / 10000` random gold
+/// skills in the second half of the race.
+fn random_gold_activations(modifier: i32, mut skills: Vec<Skill>) -> Vec<String> {
+    let adventure = skill(
+        "adventure",
+        "distance_rate>=50",
+        SkillType::ActivateRandomGold,
+        modifier,
+    );
+    skills.push(adventure);
+    let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
+    solver.run();
+
+    let mut ids: Vec<_> = activations(&solver)
+        .into_iter()
+        .map(|(id, _)| id.to_string())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Gold skill that never activates on its own (there are no heals).
+fn forced_gold_skill(id: &str) -> Skill {
+    gold_skill(
+        id,
+        "is_activate_heal_skill==1",
+        SkillType::TargetSpeed,
+        1500,
+    )
+}
+
+#[test]
+fn test_activate_random_gold_activates_one_skill_per_10000() {
+    let skills = vec![
+        forced_gold_skill("a"),
+        forced_gold_skill("b"),
+        forced_gold_skill("c"),
+    ];
+    let ids = random_gold_activations(20000, skills);
+
+    // "adventure" and two distinct gold skills.
+    assert_eq!(ids.len(), 3, "{ids:?}");
+    assert!(ids.contains(&"adventure".to_string()), "{ids:?}");
+    assert!(ids.windows(2).all(|pair| pair[0] != pair[1]), "{ids:?}");
+}
+
+#[test]
+fn test_activate_random_gold_bypasses_conditions() {
+    let ids = random_gold_activations(10000, vec![forced_gold_skill("forced")]);
+    assert_eq!(ids, vec!["adventure", "forced"]);
+}
+
+#[test]
+fn test_activate_random_gold_skips_activated_and_out_of_gate_skills() {
+    let skills = vec![
+        // Activates on its own before "adventure".
+        gold_skill("early", "distance_rate>=10", SkillType::TargetSpeed, 1500),
+        // Activates before the race.
+        gold_skill("green", "always==1", SkillType::SpeedUp, 400000),
+        // White skills can't be picked.
+        skill(
+            "white",
+            "is_activate_heal_skill==1",
+            SkillType::TargetSpeed,
+            1500,
+        ),
+        forced_gold_skill("forced"),
+    ];
+    // Only "forced" can be picked, although two skills should be.
+    let ids = random_gold_activations(20000, skills);
+    assert_eq!(ids, vec!["adventure", "early", "forced", "green"]);
+}
