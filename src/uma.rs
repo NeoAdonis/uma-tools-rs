@@ -48,6 +48,10 @@ pub enum Style {
 }
 
 impl Style {
+    /// Number of running styles. Styles can be used as array indices
+    /// (`style as usize`).
+    pub const COUNT: usize = 5;
+
     /// Returns `true` if `self` is a front-running style ([`Style::Front`] or
     /// [`Style::Runaway`]).
     ///

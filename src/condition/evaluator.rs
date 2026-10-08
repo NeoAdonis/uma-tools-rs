@@ -649,12 +649,13 @@ fn get_style_count_otherself(state: &RaceState, style: Style, my_style: Style) -
 }
 
 fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
-    state.rushed_by_style.get(&style).cloned().unwrap_or(0) as i32
+    let rushed = state.rushed_by_team.iter().map(|team| team[style as usize]);
+    rushed.map(i32::from).sum()
 }
 
-fn get_style_temptation_opponent_count(state: &RaceState, style: Style, my_style: Style) -> i32 {
-    // TODO: Opponents != Otherself; find actual opponent count.
-    get_style_temptation_count(state, style) - (my_style == style) as i32
+fn get_style_temptation_opponent_count(state: &RaceState, style: Style, runner: &Runner) -> i32 {
+    let team = &state.rushed_by_team[runner.initial_state.team as usize];
+    get_style_temptation_count(state, style) - team[style as usize] as i32
 }
 
 /// Get initial state values.
@@ -788,10 +789,8 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
         // Rush counts by position.
         TemptationCountBehind => runner.rush_counter.behind as i32,
         TemptationCountInfront => runner.rush_counter.ahead as i32,
-        // TODO: find actual opponent count.
-        TemptationOpponentCountBehind => runner.rush_counter.behind as i32,
-        // TODO: find actual opponent count.
-        TemptationOpponentCountInfront => runner.rush_counter.ahead as i32,
+        TemptationOpponentCountBehind => runner.rush_counter.opponents_behind as i32,
+        TemptationOpponentCountInfront => runner.rush_counter.opponents_ahead as i32,
 
         // Rush counts by running style.
         RunningStyleTemptationCountNige => get_style_temptation_count(state, Style::Front),
@@ -799,16 +798,16 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
         RunningStyleTemptationCountSashi => get_style_temptation_count(state, Style::Late),
         RunningStyleTemptationCountSenko => get_style_temptation_count(state, Style::Pace),
         RunningStyleTemptationOpponentCountNige => {
-            get_style_temptation_opponent_count(state, Style::Front, runner.base_style())
+            get_style_temptation_opponent_count(state, Style::Front, runner)
         }
         RunningStyleTemptationOpponentCountOikomi => {
-            get_style_temptation_opponent_count(state, Style::End, runner.base_style())
+            get_style_temptation_opponent_count(state, Style::End, runner)
         }
         RunningStyleTemptationOpponentCountSashi => {
-            get_style_temptation_opponent_count(state, Style::Late, runner.base_style())
+            get_style_temptation_opponent_count(state, Style::Late, runner)
         }
         RunningStyleTemptationOpponentCountSenko => {
-            get_style_temptation_opponent_count(state, Style::Pace, runner.base_style())
+            get_style_temptation_opponent_count(state, Style::Pace, runner)
         }
     }
 }

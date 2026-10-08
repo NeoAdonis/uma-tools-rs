@@ -1,5 +1,6 @@
 use super::*;
 use crate::course::LaneType;
+use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::{
     assert_close, load_course, race_params, ready_solver, seeded_config, skill, uma,
@@ -1447,4 +1448,105 @@ fn test_team_exceeding_gates_panics() {
     }
     let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
     solver.add_team(vec![member(), member()]);
+}
+
+/// Put runner `i` in rush state.
+fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
+    solver.runners[i].rush_state = Some(RushState {
+        section: 0,
+        start_time: 1.0,
+        end_time: 4.0,
+        max_duration: 12.0,
+        is_rushed: true,
+        style: Style::Pace,
+    });
+}
+
+#[test]
+fn test_rush_counters_by_position_count_opponents() {
+    // In position order: team 0 (×2), team 1 and team 2.
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member()]);
+    solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    solver.state.elapsed_time = 10.0;
+    solver.runners.sort_by_key(|r| r.initial_state.team);
+    for (i, position) in [400.0, 300.0, 200.0, 100.0].into_iter().enumerate() {
+        solver.runners[i].position = position;
+    }
+
+    // Rushed: the team 0 leader and the team 1 runner.
+    set_rushed(&mut solver, 0);
+    set_rushed(&mut solver, 2);
+    solver.update_order_values();
+
+    let counters = solver
+        .runners
+        .iter()
+        .map(|r| {
+            let c = &r.rush_counter;
+            (c.ahead, c.opponents_ahead, c.behind, c.opponents_behind)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        counters,
+        [
+            // Team 0 leader: the team 1 runner behind is an opponent.
+            (0, 0, 1, 1),
+            // Team 0 member: the leader ahead is an ally.
+            (1, 0, 1, 1),
+            // Team 1: does not count itself.
+            (1, 1, 0, 0),
+            // Team 2: both rushed runners ahead are opponents.
+            (2, 2, 0, 0),
+        ]
+    );
+}
+
+#[test]
+fn test_rushed_by_team_matches_runners() {
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
+    // Low wisdom for a high rush chance.
+    let member = |style| {
+        let uma = Uma {
+            wiz: 100,
+            ..uma(style)
+        };
+        (uma, Motivation::Normal, vec![])
+    };
+    solver.add_team(vec![
+        member(Style::Late),
+        member(Style::Late),
+        member(Style::Pace),
+    ]);
+    solver.add_team(vec![member(Style::Late), member(Style::End)]);
+    for style in [Style::Runaway, Style::Runaway, Style::Front, Style::Pace] {
+        let (uma, motivation, skills) = member(style);
+        solver.add_runner(uma, motivation, skills);
+    }
+    let mut solver = solver.ready_runners();
+
+    let mut max_rushed = 0;
+    let mut runaway_rushed = false;
+    while solver.state.finish_time.is_none() {
+        solver.step(DELTA_TIME);
+
+        let mut expected = vec![[0; Style::COUNT]; solver.state.team_count as usize];
+        for runner in solver.runners.iter().filter(|r| r.is_rushed()) {
+            // Runaways count as Front runners.
+            expected[runner.initial_state.team as usize][runner.base_style() as usize] += 1;
+            runaway_rushed |= runner.base.style == Style::Runaway;
+        }
+        assert_eq!(
+            solver.state.rushed_by_team, expected,
+            "t={}",
+            solver.state.elapsed_time
+        );
+        let rushed = expected.iter().flatten().sum::<u8>();
+        max_rushed = max_rushed.max(rushed);
+    }
+    assert!(max_rushed > 0, "no runner rushed");
+    assert!(runaway_rushed, "no Runaway rushed");
 }

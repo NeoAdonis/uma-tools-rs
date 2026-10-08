@@ -49,12 +49,13 @@ pub struct RaceState {
     pub finish_time: Option<f64>,
     /// Number of teams in the race. Team indices go from 0 to `team_count - 1`.
     pub team_count: u8,
-    /// Count of runners by style.
+    /// Count of runners by base style (Runaways count as Front runners).
     pub runners_by_style: HashMap<Style, u8>,
-    /// Running style of the most popular runner.
+    /// Base style of the most popular runner (Runaway counts as Front).
     pub style_most_popular: Style,
-    /// Count of runners currently rushed by style.
-    pub rushed_by_style: HashMap<Style, u8>,
+    /// Count of runners currently rushed, by team and base style (Runaways count
+    /// as Front runners). Indexed as `[team][style as usize]`.
+    pub rushed_by_team: Vec<[u8; Style::COUNT]>,
     /// Count of existing skill IDs among all runners.
     pub existing_skills: HashMap<String, u8>,
     /// Set of activated buff skill types among all runners.
@@ -102,7 +103,7 @@ impl RaceSolver<UnreadyRunner> {
             team_count: 0,
             style_most_popular: Style::Front,
             runners_by_style: HashMap::new(),
-            rushed_by_style: HashMap::new(),
+            rushed_by_team: Vec::new(),
             existing_skills: HashMap::new(),
             buffs_activated: HashSet::new(),
         };
@@ -150,6 +151,7 @@ impl RaceSolver<UnreadyRunner> {
     fn new_team(&mut self) -> u8 {
         let team = self.state.team_count;
         self.state.team_count += 1;
+        self.state.rushed_by_team.push([0; Style::COUNT]);
         team
     }
 
@@ -185,7 +187,7 @@ impl RaceSolver<UnreadyRunner> {
         *self
             .state
             .runners_by_style
-            .entry(builder.base.style)
+            .entry(builder.base.style.base_style())
             .or_insert(0) += 1;
 
         // Add to builders list.
@@ -208,7 +210,7 @@ impl RaceSolver<UnreadyRunner> {
         for (i, builder) in builders.iter_mut().enumerate() {
             builder.initial_state.popularity_rank = popularity_ranks[i];
             if builder.initial_state.popularity_rank == 1 {
-                state.style_most_popular = builder.base.style;
+                state.style_most_popular = builder.base.style.base_style();
             }
         }
 
@@ -348,32 +350,42 @@ impl RaceSolver<Runner> {
         let position_last = self.runners.last().unwrap().position;
         let position_range = position_first - position_last;
         let mut position_next = position_first;
-        let mut rush_counter = 0;
+        // Rushed runners counted so far, in total and by team.
+        let mut rushed = 0;
+        let mut rushed_by_team = vec![0; self.state.team_count as usize];
 
         // From first to last, update order and distance differences from runners ahead.
         for (index, runner) in self.runners.iter_mut().enumerate() {
             if runner.has_finished() {
                 continue;
             }
+            let team = runner.initial_state.team as usize;
             runner.update_order((index + 1) as u8, &self.state.course);
             runner.update_order_rate(total_runners, should_update_range);
-            runner.update_diff_from_ahead(
-                position_first,
-                position_next,
-                position_range,
-                rush_counter,
-            );
+            runner.update_diff_from_ahead(position_first, position_next, position_range);
+            runner.rush_counter.ahead = rushed;
+            runner.rush_counter.opponents_ahead = rushed - rushed_by_team[team];
             position_next = runner.position;
-            rush_counter += runner.is_rushed() as u8;
+            if runner.is_rushed() {
+                rushed += 1;
+                rushed_by_team[team] += 1;
+            }
         }
 
         // From last to first, update distance differences from runners behind.
         let mut position_prev = position_last;
-        let mut rush_counter = 0;
+        rushed = 0;
+        rushed_by_team.fill(0);
         for runner in self.runners.iter_mut().rev() {
-            runner.update_diff_from_behind(position_prev, rush_counter);
+            let team = runner.initial_state.team as usize;
+            runner.update_diff_from_behind(position_prev);
+            runner.rush_counter.behind = rushed;
+            runner.rush_counter.opponents_behind = rushed - rushed_by_team[team];
             position_prev = runner.position;
-            rush_counter += runner.is_rushed() as u8;
+            if runner.is_rushed() {
+                rushed += 1;
+                rushed_by_team[team] += 1;
+            }
         }
     }
 

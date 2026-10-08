@@ -2,7 +2,7 @@ use super::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::Skill;
-use crate::test_utils::{ready_solver, seeded_config, skill_data, uma};
+use crate::test_utils::{load_course, race_params, ready_solver, seeded_config, skill_data, uma};
 
 /// Ready race with a single Late Surger with the given skills.
 fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
@@ -158,4 +158,113 @@ fn test_phase_values_by_position() {
             "position {sections} sections"
         );
     }
+}
+
+/// Ready race with a team of two Late Surgers (team 0) and an individual Late
+/// Surger (team 1).
+fn create_team_race_solver() -> RaceSolver<Runner> {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let member = || (uma(Style::Late), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member()]);
+    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    solver.ready_runners()
+}
+
+/// First runner of `team`.
+fn team_runner(solver: &RaceSolver<Runner>, team: u8) -> &Runner {
+    let mut runners = solver.runners.iter();
+    runners.find(|r| r.initial_state.team == team).unwrap()
+}
+
+#[test]
+fn test_style_temptation_opponent_count_excludes_own_team() {
+    let mut solver = create_team_race_solver();
+    // Both team members and the individual runner are rushed.
+    solver.state.rushed_by_team[0][Style::Late as usize] = 2;
+    solver.state.rushed_by_team[1][Style::Late as usize] = 1;
+
+    let state = &solver.state;
+    let all = TemptationVar::RunningStyleTemptationCountSashi;
+    let opponents = TemptationVar::RunningStyleTemptationOpponentCountSashi;
+    let other_style = TemptationVar::RunningStyleTemptationOpponentCountSenko;
+    for (team, expected_opponents) in [(0, 1), (1, 2)] {
+        let runner = team_runner(&solver, team);
+        assert_eq!(get_temptation_value(&all, state, runner), 3, "team {team}");
+        assert_eq!(
+            get_temptation_value(&opponents, state, runner),
+            expected_opponents,
+            "team {team}"
+        );
+        assert_eq!(
+            get_temptation_value(&other_style, state, runner),
+            0,
+            "team {team}"
+        );
+    }
+}
+
+#[test]
+fn test_style_temptation_opponent_count_excludes_self() {
+    let mut solver = create_team_race_solver();
+    // Only the individual runner is rushed: it has no rushed opponents.
+    solver.state.rushed_by_team[1][Style::Late as usize] = 1;
+
+    let var = TemptationVar::RunningStyleTemptationOpponentCountSashi;
+    let individual = team_runner(&solver, 1);
+    assert_eq!(get_temptation_value(&var, &solver.state, individual), 0);
+    let member = team_runner(&solver, 0);
+    assert_eq!(get_temptation_value(&var, &solver.state, member), 1);
+}
+
+#[test]
+fn test_temptation_opponent_count_by_position() {
+    let mut solver = create_test_race_solver(vec![]);
+    let counter = &mut solver.runners[0].rush_counter;
+    counter.ahead = 3;
+    counter.behind = 4;
+    counter.opponents_ahead = 1;
+    counter.opponents_behind = 2;
+
+    let state = &solver.state;
+    let runner = &solver.runners[0];
+    let actual = [
+        TemptationVar::TemptationCountInfront,
+        TemptationVar::TemptationCountBehind,
+        TemptationVar::TemptationOpponentCountInfront,
+        TemptationVar::TemptationOpponentCountBehind,
+    ]
+    .map(|var| get_temptation_value(&var, state, runner));
+    assert_eq!(actual, [3, 4, 1, 2]);
+}
+
+#[test]
+fn test_runaways_count_as_front_runners() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    for style in [Style::Runaway, Style::Front, Style::Pace] {
+        solver.add_runner(uma(style), Motivation::Normal, vec![]);
+    }
+    let solver = solver.ready_runners();
+    let state = &solver.state;
+
+    let value = |var, style| get_running_style_value(&var, state, style);
+    let nige_otherself = RunningStyleVar::RunningStyleCountNigeOtherself;
+    assert_eq!(value(nige_otherself, Style::Runaway), 1);
+    assert_eq!(value(nige_otherself, Style::Front), 1);
+    assert_eq!(value(nige_otherself, Style::Pace), 2);
+    assert_eq!(
+        value(RunningStyleVar::RunningStyleCountSame, Style::Runaway),
+        2
+    );
+}
+
+#[test]
+fn test_most_popular_runaway_counts_as_front_runner() {
+    let solver = ready_solver(10101, uma(Style::Runaway), vec![], &seeded_config(0));
+    let runner = &solver.runners[0];
+
+    let var = RunningStyleVar::RunningStyleEqualPopularityOne;
+    assert_eq!(
+        get_running_style_value(&var, &solver.state, runner.adjusted.style),
+        1
+    );
 }

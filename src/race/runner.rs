@@ -240,6 +240,10 @@ pub struct RushCounter {
     pub ahead: u8,
     /// Number of runners currently in rush state behind.
     pub behind: u8,
+    /// Number of opponents currently in rush state ahead.
+    pub opponents_ahead: u8,
+    /// Number of opponents currently in rush state behind.
+    pub opponents_behind: u8,
 }
 
 /// Lane state including current and target lane positions in course widths.
@@ -1312,7 +1316,7 @@ impl Runner {
             rush_state.start_time = state.elapsed_time;
             // Rushed for at least 3 seconds.
             rush_state.end_time = state.elapsed_time + 3.0;
-            *state.rushed_by_style.entry(self.base.style).or_insert(0) += 1;
+            state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize] += 1;
             // Force positioning strategy change immediately.
             self.positioning_strategy = PositioningStrategy::Normal;
             self.next_positioning_check = state.elapsed_time;
@@ -1328,10 +1332,7 @@ impl Runner {
             rush_state.is_rushed = false;
             // Ensure end time is current.
             rush_state.end_time = state.elapsed_time;
-            state
-                .rushed_by_style
-                .entry(self.base.style)
-                .and_modify(|e| *e -= 1);
+            state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize] -= 1;
             // Force positioning strategy change immediately.
             self.positioning_strategy = PositioningStrategy::Normal;
             self.next_positioning_check = state.elapsed_time;
@@ -2134,18 +2135,15 @@ impl Runner {
         position_first: f64,
         position_next: f64,
         position_range: f64,
-        rushed_ahead: u8,
     ) {
         self.position_diff.from_first = position_first - self.position;
         self.position_diff.from_next = position_next - self.position;
         self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
-        self.rush_counter.ahead = rushed_ahead;
     }
 
     /// Update position difference from the runner behind.
-    pub fn update_diff_from_behind(&mut self, position_prev: f64, rushed_behind: u8) {
+    pub fn update_diff_from_behind(&mut self, position_prev: f64) {
         self.position_diff.from_prev = self.position - position_prev;
-        self.rush_counter.behind = rushed_behind;
     }
 
     /// Check if another runner is visible to this runner.
