@@ -7,7 +7,7 @@ use serde_with::{BoolFromInt, serde_as};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::condition::parser::{CompOp, Comparison, ComparisonTree, Condition};
+use crate::condition::parser::Condition;
 use crate::condition::variables::{ActivationVar, VarType};
 use crate::uma::Style;
 
@@ -93,6 +93,16 @@ impl SkillType {
     /// Check if this effect type is a rush chance effect.
     pub fn is_rush_chance_effect(self) -> bool {
         matches!(self, SkillType::RushChanceUp)
+    }
+
+    /// Check if this effect type modifies a parameter that is needed before the
+    /// race starts (stats, start delay, running style, rush chance, etc.).
+    pub fn is_pre_race_effect(self) -> bool {
+        self.is_stat_boost()
+            || self.is_start_delay_modification()
+            || self.style_change().is_some()
+            || self.is_rush_chance_effect()
+            || matches!(self, SkillType::ActivateSympathy)
     }
 
     /// Check if this effect type is a timed effect.
@@ -390,26 +400,6 @@ impl Skill {
         }
     }
 
-    /// Check if this skill is a "green" (stat boosting) skill.
-    pub fn is_green(self: &Skill) -> bool {
-        for alternative in &self.alternatives {
-            for effect in &alternative.effects {
-                match effect.skill_type {
-                    SkillType::SpeedUp
-                    | SkillType::StaminaUp
-                    | SkillType::PowerUp
-                    | SkillType::GutsUp
-                    | SkillType::WizUp
-                    | SkillType::AllStatsUp => {
-                        return true;
-                    }
-                    _ => {}
-                }
-            }
-        }
-        false
-    }
-
     /// Determine whether a skill effect is positive or negative.
     pub fn is_effect_positive(effect: &SkillEffect) -> bool {
         match effect.skill_type {
@@ -499,36 +489,14 @@ impl Skill {
     }
 
     /// Check if this skill should activate out of gate (before race begins).
+    ///
+    /// That is, if any of its effects modifies a parameter that is needed before
+    /// the race starts (see [`SkillType::is_pre_race_effect`]).
     pub fn should_activate_out_of_gate(&self) -> bool {
-        // Green skills (stat boosts) always activate at start.
-        if self.is_green() {
-            return true;
-        }
-
-        // Skills with always==1 condition activate at start.
-        if let Some(alt) = self.alternatives.first() {
-            if alt.condition.comp_tree
-                == ComparisonTree::Single(Comparison {
-                    var: VarType::Always,
-                    op: CompOp::Equal,
-                    value: 1,
-                })
-            {
-                return true;
-            }
-
-            // Start delay modification skills activate at start.
-            if alt.effects.iter().any(|ef| {
-                matches!(
-                    ef.skill_type,
-                    SkillType::MultiplyStartDelay | SkillType::SetStartDelay
-                )
-            }) {
-                return true;
-            }
-        }
-
-        false
+        self.alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.effects)
+            .any(|effect| effect.skill_type.is_pre_race_effect())
     }
 
     /// Check if this skill adds popularity points to a runner in a race.
@@ -574,7 +542,7 @@ impl Skill {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{assert_close, skill_data};
+    use crate::test_utils::{self, assert_close, skill_data};
 
     fn skill_with_wisdom_check(wisdom_check: bool) -> Skill {
         let data = SkillData {
@@ -711,13 +679,18 @@ mod tests {
     }
 
     #[test]
-    fn test_always_condition_activates_out_of_gate() {
-        let skill = |condition: &str| {
-            let alternatives = vec![alternative(condition, "").unwrap()];
+    fn test_pre_race_effects_activate_out_of_gate() {
+        let skill = |skill_type| {
+            let alternatives = vec![test_utils::alternative("running_style==1", skill_type, 0)];
             Skill::new("test".to_string(), skill_data(alternatives))
         };
-        assert!(skill("always==1").should_activate_out_of_gate());
-        assert!(!skill("always==1&phase>=2").should_activate_out_of_gate());
-        assert!(!skill("phase>=2").should_activate_out_of_gate());
+        assert!(skill(SkillType::SpeedUp).should_activate_out_of_gate());
+        assert!(skill(SkillType::MultiplyStartDelay).should_activate_out_of_gate());
+        assert!(skill(SkillType::ChangeStyleRunaway).should_activate_out_of_gate());
+        assert!(skill(SkillType::RushChanceUp).should_activate_out_of_gate());
+        assert!(skill(SkillType::ActivateSympathy).should_activate_out_of_gate());
+        // The condition doesn't matter, only the effects.
+        assert!(!skill(SkillType::TargetSpeed).should_activate_out_of_gate());
+        assert!(!skill(SkillType::Acceleration).should_activate_out_of_gate());
     }
 }
