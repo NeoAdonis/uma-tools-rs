@@ -221,3 +221,96 @@ fn test_activation_counts_carry_over_to_runner() {
     assert_eq!(counts.all, 1);
     assert_eq!(counts.start, 1);
 }
+
+const CONNECT_ID: &str = "201632";
+const METI_RESONANCE_ID: &str = "110502211";
+
+/// Run the out-of-gate step of a race on `course_id` with one runner per skill
+/// set, using the skills in `data/skill_data.json`.
+///
+/// Runners are returned in the order of their skill sets.
+fn sympathy_runners(course_id: u32, skill_sets: &[&[&str]]) -> Vec<Runner> {
+    let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+    let mut solver = RaceSolver::new(load_course(course_id), race_params(), &seeded_config(0));
+    for (i, ids) in skill_sets.iter().enumerate() {
+        // Guts doesn't affect speed, so it tells runners apart.
+        let uma = Uma {
+            guts: 800 + i as u16,
+            ..uma(Style::Pace)
+        };
+        let skills = ids.iter().map(|id| skills[*id].clone()).collect();
+        solver.add_runner(uma, Motivation::Normal, skills);
+    }
+    let mut runners = solver.ready_runners().runners;
+    runners.sort_by_key(|runner| runner.base.guts);
+    runners
+}
+
+/// Number of times each runner activated "Sympathy".
+fn sympathy_activations(runners: &[Runner]) -> Vec<usize> {
+    runners
+        .iter()
+        .map(|runner| {
+            runner
+                .activated_skills
+                .iter()
+                .filter(|record| record.skill_id == SYMPATHY_ID)
+                .count()
+        })
+        .collect()
+}
+
+#[test]
+fn test_sympathy_needs_five_runners_with_it() {
+    let runners = sympathy_runners(10104, &[&[SYMPATHY_ID] as &[_]; 4]);
+    assert_eq!(sympathy_activations(&runners), vec![0; 4]);
+
+    let runners = sympathy_runners(10104, &[&[SYMPATHY_ID] as &[_]; 5]);
+    assert_eq!(sympathy_activations(&runners), vec![1; 5]);
+}
+
+#[test]
+fn test_connect_activates_sympathy_for_every_runner_with_it() {
+    // Course 10104 is turf, as required by "Connect".
+    let runners = sympathy_runners(10104, &[&[CONNECT_ID], &[SYMPATHY_ID], &[], &[SYMPATHY_ID]]);
+    assert_eq!(sympathy_activations(&runners), vec![0, 1, 0, 1]);
+
+    // "Connect" gives +60 speed and "Sympathy" +40 speed.
+    let speed = runners[2].adjusted.speed;
+    assert_eq!(runners[0].adjusted.speed, speed + 60);
+    assert_eq!(runners[1].adjusted.speed, speed + 40);
+    assert_eq!(runners[3].adjusted.speed, speed + 40);
+}
+
+#[test]
+fn test_connect_activates_own_sympathy() {
+    let runners = sympathy_runners(10104, &[&[CONNECT_ID, SYMPATHY_ID], &[]]);
+    assert_eq!(sympathy_activations(&runners), vec![1, 0]);
+    assert_eq!(runners[0].adjusted.speed, runners[1].adjusted.speed + 100);
+}
+
+#[test]
+fn test_meti_resonance_activates_sympathy() {
+    // Course 10104 is a Medium turf course, as required by "METI" Resonance.
+    let runners = sympathy_runners(10104, &[&[METI_RESONANCE_ID], &[SYMPATHY_ID]]);
+    assert_eq!(sympathy_activations(&runners), vec![0, 1]);
+}
+
+#[test]
+fn test_sympathy_is_not_activated_if_connect_isnt() {
+    // Course 10913 is dirt, so "Connect" doesn't activate.
+    let runners = sympathy_runners(10913, &[&[CONNECT_ID], &[SYMPATHY_ID]]);
+    assert!(runners[0].activated_skills.is_empty());
+    assert_eq!(sympathy_activations(&runners), vec![0, 0]);
+}
+
+#[test]
+fn test_sympathy_activates_once() {
+    // Activated both by its own condition and by "Connect", listed before and after
+    // it.
+    let mut skill_sets: Vec<&[&str]> = vec![&[SYMPATHY_ID]; 5];
+    skill_sets[0] = &[CONNECT_ID, SYMPATHY_ID];
+    skill_sets[4] = &[SYMPATHY_ID, CONNECT_ID];
+    let runners = sympathy_runners(10104, &skill_sets);
+    assert_eq!(sympathy_activations(&runners), vec![1; 5]);
+}

@@ -139,6 +139,9 @@ pub struct UnreadyRunner {
     /// being evaluated. Used for conditions like `same_skill_horse_count` that need
     /// to know which skill they're checking.
     pub same_skill_count: u8,
+    /// Whether an out-of-gate skill activated "Sympathy" for every runner (see
+    /// [`Self::activate_sympathy`]).
+    pub(crate) casts_sympathy: bool,
 
     // === Random number generator ===
     /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
@@ -224,6 +227,7 @@ impl UnreadyRunner {
             runtime_skills,
             popularity_bonus: SkillPopularity::default(),
             same_skill_count: 0,
+            casts_sympathy: false,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
         };
@@ -267,6 +271,10 @@ impl UnreadyRunner {
             // Apply rush chance modifications.
             else if effect_type.is_rush_chance_effect() {
                 self.rush_chance_modifier += effect.modifier as f64 / 10000.0;
+            }
+            // "Sympathy" activation affects every runner, so it's left to the solver.
+            else if matches!(effect_type, SkillType::ActivateSympathy) {
+                self.casts_sympathy = true;
             }
             // Timed effects, recovery, and other runtime-only effects are not applicable
             // out-of-gate.
@@ -360,6 +368,25 @@ impl UnreadyRunner {
             if let Some(alt_index) = alt_index {
                 self.apply_out_of_gate_skill_effect(skill, alt_index);
             }
+        }
+    }
+
+    /// Activate "Sympathy" if the runner has it, bypassing its condition
+    /// (`same_skill_horse_count>=5`).
+    ///
+    /// This must be called after out-of-gate skills have been applied, so that it
+    /// doesn't activate twice when its condition is also satisfied.
+    pub fn activate_sympathy(&mut self) {
+        if self.activated_skill_ids.contains(SYMPATHY_ID) {
+            return;
+        }
+        if let Some(skill) = self
+            .out_of_gate_skills
+            .iter()
+            .find(|skill| skill.id == SYMPATHY_ID)
+            .cloned()
+        {
+            self.apply_out_of_gate_skill_effect(&skill, 0);
         }
     }
 

@@ -220,6 +220,17 @@ impl RaceSolver<UnreadyRunner> {
             }
         }
 
+        // Apply out-of-gate skills to every runner first, as some of them (e.g.
+        // "Connect") activate "Sympathy" for every runner.
+        for builder in &mut builders {
+            builder.apply_out_of_gate_skills(&state);
+        }
+        if builders.iter().any(|builder| builder.casts_sympathy) {
+            for builder in &mut builders {
+                builder.activate_sympathy();
+            }
+        }
+
         // Build final runners.
         let mut runners: Vec<Runner> = Vec::new();
         for builder in builders {
@@ -373,13 +384,8 @@ impl RaceSolver<Runner> {
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn apply_pending_effects(&mut self) {
-        // Applied effects can activate further skills (e.g. "Sympathy"), so keep
-        // going until no runner has pending effects.
-        while let Some(caster) = self
-            .runners
-            .iter()
-            .position(|runner| !runner.pending_effects.is_empty())
-        {
+        // ? Assume received effects never activate further skills.
+        for caster in 0..self.runners.len() {
             let pending = std::mem::take(&mut self.runners[caster].pending_effects);
             for pending_effect in &pending {
                 for target in self.select_targets(caster, pending_effect.effect.target) {

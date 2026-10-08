@@ -246,6 +246,10 @@ pub struct SkillEffect {
 /// Base cooldown used by most skills, long enough that they never reactivate.
 pub const DEFAULT_COOLDOWN: i32 = 500_0000; // 500 seconds.
 
+/// ID of the "Sympathy" skill, which skills with an
+/// [`SkillType::ActivateSympathy`] effect activate for every runner.
+pub const SYMPATHY_ID: &str = "201631";
+
 fn default_cooldown() -> i32 {
     DEFAULT_COOLDOWN
 }

@@ -537,12 +537,9 @@ pub enum StartType {
 }
 
 impl Runner {
-    /// Create a new Runner from an UnreadyRunner and RaceState.
-    pub(crate) fn new(mut builder: UnreadyRunner, state: &RaceState) -> Self {
-        // Apply out-of-gate skills with proper activation tracking.
-        builder.apply_out_of_gate_skills(state);
-
-        // Build final Runner with all modifications applied.
+    /// Create a new Runner from an UnreadyRunner, whose out-of-gate skills have
+    /// already been applied, and RaceState.
+    pub(crate) fn new(builder: UnreadyRunner, state: &RaceState) -> Self {
         let mut runner = builder.build(state);
         runner.resolve_static_guards(state);
         runner
@@ -2654,18 +2651,6 @@ impl Runner {
             // ? Assume it also applies if already rushing for now.
             if let Some(rush_state) = &mut self.rush_state {
                 rush_state.max_duration += effect.modifier as f64 / 10000.0;
-            }
-        }
-        // "Sympathy" skill activation.
-        else if matches!(effect_type, SkillType::ActivateSympathy) {
-            // Force skill activation if available.
-            if let Some((skill_index, _)) = self
-                .available_skills
-                .iter()
-                .enumerate()
-                .find(|(_, skill)| skill.id == "201631")
-            {
-                self.activate_skill(skill_index, 0, state);
             }
         }
     }
