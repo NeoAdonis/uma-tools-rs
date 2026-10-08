@@ -75,7 +75,9 @@ use rand::Rng;
 /// 4. Index triggers into scheduler queues.
 ///
 /// Alternatives whose condition or precondition can never be satisfied on this
-/// course are skipped.
+/// course are skipped. So are out-of-gate skills: their condition is evaluated
+/// before the race, then they're activated by a race start logic (see
+/// [`add_race_start_logic`]).
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -84,6 +86,10 @@ pub fn build_trigger_scheduler(
     let mut scheduler = TriggerScheduler::new();
 
     for (skill_idx, skill) in skills.iter().enumerate() {
+        if skill.should_activate_out_of_gate() {
+            continue;
+        }
+
         // Random variables are rolled per skill, so that its alternatives share them.
         let mut rolls = RandomRolls::default();
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
@@ -130,6 +136,24 @@ pub fn build_trigger_scheduler(
     }
 
     scheduler
+}
+
+/// Add the logic activating an out-of-gate skill alternative on the first frame
+/// the runner moves.
+///
+/// Its condition was already satisfied before the race, so it has no guards.
+pub fn add_race_start_logic(skill_idx: usize, alt_idx: usize, scheduler: &mut TriggerScheduler) {
+    add_logic(
+        SkillActivationLogic::new(
+            skill_idx,
+            alt_idx,
+            TriggerCondition::RaceStart,
+            Vec::new(),
+            None,
+            LogicAction::Activate,
+        ),
+        scheduler,
+    );
 }
 
 /// Add the logics unlocking a precondition, and return the precondition ID.
@@ -231,6 +255,7 @@ fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut T
         }
 
         LastStraightEntry => scheduler.last_straight_triggers.push(logic_idx),
+        RaceStart => scheduler.race_start_triggers.push(logic_idx),
         FullThrottleStart => scheduler.full_throttle_triggers.push(logic_idx),
         AnySkillActivation => scheduler.any_activation_triggers.push(logic_idx),
         BuffSkillActivation => scheduler.buff_activation_triggers.push(logic_idx),

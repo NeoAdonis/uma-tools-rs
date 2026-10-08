@@ -11,19 +11,28 @@ fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
     let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
     let runner = UnreadyRunner::new(uma(Style::Pace), 1, Motivation::Normal, &state, skills);
     assert!(
-        runner.runtime_skills.is_empty(),
+        runner.skills.iter().all(Skill::should_activate_out_of_gate),
         "All skills should be out-of-gate"
     );
     (runner, state)
 }
 
-/// IDs of the skills recorded as activated.
-fn activated_ids(runner: &UnreadyRunner) -> Vec<&str> {
-    runner
-        .activated_skills
+/// IDs of the skills that activate on the first frame the runner moves.
+fn race_start_ids<'a>(skills: &'a [Skill], scheduler: &TriggerScheduler) -> Vec<&'a str> {
+    scheduler
+        .race_start_triggers
         .iter()
-        .map(|record| record.skill_id.as_str())
+        .map(|&logic_idx| {
+            skills[scheduler.skill_logics[logic_idx].skill_index]
+                .id
+                .as_str()
+        })
         .collect()
+}
+
+/// IDs of the out-of-gate skills activated before the race.
+fn activated_ids(runner: &UnreadyRunner) -> Vec<&str> {
+    race_start_ids(&runner.skills, &runner.trigger_scheduler)
 }
 
 #[test]
@@ -213,9 +222,10 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
 }
 
 #[test]
-fn test_activation_counts_carry_over_to_runner() {
+fn test_out_of_gate_skills_are_counted_as_activated() {
     let speed = skill("speed", "always==1", SkillType::SpeedUp, 800000);
-    let solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
+    let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
+    solver.run();
 
     let counts = &solver.runners[0].trigger_scheduler.activation_counts;
     assert_eq!(counts.all, 1);
@@ -246,15 +256,14 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[&str]]) -> Vec<Runner> {
     runners
 }
 
-/// Number of times each runner activated "Sympathy".
+/// Number of times each runner activated "Sympathy" before the race.
 fn sympathy_activations(runners: &[Runner]) -> Vec<usize> {
     runners
         .iter()
         .map(|runner| {
-            runner
-                .activated_skills
+            race_start_ids(&runner.available_skills, &runner.trigger_scheduler)
                 .iter()
-                .filter(|record| record.skill_id == SYMPATHY_ID)
+                .filter(|&&id| id == SYMPATHY_ID)
                 .count()
         })
         .collect()
@@ -300,7 +309,7 @@ fn test_meti_resonance_activates_sympathy() {
 fn test_sympathy_is_not_activated_if_connect_isnt() {
     // Course 10913 is dirt, so "Connect" doesn't activate.
     let runners = sympathy_runners(10913, &[&[CONNECT_ID], &[SYMPATHY_ID]]);
-    assert!(runners[0].activated_skills.is_empty());
+    assert!(runners[0].trigger_scheduler.race_start_triggers.is_empty());
     assert_eq!(sympathy_activations(&runners), vec![0, 0]);
 }
 

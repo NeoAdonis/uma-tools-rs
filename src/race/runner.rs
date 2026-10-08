@@ -2315,6 +2315,7 @@ impl Runner {
     /// same values.
     pub fn check_skills(&mut self, state: &mut RaceState) {
         self.reset_activation_flags();
+        self.check_race_start_triggers(state);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
@@ -2324,10 +2325,25 @@ impl Runner {
         self.check_heal_dependent_triggers(state);
     }
 
-    /// Check if the runner can activate skills: she has left the gate and hasn't
-    /// finished yet.
-    pub fn can_activate_skills(&self, elapsed_time: f64) -> bool {
-        self.start_delay <= elapsed_time && !self.has_finished()
+    /// Check if the runner can activate skills during a step ending at
+    /// `step_end_time`.
+    ///
+    /// For that, she needs to move during the step (i.e. she has left the gate by
+    /// then) and hasn't finished yet.
+    pub fn can_activate_skills(&self, step_end_time: f64) -> bool {
+        self.start_delay <= step_end_time && !self.has_finished()
+    }
+
+    /// Check race start triggers, on the first frame the runner moves.
+    ///
+    /// Out-of-gate skills activate here; their pre-race effects were already
+    /// applied before the race.
+    pub fn check_race_start_triggers(&mut self, state: &RaceState) {
+        // Taken, so that they're only checked once.
+        let race_start_indices = std::mem::take(&mut self.trigger_scheduler.race_start_triggers);
+        for trigger_index in race_start_indices {
+            self.try_activate_skill(trigger_index, state);
+        }
     }
 
     /// Reset activation flags before checking skills.
@@ -2426,9 +2442,14 @@ impl Runner {
             self.available_skills[skill_index].alternatives[alternative_index].clone();
 
         // Convert from 10000ths of a second, then scale with distance and effects.
-        let base_duration = alternative.base_duration as f64 / 10000.0;
-        let scaled_duration = base_duration * state.course.distance as f64 / 1000.0
-            * self.skill_modifiers.duration_scaling;
+        // A base duration of -1 means that effects last until the end of the race.
+        let scaled_duration = if alternative.base_duration == -1 {
+            f64::INFINITY
+        } else {
+            let base_duration = alternative.base_duration as f64 / 10000.0;
+            base_duration * state.course.distance as f64 / 1000.0
+                * self.skill_modifiers.duration_scaling
+        };
 
         // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward).
         let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
@@ -2442,15 +2463,20 @@ impl Runner {
 
         // Apply each effect in the alternative. Effects on other runners are applied
         // later by the solver, which knows about every runner.
+        // N.B. Pre-race effects were applied before the race (see
+        // `UnreadyRunner::apply_out_of_gate_skills`), but still count as activated.
         for effect in &alternative.effects {
+            let is_pre_race = effect.skill_type.is_pre_race_effect();
             if effect.target == SkillTarget::Oneself {
-                self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state);
+                if !is_pre_race {
+                    self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state);
+                }
                 if Skill::is_effect_positive(effect) {
                     self.activation_flags
                         .buff_activated
                         .insert(effect.skill_type);
                 }
-            } else {
+            } else if !is_pre_race {
                 self.pending_effects.push(PendingEffect {
                     effect: effect.clone(),
                     duration: scaled_duration,
@@ -2590,8 +2616,8 @@ impl Runner {
     ) {
         let effect_type = &effect.skill_type;
 
-        // Stat boosts & start delay modifications should have been applied out of gate.
-        // Therefore, these are gracefully ignored here.
+        // Pre-race effects (stat boosts, start delay...) never reach this point (see
+        // `activate_skill`).
 
         // Timed effects (tracked in active_timed_effects).
         if effect_type.is_timed_effect() {
@@ -2640,10 +2666,6 @@ impl Runner {
                 // Recursively activate the golden skill (use first alternative).
                 self.activate_skill(golden_skill_idx, 0, state);
             }
-        }
-        // Style change.
-        else if let Some(style) = effect_type.style_change() {
-            self.adjusted.style = style;
         }
         // Rush time extension.
         else if matches!(effect_type, SkillType::RushTimeUp) {

@@ -119,6 +119,10 @@ pub enum TriggerCondition {
     /// Checked once, when entering the last straight (`is_last_straight_onetime`).
     LastStraightEntry,
 
+    /// Checked once, on the first frame the runner moves (i.e. leaves the gate).
+    /// Used for out-of-gate skills, whose condition is evaluated before the race.
+    RaceStart,
+
     /// Random point after Full-Throttle Sprint starts. The point is rolled when the
     /// sprint starts and scheduled as a position trigger.
     /// Used for `run_at_full_speed_random==1` conditions.

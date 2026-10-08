@@ -1873,3 +1873,144 @@ fn test_continuation_activates_after_other_alternative() {
         Vec::<usize>::new()
     );
 }
+
+/// Out-of-gate skill with the given effects on oneself, whose condition is
+/// always satisfied.
+fn out_of_gate_skill(id: &str, base_duration: i32, effects: &[(SkillType, i32)]) -> Skill {
+    let alternative = SkillAlternative {
+        base_duration,
+        effects: effects
+            .iter()
+            .map(|&(skill_type, modifier)| SkillEffect {
+                skill_type,
+                target: SkillTarget::Oneself,
+                modifier,
+            })
+            .collect(),
+        ..alternative("always==1", SkillType::SpeedUp, 0)
+    };
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
+}
+
+/// IDs and distances of the skills activated by the only runner.
+fn activations(solver: &RaceSolver<Runner>) -> Vec<(&str, f64)> {
+    solver.runners[0]
+        .activated_skills
+        .iter()
+        .map(|record| (record.skill_id.as_str(), record.distance))
+        .collect()
+}
+
+#[test]
+fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
+    let speed = out_of_gate_skill("speed", -1, &[(SkillType::SpeedUp, 400000)]);
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], &seeded_config(0));
+    // Longer than a frame: the runner doesn't move during the first one.
+    solver.runners[0].start_delay = 0.09;
+
+    solver.step(DELTA_TIME);
+    assert!(activations(&solver).is_empty());
+    assert_eq!(solver.runners[0].position, 0.0);
+
+    // Activated before moving, on the frame she leaves the gate.
+    solver.step(DELTA_TIME);
+    assert_eq!(activations(&solver), vec![("speed", 0.0)]);
+    assert!(solver.runners[0].position > 0.0);
+    let counts = &solver.runners[0].trigger_scheduler.activation_counts;
+    assert_eq!((counts.all, counts.start), (1, 1));
+}
+
+#[test]
+fn test_out_of_gate_timed_effects_apply_from_first_frame() {
+    // Like "Perfect Concentration": start delay before the race, then acceleration.
+    let concentration = out_of_gate_skill(
+        "concentration",
+        30000,
+        &[
+            (SkillType::MultiplyStartDelay, 4000),
+            (SkillType::Acceleration, 2000),
+        ],
+    );
+    let mut solver = ready_solver(
+        10101,
+        uma(Style::Pace),
+        vec![concentration],
+        &seeded_config(0),
+    );
+    // At most 0.1 * 0.4 seconds, within the first frame.
+    assert!(solver.runners[0].start_delay <= 0.04);
+
+    solver.step(DELTA_TIME);
+    let runner = &solver.runners[0];
+    assert_eq!(activations(&solver), vec![("concentration", 0.0)]);
+    assert_close!(runner.skill_modifiers.acceleration, 0.2);
+    // Usual duration, scaled with the course distance.
+    let distance = solver.state.course.distance as f64;
+    let [effect] = runner.active_timed_effects.as_slice() else {
+        panic!("Expected one active effect");
+    };
+    assert_close!(effect.expires_at, 3.0 * distance / 1000.0);
+}
+
+#[test]
+fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
+    // Like the style-specific Fov whites, with a cooldown of 0.
+    let fov = SkillAlternative {
+        base_cooldown: 0,
+        ..out_of_gate_skill(
+            "fov",
+            -1,
+            &[(SkillType::WizUp, 400000), (SkillType::Fov, 100000)],
+        )
+        .alternatives[0]
+            .clone()
+    };
+    let fov = Skill::new("fov".to_string(), skill_data(vec![fov]));
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![fov], &seeded_config(0));
+
+    solver.run();
+    let runner = &solver.runners[0];
+    // Activated only once, even without cooldown.
+    assert_eq!(activations(&solver), vec![("fov", 0.0)]);
+    assert_close!(runner.skill_modifiers.visible_distance, 10.0);
+    assert!(
+        runner
+            .active_timed_effects
+            .iter()
+            .all(|effect| effect.expires_at == f64::INFINITY)
+    );
+}
+
+#[test]
+fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
+    let speed = out_of_gate_skill("speed", -1, &[(SkillType::SpeedUp, 400000)]);
+    let follow = skill(
+        "follow",
+        "is_activate_any_skill==1",
+        SkillType::TargetSpeed,
+        1500,
+    );
+    let mut solver = ready_solver(
+        10101,
+        uma(Style::Pace),
+        vec![speed, follow],
+        &seeded_config(0),
+    );
+    solver.runners[0].start_delay = 0.0;
+
+    solver.step(DELTA_TIME);
+    assert_eq!(activations(&solver), vec![("speed", 0.0), ("follow", 0.0)]);
+}
+
+#[test]
+fn test_out_of_gate_style_change_is_applied_before_the_race() {
+    // Like "Great Escape".
+    let escape = skill(
+        "escape",
+        "running_style==1",
+        SkillType::ChangeStyleRunaway,
+        0,
+    );
+    let solver = ready_solver(10101, uma(Style::Front), vec![escape], &seeded_config(0));
+    assert_eq!(solver.runners[0].adjusted.style, Style::Runaway);
+}

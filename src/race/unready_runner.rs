@@ -20,7 +20,6 @@ use crate::race::runner::*;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
-use crate::trigger::skill_activation::SkillActivationRecord;
 use crate::trigger::system::*;
 use crate::*;
 
@@ -116,24 +115,17 @@ pub struct UnreadyRunner {
     /// Power gained from out-of-gate skills. Used for Charge Up.
     power_skill_bonus: i32,
 
-    // === Activation tracking ===
-    /// Set of activated skill IDs.
-    activated_skill_ids: HashSet<String>,
-    /// List of activated skills with their activation distances.
-    activated_skills: Vec<SkillActivationRecord>,
-
     // === Skills ===
     /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
-    /// Skills that can be activated after the race starts.
-    pub runtime_skills: Vec<Skill>,
-    /// Skills that activate out of gate as soon as the race starts.
-    pub out_of_gate_skills: Vec<Skill>,
+    /// Skills that passed the wisdom check. Out-of-gate skills among them are
+    /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
+    pub skills: Vec<Skill>,
     /// Popularity points added to stats by all skills, including those that
     /// failed the wisdom check.
     pub(crate) popularity_bonus: SkillPopularity,
-    /// Indices of golden skills in `runtime_skills` for activation by skills that
-    /// activate golden skills.
+    /// Indices of golden skills in `skills` for activation by skills that activate
+    /// golden skills.
     golden_skill_indices: Vec<usize>,
     /// Temporary: ID of the out-of-gate skill currently being evaluated. Used for
     /// conditions like `same_skill_horse_count` that need to know which skill
@@ -168,7 +160,7 @@ impl UnreadyRunner {
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
-        let (available_skills, failed_check_skills): (Vec<_>, Vec<_>) =
+        let (skills, failed_check_skills): (Vec<_>, Vec<_>) =
             skills.into_iter().partition(|skill| {
                 state.config.wisdom_checks.resolve(
                     &mut *rng.borrow_mut(),
@@ -176,15 +168,7 @@ impl UnreadyRunner {
                 )
             });
 
-        // Partition skills into out-of-gate and runtime skills.
-        let (out_of_gate_skills, runtime_skills): (Vec<_>, Vec<_>) = available_skills
-            .into_iter()
-            .partition(|skill| skill.should_activate_out_of_gate());
-
-        // Build trigger scheduler from the runtime skills, as its skill indices
-        // refer to them.
-        let trigger_scheduler =
-            build_trigger_scheduler(&runtime_skills, course, &mut *rng.borrow_mut());
+        let trigger_scheduler = build_trigger_scheduler(&skills, course, &mut *rng.borrow_mut());
 
         // Calculate adjusted stats (before out-of-gate skills).
         let adjusted_uma = adjust_stats(&base_uma, course, params);
@@ -193,11 +177,13 @@ impl UnreadyRunner {
         let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
 
         // Build golden skill indices for random activation.
-        let golden_skill_indices = runtime_skills
+        // N.B. Out-of-gate skills can't be activated this way.
+        let golden_skill_indices = skills
             .iter()
             .enumerate()
             .filter(|(_, skill)| {
-                skill.rarity == SkillRarity::Gold || skill.rarity == SkillRarity::Evolution
+                (skill.rarity == SkillRarity::Gold || skill.rarity == SkillRarity::Evolution)
+                    && !skill.should_activate_out_of_gate()
             })
             .map(|(i, _)| i)
             .collect::<Vec<usize>>();
@@ -218,13 +204,10 @@ impl UnreadyRunner {
                 team: 0,
             },
             start_delay,
-            activated_skill_ids: HashSet::new(),
-            activated_skills: Vec::new(),
             rng,
             trigger_scheduler,
             golden_skill_indices,
-            out_of_gate_skills,
-            runtime_skills,
+            skills,
             popularity_bonus: SkillPopularity::default(),
             evaluated_skill_id: String::new(),
             casts_sympathy: false,
@@ -234,23 +217,20 @@ impl UnreadyRunner {
 
         // Popularity guards are known before the race, so the skill bonus can be
         // calculated now. The runner is needed to evaluate the guards.
-        let all_skills = runner
-            .out_of_gate_skills
-            .iter()
-            .chain(&runner.runtime_skills)
-            .chain(&failed_check_skills);
+        let all_skills = runner.skills.iter().chain(&failed_check_skills);
         runner.popularity_bonus = popularity::skill_bonus(all_skills, &runner, state);
 
         runner
     }
 
-    /// Apply a single out-of-gate skill's effects.
-    fn apply_out_of_gate_skill_effect(&mut self, skill: &Skill, alt_index: usize) {
-        let skill_id = skill.id.clone();
-        let alternative = &skill.alternatives[alt_index];
-
-        // Apply each effect in the alternative.
-        for effect in &alternative.effects {
+    /// Activate an out-of-gate skill alternative: apply its pre-race effects now,
+    /// and activate it on the first frame the runner moves.
+    ///
+    /// The activation itself (other effects, cooldown, tracking...) is handled like
+    /// any other skill's (see [`add_race_start_logic`]).
+    fn activate_out_of_gate_skill(&mut self, skill_index: usize, alt_index: usize) {
+        let skill = self.skills[skill_index].clone();
+        for effect in &skill.alternatives[alt_index].effects {
             let effect_type = &effect.skill_type;
 
             // Apply stat boosts.
@@ -276,24 +256,20 @@ impl UnreadyRunner {
             else if matches!(effect_type, SkillType::ActivateSympathy) {
                 self.casts_sympathy = true;
             }
-            // Timed effects, recovery, and other runtime-only effects are not applicable
-            // out-of-gate.
-            // These should not appear in out-of-gate skills, so they're gracefully ignored.
+            // Other effects are applied when the skill activates.
         }
 
-        // Track skill activation.
-        self.activated_skill_ids.insert(skill_id.clone());
-        self.activated_skills.push(SkillActivationRecord {
-            skill_id,
-            // Out-of-gate activations occur at position 0.
-            distance: 0.0,
-        });
+        add_race_start_logic(skill_index, alt_index, &mut self.trigger_scheduler);
+    }
 
-        // Increment activation counts (all out-of-gate skills count as "start" phase).
-        // Tracked by the trigger scheduler so that they carry over to the runner.
-        self.trigger_scheduler
-            .activation_counts
-            .increment(Phase::Early, 0.0, 0.0);
+    /// Whether the skill at `skill_index` activates on the first frame the runner
+    /// moves.
+    fn activates_on_race_start(&self, skill_index: usize) -> bool {
+        let scheduler = &self.trigger_scheduler;
+        scheduler
+            .race_start_triggers
+            .iter()
+            .any(|&logic_idx| scheduler.skill_logics[logic_idx].skill_index == skill_index)
     }
 
     /// Determine gate bracket from gate roll and total gates.
@@ -344,14 +320,18 @@ impl UnreadyRunner {
         gate_roll + 1
     }
 
-    /// Apply all out-of-gate skills.
+    /// Activate every out-of-gate skill whose condition is satisfied (see
+    /// `activate_out_of_gate_skill`).
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
-        let skills = self.out_of_gate_skills.clone();
-        for skill in &skills {
+        for skill_index in 0..self.skills.len() {
+            let skill = &self.skills[skill_index];
+            if !skill.should_activate_out_of_gate() {
+                continue;
+            }
             // Set the skill being evaluated (same_skill_horse_count).
             self.evaluated_skill_id.clone_from(&skill.id);
 
-            // Apply the first alternative whose condition is satisfied, if any.
+            // Activate the first alternative whose condition is satisfied, if any.
             let alt_index = skill.alternatives.iter().position(|alternative| {
                 // Satisfied if all comparisons of any OR branch are true.
                 alternative
@@ -366,7 +346,7 @@ impl UnreadyRunner {
                     })
             });
             if let Some(alt_index) = alt_index {
-                self.apply_out_of_gate_skill_effect(skill, alt_index);
+                self.activate_out_of_gate_skill(skill_index, alt_index);
             }
         }
     }
@@ -377,16 +357,11 @@ impl UnreadyRunner {
     /// This must be called after out-of-gate skills have been applied, so that it
     /// doesn't activate twice when its condition is also satisfied.
     pub fn activate_sympathy(&mut self) {
-        if self.activated_skill_ids.contains(SYMPATHY_ID) {
+        let Some(skill_index) = self.skills.iter().position(|skill| skill.id == SYMPATHY_ID) else {
             return;
-        }
-        if let Some(skill) = self
-            .out_of_gate_skills
-            .iter()
-            .find(|skill| skill.id == SYMPATHY_ID)
-            .cloned()
-        {
-            self.apply_out_of_gate_skill_effect(&skill, 0);
+        };
+        if !self.activates_on_race_start(skill_index) {
+            self.activate_out_of_gate_skill(skill_index, 0);
         }
     }
 
@@ -494,9 +469,9 @@ impl UnreadyRunner {
             force_lane_update: false,
             surrounded: SurroundState::default(),
             start_delay: self.start_delay,
-            available_skills: self.runtime_skills,
-            activated_skills: self.activated_skills,
-            activated_skill_ids: self.activated_skill_ids,
+            available_skills: self.skills,
+            activated_skills: Vec::new(),
+            activated_skill_ids: HashSet::new(),
             activated_alternatives: HashSet::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),

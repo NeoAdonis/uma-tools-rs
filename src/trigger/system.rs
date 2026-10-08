@@ -25,6 +25,9 @@ pub struct TriggerScheduler {
     // Last straight entry triggers (is_last_straight_onetime).
     pub last_straight_triggers: Vec<usize>,
 
+    // Race start triggers (out-of-gate skills), checked once.
+    pub race_start_triggers: Vec<usize>,
+
     // Deferred random triggers - scheduled as distance triggers once
     // Full-Throttle Sprint starts.
     pub full_throttle_triggers: Vec<usize>,
@@ -48,6 +51,7 @@ impl TriggerScheduler {
             time_windows: WindowQueue::default(),
             hp_windows: Vec::new(),
             last_straight_triggers: Vec::new(),
+            race_start_triggers: Vec::new(),
             full_throttle_triggers: Vec::new(),
             any_activation_triggers: Vec::new(),
             buff_activation_triggers: Vec::new(),
@@ -72,6 +76,7 @@ impl TriggerScheduler {
         self.hp_windows.retain(|window| !removed(&window.logic_idx));
         for list in [
             &mut self.last_straight_triggers,
+            &mut self.race_start_triggers,
             &mut self.full_throttle_triggers,
             &mut self.any_activation_triggers,
             &mut self.buff_activation_triggers,

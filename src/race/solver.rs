@@ -301,9 +301,9 @@ impl RaceSolver<Runner> {
         self.update_team_activations();
         self.state.buffs_activated.clear();
         for runner in &mut self.runners {
-            // Runners still in the gate haven't reached any state worth checking, and
-            // skills can't activate after the goal.
-            if !runner.can_activate_skills(self.state.elapsed_time) {
+            // Runners that stay in the gate during this step haven't reached any state
+            // worth checking, and skills can't activate after the goal.
+            if !runner.can_activate_skills(self.state.elapsed_time + delta_time) {
                 continue;
             }
             runner.check_skills(&mut self.state);
@@ -311,7 +311,7 @@ impl RaceSolver<Runner> {
                 *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
             }
         }
-        self.check_advantage_triggers();
+        self.check_advantage_triggers(delta_time);
         self.apply_pending_effects();
 
         self.state.elapsed_time += delta_time;
@@ -365,13 +365,13 @@ impl RaceSolver<Runner> {
     /// now that this frame's activations are known.
     ///
     /// Skills activated here aren't counted as advantage skills for other runners.
-    fn check_advantage_triggers(&mut self) {
+    fn check_advantage_triggers(&mut self, delta_time: f64) {
         // ? Assume activations don't chain within a frame.
         if self.state.buffs_activated.is_empty() {
             return;
         }
         for runner in &mut self.runners {
-            if runner.can_activate_skills(self.state.elapsed_time) {
+            if runner.can_activate_skills(self.state.elapsed_time + delta_time) {
                 runner.check_advantage_triggers(&self.state);
             }
         }
