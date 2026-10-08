@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use rand::RngExt;
 
+use crate::condition::parser::Condition;
 use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::race::charge_up::{self, ChargeUp};
@@ -336,19 +337,19 @@ impl UnreadyRunner {
             self.evaluated_skill_id.clone_from(&skill.id);
             self.evaluated_skill_lot_draw.set(None);
 
-            // Activate the first alternative whose condition is satisfied, if any.
+            // Satisfied if all comparisons of any OR branch are true.
+            let holds = |condition: &Condition| {
+                condition.comp_tree.or_branches().iter().any(|branch| {
+                    branch
+                        .iter()
+                        .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
+                })
+            };
+            // Activate the first alternative whose precondition (if any) and condition
+            // are satisfied, if any. Before the race, a precondition is just another
+            // requirement.
             let alt_index = skill.alternatives.iter().position(|alternative| {
-                // Satisfied if all comparisons of any OR branch are true.
-                alternative
-                    .condition
-                    .comp_tree
-                    .or_branches()
-                    .iter()
-                    .any(|branch| {
-                        branch
-                            .iter()
-                            .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
-                    })
+                alternative.precondition.as_ref().is_none_or(holds) && holds(&alternative.condition)
             });
             if let Some(alt_index) = alt_index {
                 self.activate_out_of_gate_skill(skill_index, alt_index);

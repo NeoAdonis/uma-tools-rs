@@ -421,3 +421,62 @@ fn test_random_lot_draw_is_shared_by_alternatives() {
 
     assert_eq!(gains, [0, 100].into());
 }
+
+/// Out-of-gate skill alternative with a precondition.
+fn alternative_with_precondition(
+    precondition: &str,
+    condition: &str,
+    modifier: i32,
+) -> SkillAlternative {
+    SkillAlternative {
+        precondition: Some(precondition.parse().unwrap()),
+        ..alternative(condition, SkillType::SpeedUp, modifier)
+    }
+}
+
+/// Speed gained before the race by a runner with the given skill alternatives,
+/// on a 2000m turf course (10104).
+fn out_of_gate_speed_gain(alternatives: Vec<SkillAlternative>) -> u16 {
+    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let (mut runner, state) = unready_runner(vec![skill]);
+    let speed = runner.adjusted.speed;
+    runner.apply_out_of_gate_skills(&state);
+    runner.adjusted.speed - speed
+}
+
+#[test]
+fn test_out_of_gate_precondition_is_required() {
+    // Course 10104 is Medium (distance_type==3) turf (ground_type==1).
+    let gain = |precondition| {
+        out_of_gate_speed_gain(vec![alternative_with_precondition(
+            precondition,
+            "always==1",
+            400000,
+        )])
+    };
+    assert_eq!(gain("ground_type==2"), 0);
+    assert_eq!(gain("ground_type==1"), 40);
+    // Like "Long or Extended distance" preconditions: any OR branch suffices.
+    assert_eq!(gain("distance_type==3@distance_type==4"), 40);
+}
+
+#[test]
+fn test_out_of_gate_condition_is_required_with_satisfied_precondition() {
+    // Course 10104 is turf (ground_type==1).
+    let gain = out_of_gate_speed_gain(vec![alternative_with_precondition(
+        "ground_type==1",
+        "ground_type==2",
+        400000,
+    )]);
+    assert_eq!(gain, 0);
+}
+
+#[test]
+fn test_unsatisfied_precondition_falls_through_to_next_alternative() {
+    // Like "All-in!!": a bonus alternative for specific tracks, then a default one.
+    let gain = out_of_gate_speed_gain(vec![
+        alternative_with_precondition("ground_type==2", "always==1", 1000000),
+        alternative("always==1", SkillType::SpeedUp, 400000),
+    ]);
+    assert_eq!(gain, 40);
+}
