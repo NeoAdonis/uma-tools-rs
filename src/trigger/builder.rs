@@ -9,7 +9,8 @@
 //! For each skill alternative:
 //!
 //! 1. **Parse condition** - Parse condition string into AST.
-//! 2. **Pre-roll random triggers** - Determine random activation segments.
+//! 2. **Pre-roll random triggers** - Determine random activation segments,
+//!    shared by every alternative of the skill.
 //! 3. **Compile condition** - Turn each OR branch into a trigger + guards using
 //!    [`compile_condition()`].
 //! 4. **Compile precondition** - Turn the precondition (if present) into logics
@@ -58,7 +59,7 @@
 
 use crate::course::Course;
 use crate::skill::*;
-use crate::trigger::random::roll_condition;
+use crate::trigger::random::{RandomRolls, roll_condition};
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
 use rand::Rng;
@@ -67,7 +68,7 @@ use rand::Rng;
 ///
 /// For each skill alternative:
 ///
-/// 1. Pre-roll random triggers.
+/// 1. Pre-roll random triggers (once per skill, shared by its alternatives).
 /// 2. Compile the condition into one logic per OR branch.
 /// 3. Compile the precondition (if present) into logics that unlock the
 ///    alternative.
@@ -83,11 +84,13 @@ pub fn build_trigger_scheduler(
     let mut scheduler = TriggerScheduler::new();
 
     for (skill_idx, skill) in skills.iter().enumerate() {
+        // Random variables are rolled per skill, so that its alternatives share them.
+        let mut rolls = RandomRolls::default();
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
             // One logic per OR branch, except the ones whose random roll failed.
             let condition = &alternative.condition;
-            let rolls = roll_condition(condition, course, rng);
-            let branches = compile_condition(condition, &rolls, course);
+            let rolled = roll_condition(condition, course, &mut rolls, rng);
+            let branches = compile_condition(condition, &rolled, course);
             if branches.is_empty() {
                 // Condition can't be satisfied, skill never activates.
                 continue;

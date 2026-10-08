@@ -6,6 +6,16 @@ use crate::course::Course;
 use crate::course::Phase as CoursePhase;
 use rand::prelude::*;
 
+/// Results of the comparisons already rolled, so that they're rolled only once.
+///
+/// It should be shared by every condition of a skill: its alternatives often
+/// share a random variable (e.g. `phase_laterhalf_random==1`, where one of them
+/// adds requirements), and must get the same points, or the same failure.
+#[derive(Default)]
+pub struct RandomRolls<'a> {
+    rolled: Vec<(&'a Comparison, Option<Vec<f64>>)>,
+}
+
 /// Roll the random variables of every OR branch of a condition.
 ///
 /// Returns one entry per branch (in the order of
@@ -13,28 +23,25 @@ use rand::prelude::*;
 /// be checked, or `None` if a roll failed and the branch can never be
 /// satisfied.
 ///
-/// Each distinct comparison is rolled once per condition: branches containing
-/// the same one (e.g. `phase_random==1` in
+/// Each distinct comparison is rolled once per `rolls`: branches containing the
+/// same one (e.g. `phase_random==1` in
 /// `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`) share
 /// its points, or its failure.
-pub fn roll_condition(
-    condition: &Condition,
+pub fn roll_condition<'a>(
+    condition: &'a Condition,
     course: &Course,
+    rolls: &mut RandomRolls<'a>,
     rng: &mut impl Rng,
 ) -> Vec<Option<Vec<f64>>> {
-    let mut rolled = Vec::new();
     condition
         .comp_tree
         .or_branches()
         .iter()
-        .map(|comps| roll_branch(comps, course, &mut rolled, rng))
+        .map(|comps| roll_branch(comps, course, rolls, rng))
         .collect()
 }
 
-/// Results of the comparisons already rolled for a condition.
-type RolledComps<'a> = Vec<(&'a Comparison, Option<Vec<f64>>)>;
-
-/// Roll the random variables of an AND chain, reusing the results in `rolled`
+/// Roll the random variables of an AND chain, reusing the results in `rolls`
 /// for comparisons already rolled by another branch.
 ///
 /// Returns the points where the branch should be checked, or `None` if a roll
@@ -42,16 +49,16 @@ type RolledComps<'a> = Vec<(&'a Comparison, Option<Vec<f64>>)>;
 fn roll_branch<'a>(
     comps: &[&'a Comparison],
     course: &Course,
-    rolled: &mut RolledComps<'a>,
+    rolls: &mut RandomRolls<'a>,
     rng: &mut impl Rng,
 ) -> Option<Vec<f64>> {
     let mut points = Vec::new();
     for &comp in comps {
-        let result = match rolled.iter().find(|(prev, _)| *prev == comp) {
+        let result = match rolls.rolled.iter().find(|(prev, _)| *prev == comp) {
             Some((_, result)) => result.clone(),
             None => {
                 let result = process_random_comp(comp, course, rng);
-                rolled.push((comp, result.clone()));
+                rolls.rolled.push((comp, result.clone()));
                 result
             }
         };

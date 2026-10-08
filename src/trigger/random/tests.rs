@@ -53,7 +53,7 @@ fn create_test_course_with(
 
 /// Roll a single-branch condition.
 fn roll(condition: &Condition, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
-    let mut rolls = roll_condition(condition, course, rng);
+    let mut rolls = roll_condition(condition, course, &mut RandomRolls::default(), rng);
     assert_eq!(rolls.len(), 1, "expected a single-branch condition");
     rolls.remove(0)
 }
@@ -203,7 +203,7 @@ fn test_corner_random_per_branch() {
             .unwrap();
 
     let mut rng = rand::rng();
-    let rolls = roll_condition(&condition, &course, &mut rng);
+    let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
 
     // Corners 1 and 2 don't exist, so only the last two branches roll successfully,
     // each with its own point.
@@ -734,7 +734,7 @@ fn test_all_corner_random_shared_between_branches() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for _ in 0..100 {
-        let rolls = roll_condition(&condition, &course, &mut rng);
+        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
         assert_eq!(rolls.len(), 2);
         let points = rolls[0].as_ref().unwrap();
         assert!((1..=4).contains(&points.len()));
@@ -751,7 +751,7 @@ fn test_phase_random_shared_between_branches() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for _ in 0..100 {
-        let rolls = roll_condition(&condition, &course, &mut rng);
+        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
         assert_eq!(rolls.len(), 2);
         assert_eq!(rolls[0].as_ref().unwrap().len(), 1);
         assert_eq!(rolls[0], rolls[1]);
@@ -770,7 +770,7 @@ fn test_random_lot_shared_between_branches() {
     let tries = 2000;
     let mut hits = 0;
     for _ in 0..tries {
-        let rolls = roll_condition(&condition, &course, &mut rng);
+        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
         assert_eq!(rolls[0].is_some(), rolls[1].is_some());
         hits += rolls[0].is_some() as usize;
     }
@@ -785,6 +785,7 @@ fn test_different_random_comparisons_roll_separately() {
     let rolls = roll_condition(
         &condition,
         &course,
+        &mut RandomRolls::default(),
         &mut rand::rngs::StdRng::seed_from_u64(0),
     );
 
@@ -804,4 +805,18 @@ fn test_random_lot_has_no_points() {
     // Only the phase point, nothing for the random lot.
     assert_eq!(points.len(), 1);
     assert!((400.0..1600.0).contains(&points[0]));
+}
+
+#[test]
+fn test_shared_rolls_apply_across_conditions() {
+    let course = create_test_course();
+    let first = parse_condition("phase_random==1&order<=3").unwrap();
+    let second = parse_condition("phase_random==1").unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    for _ in 0..20 {
+        let mut rolls = RandomRolls::default();
+        let first_points = roll_condition(&first, &course, &mut rolls, &mut rng);
+        let second_points = roll_condition(&second, &course, &mut rolls, &mut rng);
+        assert_eq!(first_points, second_points);
+    }
 }

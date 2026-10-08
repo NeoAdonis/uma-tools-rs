@@ -544,3 +544,33 @@ fn test_skill_data_conditions_compile() {
         }
     }
 }
+
+#[test]
+fn test_alternatives_share_random_rolls() {
+    use rand::SeedableRng;
+
+    // The first alternative only adds a requirement to the second one, so both
+    // must be checked at the same random point.
+    let skill = Skill::new(
+        "shared".to_string(),
+        skill_data(vec![
+            alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 3500),
+            alternative("phase_random==1", SkillType::TargetSpeed, 1500),
+        ]),
+    );
+    for seed in 0..20 {
+        let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(seed);
+        let scheduler = build_trigger_scheduler(
+            std::slice::from_ref(&skill),
+            &create_test_course(),
+            &mut rng,
+        );
+        let logics = &scheduler.skill_logics;
+        assert_eq!(logics.len(), 2);
+        assert!(matches!(
+            logics[0].trigger,
+            TriggerCondition::Segments { .. }
+        ));
+        assert_eq!(logics[0].trigger, logics[1].trigger, "seed {seed}");
+    }
+}

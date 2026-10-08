@@ -102,7 +102,7 @@ pub enum WindowVariable {
 }
 
 /// A trigger condition that determines WHEN to check a skill.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TriggerCondition {
     /// Checked every frame while the position is within any of the `(min, max)`
     /// ranges (in meters). Used for random segments, trimmed to the positions where
