@@ -2012,24 +2012,10 @@ impl Runner {
     /// Check for straight entry.
     ///
     /// Skills triggered by the entry are checked on the next skill check (see
-    /// [`Self::check_last_straight_triggers`]).
+    /// [`Self::check_state_triggers`]).
     pub fn check_straight_start(&mut self, straights: &[Straight]) {
         if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
             self.entered_straight = Some(straight_idx);
-        }
-    }
-
-    /// Check skills triggered by entering the last straight since the last check.
-    pub fn check_last_straight_triggers(&mut self, state: &RaceState) {
-        let Some(straight_idx) = self.entered_straight.take() else {
-            return;
-        };
-        if straight_idx + 1 != state.course.straights.len() {
-            // Not the last straight.
-            return;
-        }
-        for logic_idx in self.trigger_scheduler.last_straight_triggers.clone() {
-            self.try_activate_skill(logic_idx, state);
         }
     }
 
@@ -2335,8 +2321,7 @@ impl Runner {
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
-        self.check_window_triggers(state);
-        self.check_last_straight_triggers(state);
+        self.check_state_triggers(state);
         // Depend on the activations above.
         self.check_activation_dependent_triggers(state);
         self.check_heal_dependent_triggers(state);
@@ -2391,8 +2376,20 @@ impl Runner {
         }
     }
 
-    /// Check window triggers (position, time, HP) containing the current values.
-    pub fn check_window_triggers(&mut self, state: &RaceState) {
+    /// Check the triggers that don't depend on this frame's activations.
+    ///
+    /// Windows (position, time, HP) containing the current values are checked, as
+    /// well as entering the last straight since the last check.
+    ///
+    /// These triggers are checked together in the order the logics were built (by
+    /// skill, then by alternative), so that when several alternatives of a skill
+    /// are satisfied on the same frame, the first one wins.
+    pub fn check_state_triggers(&mut self, state: &RaceState) {
+        let entered_last_straight = self
+            .entered_straight
+            .take()
+            .is_some_and(|straight_idx| straight_idx + 1 == state.course.straights.len());
+
         let scheduler = &mut self.trigger_scheduler;
         let mut inside = scheduler.position_windows.advance(self.position, EPSILON);
         inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
@@ -2408,6 +2405,9 @@ impl Runner {
                 })
                 .map(|window| window.logic_idx),
         );
+        if entered_last_straight {
+            inside.extend(&scheduler.last_straight_triggers);
+        }
 
         // Try activations in the order the logics were built.
         inside.sort_unstable();
@@ -2557,10 +2557,14 @@ impl Runner {
     /// Continuations (see [`SkillAlternative::is_continuation`]) are the exception:
     /// they can only activate after another alternative did.
     ///
-    /// ? Alternatives should be checked in order, so that the first one wins when
-    /// several are satisfied on the same frame. Instead, the first one checked
-    /// wins: triggers are checked by type (windows, last straight entry,
-    /// activation-dependent...), and only by alternative within each type.
+    /// When several alternatives are satisfied on the same frame, the first one
+    /// checked wins. Triggers that don't depend on this frame's activations are
+    /// checked by alternative (see [`Self::check_state_triggers`]), but
+    /// activation-dependent ones (any skill, heal, other runners' buffs) are
+    /// checked after them, as they depend on their activations.
+    ///
+    /// N.B.: A later alternative could then win over an activation-dependent
+    /// earlier one. It's assumed that no skill will have such alternatives.
     fn disable_other_alternatives(&mut self, skill_index: usize, alternative_index: usize) {
         let alternatives = &self.available_skills[skill_index].alternatives;
         for logic in &mut self.trigger_scheduler.skill_logics {

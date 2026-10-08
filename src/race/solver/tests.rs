@@ -1848,6 +1848,11 @@ fn test_skill_activates_through_a_single_alternative() {
         activated_alternatives(&["accumulatetime>=5", "accumulatetime>=5"]),
         [0]
     );
+    // Even with different triggers: last straight entry and a position window.
+    assert_eq!(
+        activated_alternatives(&["is_last_straight_onetime==1", "is_last_straight==1"]),
+        [0]
+    );
 }
 
 #[test]
