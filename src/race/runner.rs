@@ -25,7 +25,9 @@ use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
-use crate::trigger::skill_activation::{ActiveTimedEffect, LogicAction, SkillActivationRecord};
+use crate::trigger::skill_activation::{
+    ActiveTimedEffect, LogicAction, PendingEffect, SkillActivationRecord,
+};
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::uma::*;
 use crate::units::*;
@@ -401,6 +403,9 @@ pub struct Runner {
     pub skill_modifiers: SkillModifiers,
     /// Effects from skills that are currently active for a limited duration.
     pub active_timed_effects: Vec<ActiveTimedEffect>,
+    /// Effects from this runner's skills that target other runners, applied by the
+    /// solver once every runner has checked its skills.
+    pub pending_effects: Vec<PendingEffect>,
     /// List of indices of golden skills in `available_skills`.
     /// These skills can be activated by other skills.
     pub golden_skill_indices: Vec<usize>,
@@ -2436,14 +2441,17 @@ impl Runner {
             0.0
         };
 
-        // Apply each effect in the alternative.
+        // Apply each effect in the alternative. Effects on other runners are applied
+        // later by the solver, which knows about every runner.
         for effect in &alternative.effects {
-            match effect.target {
-                SkillTarget::Oneself => {
-                    self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state)
-                }
-                // TODO: Handle other targets.
-                _ => continue,
+            if effect.target == SkillTarget::Oneself {
+                self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state);
+            } else {
+                self.pending_effects.push(PendingEffect {
+                    effect: effect.clone(),
+                    duration: scaled_duration,
+                    wiz_bonus,
+                });
             }
         }
 
@@ -2629,6 +2637,12 @@ impl Runner {
         if Skill::is_effect_positive(effect) {
             self.activation_flags.buff_activated.insert(*effect_type);
         }
+    }
+
+    /// Apply a skill effect casted by another runner.
+    pub fn receive_skill_effect(&mut self, pending: &PendingEffect, state: &RaceState) {
+        self.apply_skill_effect(&pending.effect, pending.duration, pending.wiz_bonus, state);
+        self.recalculate_skill_modifiers();
     }
 
     /// Check if a skill at the given index is a heal skill.

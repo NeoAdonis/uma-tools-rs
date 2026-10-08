@@ -132,36 +132,101 @@ pub enum SkillRarity {
     Evolution = 6,
 }
 
-/// Represents the target of a skill effect.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
-#[repr(u8)]
+/// Represents the target of a skill effect, along with the parameter that
+/// narrows it down (number of runners, running style...).
+///
+/// As far as targeting is concerned, skills don't distinguish allies from
+/// opponents: allies can be selected and count towards the maximum number of
+/// targets. However, allies are excluded from debuffs afterwards (see
+/// [`SkillTarget::is_opponent_only`]).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "RawSkillTarget")]
 pub enum SkillTarget {
     /// Skill affects oneself.
-    Oneself = 1,
-    /// Skill affects all runners.
-    All = 2,
-    /// Skill affects only runners inside field of view.
-    InFov = 4,
-    /// Skill affects only the next 4 runners ahead.
-    AheadOfPosition = 7,
-    /// Skill affects only the next 2 runners ahead.
-    AheadOfSelf = 9,
-    /// Skill affects only the previous 2 runners behind.
-    BehindSelf = 10,
-    /// Skill affects all team allies.
-    AllAllies = 11,
+    Oneself,
+    /// Skill affects all runners, oneself included.
+    All,
+    /// Skill affects runners inside field of view, up to `max` of them.
+    InFov { max: u8 },
+    /// Skill affects runners placed ahead of `position` (e.g. 1st to 4th place
+    /// for position 5).
+    AheadOfPosition { position: u8 },
+    /// Skill affects the `count` nearest runners ahead.
+    AheadOfSelf { count: u8 },
+    /// Skill affects the `count` nearest runners behind.
+    BehindSelf { count: u8 },
+    /// Skill affects all team allies, oneself excluded.
+    AllAllies,
     /// Skill affects all opponents with a specific running style.
-    EnemyStrategy = 18,
-    /// Skill affects runners ahead that are rushed.
-    RushedAhead = 19,
-    /// Skill affects runners behind that are rushed.
-    RushedBehind = 20,
-    /// Skill affects runners with a specific running style that are rushed.
-    RushedStrategy = 21,
-    /// Unknown.
-    UmaId = 22,
-    /// Skill affects runners that have used recovery skills.
-    UsedRecovery = 23,
+    EnemyStrategy { style: Style },
+    /// Skill affects the `max` nearest rushed runners ahead.
+    RushedAhead { max: u8 },
+    /// Skill affects the `max` nearest rushed runners behind.
+    RushedBehind { max: u8 },
+    /// Skill affects rushed runners with a specific running style.
+    RushedStrategy { style: Style },
+    /// Unknown. Not used by any skill.
+    UmaId { value: i32 },
+    /// Skill affects runners that have activated recovery skills.
+    ///
+    /// The meaning of `value` is unknown (always 1).
+    UsedRecovery { value: i32 },
+}
+
+impl SkillTarget {
+    /// Check if this target can only select opponents (i.e. allies are excluded
+    /// after selection).
+    ///
+    /// Every target other than oneself, all runners and team allies is a debuff
+    /// target. Note that a debuff isn't always a negative modifier (e.g. rush time
+    /// extension).
+    pub fn is_opponent_only(self) -> bool {
+        !matches!(
+            self,
+            SkillTarget::Oneself | SkillTarget::All | SkillTarget::AllAllies
+        )
+    }
+}
+
+/// Skill target as stored in the skill data, before being converted to a
+/// [`SkillTarget`].
+#[derive(Deserialize)]
+struct RawSkillTarget {
+    #[serde(rename = "type")]
+    target_type: u8,
+    value: i32,
+}
+
+impl TryFrom<RawSkillTarget> for SkillTarget {
+    type Error = String;
+
+    fn try_from(raw: RawSkillTarget) -> Result<Self, Self::Error> {
+        let RawSkillTarget { target_type, value } = raw;
+        let count = || u8::try_from(value).map_err(|_| format!("invalid target count {value}"));
+        let style = || match value {
+            1 => Ok(Style::Front),
+            2 => Ok(Style::Pace),
+            3 => Ok(Style::Late),
+            4 => Ok(Style::End),
+            _ => Err(format!("invalid target style {value}")),
+        };
+        Ok(match target_type {
+            1 => SkillTarget::Oneself,
+            2 => SkillTarget::All,
+            4 => SkillTarget::InFov { max: count()? },
+            7 => SkillTarget::AheadOfPosition { position: count()? },
+            9 => SkillTarget::AheadOfSelf { count: count()? },
+            10 => SkillTarget::BehindSelf { count: count()? },
+            11 => SkillTarget::AllAllies,
+            18 => SkillTarget::EnemyStrategy { style: style()? },
+            19 => SkillTarget::RushedAhead { max: count()? },
+            20 => SkillTarget::RushedBehind { max: count()? },
+            21 => SkillTarget::RushedStrategy { style: style()? },
+            22 => SkillTarget::UmaId { value },
+            23 => SkillTarget::UsedRecovery { value },
+            _ => return Err(format!("unknown target type {target_type}")),
+        })
+    }
 }
 
 /// Represents a single effect of a skill.
@@ -530,7 +595,7 @@ mod tests {
     fn alternative(condition: &str, precondition: &str) -> serde_json::Result<SkillAlternative> {
         let json = format!(
             r#"{{"baseDuration": 30000, "condition": "{condition}",
-                "effects": [{{"type": 27, "target": 1, "modifier": 3500}}],
+                "effects": [{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 3500}}],
                 "precondition": "{precondition}"}}"#
         );
         serde_json::from_str(&json)
@@ -553,6 +618,47 @@ mod tests {
         assert!(alternative("phase>=", "").is_err());
         assert!(alternative("phase>=2&", "").is_err());
         assert!(alternative("phase>=2", "order<=").is_err());
+    }
+
+    /// Deserialize a skill target from its type and value.
+    fn target(target_type: u8, value: i32) -> serde_json::Result<SkillTarget> {
+        serde_json::from_str(&format!(r#"{{"type": {target_type}, "value": {value}}}"#))
+    }
+
+    #[test]
+    fn test_target_encodes_value() {
+        assert_eq!(target(1, 0).unwrap(), SkillTarget::Oneself);
+        assert_eq!(target(4, 18).unwrap(), SkillTarget::InFov { max: 18 });
+        assert_eq!(
+            target(7, 5).unwrap(),
+            SkillTarget::AheadOfPosition { position: 5 }
+        );
+        assert_eq!(target(9, 3).unwrap(), SkillTarget::AheadOfSelf { count: 3 });
+        assert_eq!(target(10, 5).unwrap(), SkillTarget::BehindSelf { count: 5 });
+        assert_eq!(
+            target(18, 1).unwrap(),
+            SkillTarget::EnemyStrategy {
+                style: Style::Front
+            }
+        );
+        assert_eq!(
+            target(21, 4).unwrap(),
+            SkillTarget::RushedStrategy { style: Style::End }
+        );
+        assert_eq!(
+            target(20, 10).unwrap(),
+            SkillTarget::RushedBehind { max: 10 }
+        );
+    }
+
+    #[test]
+    fn test_invalid_targets_are_errors() {
+        // Unknown target type.
+        assert!(target(3, 0).is_err());
+        // Runaway (0) isn't a valid target style.
+        assert!(target(18, 0).is_err());
+        // Negative count.
+        assert!(target(9, -1).is_err());
     }
 
     #[test]

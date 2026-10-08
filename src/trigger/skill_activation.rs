@@ -149,6 +149,20 @@ pub struct ActiveTimedEffect {
     pub expires_at: f64,
 }
 
+/// A skill effect that targets other runners, waiting to be applied to them.
+///
+/// Values that depend on the caster (duration, Wiz Limit Break bonus) are fixed
+/// at activation time.
+#[derive(Debug, Clone)]
+pub struct PendingEffect {
+    /// Skill effect to apply to each target.
+    pub effect: SkillEffect,
+    /// Duration in seconds, already scaled.
+    pub duration: f64,
+    /// Wiz Limit Break bonus of the caster.
+    pub wiz_bonus: f64,
+}
+
 /// Record of a skill activation during the race.
 #[derive(Debug, Clone)]
 pub struct SkillActivationRecord {

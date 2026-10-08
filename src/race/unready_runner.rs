@@ -473,6 +473,7 @@ impl UnreadyRunner {
             activated_alternatives: HashSet::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
+            pending_effects: Vec::new(),
             golden_skill_indices: self.golden_skill_indices,
             section: 0,
             phase: Phase::Early,

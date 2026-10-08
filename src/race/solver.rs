@@ -295,6 +295,7 @@ impl RaceSolver<Runner> {
             }
             runner.check_skills(&mut self.state);
         }
+        self.apply_pending_effects();
 
         self.state.elapsed_time += delta_time;
 
@@ -341,6 +342,88 @@ impl RaceSolver<Runner> {
         self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
+    }
+
+    /// Apply skill effects that target other runners to their targets.
+    ///
+    /// Targets are selected from the state reached at the end of the previous step,
+    /// so the result doesn't depend on which runner activated her skills first.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn apply_pending_effects(&mut self) {
+        // Applied effects can activate further skills (e.g. "Sympathy"), so keep
+        // going until no runner has pending effects.
+        while let Some(caster) = self
+            .runners
+            .iter()
+            .position(|runner| !runner.pending_effects.is_empty())
+        {
+            let pending = std::mem::take(&mut self.runners[caster].pending_effects);
+            for pending_effect in &pending {
+                for target in self.select_targets(caster, pending_effect.effect.target) {
+                    self.runners[target].receive_skill_effect(pending_effect, &self.state);
+                }
+            }
+        }
+    }
+
+    /// Select the indices of the runners targeted by a skill effect casted by the
+    /// runner at index `caster`.
+    ///
+    /// Allies count towards the maximum number of targets, but they are excluded
+    /// from debuffs afterwards. Runners that have finished are never targeted.
+    ///
+    /// Runners must be sorted by position in descending order before calling this.
+    fn select_targets(&self, caster: usize, target: SkillTarget) -> Vec<usize> {
+        let runners = &self.runners;
+        let source = &runners[caster];
+        // Finished runners are skipped before counting targets. Nearest runners first.
+        let is_running = |i: &usize| !runners[*i].has_finished();
+        let ahead = (0..caster).rev().filter(is_running);
+        let behind = (caster + 1..runners.len()).filter(is_running);
+        let others = (0..runners.len()).filter(|&i| i != caster && is_running(&i));
+        let is_rushed = |i: &usize| runners[*i].is_rushed();
+
+        let selected: Vec<usize> = match target {
+            SkillTarget::Oneself => vec![caster],
+            SkillTarget::All => (0..runners.len()).filter(is_running).collect(),
+            // ? Assume field of view only covers runners ahead, as for visible counts.
+            SkillTarget::InFov { max } => ahead
+                .filter(|&i| source.is_visible(&runners[i]))
+                .take(max as usize)
+                .collect(),
+            // Index `position - 1` is the runner placed at `position`.
+            SkillTarget::AheadOfPosition { position } => (0..position.saturating_sub(1) as usize)
+                .filter(|&i| i < runners.len() && i != caster && is_running(&i))
+                .collect(),
+            SkillTarget::AheadOfSelf { count } => ahead.take(count as usize).collect(),
+            SkillTarget::BehindSelf { count } => behind.take(count as usize).collect(),
+            SkillTarget::AllAllies => others
+                .filter(|&i| !source.is_opponent(&runners[i]))
+                .collect(),
+            SkillTarget::EnemyStrategy { style } => others
+                .filter(|&i| runners[i].base_style() == style)
+                .collect(),
+            SkillTarget::RushedAhead { max } => {
+                ahead.filter(is_rushed).take(max as usize).collect()
+            }
+            SkillTarget::RushedBehind { max } => {
+                behind.filter(is_rushed).take(max as usize).collect()
+            }
+            SkillTarget::RushedStrategy { style } => others
+                .filter(|&i| is_rushed(&i) && runners[i].base_style() == style)
+                .collect(),
+            // TODO: Target the runners that activated a recovery skill this frame, once
+            // `is_other_character_activate_advantage_skill` is evaluated per frame.
+            SkillTarget::UsedRecovery { .. } => Vec::new(),
+            // Not used by any skill.
+            SkillTarget::UmaId { .. } => Vec::new(),
+        };
+
+        selected
+            .into_iter()
+            .filter(|&i| !target.is_opponent_only() || source.is_opponent(&runners[i]))
+            .collect()
     }
 
     /// Recount skill activations by team from each runner's own counts.

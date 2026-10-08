@@ -5,6 +5,7 @@ use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::{
     assert_close, load_course, race_params, ready_solver, seeded_config, skill, uma,
 };
+use crate::trigger::skill_activation::PendingEffect;
 use crate::units::horse_lanes_to_course_widths;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -1606,4 +1607,115 @@ fn test_team_activations_match_runners_each_frame() {
     // Every skill activated: 3 per runner with skills, none for the last runner.
     solver.update_team_activations();
     assert_eq!(solver.state.team_activations, [6, 3, 0]);
+}
+
+/// Ready race with one runner per `(style, team)`, placed in that order from first
+/// to last, 10 meters apart.
+fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    for _ in runners {
+        solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+    solver.state.elapsed_time = 10.0;
+    // Runners are built in gate order, so assign everything here.
+    for (i, (runner, &(style, team))) in solver.runners.iter_mut().zip(runners).enumerate() {
+        runner.base.style = style;
+        runner.adjusted.style = style;
+        runner.initial_state.team = team;
+        runner.position = 1000.0 - 10.0 * i as f64;
+    }
+    solver
+}
+
+/// Targets of a skill effect casted by runner `caster` (in position order).
+fn targets(solver: &RaceSolver<Runner>, caster: usize, target: SkillTarget) -> Vec<usize> {
+    solver.select_targets(caster, target)
+}
+
+#[test]
+fn test_targets_nearest_runners_ahead_and_behind() {
+    let solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (Style::Late, team)));
+    assert_eq!(
+        targets(&solver, 3, SkillTarget::AheadOfSelf { count: 2 }),
+        [2, 1]
+    );
+    assert_eq!(
+        targets(&solver, 3, SkillTarget::BehindSelf { count: 5 }),
+        [4, 5]
+    );
+    // The first 4 places, oneself excluded.
+    assert_eq!(
+        targets(&solver, 2, SkillTarget::AheadOfPosition { position: 5 }),
+        [0, 1, 3]
+    );
+}
+
+#[test]
+fn test_allies_count_towards_max_targets_but_are_not_debuffed() {
+    // Runner 2 is an ally of runner 3.
+    let solver = targeting_solver(&[
+        (Style::Late, 0),
+        (Style::Late, 1),
+        (Style::Late, 2),
+        (Style::Late, 2),
+    ]);
+    assert_eq!(
+        targets(&solver, 3, SkillTarget::AheadOfSelf { count: 2 }),
+        [1]
+    );
+    assert_eq!(targets(&solver, 3, SkillTarget::AllAllies), [2]);
+    // Non-debuff targets include oneself when meant to.
+    assert_eq!(targets(&solver, 3, SkillTarget::All), [0, 1, 2, 3]);
+}
+
+#[test]
+fn test_targets_opponents_with_style() {
+    let solver = targeting_solver(&[
+        (Style::Front, 0),
+        (Style::Runaway, 1),
+        (Style::Front, 2),
+        (Style::Pace, 3),
+    ]);
+    // Runaways count as Front runners; allies are excluded.
+    assert_eq!(
+        targets(
+            &solver,
+            2,
+            SkillTarget::EnemyStrategy {
+                style: Style::Front
+            }
+        ),
+        [0, 1]
+    );
+}
+
+#[test]
+fn test_finished_runners_are_not_counted_as_targets() {
+    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
+    solver.runners[1].finish_time = Some(60.0);
+    assert_eq!(
+        targets(&solver, 2, SkillTarget::AheadOfSelf { count: 1 }),
+        [0]
+    );
+}
+
+#[test]
+fn test_pending_effects_apply_to_targets() {
+    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
+    solver.runners[0].pending_effects.push(PendingEffect {
+        effect: SkillEffect {
+            skill_type: SkillType::CurrentSpeed,
+            target: SkillTarget::BehindSelf { count: 1 },
+            modifier: -1500,
+        },
+        duration: 3.0,
+        wiz_bonus: 0.0,
+    });
+    solver.apply_pending_effects();
+
+    assert!(solver.runners[0].pending_effects.is_empty());
+    assert_close!(solver.runners[0].skill_modifiers.current_speed, 0.0);
+    assert_close!(solver.runners[1].skill_modifiers.current_speed, -0.15);
+    assert_close!(solver.runners[2].skill_modifiers.current_speed, 0.0);
 }
