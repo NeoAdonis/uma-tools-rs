@@ -49,30 +49,32 @@ fn test_stat_boost_is_applied() {
 }
 
 #[test]
-fn test_start_delay_is_set() {
+fn test_start_delay_is_added() {
     let (mut runner, state) = unready_runner(vec![skill(
         "delay",
         "always==1",
-        SkillType::SetStartDelay,
-        0.0,
+        SkillType::AddStartDelay,
+        0.1,
     )]);
+    let start_delay = runner.start_delay;
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.start_delay, 0.0);
+    assert_eq!(runner.start_delay, start_delay + 0.1);
     assert_eq!(activated_ids(&runner), vec!["delay"]);
 }
 
 #[test]
 fn test_every_out_of_gate_skill_is_applied() {
     let (mut runner, state) = unready_runner(vec![
-        skill("delay", "always==1", SkillType::SetStartDelay, 0.0),
+        skill("delay", "always==1", SkillType::AddStartDelay, 0.1),
         skill("rush", "always==1", SkillType::RushChanceUp, -3.0),
     ]);
+    let start_delay = runner.start_delay;
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.start_delay, 0.0);
+    assert_eq!(runner.start_delay, start_delay + 0.1);
     assert_eq!(runner.rush_chance_modifier, -3.0);
     assert_eq!(activated_ids(&runner), vec!["delay", "rush"]);
 }
@@ -83,8 +85,8 @@ fn test_unsatisfied_condition_is_not_applied() {
     let (mut runner, state) = unready_runner(vec![skill(
         "dirt_delay",
         "ground_type==2",
-        SkillType::SetStartDelay,
-        0.0,
+        SkillType::AddStartDelay,
+        0.1,
     )]);
     let start_delay = runner.start_delay;
 
@@ -136,7 +138,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // scheduler refers to.
     let skills = vec![
         skill("speed", "always==1", SkillType::SpeedUp, 40.0),
-        skill("delay", "always==1", SkillType::SetStartDelay, 0.0),
+        skill("delay", "always==1", SkillType::AddStartDelay, 0.1),
         skill("late", "distance_rate>=50", SkillType::TargetSpeed, 0.35),
     ];
     let mut solver = ready_solver(10104, uma(Style::Pace), skills, &seeded_config(0));

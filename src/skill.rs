@@ -36,8 +36,8 @@ pub enum SkillType {
     MultiplyStartDelay = 10,
     /// Modify how long a runner can stay rushed.
     RushTimeUp = 13,
-    /// Set start delay to a fixed value.
-    SetStartDelay = 14,
+    /// Add seconds to start delay.
+    AddStartDelay = 14,
     /// Modify current speed directly.
     CurrentSpeed = 21,
     /// Modify current speed with natural deceleration.
@@ -80,7 +80,7 @@ impl SkillType {
     pub fn is_start_delay_modification(self) -> bool {
         matches!(
             self,
-            SkillType::MultiplyStartDelay | SkillType::SetStartDelay
+            SkillType::MultiplyStartDelay | SkillType::AddStartDelay
         )
     }
 
@@ -437,8 +437,8 @@ impl Skill {
             | SkillType::ActivateUnique
             | SkillType::ActivateSympathy
             | SkillType::ChangeStyleRunaway => true,
-            // When a start delay is set, it's always to a bad start.
-            SkillType::SetStartDelay => false,
+            // Less start delay is good.
+            SkillType::AddStartDelay => effect.modifier <= 0.0,
             // Multiplier of less than or equal to 1.0 is a reduction in delay.
             SkillType::MultiplyStartDelay => effect.modifier <= 1.0,
             // Less chance or shorter rush time is good.

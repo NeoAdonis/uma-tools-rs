@@ -71,8 +71,8 @@ fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType
         SkillType::MultiplyStartDelay => {
             *start_delay *= modifier;
         }
-        SkillType::SetStartDelay => {
-            *start_delay = modifier;
+        SkillType::AddStartDelay => {
+            *start_delay += modifier;
         }
         // Not a start delay effect.
         _ => {}
