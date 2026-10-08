@@ -9,7 +9,6 @@ use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 
 /// Same as skill 204222, but without wisdom check so it is always available.
-// TODO: Replace with a global switch to disable wisdom checks.
 fn full_throttle_skill() -> Skill {
     let alternative = SkillAlternative {
         base_duration: 20000,
