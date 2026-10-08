@@ -30,6 +30,9 @@ pub const DELTA_TIME: f64 = 1.0 / 15.0;
 /// Speed used to convert scaled finish time differences into margins, in m/s.
 const MARGIN_SPEED: f64 = 15.0;
 
+/// Maximum number of runners in a single team.
+pub const MAX_TEAM_SIZE: usize = 3;
+
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
@@ -44,6 +47,8 @@ pub struct RaceState {
     /// Time when the first runner finished, in seconds. This might be different
     /// from displayed finish time due to scoreboard conversion.
     pub finish_time: Option<f64>,
+    /// Number of teams in the race. Team indices go from 0 to `team_count - 1`.
+    pub team_count: u8,
     /// Count of runners by style.
     pub runners_by_style: HashMap<Style, u8>,
     /// Running style of the most popular runner.
@@ -94,6 +99,7 @@ impl RaceSolver<UnreadyRunner> {
             rng,
             elapsed_time: 0.0,
             finish_time: None,
+            team_count: 0,
             style_most_popular: Style::Front,
             runners_by_style: HashMap::new(),
             rushed_by_style: HashMap::new(),
@@ -110,12 +116,46 @@ impl RaceSolver<UnreadyRunner> {
         }
     }
 
-    /// Add a runner to the race BEFORE it starts.
+    /// Add an individual runner to the race BEFORE it starts.
+    ///
+    /// The runner gets a team of its own, so every other runner is an opponent.
     pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
-        if self.builders.len() as u8 >= self.state.params.gates {
+        if self.builders.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
+        let team = self.new_team();
+        self.add_member(uma, motivation, skills, team);
+    }
+
+    /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
+    ///
+    /// Members are allies of each other and opponents of everyone else.
+    pub fn add_team(&mut self, members: Vec<(Uma, Motivation, Vec<Skill>)>) {
+        if members.is_empty() || members.len() > MAX_TEAM_SIZE {
+            panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
+        }
+        // Check the whole team up front so that it is never added partially.
+        if self.builders.len() + members.len() > self.state.params.gates as usize {
+            panic!("Cannot add more runners than available gates");
+        }
+
+        let team = self.new_team();
+        for (uma, motivation, skills) in members {
+            self.add_member(uma, motivation, skills, team);
+        }
+    }
+
+    /// Allocate the next team index.
+    fn new_team(&mut self) -> u8 {
+        let team = self.state.team_count;
+        self.state.team_count += 1;
+        team
+    }
+
+    /// Add a runner as a member of `team`. Gate capacity must be checked by the
+    /// caller.
+    fn add_member(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>, team: u8) {
         // Get existing skills before moving them into builder.
         for skill in &skills {
             *self
@@ -138,7 +178,8 @@ impl RaceSolver<UnreadyRunner> {
         };
 
         // Create builder.
-        let builder = UnreadyRunner::new(uma, gate_roll, motivation, &self.state, skills);
+        let mut builder = UnreadyRunner::new(uma, gate_roll, motivation, &self.state, skills);
+        builder.initial_state.team = team;
 
         // Update runnners-by-style count before moving builder.
         *self

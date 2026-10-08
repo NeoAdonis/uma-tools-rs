@@ -213,6 +213,8 @@ impl UnreadyRunner {
                 judge_scores: JudgeScores::default(),
                 // TODO: Determine fan count from race state or parameters.
                 fan_count: 0,
+                // Assigned by the solver when the runner joins the race.
+                team: 0,
             },
             start_delay,
             activation_counts: ActivationCounts::default(),

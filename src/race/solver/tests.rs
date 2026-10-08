@@ -1381,3 +1381,70 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     let expected = 0.19 + horse_lanes_to_course_widths(2.0);
     assert_close!(bumped.lane.target, expected);
 }
+
+#[test]
+fn test_individual_runners_are_all_opponents() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    for _ in 0..3 {
+        solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    }
+    let solver = solver.ready_runners();
+
+    assert_eq!(solver.state.team_count, 3);
+    for a in &solver.runners {
+        for b in &solver.runners {
+            assert_eq!(a.is_opponent(b), a.gate_roll != b.gate_roll);
+        }
+    }
+}
+
+#[test]
+fn test_team_members_are_allies() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member(), member()]);
+    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member()]);
+    let solver = solver.ready_runners();
+
+    assert_eq!(solver.state.team_count, 3);
+    let mut sizes = [0; 3];
+    for runner in &solver.runners {
+        sizes[runner.initial_state.team as usize] += 1;
+    }
+    assert_eq!(sizes, [3, 1, 2]);
+
+    for a in &solver.runners {
+        for b in &solver.runners {
+            let same_team = a.initial_state.team == b.initial_state.team;
+            assert_eq!(a.is_opponent(b), !same_team);
+        }
+    }
+}
+
+#[test]
+#[should_panic(expected = "Team must have between 1 and 3 runners")]
+fn test_team_larger_than_max_size_panics() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member(), member(), member()]);
+}
+
+#[test]
+#[should_panic(expected = "Team must have between 1 and 3 runners")]
+fn test_empty_team_panics() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    solver.add_team(vec![]);
+}
+
+#[test]
+#[should_panic(expected = "Cannot add more runners than available gates")]
+fn test_team_exceeding_gates_panics() {
+    // 9 gates: 8 individual runners leave room for one more, not a team of two.
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    for _ in 0..8 {
+        solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    }
+    let member = || (uma(Style::Pace), Motivation::Normal, vec![]);
+    solver.add_team(vec![member(), member()]);
+}

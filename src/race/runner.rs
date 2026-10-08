@@ -88,6 +88,10 @@ pub struct InitialState {
     pub gate_block: u8,
     /// Number of fans.
     pub fan_count: u32,
+    /// Team index (0-based). In individual races, each runner has its own team.
+    ///
+    /// Runners on the same team are allies; everyone else is an opponent.
+    pub team: u8,
 }
 
 /// State related to rushing (temptation, 掛かり).
@@ -1126,6 +1130,11 @@ impl Runner {
             let time_to_finish = remaining_distance / self.effective_speed();
             self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
+    }
+
+    /// Check if `other` is an opponent (i.e. on a different team).
+    pub fn is_opponent(&self, other: &Runner) -> bool {
+        self.initial_state.team != other.initial_state.team
     }
 
     /// Check if the runner has finished the race.
