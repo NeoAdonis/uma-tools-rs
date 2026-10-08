@@ -537,6 +537,13 @@ impl RaceSolver<Runner> {
 
         let game_version = self.state.config.game_version;
         let num_runners = self.runners.len();
+        // Furthest distance at which any check can apply: the longest field of
+        // view, or the range of the proximity checks.
+        let max_distance = self
+            .runners
+            .iter()
+            .map(Runner::visible_distance)
+            .fold(5.0, f64::max);
         for i in 0..num_runners {
             let (left, right) = self.runners.split_at_mut(i + 1);
             let runner_i = &mut left[i];
@@ -552,7 +559,7 @@ impl RaceSolver<Runner> {
                 let distance = runner_i.position - runner_j.position;
                 let lane_diff = runner_i.lane.current - runner_j.lane.current;
 
-                if distance > 20.0 {
+                if distance > max_distance {
                     // We have gone too far behind; move to next i.
                     break;
                 }

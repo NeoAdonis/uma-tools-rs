@@ -1385,6 +1385,74 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     assert_close!(bumped.lane.target, expected);
 }
 
+/// Mid-race solver with a runner 30m ahead of another in the same lane, slower
+/// and aiming slower, so she can be caught within 15 seconds.
+fn far_ahead_solver(visible_distance: f64) -> RaceSolver<Runner> {
+    let mut solver = struggle_solver(
+        &[(Style::Pace, 230.0, 0.2), (Style::Pace, 200.0, 0.2)],
+        GameVersion::LATEST,
+    );
+    for runner in &mut solver.runners {
+        runner.phase = Phase::Mid;
+    }
+    for (runner, speed) in solver.runners.iter_mut().zip([15.0, 18.0]) {
+        runner.speed = speed;
+        runner.target_speed = speed;
+    }
+    solver.runners[1].skill_modifiers.visible_distance = visible_distance;
+    solver
+}
+
+#[test]
+fn test_runners_beyond_base_field_of_view_are_not_seen() {
+    let mut solver = far_ahead_solver(0.0);
+
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[1].visible_count, 0);
+    assert!(!solver.runners[1].is_in_overtake_mode());
+    assert_eq!(solver.runners[0].being_overtake_target_time, 0.0);
+}
+
+#[test]
+fn test_fov_bonus_extends_visibility_and_overtake_targets() {
+    // Like a +15m Fov skill, so the field of view reaches 35m.
+    let mut solver = far_ahead_solver(15.0);
+
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[1].visible_count, 1);
+    assert!(solver.runners[1].is_in_overtake_mode());
+    assert_close!(solver.runners[0].being_overtake_target_time, DELTA_TIME);
+}
+
+#[test]
+fn test_fov_bonus_narrows_field_of_view_at_a_given_distance() {
+    // 10m ahead, 3 horse lanes apart: within the 20m field of view, whose half
+    // width there is 3.875 horse lanes, but not within a 40m one (2.4375).
+    let mut solver = struggle_solver(
+        &[
+            (Style::Pace, 210.0, horse_lanes_to_course_widths(3.0)),
+            (Style::Pace, 200.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    assert!(solver.runners[1].is_visible(&solver.runners[0]));
+
+    solver.runners[1].skill_modifiers.visible_distance = 20.0;
+    assert!(!solver.runners[1].is_visible(&solver.runners[0]));
+}
+
+#[test]
+fn test_fov_debuffs_cannot_shorten_field_of_view_below_zero() {
+    // Three stacked -10m debuffs.
+    let mut solver = far_ahead_solver(-30.0);
+    solver.runners[0].position = solver.runners[1].position;
+
+    assert_eq!(solver.runners[1].visible_distance(), 0.0);
+    assert!(!solver.runners[1].is_visible(&solver.runners[0]));
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[1].visible_count, 0);
+}
+
 #[test]
 fn test_individual_runners_are_all_opponents() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));

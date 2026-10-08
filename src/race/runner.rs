@@ -1536,8 +1536,9 @@ impl Runner {
     pub fn check_overtake_target(&mut self, target: &Runner, delta_time: f64) -> bool {
         let distance = target.position - self.position;
 
-        // Must be 1-20m ahead.
-        if !(1.0..=20.0).contains(&distance) {
+        // Must be at least 1m ahead. The maximum distance is given by the field of
+        // view, checked by the caller.
+        if distance < 1.0 {
             return false;
         }
 
@@ -2135,12 +2136,22 @@ impl Runner {
         self.position_diff.from_prev = self.position - position_prev;
     }
 
+    /// Length of this runner's field of view in meters.
+    ///
+    /// Starts at 20m, modified by skill bonuses. The width of the field of view
+    /// doesn't change, so a longer one is also narrower at a given distance.
+    pub fn visible_distance(&self) -> f64 {
+        // ? Assume minimum (shortened by stacked debuffs) is 0m.
+        (20.0 + self.skill_modifiers.visible_distance).max(0.0)
+    }
+
     /// Check if another runner is visible to this runner.
     pub fn is_visible(&self, other: &Self) -> bool {
         let distance = (self.position - other.position).abs();
-        // Visibility starts at 20m, modified by skill bonuses.
-        let visible_distance = 20.0 + self.skill_modifiers.visible_distance;
-        distance <= visible_distance
+        let visible_distance = self.visible_distance();
+        // A runner without field of view sees nothing.
+        visible_distance > 0.0
+            && distance <= visible_distance
             && (self.lane.current - other.lane.current).abs()
                 <= horse_lanes_to_course_widths((distance / visible_distance) * 11.5 + 2.0) / 2.0
     }
