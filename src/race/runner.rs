@@ -2659,6 +2659,10 @@ impl Runner {
         else if matches!(effect_type, SkillType::ActivateRandomGold) {
             self.activate_random_gold_skills(effect.modifier / 10000, state);
         }
+        // Activate unique skills again (one per 10000 of modifier).
+        else if matches!(effect_type, SkillType::ActivateUnique) {
+            self.activate_unique_skills(effect.modifier / 10000, state);
+        }
         // Rush time extension.
         else if matches!(effect_type, SkillType::RushTimeUp) {
             // Extend only if the Uma is bound to rush at all.
@@ -2695,6 +2699,39 @@ impl Runner {
             // ? Assume the first alternative is activated, even when the others are
             // variants for other courses or running styles (e.g. "Piercing Azure").
             self.activate_skill(skill_index, 0, state);
+        }
+    }
+
+    /// Activate up to `count` unique skills, bypassing their conditions and
+    /// cooldowns.
+    ///
+    /// Each activation is a new instance of the skill: its values (duration, Wiz
+    /// Limit Break bonus...) are calculated anew, and its effects stack with any
+    /// still active from a previous activation. The (first) alternative that
+    /// activated before is used, or the first one if the skill hasn't activated
+    /// yet.
+    ///
+    /// N.B. Out-of-gate skills are skipped, as their effects are only applied
+    /// before the race.
+    fn activate_unique_skills(&mut self, count: i32, state: &RaceState) {
+        let unique_indices: Vec<usize> = self
+            .available_skills
+            .iter()
+            .enumerate()
+            .filter(|(_, skill)| skill.is_unique() && !skill.should_activate_out_of_gate())
+            .map(|(i, _)| i)
+            .take(count.max(0) as usize)
+            .collect();
+        for skill_index in unique_indices {
+            let alternative_index = self
+                .activated_alternatives
+                .iter()
+                .filter(|&&(activated, _)| activated == skill_index)
+                .map(|&(_, alternative_index)| alternative_index)
+                // Lowest, as the set's order isn't deterministic.
+                .min()
+                .unwrap_or(0);
+            self.activate_skill(skill_index, alternative_index, state);
         }
     }
 

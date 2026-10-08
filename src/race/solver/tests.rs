@@ -2097,3 +2097,133 @@ fn test_activate_random_gold_skips_activated_and_out_of_gate_skills() {
     let ids = random_gold_activations(20000, skills);
     assert_eq!(ids, vec!["adventure", "early", "forced", "green"]);
 }
+
+/// Unique skill with the given alternatives.
+fn unique_skill(id: &str, alternatives: Vec<SkillAlternative>) -> Skill {
+    let data = SkillData {
+        rarity: SkillRarity::UniqueNatural,
+        ..skill_data(alternatives)
+    };
+    Skill::new(id.to_string(), data)
+}
+
+/// Alternative whose effect lasts until the end of the race.
+fn lasting_alternative(condition: &str, skill_type: SkillType, modifier: i32) -> SkillAlternative {
+    SkillAlternative {
+        base_duration: -1,
+        ..alternative(condition, skill_type, modifier)
+    }
+}
+
+/// Runner after a whole race, with a skill activating `modifier / 10000` unique
+/// skills again in the second half of the race.
+fn unique_reactivation_runner(modifier: i32, mut skills: Vec<Skill>) -> Runner {
+    let again = skill(
+        "again",
+        "distance_rate>=50",
+        SkillType::ActivateUnique,
+        modifier,
+    );
+    skills.push(again);
+    let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
+    solver.run();
+    solver.runners.swap_remove(0)
+}
+
+/// Sorted IDs of the skills activated by `runner`.
+fn sorted_activation_ids(runner: &Runner) -> Vec<&str> {
+    let mut ids: Vec<_> = runner
+        .activated_skills
+        .iter()
+        .map(|record| record.skill_id.as_str())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Number of active timed effects of the given type.
+fn active_effect_count(runner: &Runner, skill_type: SkillType) -> usize {
+    runner
+        .active_timed_effects
+        .iter()
+        .filter(|timed| timed.effect.skill_type == skill_type)
+        .count()
+}
+
+#[test]
+fn test_activate_unique_fires_the_unique_again() {
+    let unique = unique_skill(
+        "unique",
+        vec![lasting_alternative(
+            "distance_rate>=10",
+            SkillType::TargetSpeed,
+            3500,
+        )],
+    );
+    let runner = unique_reactivation_runner(10000, vec![unique]);
+    assert_eq!(
+        sorted_activation_ids(&runner),
+        vec!["again", "unique", "unique"]
+    );
+    // Both activations' effects stack.
+    assert_eq!(active_effect_count(&runner, SkillType::TargetSpeed), 2);
+}
+
+#[test]
+fn test_activate_unique_bypasses_conditions() {
+    let unique = unique_skill(
+        "unique",
+        vec![alternative(
+            "is_activate_heal_skill==1",
+            SkillType::TargetSpeed,
+            3500,
+        )],
+    );
+    let runner = unique_reactivation_runner(10000, vec![unique]);
+    assert_eq!(sorted_activation_ids(&runner), vec!["again", "unique"]);
+}
+
+#[test]
+fn test_activate_unique_uses_the_alternative_that_activated() {
+    let unique = unique_skill(
+        "unique",
+        vec![
+            lasting_alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 3500),
+            lasting_alternative("distance_rate>=10", SkillType::Acceleration, 2000),
+        ],
+    );
+    let runner = unique_reactivation_runner(10000, vec![unique]);
+    assert_eq!(active_effect_count(&runner, SkillType::TargetSpeed), 0);
+    assert_eq!(active_effect_count(&runner, SkillType::Acceleration), 2);
+}
+
+#[test]
+fn test_activate_unique_skips_other_and_out_of_gate_skills() {
+    let never = |id| {
+        unique_skill(
+            id,
+            vec![alternative(
+                "is_activate_heal_skill==1",
+                SkillType::TargetSpeed,
+                3500,
+            )],
+        )
+    };
+    let skills = vec![
+        // Activates before the race.
+        unique_skill(
+            "green",
+            vec![alternative("always==1", SkillType::SpeedUp, 400000)],
+        ),
+        // Gold skills can't be picked.
+        forced_gold_skill("gold"),
+        never("first"),
+        never("second"),
+    ];
+    // Only the first eligible unique activates.
+    let runner = unique_reactivation_runner(10000, skills);
+    assert_eq!(
+        sorted_activation_ids(&runner),
+        vec!["again", "first", "green"]
+    );
+}

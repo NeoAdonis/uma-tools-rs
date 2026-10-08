@@ -61,6 +61,8 @@ pub enum SkillType {
     ExtendEvolvedDuration = 42,
     /// Modify acceleration during Full-throttle spurt (5th Anniversary onward).
     AccelerationFullThrottle = 48,
+    /// (Re-)activate a unique skill.
+    ActivateUnique = 49,
 }
 
 impl SkillType {
@@ -405,6 +407,7 @@ impl Skill {
         match effect.skill_type {
             // Purely positive effects.
             SkillType::ActivateRandomGold
+            | SkillType::ActivateUnique
             | SkillType::ActivateSympathy
             | SkillType::ChangeStyleRunaway => true,
             // When a start delay is set, it's always to a bad start.
