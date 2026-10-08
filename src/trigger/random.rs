@@ -77,7 +77,10 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
 
     match &comp.var {
         // Pure probability roll.
-        Random(RandomVar::RandomLot) => {
+        // N.B. Both are only used by out-of-gate skills, which are evaluated before
+        // the race instead (see `UnreadyRunner::apply_out_of_gate_skills`). Here,
+        // they're shared by comparison, like any other random variable.
+        Random(RandomVar::RandomLot | RandomVar::RandomLotShared) => {
             // "random_lot==X" means X% chance of activation.
             let chance = comp.value as f64 / 100.0;
             if rng.random_bool(chance) {

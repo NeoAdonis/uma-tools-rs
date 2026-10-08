@@ -396,18 +396,18 @@ fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
     assert_eq!(activated_ids(&runner), vec!["speed"]);
 }
 
-#[test]
-fn test_random_lot_draw_is_shared_by_alternatives() {
-    // Both alternatives are eligible: with a single draw per skill, the second one
-    // can't activate after the lottery of the first one failed.
+/// Speed gains, over 50 races, of a skill whose two alternatives are eligible
+/// with a 50% lottery each (`lottery==50`), giving +100 and +40 speed.
+fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
+    let condition = format!("{lottery}==50");
     let alternatives = vec![
-        alternative("random_lot==50", SkillType::SpeedUp, 1000000),
-        alternative("random_lot==50", SkillType::SpeedUp, 400000),
+        alternative(&condition, SkillType::SpeedUp, 1000000),
+        alternative(&condition, SkillType::SpeedUp, 400000),
     ];
     let skill = Skill::new("speed".to_string(), skill_data(alternatives));
     let course = load_course(10104);
 
-    let gains: std::collections::HashSet<_> = (0..50)
+    (0..50)
         .map(|seed| {
             let state = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed)).state;
             let skills = vec![skill.clone()];
@@ -417,9 +417,20 @@ fn test_random_lot_draw_is_shared_by_alternatives() {
             runner.apply_out_of_gate_skills(&state);
             runner.adjusted.speed - speed
         })
-        .collect();
+        .collect()
+}
 
-    assert_eq!(gains, [0, 100].into());
+#[test]
+fn test_random_lot_is_rolled_by_each_alternative() {
+    // The second alternative can activate after the lottery of the first one failed.
+    assert_eq!(lottery_speed_gains("random_lot"), [0, 40, 100].into());
+}
+
+#[test]
+fn test_random_lot_shared_draw_is_shared_by_alternatives() {
+    // With a single draw per skill, the second alternative can't activate after the
+    // lottery of the first one failed.
+    assert_eq!(lottery_speed_gains("random_lot_shared"), [0, 100].into());
 }
 
 /// Out-of-gate skill alternative with a precondition.

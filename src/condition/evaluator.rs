@@ -244,8 +244,13 @@ impl CompEvaluator for EvaluatorOutOfGate {
             Lineup(lineup_var) => {
                 evaluate_lineup(lineup_var, comp, state, &context.evaluated_skill_id)
             }
-            // "random_lot==X" means X% chance, with a single draw per skill.
-            Random(RandomVar::RandomLot) => context.evaluated_skill_lot() < comp.value as f64,
+            // "random_lot==X" means X% chance, rolled every time it's evaluated.
+            // N.B. It currently behaves like `random_lot_shared`: skills using it have
+            // a single alternative, or alternatives that exclude each other (e.g.
+            // `popularity<=3` and `popularity>=4`), so it's never rolled twice.
+            Random(RandomVar::RandomLot) => context.roll_lot() < comp.value as f64,
+            // Like `random_lot`, but rolled once per skill.
+            Random(RandomVar::RandomLotShared) => context.evaluated_skill_lot() < comp.value as f64,
             _ => {
                 // Normal case: get variable value and compare.
                 let current_value = get_variable_value_out_of_gate(&comp.var, state, context);

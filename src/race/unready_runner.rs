@@ -357,8 +357,13 @@ impl UnreadyRunner {
         }
     }
 
+    /// New lottery draw (from 0 to 100), used for `random_lot` conditions.
+    pub(crate) fn roll_lot(&self) -> f64 {
+        self.rng.borrow_mut().random_range(0.0..100.0)
+    }
+
     /// Lottery draw (from 0 to 100) of the out-of-gate skill being evaluated, used
-    /// for `random_lot` conditions.
+    /// for `random_lot_shared` conditions.
     ///
     /// Drawn on first use, then kept for every alternative of the skill, so that
     /// several alternatives don't improve its chances.
@@ -366,7 +371,7 @@ impl UnreadyRunner {
         if let Some(draw) = self.evaluated_skill_lot_draw.get() {
             return draw;
         }
-        let draw = self.rng.borrow_mut().random_range(0.0..100.0);
+        let draw = self.roll_lot();
         self.evaluated_skill_lot_draw.set(Some(draw));
         draw
     }

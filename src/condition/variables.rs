@@ -215,7 +215,10 @@ pub enum StatusVar {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RandomVar {
+    /// Lottery rolled every time it's evaluated.
     RandomLot,
+    /// Lottery rolled once per skill, shared by all its alternatives.
+    RandomLotShared,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -499,6 +502,7 @@ impl VarType {
 
             // Randoms.
             "random_lot" => Random(RandomVar::RandomLot),
+            "random_lot_shared" => Random(RandomVar::RandomLotShared),
 
             // Blocking/Surrounding.
             "behind_near_lane_time_set1" => Blocking(BlockingVar::BehindNearLaneTimeSet1),
