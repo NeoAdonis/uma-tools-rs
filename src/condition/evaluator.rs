@@ -192,10 +192,6 @@ impl CompEvaluator for EvaluatorFull {
                     _ => false,
                 }
             }
-            Activation(ActivationVar::IsExistSkillId) => {
-                // Check if at least one runner has skill with ID == `comp.value`.
-                state.existing_skills.contains_key(&comp.value.to_string())
-            }
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
                 // Check if any other runner has activated a buff whose type is `comp.value`
                 // this frame, discounting the runner's own activation.
@@ -208,15 +204,13 @@ impl CompEvaluator for EvaluatorFull {
                     .get(&value)
                     .is_some_and(|&count| count > own)
             }
-            RaceParam(RaceParamVar::SameSkillHorseCount) => {
-                // Count of runners with same skill.
-                // Extract skill ID from logic context.
+            Lineup(lineup_var) => {
+                // Extract the skill being evaluated from logic context.
                 let skill_id = logic_ctx
                     .and_then(|logic| runner.available_skills.get(logic.skill_index))
                     .map(|skill| skill.id.as_str())
                     .unwrap_or("");
-                let count = state.existing_skills.get(skill_id).cloned().unwrap_or(0) as i32;
-                comp.op.apply(count, comp.value)
+                evaluate_lineup(lineup_var, comp, state, skill_id)
             }
             _ => {
                 // Normal case: get variable value and compare.
@@ -246,16 +240,9 @@ impl CompEvaluator for EvaluatorOutOfGate {
     ) -> bool {
         use VarType::*;
         match &comp.var {
-            // Special case: skill ID checks require different logic.
-            Activation(ActivationVar::IsExistSkillId) => {
-                // Check if at least one runner has skill with ID == `comp.value`.
-                state.existing_skills.contains_key(&comp.value.to_string())
-            }
-            RaceParam(RaceParamVar::SameSkillHorseCount) => {
-                // Count of runners with same skill.
-                // In out-of-gate context, get value directly from temporary context.
-                let count = context.same_skill_count as i32;
-                comp.op.apply(count, comp.value)
+            // Special case: lineup variables require different logic.
+            Lineup(lineup_var) => {
+                evaluate_lineup(lineup_var, comp, state, &context.evaluated_skill_id)
             }
             _ => {
                 // Normal case: get variable value and compare.
@@ -278,7 +265,7 @@ fn get_variable_value(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
-        InitialState(status_var) => get_initial_state_value(status_var, &runner.initial_state),
+        Entry(entry_var) => get_entry_value(entry_var, &runner.initial_state),
         Order(pos_var) => get_rank_value(pos_var, runner),
         Distance(dist_var) => get_distance_value(dist_var, runner),
         Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
@@ -295,6 +282,10 @@ fn get_variable_value(
         Always => 1,
         // Defaults to 0.
         Unknown(_) => 0,
+        Lineup(_) => panic!(
+            "BUG: Lineup variable {:?} should be handled in evaluate()",
+            var
+        ),
         // Normally a trigger; evaluates to whether Full-Throttle Sprint is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
             runner.full_throttle.is_active() as i32
@@ -317,7 +308,7 @@ fn get_variable_value_out_of_gate(
     use VarType::*;
     match var {
         BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
-        InitialState(status_var) => get_initial_state_value(status_var, &builder.initial_state),
+        Entry(entry_var) => get_entry_value(entry_var, &builder.initial_state),
         Course(course_var) => get_course_value(course_var, &state.course),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
@@ -553,10 +544,33 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 
         // Weather: 1=sunny, 2=cloudy, 3=rainy, 4=snowy.
         Weather => params.weather as i32,
+    }
+}
 
-        // Count of runners with same skill.
+/// Evaluate a comparison on the lineup (every runner entered in the race).
+///
+/// Unlike most variables, some of these use the comparison value as parameter
+/// instead of comparing against it. `skill_id` is the ID of the skill whose
+/// condition is being evaluated.
+fn evaluate_lineup(var: &LineupVar, comp: &Comparison, state: &RaceState, skill_id: &str) -> bool {
+    use LineupVar::*;
+
+    match var {
+        // Whether any runner has the skill with ID == `comp.value`.
+        IsExistSkillId => {
+            let exists = state.existing_skills.contains_key(&comp.value.to_string());
+            match comp.op {
+                CompOp::Equal => exists,
+                CompOp::NotEqual => !exists,
+                // Other operators don't make sense for skill ID checks.
+                _ => false,
+            }
+        }
+
+        // Number of runners with the skill being evaluated.
         SameSkillHorseCount => {
-            panic!("same_skill_horse_count: should be handled in evaluate()")
+            let count = state.existing_skills.get(skill_id).copied().unwrap_or(0);
+            comp.op.apply(count as i32, comp.value)
         }
 
         // Existence checks - out of scope.
@@ -605,9 +619,6 @@ fn get_activation_value(
 
         // Special cases: these variables use the comparison value as parameter instead
         // of comparing against it.
-        IsExistSkillId => {
-            panic!("is_exist_skill_id: should be handled in evaluate()")
-        }
         IsOtherCharacterActivateAdvantageSkill => {
             panic!("is_other_character_activate_advantage_skill: should be handled in evaluate()")
         }
@@ -660,9 +671,9 @@ fn get_style_temptation_opponent_count(state: &RaceState, style: Style, runner: 
     get_style_temptation_count(state, style) - team[style as usize] as i32
 }
 
-/// Get initial state values.
-fn get_initial_state_value(var: &InitialStateVar, state: &InitialState) -> i32 {
-    use InitialStateVar::*;
+/// Get runner entry values.
+fn get_entry_value(var: &EntryVar, state: &InitialState) -> i32 {
+    use EntryVar::*;
 
     match var {
         // Number of fans.

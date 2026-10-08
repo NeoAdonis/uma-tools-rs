@@ -94,7 +94,7 @@ fn test_is_exist_skill_id_in_available_skills() {
 
     // Create comparison: is_exist_skill_id == 203061.
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsExistSkillId),
+        var: VarType::Lineup(LineupVar::IsExistSkillId),
         op: CompOp::Equal,
         value: 203061,
     };

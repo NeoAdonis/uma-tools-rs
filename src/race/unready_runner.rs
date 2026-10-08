@@ -135,10 +135,10 @@ pub struct UnreadyRunner {
     /// Indices of golden skills in `runtime_skills` for activation by skills that
     /// activate golden skills.
     golden_skill_indices: Vec<usize>,
-    /// Temporary: Number of runners that have the same skill as the one currently
-    /// being evaluated. Used for conditions like `same_skill_horse_count` that need
-    /// to know which skill they're checking.
-    pub same_skill_count: u8,
+    /// Temporary: ID of the out-of-gate skill currently being evaluated. Used for
+    /// conditions like `same_skill_horse_count` that need to know which skill
+    /// they're checking.
+    pub evaluated_skill_id: String,
     /// Whether an out-of-gate skill activated "Sympathy" for every runner (see
     /// [`Self::activate_sympathy`]).
     pub(crate) casts_sympathy: bool,
@@ -226,7 +226,7 @@ impl UnreadyRunner {
             out_of_gate_skills,
             runtime_skills,
             popularity_bonus: SkillPopularity::default(),
-            same_skill_count: 0,
+            evaluated_skill_id: String::new(),
             casts_sympathy: false,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
@@ -348,8 +348,8 @@ impl UnreadyRunner {
     pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         let skills = self.out_of_gate_skills.clone();
         for skill in &skills {
-            // Update count (same_skill_horse_count).
-            self.same_skill_count = state.existing_skills.get(&skill.id).cloned().unwrap_or(0);
+            // Set the skill being evaluated (same_skill_horse_count).
+            self.evaluated_skill_id.clone_from(&skill.id);
 
             // Apply the first alternative whose condition is satisfied, if any.
             let alt_index = skill.alternatives.iter().position(|alternative| {

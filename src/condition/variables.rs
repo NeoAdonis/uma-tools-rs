@@ -7,8 +7,9 @@ pub enum VarType {
     AccumulateTime,
     /// Variable representing base stats.
     BaseStat(StatKind),
-    /// Variable related to state before race start.
-    InitialState(InitialStateVar),
+    /// Variables related to the runner's entry in the race (gate, popularity,
+    /// etc.).
+    Entry(EntryVar),
     /// Variables related to order/rank.
     Order(OrderVar),
     /// Variables related to distance between runners.
@@ -27,6 +28,8 @@ pub enum VarType {
     Activation(ActivationVar),
     /// Variables related to race parameters.
     RaceParam(RaceParamVar),
+    /// Variables related to the lineup (every runner entered in the race).
+    Lineup(LineupVar),
     /// Variables related to running style.
     RunningStyle(RunningStyleVar),
     /// Variables related to status/flags.
@@ -53,7 +56,7 @@ pub enum StatKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InitialStateVar {
+pub enum EntryVar {
     FanCount,
     Motivation,
     Popularity,
@@ -165,7 +168,6 @@ pub enum ActivationVar {
     IsActivateAnySkill,
     IsActivateHealSkill,
     IsActivateOtherSkillDetail,
-    IsExistSkillId,
     IsOtherCharacterActivateAdvantageSkill,
     IsUsedSkillId,
 }
@@ -174,11 +176,16 @@ pub enum ActivationVar {
 pub enum RaceParamVar {
     Grade,
     GroundCondition,
-    IsExistCharaId,
-    SameSkillHorseCount,
     Season,
     Time,
     Weather,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineupVar {
+    IsExistCharaId,
+    IsExistSkillId,
+    SameSkillHorseCount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,7 +257,7 @@ impl fmt::Display for VarType {
         use VarType::*;
         match self {
             BaseStat(s) => write!(f, "base_{}", s),
-            InitialState(i) => write!(f, "initial_{}", i),
+            Entry(e) => write!(f, "{}", e),
             Order(o) => write!(f, "{}", o),
             Distance(d) => write!(f, "{}", d),
             Phase(p) => write!(f, "{}", p),
@@ -258,6 +265,7 @@ impl fmt::Display for VarType {
             Course(c) => write!(f, "{}", c),
             Activation(a) => write!(f, "{}", a),
             RaceParam(r) => write!(f, "{}", r),
+            Lineup(l) => write!(f, "{}", l),
             RunningStyle(r) => write!(f, "{}", r),
             Status(s) => write!(f, "{}", s),
             Random(r) => write!(f, "{}", r),
@@ -303,7 +311,7 @@ macro_rules! impl_display_snake_case {
     };
 }
 
-impl_display_snake_case!(InitialStateVar);
+impl_display_snake_case!(EntryVar);
 impl_display_snake_case!(OrderVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
@@ -313,6 +321,7 @@ impl_display_snake_case!(RandomSpatialVar);
 impl_display_snake_case!(CourseVar);
 impl_display_snake_case!(ActivationVar);
 impl_display_snake_case!(RaceParamVar);
+impl_display_snake_case!(LineupVar);
 impl_display_snake_case!(RunningStyleVar);
 impl_display_snake_case!(StatusVar);
 impl_display_snake_case!(RandomVar);
@@ -332,11 +341,11 @@ impl VarType {
             "base_guts" => BaseStat(StatKind::Guts),
             "base_wiz" => BaseStat(StatKind::Wiz),
 
-            // Initial state.
-            "fan_count" => InitialState(InitialStateVar::FanCount),
-            "motivation" => InitialState(InitialStateVar::Motivation),
-            "popularity" => InitialState(InitialStateVar::Popularity),
-            "post_number" => InitialState(InitialStateVar::PostNumber),
+            // Runner entry.
+            "fan_count" => Entry(EntryVar::FanCount),
+            "motivation" => Entry(EntryVar::Motivation),
+            "popularity" => Entry(EntryVar::Popularity),
+            "post_number" => Entry(EntryVar::PostNumber),
 
             // Order/Rank.
             "change_order_onetime" => Order(OrderVar::ChangeOrderOnetime),
@@ -438,7 +447,6 @@ impl VarType {
             "is_activate_other_skill_detail" => {
                 Activation(ActivationVar::IsActivateOtherSkillDetail)
             }
-            "is_exist_skill_id" => Activation(ActivationVar::IsExistSkillId),
             "is_other_character_activate_advantage_skill" => {
                 Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
             }
@@ -447,11 +455,14 @@ impl VarType {
             // Race parameters.
             "grade" => RaceParam(RaceParamVar::Grade),
             "ground_condition" => RaceParam(RaceParamVar::GroundCondition),
-            "is_exist_chara_id" => RaceParam(RaceParamVar::IsExistCharaId),
-            "same_skill_horse_count" => RaceParam(RaceParamVar::SameSkillHorseCount),
             "season" => RaceParam(RaceParamVar::Season),
             "time" => RaceParam(RaceParamVar::Time),
             "weather" => RaceParam(RaceParamVar::Weather),
+
+            // Lineup.
+            "is_exist_chara_id" => Lineup(LineupVar::IsExistCharaId),
+            "is_exist_skill_id" => Lineup(LineupVar::IsExistSkillId),
+            "same_skill_horse_count" => Lineup(LineupVar::SameSkillHorseCount),
 
             // Running style.
             "running_style" => RunningStyle(RunningStyleVar::RunningStyle),
@@ -563,7 +574,7 @@ impl VarType {
         use VarType::*;
 
         match self {
-            RaceParam(_) | Course(_) | BaseStat(_) | InitialState(_) => true,
+            RaceParam(_) | Lineup(_) | Course(_) | BaseStat(_) | Entry(_) => true,
             Status(StatusVar::IsBadstart) => true,
             // N.B. While running style can technically change, it can only do so from Front
             // Runner to Runaway. Since both styles are considered the same for skill
@@ -599,7 +610,7 @@ impl VarType {
                     | RaceParamVar::Time
                     | RaceParamVar::Grade
             ) | RunningStyle(RunningStyleVar::RunningStyle)
-                | InitialState(InitialStateVar::PostNumber)
+                | Entry(EntryVar::PostNumber)
         )
     }
 }
