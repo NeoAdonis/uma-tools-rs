@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -131,6 +131,9 @@ pub struct UnreadyRunner {
     /// conditions like `same_skill_horse_count` that need to know which skill
     /// they're checking.
     pub evaluated_skill_id: String,
+    /// Temporary: lottery draw of the out-of-gate skill currently being evaluated,
+    /// if drawn yet (see [`Self::evaluated_skill_lot`]).
+    evaluated_skill_lot_draw: Cell<Option<f64>>,
     /// Whether an out-of-gate skill activated "Sympathy" for every runner (see
     /// [`Self::activate_sympathy`]).
     pub(crate) casts_sympathy: bool,
@@ -210,6 +213,7 @@ impl UnreadyRunner {
             skills,
             popularity_bonus: SkillPopularity::default(),
             evaluated_skill_id: String::new(),
+            evaluated_skill_lot_draw: Cell::new(None),
             casts_sympathy: false,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
@@ -328,8 +332,9 @@ impl UnreadyRunner {
             if !skill.should_activate_out_of_gate() {
                 continue;
             }
-            // Set the skill being evaluated (same_skill_horse_count).
+            // Set the skill being evaluated (same_skill_horse_count, random_lot).
             self.evaluated_skill_id.clone_from(&skill.id);
+            self.evaluated_skill_lot_draw.set(None);
 
             // Activate the first alternative whose condition is satisfied, if any.
             let alt_index = skill.alternatives.iter().position(|alternative| {
@@ -349,6 +354,20 @@ impl UnreadyRunner {
                 self.activate_out_of_gate_skill(skill_index, alt_index);
             }
         }
+    }
+
+    /// Lottery draw (from 0 to 100) of the out-of-gate skill being evaluated, used
+    /// for `random_lot` conditions.
+    ///
+    /// Drawn on first use, then kept for every alternative of the skill, so that
+    /// several alternatives don't improve its chances.
+    pub(crate) fn evaluated_skill_lot(&self) -> f64 {
+        if let Some(draw) = self.evaluated_skill_lot_draw.get() {
+            return draw;
+        }
+        let draw = self.rng.borrow_mut().random_range(0.0..100.0);
+        self.evaluated_skill_lot_draw.set(Some(draw));
+        draw
     }
 
     /// Activate "Sympathy" if the runner has it, bypassing its condition

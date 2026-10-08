@@ -323,3 +323,101 @@ fn test_sympathy_activates_once() {
     let runners = sympathy_runners(10104, &skill_sets);
     assert_eq!(sympathy_activations(&runners), vec![1; 5]);
 }
+
+#[test]
+fn test_random_lot_is_rolled_before_the_race() {
+    let (mut runner, state) = unready_runner(vec![
+        skill("never", "random_lot==0", SkillType::SpeedUp, 400000),
+        skill("always", "random_lot==100", SkillType::SpeedUp, 800000),
+    ]);
+    let speed = runner.adjusted.speed;
+
+    runner.apply_out_of_gate_skills(&state);
+
+    assert_eq!(runner.adjusted.speed, speed + 80);
+    assert_eq!(activated_ids(&runner), vec!["always"]);
+}
+
+#[test]
+fn test_failed_random_lot_falls_through_to_next_alternative() {
+    let alternatives = vec![
+        alternative("random_lot==0", SkillType::SpeedUp, 1000000),
+        alternative("always==1", SkillType::SpeedUp, 400000),
+    ];
+    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let (mut runner, state) = unready_runner(vec![skill]);
+    let speed = runner.adjusted.speed;
+
+    runner.apply_out_of_gate_skills(&state);
+
+    assert_eq!(runner.adjusted.speed, speed + 40);
+    assert_eq!(activated_ids(&runner), vec!["speed"]);
+}
+
+#[test]
+fn test_gambler_activation_rate() {
+    // As the only runner, she's the most popular: `popularity<=3&random_lot==30`.
+    const GAMBLER_ID: &str = "202441";
+    const RACES: u64 = 300;
+    let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+    let course = load_course(10104);
+
+    let activations = (0..RACES)
+        .filter(|&seed| {
+            let mut solver = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed));
+            let gambler = skills[GAMBLER_ID].clone();
+            solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![gambler]);
+            let runner = &solver.ready_runners().runners[0];
+            !race_start_ids(&runner.available_skills, &runner.trigger_scheduler).is_empty()
+        })
+        .count();
+
+    // 90 expected; the bounds are about 4 standard deviations away.
+    assert!(
+        (60..=120).contains(&activations),
+        "{activations} activations"
+    );
+}
+
+#[test]
+fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
+    // Course 10104 is turf (ground_type==1): both OR branches hold.
+    let (mut runner, state) = unready_runner(vec![skill(
+        "speed",
+        "ground_type==1@always==1",
+        SkillType::SpeedUp,
+        400000,
+    )]);
+    let speed = runner.adjusted.speed;
+
+    runner.apply_out_of_gate_skills(&state);
+
+    assert_eq!(runner.adjusted.speed, speed + 40);
+    assert_eq!(activated_ids(&runner), vec!["speed"]);
+}
+
+#[test]
+fn test_random_lot_draw_is_shared_by_alternatives() {
+    // Both alternatives are eligible: with a single draw per skill, the second one
+    // can't activate after the lottery of the first one failed.
+    let alternatives = vec![
+        alternative("random_lot==50", SkillType::SpeedUp, 1000000),
+        alternative("random_lot==50", SkillType::SpeedUp, 400000),
+    ];
+    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let course = load_course(10104);
+
+    let gains: std::collections::HashSet<_> = (0..50)
+        .map(|seed| {
+            let state = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed)).state;
+            let skills = vec![skill.clone()];
+            let mut runner =
+                UnreadyRunner::new(uma(Style::Pace), 1, Motivation::Normal, &state, skills);
+            let speed = runner.adjusted.speed;
+            runner.apply_out_of_gate_skills(&state);
+            runner.adjusted.speed - speed
+        })
+        .collect();
+
+    assert_eq!(gains, [0, 100].into());
+}
