@@ -248,22 +248,6 @@ impl Uma {
     }
 }
 
-// Random distribution implementation for Motivation.
-use rand::distr::{Distribution, StandardUniform};
-use rand::prelude::*;
-
-impl Distribution<Motivation> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Motivation {
-        match rng.random_range(0..5) {
-            0 => Motivation::Awful,
-            1 => Motivation::Bad,
-            2 => Motivation::Normal,
-            3 => Motivation::Good,
-            _ => Motivation::Great,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,52 +255,147 @@ mod tests {
 
     #[test]
     fn test_motivation_multiplier() {
-        // Normal = 0; multiplier should be 1.0.
-        assert_eq!(motivation_multiplier(Motivation::Normal), 1.0);
-
-        // Great = +2; multiplier should be 1.04.
-        assert_close!(
-            motivation_multiplier(Motivation::Great),
-            1.04,
-            tolerance = 0.001
-        );
-
-        // Awful = -2; multiplier should be 0.96.
-        assert_close!(
-            motivation_multiplier(Motivation::Awful),
-            0.96,
-            tolerance = 0.001
-        );
+        let cases = [
+            (Motivation::Awful, 0.96),
+            (Motivation::Bad, 0.98),
+            (Motivation::Normal, 1.0),
+            (Motivation::Good, 1.02),
+            (Motivation::Great, 1.04),
+        ];
+        for (motivation, expected) in cases {
+            assert_close!(
+                motivation_multiplier(motivation),
+                expected,
+                "{motivation:?}"
+            );
+        }
     }
 
     #[test]
-    fn test_uma_stat_calculations() {
-        let raw_uma = Uma {
+    fn test_calculate_base_stat() {
+        // (raw stat, motivation, base stat).
+        let cases = [
+            (1000, Motivation::Normal, 1000),
+            (1200, Motivation::Normal, 1200),
+            // Excess above 1200 is halved, rounding down.
+            (1201, Motivation::Normal, 1200),
+            (1500, Motivation::Normal, 1350),
+            // Multiplier is applied after halving, truncating.
+            (1000, Motivation::Awful, 960),
+            (1500, Motivation::Great, 1404),
+            (1199, Motivation::Good, 1222),
+            // Stats are at least 1 before the multiplier.
+            (0, Motivation::Normal, 1),
+            (0, Motivation::Great, 1),
+        ];
+        for (stat, motivation, expected) in cases {
+            let actual = calculate_base_stat(stat, motivation_multiplier(motivation));
+            assert_eq!(actual, expected, "{stat} with {motivation:?}");
+        }
+    }
+
+    #[test]
+    fn test_raw_to_base() {
+        let raw = Uma {
             speed: 1500,
             stamina: 800,
             power: 1200,
             guts: 700,
-            wiz: 1200,
+            wiz: 1300,
             style: Style::End,
             distance_aptitude: Aptitude::S,
-            track_aptitude: Aptitude::A,
-            style_aptitude: Aptitude::A,
+            track_aptitude: Aptitude::B,
+            style_aptitude: Aptitude::C,
         };
 
-        // Test motivation effects.
-        let base_uma = Uma::raw_to_base(raw_uma, Motivation::Normal);
+        // Style and aptitudes are kept.
+        let expected = Uma {
+            speed: 1404,
+            stamina: 832,
+            power: 1248,
+            guts: 728,
+            wiz: 1300,
+            ..raw
+        };
+        assert_eq!(Uma::raw_to_base(raw, Motivation::Great), expected);
+    }
 
-        // Normal motivation should not change stats significantly
-        // (motivation multiplier is 1.0 for Normal).
-        assert!(base_uma.speed > 0);
-        assert!(base_uma.stamina > 0);
+    /// JSON for [`UmaData`] with every field set, and the style as given.
+    fn uma_json(strategy: &str) -> String {
+        format!(
+            r#"{{
+                "speed": 1501,
+                "stamina": 802,
+                "power": 1203,
+                "guts": 704,
+                "wisdom": 1205,
+                "strategy": "{strategy}",
+                "distanceAptitude": "S",
+                "surfaceAptitude": "B",
+                "strategyAptitude": "C",
+                "motivation": "Bad",
+                "skills": [200642, 201161]
+            }}"#
+        )
+    }
 
-        // Test Great motivation (positive boost).
-        let great_uma = Uma::raw_to_base(raw_uma, Motivation::Great);
-        assert!(great_uma.speed > base_uma.speed);
+    #[test]
+    fn test_uma_data_from_json() {
+        let expected = UmaData {
+            uma: Uma {
+                speed: 1501,
+                stamina: 802,
+                power: 1203,
+                guts: 704,
+                wiz: 1205,
+                style: Style::Pace,
+                distance_aptitude: Aptitude::S,
+                track_aptitude: Aptitude::B,
+                style_aptitude: Aptitude::C,
+            },
+            motivation: Motivation::Bad,
+            skills: vec![200642, 201161],
+        };
+        assert_eq!(UmaData::from_json(&uma_json("Senkou")).unwrap(), expected);
+    }
 
-        // Test Awful motivation (negative impact).
-        let awful_uma = Uma::raw_to_base(raw_uma, Motivation::Awful);
-        assert!(awful_uma.speed < base_uma.speed);
+    #[test]
+    fn test_uma_data_style_names() {
+        let cases = [
+            ("Oonige", Style::Runaway),
+            ("Nige", Style::Front),
+            ("Senkou", Style::Pace),
+            ("Sasi", Style::Late),
+            ("Oikomi", Style::End),
+        ];
+        for (name, expected) in cases {
+            let uma_data = UmaData::from_json(&uma_json(name)).unwrap();
+            assert_eq!(uma_data.uma.style, expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn test_uma_data_from_invalid_json() {
+        // Unknown style.
+        assert!(UmaData::from_json(&uma_json("Front")).is_err());
+        // Missing field.
+        let json = uma_json("Nige").replace(r#""motivation": "Bad","#, "");
+        assert!(UmaData::from_json(&json).is_err());
+        // Malformed.
+        assert!(UmaData::from_json("{").is_err());
+    }
+
+    #[test]
+    fn test_uma_data_from_json_file() {
+        let uma_data = UmaData::from_json_file("uma.json").unwrap();
+        assert_eq!(uma_data.uma.speed, 1500);
+        assert_eq!(uma_data.uma.style, Style::End);
+        assert_eq!(uma_data.motivation, Motivation::Great);
+        assert_eq!(uma_data.skills, vec![200642]);
+    }
+
+    #[test]
+    fn test_uma_data_from_missing_file() {
+        assert!(UmaData::from_json_file("does_not_exist.json").is_err());
     }
 }
