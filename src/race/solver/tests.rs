@@ -1883,6 +1883,63 @@ fn test_pending_effects_apply_to_targets() {
     assert_close!(solver.runners[2].skill_modifiers.current_speed, 0.0);
 }
 
+#[test]
+fn test_activated_effects_on_others_are_queued_for_targets() {
+    // A buff on oneself, a debuff on the runner behind, and a pre-race effect on
+    // everyone (applied before the race, if at all, so never queued).
+    let mut alternative = alternative("always==1", SkillType::TargetSpeed, 0.1);
+    let on_others = |skill_type, target, modifier| SkillEffect {
+        skill_type,
+        target,
+        modifier,
+    };
+    alternative.effects.extend([
+        on_others(
+            SkillType::CurrentSpeed,
+            SkillTarget::BehindSelf { count: 1 },
+            -0.15,
+        ),
+        on_others(SkillType::SpeedUp, SkillTarget::All, -60.0),
+    ]);
+    let debuff = Skill::new("debuff".to_string(), skill_data(vec![alternative]));
+
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![debuff]);
+    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    // The caster is ahead.
+    for runner in &mut solver.runners {
+        runner.position = if runner.available_skills.is_empty() {
+            90.0
+        } else {
+            100.0
+        };
+    }
+    sort_by_position(&mut solver);
+
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+
+    // Only the debuff is queued, with its duration scaled to the 1200m course.
+    let caster = &solver.runners[0];
+    let queued: Vec<_> = caster
+        .pending_effects
+        .iter()
+        .map(|pending| (pending.effect.skill_type, pending.duration))
+        .collect();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].0, SkillType::CurrentSpeed);
+    assert_close!(queued[0].1, 3.0 * 1.2);
+    // The caster only gets her own buff, and only it counts as one.
+    assert_close!(caster.skill_modifiers.target_speed, 0.1);
+    assert_close!(caster.skill_modifiers.current_speed, 0.0);
+    let buffs = &caster.activation_flags.buff_activated;
+    assert_eq!(buffs.iter().collect::<Vec<_>>(), [&SkillType::TargetSpeed]);
+
+    solver.apply_pending_effects();
+    assert!(solver.runners[0].pending_effects.is_empty());
+    assert_close!(solver.runners[1].skill_modifiers.current_speed, -0.15);
+}
+
 /// Run a race with one runner per skill list and return, for each list, whether
 /// the runner activated `skill_id`.
 fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
