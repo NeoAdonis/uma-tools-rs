@@ -688,7 +688,8 @@ fn get_entry_value(var: &EntryVar, state: &InitialState) -> i32 {
         FanCount => state.fan_count as i32,
 
         // Motivation: 1=awful, 2=bad, 3=normal, 4=good, 5=great.
-        Motivation => state.motivation as i32,
+        // N.B. `Motivation` ranges from -2 (awful) to 2 (great).
+        Motivation => state.motivation as i32 + 3,
 
         // Popularity rank.
         Popularity => state.popularity_rank as i32,
