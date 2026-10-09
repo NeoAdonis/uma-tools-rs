@@ -1510,6 +1510,16 @@ fn test_empty_team_panics() {
 
 #[test]
 #[should_panic(expected = "Cannot add more runners than available gates")]
+fn test_runner_exceeding_gates_panics() {
+    // 9 gates.
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    for _ in 0..10 {
+        solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+    }
+}
+
+#[test]
+#[should_panic(expected = "Cannot add more runners than available gates")]
 fn test_team_exceeding_gates_panics() {
     // 9 gates: 8 individual runners leave room for one more, not a team of two.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
@@ -1757,6 +1767,90 @@ fn test_targets_opponents_with_style() {
         ),
         [0, 1]
     );
+}
+
+#[test]
+fn test_targets_oneself_and_nobody_by_uma_id() {
+    let solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1)]);
+    assert_eq!(targets(&solver, 1, SkillTarget::Oneself), [1]);
+    assert_eq!(
+        targets(&solver, 1, SkillTarget::UmaId { value: 1001 }),
+        [] as [usize; 0]
+    );
+}
+
+#[test]
+fn test_targets_runners_ahead_in_field_of_view() {
+    // Runners 40m, 30m, 20m and 10m ahead of runner 4, all in the same lane.
+    let mut solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (Style::Late, team)));
+    for runner in &mut solver.runners {
+        runner.lane.current = 0.0;
+    }
+
+    // Within the base 20m field of view, nearest first; not runners behind.
+    let in_fov = |max| SkillTarget::InFov { max };
+    assert_eq!(targets(&solver, 4, in_fov(5)), [3, 2]);
+    assert_eq!(targets(&solver, 4, in_fov(1)), [3]);
+
+    // Out of the field of view once far enough to the side.
+    solver.runners[3].lane.current = horse_lanes_to_course_widths(5.0);
+    assert_eq!(targets(&solver, 4, in_fov(5)), [2]);
+}
+
+#[test]
+fn test_targets_rushed_runners() {
+    let mut solver = targeting_solver(&[
+        (Style::Runaway, 0),
+        (Style::Pace, 1),
+        (Style::Front, 2),
+        (Style::Late, 3),
+        (Style::Pace, 4),
+        (Style::Front, 5),
+    ]);
+    for i in [0, 2, 4, 5] {
+        set_rushed(&mut solver, i);
+    }
+
+    // Nearest first.
+    let ahead = |max| SkillTarget::RushedAhead { max };
+    assert_eq!(targets(&solver, 3, ahead(5)), [2, 0]);
+    assert_eq!(targets(&solver, 3, ahead(1)), [2]);
+    let behind = |max| SkillTarget::RushedBehind { max };
+    assert_eq!(targets(&solver, 3, behind(5)), [4, 5]);
+    assert_eq!(targets(&solver, 3, behind(1)), [4]);
+
+    // Runaways count as Front runners; runner 1 isn't rushed.
+    let with_style = |style| SkillTarget::RushedStrategy { style };
+    assert_eq!(targets(&solver, 3, with_style(Style::Front)), [0, 2, 5]);
+    assert_eq!(targets(&solver, 3, with_style(Style::Pace)), [4]);
+}
+
+#[test]
+fn test_scoreboard_time() {
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], &seeded_config(0));
+    let min = solver.state.course.finish_time_min;
+    let max = solver.state.course.finish_time_max;
+
+    // Not finished.
+    assert_eq!(solver.scoreboard_time(), None);
+
+    // Within the course range: scaled as is.
+    let finish_time = (min + max) / 2.0 / FINISH_TIME_SCALE;
+    solver.state.finish_time = Some(finish_time);
+    assert_close!(
+        solver.scoreboard_time().unwrap(),
+        finish_time * FINISH_TIME_SCALE
+    );
+
+    // Out of range: clamped, plus a random offset of up to 1 second.
+    for (finish_time, bound) in [(min / FINISH_TIME_SCALE - 5.0, min), (max, max)] {
+        solver.state.finish_time = Some(finish_time);
+        let time = solver.scoreboard_time().unwrap();
+        assert!(
+            (bound..bound + 1.0).contains(&time),
+            "finish time {finish_time}: expected {bound} plus up to 1s, got {time}"
+        );
+    }
 }
 
 #[test]
