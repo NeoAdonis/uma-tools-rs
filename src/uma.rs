@@ -166,7 +166,7 @@ pub struct UmaData {
     pub uma: Uma,
     /// Motivation, mood or condition of the Uma. Affects base stat multipliers.
     pub motivation: Motivation,
-    /// List of [`skill`](skill::Skill)s by ID that the Uma has.
+    /// List of [`skill`](crate::skill::Skill)s by ID that the Uma has.
     pub skills: Vec<u32>,
 }
 

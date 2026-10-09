@@ -86,8 +86,7 @@ use crate::units::*;
 ///
 /// Short-circuit evaluation is used: it stops at the first false comparison.
 ///
-/// For example, [`Runner::try_activate_skill`] uses it to evaluate guards as
-/// follows:
+/// For example, it's used inside [`Runner`] to evaluate guards as follows:
 ///
 /// ```rust,ignore
 /// let logic = &self.trigger_scheduler.skill_logics[trigger_index];
@@ -266,7 +265,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
 }
 
 /// Get current integer value for any variable type.
-fn get_variable_value(
+pub fn get_variable_value(
     var: &VarType,
     state: &RaceState,
     runner: &Runner,
@@ -308,7 +307,7 @@ fn get_variable_value(
 }
 
 /// Get current integer value for any variable type in out-of-gate context.
-fn get_variable_value_out_of_gate(
+pub fn get_variable_value_out_of_gate(
     var: &VarType,
     state: &RaceState,
     builder: &UnreadyRunner,
