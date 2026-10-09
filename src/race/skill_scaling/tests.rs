@@ -174,3 +174,57 @@ fn test_fan_count_multiplier() {
         );
     }
 }
+
+#[test]
+fn test_distance_from_first_duration_multiplier() {
+    assert_close!(distance_from_first_duration_multiplier(0.0), 0.8);
+    assert_close!(distance_from_first_duration_multiplier(12.5), 1.0);
+    assert_close!(distance_from_first_duration_multiplier(25.0), 1.2);
+    // Capped at 50m.
+    assert_close!(distance_from_first_duration_multiplier(50.0), 1.6);
+    assert_close!(distance_from_first_duration_multiplier(100.0), 1.6);
+}
+
+#[test]
+fn test_remaining_hp_duration_multipliers() {
+    let cases = [
+        (0.0, 1.0),
+        (1999.0, 1.0),
+        (2000.0, 1.5),
+        (2400.0, 2.0),
+        (2600.0, 2.2),
+        (2800.0, 2.5),
+        (3000.0, 3.0),
+        (3200.0, 3.5),
+        (3499.0, 3.5),
+        (3500.0, 4.0),
+    ];
+    for (hp, expected) in cases {
+        assert_eq!(remaining_hp_duration_multiplier_1(hp), expected, "HP {hp}");
+    }
+
+    let cases = [
+        (0.0, 1.0),
+        (1499.0, 1.0),
+        (1500.0, 1.5),
+        (1800.0, 2.0),
+        (2000.0, 2.5),
+        (2099.0, 2.5),
+        (2100.0, 3.0),
+    ];
+    for (hp, expected) in cases {
+        assert_eq!(remaining_hp_duration_multiplier_2(hp), expected, "HP {hp}");
+    }
+}
+
+#[test]
+fn test_uphill_duration_bonus() {
+    let cases = [(0, 0.0), (1, 0.5), (3, 1.5), (4, 2.0), (6, 2.0)];
+    for (uphills, expected) in cases {
+        assert_eq!(
+            uphill_duration_bonus(uphills),
+            expected,
+            "uphills {uphills}"
+        );
+    }
+}

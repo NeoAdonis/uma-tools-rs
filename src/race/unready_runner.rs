@@ -509,6 +509,7 @@ impl UnreadyRunner {
             positioning_strategy: PositioningStrategy::Normal,
             slope_acceleration: None,
             downhill_time: 0.0,
+            uphills_climbed: 0,
             last_spurt: None,
             stamina_limit_break_base: stamina_limit_break_base_buff(
                 self.adjusted.stamina,

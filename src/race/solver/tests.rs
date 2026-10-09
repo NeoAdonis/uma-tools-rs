@@ -1,6 +1,7 @@
 use super::*;
 use crate::configuration::Roll;
 use crate::course::LaneType;
+use crate::course::geometry::Slope;
 use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::{
@@ -3023,4 +3024,150 @@ fn test_largest_lead_before_late_race_is_tracked() {
     // The other runner is ahead now; move the scaled skill's owner first.
     solver.runners.swap(0, 1);
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.4);
+}
+
+/// Skill with a 3-second target speed effect whose duration scales as
+/// `time_usage`. It never activates on its own.
+fn timed_skill(id: &str, time_usage: TimeUsage) -> Skill {
+    let alternative = SkillAlternative {
+        time_usage,
+        ..alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25)
+    };
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
+}
+
+/// Ready race on a 1200m course with a single runner having `skills`.
+fn timed_skill_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
+    ready_solver(10101, uma(Style::Late), skills, &seeded_config(0))
+}
+
+/// Remaining duration of each of the first runner's active timed effects.
+fn remaining_durations(solver: &RaceSolver<Runner>) -> Vec<f64> {
+    solver.runners[0]
+        .active_timed_effects
+        .iter()
+        .map(|timed| timed.expires_at - solver.state.elapsed_time)
+        .collect()
+}
+
+#[test]
+fn test_duration_scaling_by_runner_situation() {
+    // Base duration of 3 seconds, scaled to the 1200m course.
+    let base = 3.0 * 1.2;
+    /// Changes the runner's situation before activating the skill.
+    type Setup = fn(&mut Runner);
+    let cases: [(TimeUsage, Setup, f64); 6] = [
+        (TimeUsage::Direct, |_| {}, 1.0),
+        (
+            TimeUsage::MultiplyDistanceDiffTop,
+            |runner| runner.position_diff.from_first = 25.0,
+            1.2,
+        ),
+        (
+            TimeUsage::MultiplyRemainHp1,
+            |runner| runner.hp.current = 2500.0,
+            2.0,
+        ),
+        (
+            TimeUsage::MultiplyRemainHp2,
+            |runner| runner.hp.current = 2500.0,
+            3.0,
+        ),
+        (
+            TimeUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+            |runner| runner.blocked.max_mid_side_time = 4.5,
+            3.0,
+        ),
+        // Only extended later, by overtaking.
+        (TimeUsage::IncrementOrderUp, |_| {}, 1.0),
+    ];
+    for (time_usage, setup, multiplier) in cases {
+        let mut solver = timed_skill_solver(vec![timed_skill("timed", time_usage)]);
+        setup(&mut solver.runners[0]);
+        solver.runners[0].activate_skill(0, 0, &solver.state);
+        let durations = remaining_durations(&solver);
+        assert_eq!(durations.len(), 1, "{time_usage:?}");
+        assert_close!(durations[0], base * multiplier, "{time_usage:?}");
+    }
+}
+
+#[test]
+fn test_overtakes_extend_effects() {
+    // Two effects extended by overtaking, and another skill's effect that isn't.
+    let mut alternative =
+        timed_skill("extended", TimeUsage::IncrementOrderUp).alternatives[0].clone();
+    alternative.effects.push(SkillEffect {
+        skill_type: SkillType::Acceleration,
+        ..alternative.effects[0].clone()
+    });
+    let extended = Skill::new("extended".to_string(), skill_data(vec![alternative]));
+    let direct = timed_skill("direct", TimeUsage::Direct);
+    let mut solver = timed_skill_solver(vec![extended, direct]);
+    let course = solver.state.course.clone();
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+    solver.runners[0].activate_skill(1, 0, &solver.state);
+    let change_order = |solver: &mut RaceSolver<Runner>, from, to| {
+        let runner = &mut solver.runners[0];
+        runner.order.order = from;
+        runner.update_order(to, &course);
+    };
+
+    // Each extension adds 1 second, scaled to the 1200m course.
+    let base = 3.0 * 1.2;
+    // Two overtakes at once.
+    change_order(&mut solver, 5, 3);
+    let durations = remaining_durations(&solver);
+    assert_close!(durations[0], base + 2.0 * 1.2);
+    assert_close!(durations[1], base + 2.0 * 1.2);
+    assert_close!(durations[2], base);
+    // Being overtaken doesn't extend them.
+    change_order(&mut solver, 3, 4);
+    assert_close!(remaining_durations(&solver)[0], base + 2.0 * 1.2);
+    // Up to three extensions in total.
+    change_order(&mut solver, 4, 1);
+    change_order(&mut solver, 2, 1);
+    let durations = remaining_durations(&solver);
+    assert_close!(durations[0], base + 3.0 * 1.2);
+    assert_close!(durations[1], base + 3.0 * 1.2);
+    assert_close!(durations[2], base);
+}
+
+#[test]
+fn test_uphills_climbed_are_counted() {
+    let mut solver = timed_skill_solver(vec![]);
+    let slopes = [
+        Slope::new(100.0, 100.0, 2.0),
+        Slope::new(300.0, 100.0, -2.0),
+        // Right after the previous one.
+        Slope::new(400.0, 100.0, 1.5),
+    ];
+    let rng = Rc::clone(&solver.state.rng);
+    let runner = &mut solver.runners[0];
+    let mut climbed_at = |position| {
+        runner.position = position;
+        runner.update_slope(&slopes, DELTA_TIME, &mut *rng.borrow_mut());
+        runner.uphills_climbed
+    };
+
+    // Only counted once the end of an uphill is reached.
+    assert_eq!(climbed_at(150.0), 0);
+    assert_eq!(climbed_at(200.0), 1);
+    // Downhills don't count.
+    assert_eq!(climbed_at(350.0), 1);
+    assert_eq!(climbed_at(450.0), 1);
+    assert_eq!(climbed_at(500.0), 2);
+}
+
+#[test]
+fn test_uphills_climbed_extend_duration() {
+    // Base duration of 3 seconds plus 0.5 seconds per uphill (up to 4), scaled to
+    // the 1200m course.
+    for (uphills, base_duration) in [(0, 3.0), (2, 4.0), (4, 5.0), (6, 5.0)] {
+        let mut solver =
+            timed_skill_solver(vec![timed_skill("timed", TimeUsage::IncrementUphillCount)]);
+        solver.runners[0].uphills_climbed = uphills;
+        solver.runners[0].activate_skill(0, 0, &solver.state);
+        let durations = remaining_durations(&solver);
+        assert_close!(durations[0], base_duration * 1.2, "{uphills} uphills");
+    }
 }

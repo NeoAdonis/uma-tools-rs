@@ -53,6 +53,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                         modifier: 0.4,
                         value_usage: ValueUsage::Direct,
                     }],
+                    time_usage: TimeUsage::Direct,
                 })
                 .collect(),
             popularity: None,

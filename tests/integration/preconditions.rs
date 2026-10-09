@@ -129,6 +129,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         modifier: 0.4,
                         value_usage: ValueUsage::Direct,
                     }],
+                    time_usage: TimeUsage::Direct,
                 },
                 // Another precondition (accumulatetime>=10)
                 SkillAlternative {
@@ -142,6 +143,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         modifier: 0.3,
                         value_usage: ValueUsage::Direct,
                     }],
+                    time_usage: TimeUsage::Direct,
                 },
                 // No precondition
                 SkillAlternative {
@@ -155,6 +157,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         modifier: 0.5,
                         value_usage: ValueUsage::Direct,
                     }],
+                    time_usage: TimeUsage::Direct,
                 },
             ],
             popularity: None,
@@ -222,6 +225,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
                     modifier: 0.035,
                     value_usage: ValueUsage::Direct,
                 }],
+                time_usage: TimeUsage::Direct,
             }],
             popularity: None,
             wisdom_check: false,

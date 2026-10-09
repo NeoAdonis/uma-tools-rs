@@ -123,6 +123,7 @@ pub(crate) fn alternative(
             modifier,
             value_usage: ValueUsage::Direct,
         }],
+        time_usage: TimeUsage::Direct,
     }
 }
 

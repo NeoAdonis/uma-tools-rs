@@ -19,15 +19,15 @@ use crate::race::modifiers::*;
 use crate::race::popularity::JudgeScores;
 use crate::race::proximity;
 use crate::race::secure_lead;
+use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
 use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
-use crate::race::value_scaling;
 use crate::skill::*;
 use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{
-    ActiveTimedEffect, LogicAction, PendingEffect, SkillActivationRecord,
+    ActiveTimedEffect, LogicAction, OvertakeExtension, PendingEffect, SkillActivationRecord,
 };
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::uma::*;
@@ -495,6 +495,8 @@ pub struct Runner {
     ///
     /// It's used to determine chance of downhill acceleration each second.
     pub downhill_time: f64,
+    /// Number of uphills climbed to the end.
+    pub uphills_climbed: u8,
     /// Current section index (0-23).
     pub section: u8,
     /// Current race phase.
@@ -2049,13 +2051,12 @@ impl Runner {
     pub fn update_slope(&mut self, slopes: &[Slope], delta_time: f64, rng: &mut impl Rng) {
         // Exit first, so that a slope right after another one is entered in the same
         // frame.
-        if self
-            .slope_manager
-            .check_exit(self.position, slopes)
-            .is_some()
-        {
+        if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
             // Exiting slope - stop any slope-based acceleration/deceleration.
             self.stop_slope_acceleration();
+            if slopes[slope_idx].is_uphill() {
+                self.uphills_climbed += 1;
+            }
         }
 
         if let Some(slope_idx) = self.slope_manager.check_entry(self.position, slopes) {
@@ -2115,6 +2116,7 @@ impl Runner {
                     self.order.overtakes_in_late_corners += overtakes;
                 }
             }
+            self.extend_effects_on_overtake(overtakes);
             if course
                 .corners
                 .last()
@@ -2122,6 +2124,17 @@ impl Runner {
             {
                 self.order.overtakes_since_last_corner += overtakes;
             }
+        }
+    }
+
+    /// Extend the active effects that can still be extended by overtaking, once
+    /// per overtake.
+    fn extend_effects_on_overtake(&mut self, overtakes: u16) {
+        for timed in &mut self.active_timed_effects {
+            let extension = &mut timed.overtake_extension;
+            let count = overtakes.min(extension.remaining as u16) as u8;
+            timed.expires_at += extension.duration * count as f64;
+            extension.remaining -= count;
         }
     }
 
@@ -2491,10 +2504,21 @@ impl Runner {
         let alternative =
             self.available_skills[skill_index].alternatives[alternative_index].clone();
 
-        // Scale with distance and effects. Effects lasting until the end of the race
-        // have an infinite base duration, which stays infinite.
-        let scaled_duration = alternative.base_duration * state.course.distance as f64 / 1000.0
-            * self.skill_modifiers.duration_scaling;
+        // Scale with the runner's situation, distance and effects. Effects lasting
+        // until the end of the race have an infinite base duration, which stays
+        // infinite.
+        let duration_factor =
+            state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling;
+        let scaled_duration = self.situational_base_duration(&alternative) * duration_factor;
+        // Extensions from overtaking scale like the base duration.
+        let overtake_extension = if alternative.time_usage == TimeUsage::IncrementOrderUp {
+            OvertakeExtension {
+                duration: skill_scaling::OVERTAKE_EXTENSION * duration_factor,
+                remaining: skill_scaling::MAX_OVERTAKE_EXTENSIONS,
+            }
+        } else {
+            OvertakeExtension::default()
+        };
 
         // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward).
         let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
@@ -2518,7 +2542,13 @@ impl Runner {
                     ..effect.clone()
                 };
                 if scaled.target == SkillTarget::Oneself {
-                    self.apply_skill_effect(&scaled, scaled_duration, wiz_bonus, state);
+                    self.apply_skill_effect(
+                        &scaled,
+                        scaled_duration,
+                        overtake_extension,
+                        wiz_bonus,
+                        state,
+                    );
                 } else {
                     self.pending_effects.push(PendingEffect {
                         effect: scaled,
@@ -2650,6 +2680,34 @@ impl Runner {
         }
     }
 
+    /// Base duration of a skill alternative scaled with the runner's situation
+    /// (see [`TimeUsage`]), before distance scaling.
+    fn situational_base_duration(&self, alternative: &SkillAlternative) -> f64 {
+        use TimeUsage::*;
+        let base = alternative.base_duration;
+        match alternative.time_usage {
+            // Overtakes extend the effects later instead.
+            Direct | IncrementOrderUp => base,
+            MultiplyDistanceDiffTop => {
+                let distance = self.position_diff.from_first;
+                base * skill_scaling::distance_from_first_duration_multiplier(distance)
+            }
+            MultiplyRemainHp1 => {
+                base * skill_scaling::remaining_hp_duration_multiplier_1(self.hp.current)
+            }
+            MultiplyRemainHp2 => {
+                base * skill_scaling::remaining_hp_duration_multiplier_2(self.hp.current)
+            }
+            MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
+                let time = self.blocked.max_mid_side_time;
+                base * skill_scaling::mid_side_blocked_time_multiplier(time)
+            }
+            IncrementUphillCount => {
+                base + skill_scaling::uphill_duration_bonus(self.uphills_climbed)
+            }
+        }
+    }
+
     /// Value of an effect's modifier scaled with the runner's situation (see
     /// [`ValueUsage`]).
     fn scaled_modifier(&self, effect: &SkillEffect) -> f64 {
@@ -2658,22 +2716,22 @@ impl Runner {
         match effect.value_usage {
             Direct => modifier,
             MultiplySkillNum => {
-                modifier * value_scaling::skill_count_multiplier(self.initial_state.skill_count)
+                modifier * skill_scaling::skill_count_multiplier(self.initial_state.skill_count)
             }
-            Aoharu => modifier * value_scaling::AOHARU_MULTIPLIER,
+            Aoharu => modifier * skill_scaling::AOHARU_MULTIPLIER,
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {
                 let roll = self.rng.borrow_mut().random();
-                modifier * value_scaling::random_multiplier(roll)
+                modifier * skill_scaling::random_multiplier(roll)
             }
-            Climax => modifier * value_scaling::CLIMAX_MULTIPLIER,
+            Climax => modifier * skill_scaling::CLIMAX_MULTIPLIER,
             MultiplyMaximumRawStatus => {
                 let raw = &self.raw;
                 let max_stat = [raw.speed, raw.stamina, raw.power, raw.guts, raw.wiz]
                     .into_iter()
                     .max()
                     .unwrap();
-                modifier * value_scaling::max_raw_stat_multiplier(max_stat)
+                modifier * skill_scaling::max_raw_stat_multiplier(max_stat)
             }
             MultiplyActivateSpecificTagSkillCount => {
                 let green_count = self
@@ -2683,33 +2741,33 @@ impl Runner {
                         skill.is_green() && self.activated_skill_ids.contains(&skill.id)
                     })
                     .count();
-                modifier * value_scaling::green_skill_count_multiplier(green_count)
+                modifier * skill_scaling::green_skill_count_multiplier(green_count)
             }
             AddDistanceDiffTop => {
-                modifier + value_scaling::distance_from_first_bonus(self.position_diff.from_first)
+                modifier + skill_scaling::distance_from_first_bonus(self.position_diff.from_first)
             }
             MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
                 let time = self.blocked.max_mid_side_time;
-                modifier * value_scaling::mid_side_blocked_time_multiplier(time)
+                modifier * skill_scaling::mid_side_blocked_time_multiplier(time)
             }
-            MultiplySpeed1 => modifier * value_scaling::speed_multiplier_1(self.adjusted.speed),
-            MultiplySpeed2 => modifier * value_scaling::speed_multiplier_2(self.adjusted.speed),
-            MultiplyArcGlobalPotentialLevel => modifier * value_scaling::L_ARC_MULTIPLIER,
+            MultiplySpeed1 => modifier * skill_scaling::speed_multiplier_1(self.adjusted.speed),
+            MultiplySpeed2 => modifier * skill_scaling::speed_multiplier_2(self.adjusted.speed),
+            MultiplyArcGlobalPotentialLevel => modifier * skill_scaling::L_ARC_MULTIPLIER,
             MultiplyTopLeadAmount => {
-                modifier * value_scaling::lead_multiplier(self.position_diff.max_lead)
+                modifier * skill_scaling::lead_multiplier(self.position_diff.max_lead)
             }
             CornerOvertakeCount => {
                 let overtakes = self.order.overtakes_in_late_corners;
-                modifier * value_scaling::late_corner_overtake_multiplier(overtakes)
+                modifier * skill_scaling::late_corner_overtake_multiplier(overtakes)
             }
             FanCount => {
-                modifier * value_scaling::fan_count_multiplier(self.initial_state.fan_count)
+                modifier * skill_scaling::fan_count_multiplier(self.initial_state.fan_count)
             }
-            UafWinCount => modifier * value_scaling::UAF_WIN_MULTIPLIER,
-            CookingPoints => modifier * value_scaling::COOKING_MULTIPLIER,
-            ResearchLevel => modifier * value_scaling::RESEARCH_MULTIPLIER,
-            FanLove => modifier * value_scaling::FAN_LOVE_MULTIPLIER,
-            DevelopmentPoints => modifier * value_scaling::DEVELOPMENT_MULTIPLIER,
+            UafWinCount => modifier * skill_scaling::UAF_WIN_MULTIPLIER,
+            CookingPoints => modifier * skill_scaling::COOKING_MULTIPLIER,
+            ResearchLevel => modifier * skill_scaling::RESEARCH_MULTIPLIER,
+            FanLove => modifier * skill_scaling::FAN_LOVE_MULTIPLIER,
+            DevelopmentPoints => modifier * skill_scaling::DEVELOPMENT_MULTIPLIER,
         }
     }
 
@@ -2723,6 +2781,7 @@ impl Runner {
         &mut self,
         effect: &SkillEffect,
         scaled_duration: f64,
+        overtake_extension: OvertakeExtension,
         wiz_bonus: f64,
         state: &RaceState,
     ) {
@@ -2745,6 +2804,7 @@ impl Runner {
                 effect: effect.clone(),
                 value: effect.modifier * (1.0 + bonus),
                 expires_at,
+                overtake_extension,
             });
         }
         // Recovery (HP restoration, or HP loss if negative), as a fraction of max HP.
@@ -2849,7 +2909,14 @@ impl Runner {
 
     /// Apply a skill effect casted by another runner.
     pub fn receive_skill_effect(&mut self, pending: &PendingEffect, state: &RaceState) {
-        self.apply_skill_effect(&pending.effect, pending.duration, pending.wiz_bonus, state);
+        // Overtakes only extend the caster's own effects.
+        self.apply_skill_effect(
+            &pending.effect,
+            pending.duration,
+            OvertakeExtension::default(),
+            pending.wiz_bonus,
+            state,
+        );
         self.recalculate_skill_modifiers();
     }
 

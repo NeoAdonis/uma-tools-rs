@@ -3,6 +3,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::race::solver::RaceSolver;
 use crate::skill::{SkillEffect, SkillTarget, SkillType, ValueUsage};
 use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
+use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
 /// Build a solver with a single runner on a 2000m course.
@@ -187,13 +188,25 @@ fn test_recovery_recalculates_only_from_late_phase() {
     let mut solver = solver(1000, GameVersion::LATEST, 0);
     move_to_section(&mut solver, 4);
     let runner = &mut solver.runners[0];
-    runner.apply_skill_effect(&recovery(0.05), 0.0, 0.0, &solver.state);
+    runner.apply_skill_effect(
+        &recovery(0.05),
+        0.0,
+        OvertakeExtension::default(),
+        0.0,
+        &solver.state,
+    );
     assert!(runner.last_spurt.is_none());
 
     move_to_section(&mut solver, 17);
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
-    runner.apply_skill_effect(&recovery(0.05), 0.0, 0.0, &solver.state);
+    runner.apply_skill_effect(
+        &recovery(0.05),
+        0.0,
+        OvertakeExtension::default(),
+        0.0,
+        &solver.state,
+    );
     assert!(runner.last_spurt.as_ref().unwrap().max_speed > 0.0);
 }
 
@@ -203,7 +216,13 @@ fn test_recovery_does_not_recalculate_before_first_anniversary() {
     move_to_section(&mut solver, 17);
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
-    runner.apply_skill_effect(&recovery(0.05), 0.0, 0.0, &solver.state);
+    runner.apply_skill_effect(
+        &recovery(0.05),
+        0.0,
+        OvertakeExtension::default(),
+        0.0,
+        &solver.state,
+    );
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
 }
 
@@ -217,7 +236,13 @@ fn test_hp_loss_is_not_a_heal() {
     let hp_before = runner.hp.current;
 
     // 2% of maximum HP.
-    runner.apply_skill_effect(&recovery(-0.02), 0.0, 0.0, &solver.state);
+    runner.apply_skill_effect(
+        &recovery(-0.02),
+        0.0,
+        OvertakeExtension::default(),
+        0.0,
+        &solver.state,
+    );
     assert_close!(runner.hp.current, hp_before - runner.hp.maximum * 0.02);
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
     assert_eq!(runner.trigger_scheduler.activation_counts.heal, 0);

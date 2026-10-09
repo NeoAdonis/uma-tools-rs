@@ -247,7 +247,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 }
 
 /// Represents how the value of a skill effect scales with the runner's situation
-/// when the skill activates (see [`crate::race::value_scaling`]).
+/// when the skill activates (see [`crate::race::skill_scaling`]).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "u8")]
 pub enum ValueUsage {
@@ -380,6 +380,49 @@ fn default_cooldown() -> f64 {
     DEFAULT_COOLDOWN
 }
 
+/// Represents how the duration of a skill scales with the runner's situation
+/// when the skill activates (see [`crate::race::skill_scaling`]).
+///
+/// The scaling is applied on top of the course distance scaling.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u8")]
+pub enum TimeUsage {
+    /// No scaling (1).
+    Direct,
+    /// Scales with the distance behind the first place (2).
+    MultiplyDistanceDiffTop,
+    /// Scales with the remaining HP, first variant (3).
+    MultiplyRemainHp1,
+    /// Extended each time the runner overtakes while the effects are active, up
+    /// to a few times (4).
+    IncrementOrderUp,
+    /// Scales with the longest time the runner was side-blocked during the Mid
+    /// race (5).
+    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+    /// Scales with the remaining HP, second variant (7).
+    MultiplyRemainHp2,
+    /// Extended for each uphill climbed before activation, up to a few times (8).
+    IncrementUphillCount,
+}
+
+impl TryFrom<u8> for TimeUsage {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use TimeUsage::*;
+        Ok(match value {
+            1 => Direct,
+            2 => MultiplyDistanceDiffTop,
+            3 => MultiplyRemainHp1,
+            4 => IncrementOrderUp,
+            5 => MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+            7 => MultiplyRemainHp2,
+            8 => IncrementUphillCount,
+            _ => return Err(format!("unknown time usage {value}")),
+        })
+    }
+}
+
 /// Represents an alternative version of a skill, with its own conditions and
 /// effects.
 #[derive(Clone, Debug, Deserialize)]
@@ -401,6 +444,8 @@ pub struct SkillAlternative {
     /// race), and converted when deserializing.
     #[serde(deserialize_with = "deserialize_base_duration")]
     pub base_duration: f64,
+    /// How the duration scales when the skill activates.
+    pub time_usage: TimeUsage,
     /// Condition that determines when this alternative can be triggered.
     #[serde(deserialize_with = "deserialize_condition")]
     pub condition: Condition,
@@ -687,7 +732,7 @@ mod tests {
             r#"{{"baseDuration": 30000, "condition": "{condition}",
                 "effects": [{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 3500,
                     "valueUsage": 1}}],
-                "precondition": "{precondition}"}}"#
+                "precondition": "{precondition}", "timeUsage": 1}}"#
         );
         serde_json::from_str(&json)
     }
@@ -701,7 +746,7 @@ mod tests {
         assert_eq!(parsed.base_cooldown, DEFAULT_COOLDOWN);
 
         let json = r#"{"baseCooldown": 300000, "baseDuration": -1, "condition": "always==1",
-            "effects": [], "precondition": ""}"#;
+            "effects": [], "precondition": "", "timeUsage": 1}"#;
         let parsed: SkillAlternative = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.base_cooldown, 30.0);
         // Until the end of the race.
@@ -855,6 +900,34 @@ mod tests {
         // Unknown IDs.
         for id in [0, 15, 21, 29, 32] {
             assert!(value_usage(id).is_err(), "ID {id}");
+        }
+    }
+
+    /// Deserialize a time usage from its ID.
+    fn time_usage(id: u8) -> serde_json::Result<TimeUsage> {
+        serde_json::from_str(&id.to_string())
+    }
+
+    #[test]
+    fn test_time_usage_ids() {
+        let cases = [
+            (1, TimeUsage::Direct),
+            (2, TimeUsage::MultiplyDistanceDiffTop),
+            (3, TimeUsage::MultiplyRemainHp1),
+            (4, TimeUsage::IncrementOrderUp),
+            (
+                5,
+                TimeUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+            ),
+            (7, TimeUsage::MultiplyRemainHp2),
+            (8, TimeUsage::IncrementUphillCount),
+        ];
+        for (id, expected) in cases {
+            assert_eq!(time_usage(id).unwrap(), expected, "ID {id}");
+        }
+        // Unknown IDs.
+        for id in [0, 6, 9] {
+            assert!(time_usage(id).is_err(), "ID {id}");
         }
     }
 

@@ -27,6 +27,7 @@ fn skill(condition: &str, base_cooldown: f64) -> Skill {
                     value_usage: ValueUsage::Direct,
                 }],
                 precondition: None,
+                time_usage: TimeUsage::Direct,
             }],
             popularity: None,
             wisdom_check: false,

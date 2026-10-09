@@ -1,7 +1,7 @@
 use super::*;
 use crate::skill::{
     DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData, SkillEffect,
-    SkillRarity, SkillTarget, SkillType, ValueUsage,
+    SkillRarity, SkillTarget, SkillType, TimeUsage, ValueUsage,
 };
 use crate::test_utils::assert_close;
 
@@ -26,6 +26,7 @@ fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, f64)
                         value_usage: ValueUsage::Direct,
                     })
                     .collect(),
+                time_usage: TimeUsage::Direct,
             }],
             popularity: None,
             wisdom_check: true,
@@ -164,6 +165,7 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
                     condition: condition.parse().unwrap(),
                     precondition: None,
                     effects: vec![],
+                    time_usage: TimeUsage::Direct,
                 })
                 .collect(),
             popularity: Some(vec![Entry {

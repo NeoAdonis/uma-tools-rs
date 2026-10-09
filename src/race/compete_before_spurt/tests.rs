@@ -4,6 +4,7 @@ use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
 use crate::skill::{SkillEffect, SkillTarget, SkillType, ValueUsage};
 use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
+use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
 #[test]
@@ -197,7 +198,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
         modifier: 1.0,
         value_usage: ValueUsage::Direct,
     };
-    runner.apply_skill_effect(&recovery, 0.0, 0.0, &state);
+    runner.apply_skill_effect(&recovery, 0.0, OvertakeExtension::default(), 0.0, &state);
     assert!(!runner.is_stamina_keep);
     state.elapsed_time = elapsed + 2.0 * CHECK_INTERVAL;
     runner.try_compete_before_spurt(true, true, &state);

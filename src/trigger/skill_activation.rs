@@ -152,6 +152,22 @@ pub struct ActiveTimedEffect {
     pub value: f64,
     /// Race time in seconds when effect expires.
     pub expires_at: f64,
+    /// Extension of the effect when overtaking while it's active.
+    pub overtake_extension: OvertakeExtension,
+}
+
+/// Extension of a timed effect each time the runner overtakes while it's active
+/// (see [`TimeUsage::IncrementOrderUp`]).
+///
+/// The default doesn't extend the effect.
+///
+/// [`TimeUsage::IncrementOrderUp`]: crate::skill::TimeUsage::IncrementOrderUp
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OvertakeExtension {
+    /// Duration in seconds added for each overtake, already scaled.
+    pub duration: f64,
+    /// Number of extensions left.
+    pub remaining: u8,
 }
 
 /// A skill effect that targets other runners, waiting to be applied to them.

@@ -1,5 +1,6 @@
-//! Formulas that scale a skill effect's value with the runner's situation (see
-//! [`ValueUsage`](crate::skill::ValueUsage)).
+//! Formulas that scale a skill effect's value or a skill's duration with the
+//! runner's situation (see [`ValueUsage`](crate::skill::ValueUsage) and
+//! [`TimeUsage`](crate::skill::TimeUsage)).
 
 /// Multiplier for Unity Cup (アオハル杯) skills.
 ///
@@ -107,6 +108,8 @@ pub fn distance_from_first_bonus(distance: f64) -> f64 {
 
 /// Multiplier from the longest time (in seconds) the runner was side-blocked
 /// during the Mid race.
+///
+/// Used for both values and durations.
 pub fn mid_side_blocked_time_multiplier(time: f64) -> f64 {
     if time < 2.0 {
         1.0
@@ -172,6 +175,65 @@ pub fn lead_multiplier(lead: f64) -> f64 {
         1.8
     }
 }
+
+/// Duration multiplier from the distance (in meters) behind the first place, up
+/// to 1.6x.
+pub fn distance_from_first_duration_multiplier(distance: f64) -> f64 {
+    (0.8 + distance / 62.5).min(1.6)
+}
+
+/// Duration multiplier from the runner's remaining HP, first variant.
+pub fn remaining_hp_duration_multiplier_1(hp: f64) -> f64 {
+    if hp < 2000.0 {
+        1.0
+    } else if hp < 2400.0 {
+        1.5
+    } else if hp < 2600.0 {
+        2.0
+    } else if hp < 2800.0 {
+        2.2
+    } else if hp < 3000.0 {
+        2.5
+    } else if hp < 3200.0 {
+        3.0
+    } else if hp < 3500.0 {
+        3.5
+    } else {
+        4.0
+    }
+}
+
+/// Duration multiplier from the runner's remaining HP, second variant.
+pub fn remaining_hp_duration_multiplier_2(hp: f64) -> f64 {
+    if hp < 1500.0 {
+        1.0
+    } else if hp < 1800.0 {
+        1.5
+    } else if hp < 2000.0 {
+        2.0
+    } else if hp < 2100.0 {
+        2.5
+    } else {
+        3.0
+    }
+}
+
+/// Base duration in seconds added for each uphill climbed before the skill
+/// activates, up to [`MAX_UPHILL_EXTENSIONS`] times.
+pub const UPHILL_EXTENSION: f64 = 0.5;
+/// Maximum number of uphills that extend a skill's base duration.
+pub const MAX_UPHILL_EXTENSIONS: u8 = 4;
+
+/// Base duration in seconds added for the number of uphills climbed.
+pub fn uphill_duration_bonus(uphills: u8) -> f64 {
+    UPHILL_EXTENSION * uphills.min(MAX_UPHILL_EXTENSIONS) as f64
+}
+
+/// Base duration in seconds added to a skill's effects for each overtake while
+/// they're active. It scales with the course distance like base durations.
+pub const OVERTAKE_EXTENSION: f64 = 1.0;
+/// Maximum number of times a skill's effects are extended by overtaking.
+pub const MAX_OVERTAKE_EXTENSIONS: u8 = 3;
 
 #[cfg(test)]
 mod tests;
