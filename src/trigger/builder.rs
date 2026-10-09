@@ -83,7 +83,7 @@ pub fn build_trigger_scheduler(
     course: &Course,
     rng: &mut impl Rng,
 ) -> TriggerScheduler {
-    let mut scheduler = TriggerScheduler::new();
+    let mut scheduler = TriggerScheduler::default();
 
     for (skill_idx, skill) in skills.iter().enumerate() {
         if skill.should_activate_out_of_gate() {

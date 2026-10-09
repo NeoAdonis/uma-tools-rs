@@ -5,6 +5,7 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 ///
 /// This scheduler stores `SkillActivationLogic` which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
+#[derive(Default)]
 pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
 
@@ -42,24 +43,6 @@ pub struct TriggerScheduler {
 }
 
 impl TriggerScheduler {
-    pub fn new() -> Self {
-        TriggerScheduler {
-            skill_logics: Vec::new(),
-            precondition_satisfied: Vec::new(),
-            precondition_windows: WindowQueue::default(),
-            position_windows: WindowQueue::default(),
-            time_windows: WindowQueue::default(),
-            hp_windows: Vec::new(),
-            last_straight_triggers: Vec::new(),
-            race_start_triggers: Vec::new(),
-            full_throttle_triggers: Vec::new(),
-            any_activation_triggers: Vec::new(),
-            buff_activation_triggers: Vec::new(),
-            heal_activation_triggers: Vec::new(),
-            activation_counts: ActivationCounts::default(),
-        }
-    }
-
     /// Remove every trigger of the given logics, so they're never checked.
     pub fn remove_triggers(&mut self, logic_indices: &[usize]) {
         if logic_indices.is_empty() {
@@ -84,12 +67,6 @@ impl TriggerScheduler {
         ] {
             list.retain(|logic_idx| !removed(logic_idx));
         }
-    }
-}
-
-impl Default for TriggerScheduler {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -215,6 +192,86 @@ impl ActivationCounts {
 mod tests {
     use super::*;
     use crate::course::Phase;
+
+    /// Scheduler with logics 0 and 1 in every trigger collection.
+    fn scheduler_with_two_logics() -> TriggerScheduler {
+        let mut scheduler = TriggerScheduler::default();
+        for logic_idx in [0, 1] {
+            let min = 100.0 * logic_idx as f64;
+            let window = || window(logic_idx, min, min + 10.0);
+            scheduler.precondition_windows.push(window());
+            scheduler.position_windows.push(window());
+            scheduler.time_windows.push(window());
+            scheduler.hp_windows.push(window());
+            scheduler.last_straight_triggers.push(logic_idx);
+            scheduler.race_start_triggers.push(logic_idx);
+            scheduler.full_throttle_triggers.push(logic_idx);
+            scheduler.any_activation_triggers.push(logic_idx);
+            scheduler.buff_activation_triggers.push(logic_idx);
+            scheduler.heal_activation_triggers.push(logic_idx);
+        }
+        // An active window, so that both queue stages are checked.
+        scheduler.position_windows.advance(0.0, 0.0);
+        scheduler
+    }
+
+    /// Logic indices of every trigger collection, by name.
+    fn logics_by_collection(scheduler: &TriggerScheduler) -> Vec<(&str, Vec<usize>)> {
+        let windows = |queue: &WindowQueue| queue.iter().map(|t| t.logic_idx).collect();
+        vec![
+            (
+                "precondition_windows",
+                windows(&scheduler.precondition_windows),
+            ),
+            ("position_windows", windows(&scheduler.position_windows)),
+            ("time_windows", windows(&scheduler.time_windows)),
+            (
+                "hp_windows",
+                scheduler.hp_windows.iter().map(|t| t.logic_idx).collect(),
+            ),
+            (
+                "last_straight_triggers",
+                scheduler.last_straight_triggers.clone(),
+            ),
+            ("race_start_triggers", scheduler.race_start_triggers.clone()),
+            (
+                "full_throttle_triggers",
+                scheduler.full_throttle_triggers.clone(),
+            ),
+            (
+                "any_activation_triggers",
+                scheduler.any_activation_triggers.clone(),
+            ),
+            (
+                "buff_activation_triggers",
+                scheduler.buff_activation_triggers.clone(),
+            ),
+            (
+                "heal_activation_triggers",
+                scheduler.heal_activation_triggers.clone(),
+            ),
+        ]
+    }
+
+    #[test]
+    fn test_remove_triggers_from_every_collection() {
+        let mut scheduler = scheduler_with_two_logics();
+        scheduler.remove_triggers(&[1]);
+
+        for (name, logics) in logics_by_collection(&scheduler) {
+            assert_eq!(logics, [0], "{name}");
+        }
+    }
+
+    #[test]
+    fn test_remove_no_triggers() {
+        let mut scheduler = scheduler_with_two_logics();
+        scheduler.remove_triggers(&[]);
+
+        for (name, logics) in logics_by_collection(&scheduler) {
+            assert_eq!(logics, [0, 1], "{name}");
+        }
+    }
 
     #[test]
     fn test_activation_counts_early_phase() {
