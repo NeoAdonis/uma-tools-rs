@@ -1940,6 +1940,84 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     assert_close!(solver.runners[1].skill_modifiers.current_speed, -0.15);
 }
 
+/// Effect of the given type, lasting 3 seconds, as received from another
+/// runner.
+fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
+    PendingEffect {
+        effect: SkillEffect {
+            skill_type,
+            target: SkillTarget::All,
+            modifier,
+        },
+        duration: 3.0,
+        wiz_bonus: 0.0,
+    }
+}
+
+#[test]
+fn test_lane_and_duration_effects_set_skill_modifiers() {
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+    let effects = [
+        (SkillType::LaneMovementSpeed, 0.02),
+        (SkillType::LaneMovementSpeed, 0.03),
+        (SkillType::LaneChange, 0.5),
+        (SkillType::ExtendEvolvedDuration, 2.0),
+        (SkillType::ExtendEvolvedDuration, 1.5),
+    ];
+    for (skill_type, modifier) in effects {
+        solver.runners[0].receive_skill_effect(&received(skill_type, modifier), &solver.state);
+    }
+
+    // Lane speed adds up, duration scaling multiplies.
+    let mods = &solver.runners[0].skill_modifiers;
+    assert_close!(mods.lane_speed, 0.05);
+    assert_eq!(mods.target_lane, Some(0.5));
+    assert_close!(mods.duration_scaling, 3.0);
+
+    // Back to defaults once they expire.
+    solver.runners[0].update_skill_durations(3.0);
+    let mods = &solver.runners[0].skill_modifiers;
+    assert_close!(mods.lane_speed, 0.0);
+    assert_eq!(mods.target_lane, None);
+    assert_close!(mods.duration_scaling, 1.0);
+}
+
+#[test]
+fn test_duration_scaling_extends_activated_skills() {
+    let skill = skill("speed", "always==1", SkillType::TargetSpeed, 0.15);
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    let extend = received(SkillType::ExtendEvolvedDuration, 2.0);
+    solver.runners[0].receive_skill_effect(&extend, &solver.state);
+
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+
+    // 3s base duration, scaled to the 1200m course, then doubled.
+    let speed_effect = solver.runners[0]
+        .active_timed_effects
+        .iter()
+        .find(|timed| timed.effect.skill_type == SkillType::TargetSpeed)
+        .unwrap();
+    assert_close!(speed_effect.expires_at, 3.0 * 1.2 * 2.0);
+}
+
+#[test]
+fn test_rush_time_up_extends_rush_of_runners_bound_to_rush() {
+    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1)]);
+    set_rushed(&mut solver, 0);
+    // Not bound to rush (whatever was rolled when readying the race).
+    solver.runners[1].rush_state = None;
+    let extend = received(SkillType::RushTimeUp, 5.0);
+
+    for runner in &mut solver.runners {
+        runner.receive_skill_effect(&extend, &solver.state);
+    }
+
+    let max_duration = solver.runners[0].rush_state.as_ref().unwrap().max_duration;
+    assert_close!(max_duration, 12.0 + 5.0);
+    // Runners not bound to rush are unaffected.
+    assert!(solver.runners[1].rush_state.is_none());
+}
+
 /// Run a race with one runner per skill list and return, for each list, whether
 /// the runner activated `skill_id`.
 fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
