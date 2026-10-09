@@ -1,8 +1,17 @@
 use super::*;
-use crate::race::runner::Runner;
+use crate::course::geometry::*;
+use crate::course::{CourseData, Phase as CoursePhase};
+use crate::race::duel::Duel;
+use crate::race::full_throttle::FullThrottle;
+use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
+use crate::race::parameters::*;
+use crate::race::runner::{Runner, RushState};
 use crate::race::solver::RaceSolver;
+use crate::race::transitions::{CornerManager, SlopeManager, StraightManager};
 use crate::skill::Skill;
-use crate::test_utils::{load_course, race_params, ready_solver, seeded_config, skill_data, uma};
+use crate::test_utils::{
+    course_data, load_course, race_params, ready_solver, seeded_config, skill_data, uma,
+};
 
 /// Ready race with a single Late Surger with the given skills.
 fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
@@ -317,4 +326,805 @@ fn test_activate_count_all_team_reads_own_team() {
         let actual = get_activation_value(&var, &solver.state, runner, None);
         assert_eq!(actual, expected, "team {team}");
     }
+}
+
+/// Single comparison parsed from a condition string, e.g. `"hp_per>=50"`.
+fn comp(condition: &str) -> Comparison {
+    match condition.parse::<Condition>().unwrap().comp_tree {
+        ComparisonTree::Single(comp) => comp,
+        _ => panic!("expected a single comparison: {condition}"),
+    }
+}
+
+#[test]
+fn test_is_exist_skill_id_not_equal() {
+    let solver = create_test_race_solver(vec![]);
+    let (state, runner) = (&solver.state, &solver.runners[0]);
+
+    // No runner has the skill.
+    assert!(EvaluatorFull.evaluate(&comp("is_exist_skill_id!=203061"), None, state, runner));
+    assert!(!EvaluatorFull.evaluate(&comp("is_exist_skill_id==203061"), None, state, runner));
+}
+
+#[test]
+fn test_base_stat_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    solver.runners[0].base = Uma {
+        speed: 1101,
+        stamina: 902,
+        power: 803,
+        guts: 704,
+        wiz: 605,
+        ..uma(Style::Late)
+    };
+
+    let base = &solver.runners[0].base;
+    let actual = [
+        StatKind::Speed,
+        StatKind::Stamina,
+        StatKind::Power,
+        StatKind::Guts,
+        StatKind::Wiz,
+    ]
+    .map(|stat| get_base_stat(&stat, base));
+    assert_eq!(actual, [1101, 902, 803, 704, 605]);
+}
+
+#[test]
+fn test_entry_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let initial_state = &mut solver.runners[0].initial_state;
+    initial_state.fan_count = 12345;
+    initial_state.popularity_rank = 3;
+    initial_state.gate_block = 5;
+
+    let initial_state = &solver.runners[0].initial_state;
+    let actual = [
+        EntryVar::FanCount,
+        EntryVar::Popularity,
+        EntryVar::PostNumber,
+    ]
+    .map(|var| get_entry_value(&var, initial_state));
+    assert_eq!(actual, [12345, 3, 5]);
+}
+
+#[test]
+fn test_motivation_values() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    let cases = [
+        (Motivation::Awful, 1),
+        (Motivation::Bad, 2),
+        (Motivation::Normal, 3),
+        (Motivation::Good, 4),
+        (Motivation::Great, 5),
+    ];
+    for (motivation, expected) in cases {
+        solver.runners[0].initial_state.motivation = motivation;
+        let actual = get_entry_value(&EntryVar::Motivation, &solver.runners[0].initial_state);
+        assert_eq!(actual, expected, "{motivation:?}");
+    }
+}
+
+#[test]
+fn test_race_param_values() {
+    let params = RaceParameters {
+        track_condition: TrackCondition::Soft,
+        weather: Weather::Rainy,
+        season: Season::Sakura,
+        time: Time::Night,
+        grade: Grade::G2,
+        gates: 9,
+    };
+
+    let actual = [
+        RaceParamVar::GroundCondition,
+        RaceParamVar::Grade,
+        RaceParamVar::Season,
+        RaceParamVar::Time,
+        RaceParamVar::Weather,
+    ]
+    .map(|var| get_race_param_value(&var, &params));
+    assert_eq!(actual, [3, 200, 5, 4, 3]);
+}
+
+#[test]
+fn test_course_values() {
+    // Sapporo 1200m turf: 2 corners, clockwise.
+    let course = load_course(10101);
+
+    let actual = [
+        CourseVar::CornerCount,
+        CourseVar::CourseDistance,
+        CourseVar::DistanceType,
+        CourseVar::GroundType,
+        CourseVar::IsAbroad,
+        CourseVar::IsBasisDistance,
+        CourseVar::IsDirtgrade,
+        CourseVar::IsTightTrack,
+        CourseVar::Rotation,
+        CourseVar::TrackId,
+    ]
+    .map(|var| get_course_value(&var, &course));
+    assert_eq!(actual, [2, 1200, 1, 1, 0, 1, 0, 1, 1, 10001]);
+}
+
+#[test]
+fn test_course_flags_by_track() {
+    // (track ID, distance, is_abroad, is_basis_distance, is_dirtgrade,
+    // is_tight_track).
+    let cases = [
+        // Longchamp.
+        (10201, 2400, 1, 1, 0, 0),
+        // Ooi.
+        (10101, 2000, 0, 1, 1, 0),
+        // Kawasaki.
+        (10103, 2100, 0, 0, 1, 1),
+    ];
+
+    for (race_track_id, distance, abroad, basis, dirtgrade, tight) in cases {
+        let data = CourseData {
+            race_track_id,
+            distance,
+            ..course_data()
+        };
+        let course = Course::new_test(0, data);
+        let actual = [
+            CourseVar::IsAbroad,
+            CourseVar::IsBasisDistance,
+            CourseVar::IsDirtgrade,
+            CourseVar::IsTightTrack,
+        ]
+        .map(|var| get_course_value(&var, &course));
+        assert_eq!(
+            actual,
+            [abroad, basis, dirtgrade, tight],
+            "track {race_track_id}"
+        );
+    }
+}
+
+/// Synthetic 2000m course with two corners (1000-1200 and 1400-1800), a
+/// straight on each end (opposite and facing the audience) and two slopes
+/// (uphill at 200-300 and downhill at 500-600).
+fn location_course() -> Course {
+    let data = CourseData {
+        corners: vec![
+            Corner {
+                start: 1000.0,
+                length: 200.0,
+            },
+            Corner {
+                start: 1400.0,
+                length: 400.0,
+            },
+        ],
+        straights: vec![
+            Straight {
+                start: 0.0,
+                end: 1000.0,
+                front_type: FrontType::Opposite,
+            },
+            Straight {
+                start: 1800.0,
+                end: 2000.0,
+                front_type: FrontType::Audience,
+            },
+        ],
+        slopes: vec![
+            Slope::new(200.0, 100.0, 1.5),
+            Slope::new(500.0, 100.0, -1.0),
+        ],
+        ..course_data()
+    };
+    Course::new_test(0, data)
+}
+
+/// Move a runner to `position`, entering the corner, straight and slope there
+/// (if any).
+fn place(runner: &mut Runner, course: &Course, position: f64) {
+    runner.position = position;
+    runner.corner_manager = CornerManager::new();
+    runner.corner_manager.check_entry(position, &course.corners);
+    runner.straight_manager = StraightManager::new();
+    runner
+        .straight_manager
+        .check_entry(position, &course.straights);
+    runner.slope_manager = SlopeManager::new();
+    runner.slope_manager.check_entry(position, &course.slopes);
+}
+
+#[test]
+fn test_location_values_by_position() {
+    let mut solver = create_test_race_solver(vec![]);
+    let course = location_course();
+
+    // (position, corner, is_finalcorner, is_finalcorner_laterhalf,
+    // is_last_straight, slope, straight_front_type).
+    let cases = [
+        (0.0, 0, 0, 0, 0, 0, 2),
+        (250.0, 0, 0, 0, 0, 1, 2),
+        (550.0, 0, 0, 0, 0, 2, 2),
+        // First of two corners is the third one.
+        (1100.0, 3, 0, 0, 0, 0, 0),
+        (1300.0, 0, 0, 0, 0, 0, 0),
+        (1400.0, 4, 1, 0, 0, 0, 0),
+        (1599.9, 4, 1, 0, 0, 0, 0),
+        (1600.0, 4, 1, 1, 0, 0, 0),
+        (1800.0, 0, 1, 1, 1, 0, 1),
+    ];
+
+    for (position, corner, final_corner, laterhalf, last_straight, slope, front) in cases {
+        place(&mut solver.runners[0], &course, position);
+        let runner = &solver.runners[0];
+        let actual = [
+            SpatialVar::Corner,
+            SpatialVar::IsFinalcorner,
+            SpatialVar::IsFinalcornerLaterhalf,
+            SpatialVar::IsLastStraight,
+            SpatialVar::Slope,
+            SpatialVar::StraightFrontType,
+        ]
+        .map(|var| get_location_value(&var, &course, runner));
+        assert_eq!(
+            actual,
+            [corner, final_corner, laterhalf, last_straight, slope, front],
+            "position {position}"
+        );
+    }
+}
+
+#[test]
+fn test_location_values_without_corners() {
+    let mut solver = create_test_race_solver(vec![]);
+    let course = Course::new_test(0, course_data());
+    place(&mut solver.runners[0], &course, 100.0);
+
+    let runner = &solver.runners[0];
+    let actual = [
+        SpatialVar::Corner,
+        SpatialVar::IsFinalcorner,
+        SpatialVar::IsFinalcornerLaterhalf,
+        SpatialVar::IsLastStraight,
+    ]
+    .map(|var| get_location_value(&var, &course, runner));
+    // The only straight is the last one.
+    assert_eq!(actual, [0, 0, 0, 1]);
+}
+
+#[test]
+fn test_distance_location_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let course = location_course();
+    place(&mut solver.runners[0], &course, 1500.0);
+
+    let runner = &solver.runners[0];
+    let actual = [
+        SpatialVar::DistanceRate,
+        SpatialVar::Furlong,
+        SpatialVar::RemainDistance,
+    ]
+    .map(|var| get_location_value(&var, &course, runner));
+    // 1500m are 7.46 furlongs.
+    assert_eq!(actual, [75, 7, 500]);
+}
+
+#[test]
+fn test_lane_type_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let course = location_course();
+
+    let cases = [(0.0, 0), (0.2, 0), (0.3, 1), (0.5, 2), (0.7, 3)];
+    for (lane, expected) in cases {
+        solver.runners[0].lane.current = lane;
+        let actual = get_location_value(&SpatialVar::LaneType, &course, &solver.runners[0]);
+        assert_eq!(actual, expected, "lane {lane}");
+    }
+}
+
+#[test]
+fn test_distance_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let diff = &mut solver.runners[0].position_diff;
+    diff.from_prev = 7.6;
+    diff.from_next = 5.0;
+    diff.rate_from_first = 42.7;
+    diff.from_first = 12.34;
+
+    let runner = &solver.runners[0];
+    let actual = [
+        DistanceVar::BashinDiffBehind,
+        DistanceVar::BashinDiffInfront,
+        DistanceVar::DistanceDiffRate,
+        DistanceVar::DistanceDiffTop,
+        DistanceVar::DistanceDiffTopFloat,
+    ]
+    .map(|var| get_distance_value(&var, runner));
+    // 1 bashin is 2.5m.
+    assert_eq!(actual, [3, 2, 42, 12, 123]);
+}
+
+#[test]
+fn test_rank_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let order = &mut solver.runners[0].order;
+    order.order = 4;
+    order.rate = 33;
+    order.delta = -2;
+    order.overtakes_since_late = 5;
+    order.overtakes_since_last_corner = 6;
+    order.overtakes_since_mid = 7;
+
+    let runner = &solver.runners[0];
+    let actual = [
+        OrderVar::Order,
+        OrderVar::OrderRate,
+        OrderVar::ChangeOrderOnetime,
+        OrderVar::ChangeOrderUpEndAfter,
+        OrderVar::ChangeOrderUpFinalcornerAfter,
+        OrderVar::ChangeOrderUpMiddle,
+    ]
+    .map(|var| get_rank_value(&var, runner));
+    assert_eq!(actual, [4, 33, -2, 5, 6, 7]);
+}
+
+#[test]
+fn test_order_rate_in_continue_boundaries() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    // (minimum order rate, [in20, in40, in50, in80]).
+    let cases = [
+        (20, [1, 1, 1, 1]),
+        (21, [0, 1, 1, 1]),
+        (41, [0, 0, 1, 1]),
+        (51, [0, 0, 0, 1]),
+        (81, [0, 0, 0, 0]),
+    ];
+    for (rate_min, expected) in cases {
+        solver.runners[0].order.rate_min = rate_min;
+        let actual = [
+            OrderVar::OrderRateIn20Continue,
+            OrderVar::OrderRateIn40Continue,
+            OrderVar::OrderRateIn50Continue,
+            OrderVar::OrderRateIn80Continue,
+        ]
+        .map(|var| get_rank_value(&var, &solver.runners[0]));
+        assert_eq!(actual, expected, "rate_min {rate_min}");
+    }
+}
+
+#[test]
+fn test_order_rate_out_continue_boundaries() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    // (maximum order rate, [out20, out40, out50, out70]).
+    let cases = [
+        (20, [0, 0, 0, 0]),
+        (21, [1, 0, 0, 0]),
+        (41, [1, 1, 0, 0]),
+        (51, [1, 1, 1, 0]),
+        (71, [1, 1, 1, 1]),
+    ];
+    for (rate_max, expected) in cases {
+        solver.runners[0].order.rate_max = rate_max;
+        let actual = [
+            OrderVar::OrderRateOut20Continue,
+            OrderVar::OrderRateOut40Continue,
+            OrderVar::OrderRateOut50Continue,
+            OrderVar::OrderRateOut70Continue,
+        ]
+        .map(|var| get_rank_value(&var, &solver.runners[0]));
+        assert_eq!(actual, expected, "rate_max {rate_max}");
+    }
+}
+
+const BLOCKING_VARS: [BlockingVar; 14] = [
+    BlockingVar::BlockedFront,
+    BlockingVar::BlockedFrontContinuetime,
+    BlockingVar::BlockedSideContinuetime,
+    BlockingVar::BlockedAllContinuetime,
+    BlockingVar::IsSurrounded,
+    BlockingVar::NearCount,
+    BlockingVar::NearInfrontCount,
+    BlockingVar::InfrontNearLaneTime,
+    BlockingVar::BehindNearLaneTime,
+    BlockingVar::BehindNearLaneTimeSet1,
+    BlockingVar::IsBehindIn,
+    BlockingVar::OvertakeTargetNoOrderUpTime,
+    BlockingVar::OvertakeTargetTime,
+    BlockingVar::Visiblehorse,
+];
+
+#[test]
+fn test_blocking_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let runner = &mut solver.runners[0];
+    runner.blocked.speed_limit = Some(10.0);
+    runner.blocked.front_time = 3.7;
+    runner.blocked.side_time = 5.2;
+    runner.surrounded.front = true;
+    runner.surrounded.back = true;
+    runner.surrounded.side = true;
+    runner.nearby.count = 4;
+    runner.nearby.ahead_same_lane_count = 2;
+    runner.nearby.ahead_same_lane_time = 1.9;
+    runner.nearby.behind_same_lane_time = 2.5;
+    runner.nearby.behind_set1_time = 6.1;
+    runner.nearby.behind_in = true;
+    runner.overtake_target_time = 8.4;
+    runner.being_overtake_target_time = 9.0;
+    runner.visible_count = 11;
+
+    let runner = &solver.runners[0];
+    let actual = BLOCKING_VARS.map(|var| get_blocking_value(&var, runner));
+    // Blocked on all sides for as long as the shortest of both.
+    assert_eq!(actual, [1, 3, 5, 3, 1, 4, 2, 1, 2, 6, 1, 8, 9, 11]);
+}
+
+#[test]
+fn test_blocking_values_when_free() {
+    let mut solver = create_test_race_solver(vec![]);
+    // Not surrounded unless blocked on all sides.
+    solver.runners[0].surrounded.front = true;
+    solver.runners[0].surrounded.back = true;
+
+    let runner = &solver.runners[0];
+    let actual = BLOCKING_VARS.map(|var| get_blocking_value(&var, runner));
+    assert_eq!(actual, [0; 14]);
+}
+
+#[test]
+fn test_hp_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let hp = &mut solver.runners[0].hp;
+    hp.current = hp.maximum * 0.4999;
+    hp.has_emptied = true;
+
+    let runner = &solver.runners[0];
+    let actual =
+        [StatusVar::HpPer, StatusVar::IsHpEmptyOnetime].map(|var| get_status_value(&var, runner));
+    assert_eq!(actual, [49, 1]);
+}
+
+#[test]
+fn test_is_lastspurt_by_position() {
+    let mut solver = create_test_race_solver(vec![]);
+    let var = StatusVar::IsLastspurt;
+
+    // Not calculated yet.
+    assert_eq!(get_status_value(&var, &solver.runners[0]), 0);
+
+    solver.runners[0].last_spurt = Some(LastSpurt {
+        max_speed: 20.0,
+        target_distance: 1000.0,
+        category: LastSpurtCategory::Full,
+    });
+    for (position, expected) in [(999.9, 0), (1000.0, 1)] {
+        solver.runners[0].position = position;
+        let actual = get_status_value(&var, &solver.runners[0]);
+        assert_eq!(actual, expected, "position {position}");
+    }
+}
+
+#[test]
+fn test_is_badstart_by_start_delay() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    for (start_delay, expected) in [(0.0, 0), (0.08, 0), (0.081, 1)] {
+        solver.runners[0].start_delay = start_delay;
+        let actual = get_status_value(&StatusVar::IsBadstart, &solver.runners[0]);
+        assert_eq!(actual, expected, "start delay {start_delay}");
+    }
+}
+
+#[test]
+fn test_is_move_lane_by_lane_speed() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    // Inward, still, outward.
+    for (speed, expected) in [(-0.01, 1), (0.0, 0), (0.01, 2)] {
+        solver.runners[0].lane.speed = speed;
+        let actual = get_status_value(&StatusVar::IsMoveLane, &solver.runners[0]);
+        assert_eq!(actual, expected, "lane speed {speed}");
+    }
+}
+
+#[test]
+fn test_is_overtake_without_targets() {
+    let solver = create_test_race_solver(vec![]);
+    let actual = get_status_value(&StatusVar::IsOvertake, &solver.runners[0]);
+    assert_eq!(actual, 0);
+}
+
+#[test]
+fn test_temptation_status_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let rush = |is_rushed| RushState {
+        section: 2,
+        start_time: 5.0,
+        end_time: 15.0,
+        max_duration: 12.0,
+        is_rushed,
+        style: Style::Late,
+    };
+
+    // (rush state, is_temptation, temptation_count).
+    let cases = [
+        (None, 0, 0),
+        (Some(rush(true)), 1, 1),
+        (Some(rush(false)), 0, 1),
+    ];
+    for (rush_state, is_temptation, count) in cases {
+        let label = rush_state.as_ref().map(|s| s.is_rushed);
+        solver.runners[0].rush_state = rush_state;
+        let actual = [StatusVar::IsTemptation, StatusVar::TemptationCount]
+            .map(|var| get_status_value(&var, &solver.runners[0]));
+        assert_eq!(actual, [is_temptation, count], "is_rushed {label:?}");
+    }
+}
+
+#[test]
+fn test_activation_counts() {
+    let mut solver = create_test_race_solver(vec![]);
+    let counts = &mut solver.runners[0].trigger_scheduler.activation_counts;
+    counts.all = 6;
+    counts.start = 1;
+    counts.middle = 2;
+    counts.later_half = 3;
+    counts.end_after = 4;
+    counts.heal = 5;
+
+    let (state, runner) = (&solver.state, &solver.runners[0]);
+    let actual = [
+        ActivationVar::ActivateCountAll,
+        ActivationVar::ActivateCountStart,
+        ActivationVar::ActivateCountMiddle,
+        ActivationVar::ActivateCountLaterHalf,
+        ActivationVar::ActivateCountEndAfter,
+        ActivationVar::ActivateCountHeal,
+    ]
+    .map(|var| get_activation_value(&var, state, runner, None));
+    assert_eq!(actual, [6, 1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn test_is_activate_other_skill_detail_without_logic() {
+    let mut solver = create_test_race_solver(vec![]);
+    solver.runners[0].activated_alternatives.insert((0, 1));
+
+    let var = ActivationVar::IsActivateOtherSkillDetail;
+    let actual = get_activation_value(&var, &solver.state, &solver.runners[0], None);
+    assert_eq!(actual, 0);
+}
+
+#[test]
+fn test_compete_fight_count_by_duel_state() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    // Still counts after leaving the duel.
+    for (duel, expected) in [(Duel::Pending, 0), (Duel::start(800), 1), (Duel::Ended, 1)] {
+        solver.runners[0].duel = duel;
+        let var = ActivationVar::CompeteFightCount;
+        let actual = get_activation_value(&var, &solver.state, &solver.runners[0], None);
+        assert_eq!(actual, expected, "{duel:?}");
+    }
+}
+
+#[test]
+fn test_running_style_counts() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let styles = [
+        Style::Runaway,
+        Style::Front,
+        Style::Pace,
+        Style::Pace,
+        Style::Late,
+        Style::End,
+    ];
+    for style in styles {
+        solver.add_runner(uma(style), Motivation::Normal, vec![]);
+    }
+    let solver = solver.ready_runners();
+    let state = &solver.state;
+
+    let vars = [
+        RunningStyleVar::RunningStyle,
+        RunningStyleVar::RunningStyleCountNigeOtherself,
+        RunningStyleVar::RunningStyleCountSenkoOtherself,
+        RunningStyleVar::RunningStyleCountSashiOtherself,
+        RunningStyleVar::RunningStyleCountOikomiOtherself,
+        RunningStyleVar::RunningStyleCountSame,
+        RunningStyleVar::RunningStyleCountSameRate,
+    ];
+    // Front: 2 (Runaway included), Pace: 2, Late: 1, End: 1, with 9 gates.
+    let cases = [
+        (Style::Pace, [2, 2, 1, 1, 1, 2, 22]),
+        (Style::End, [4, 2, 2, 1, 0, 1, 11]),
+    ];
+    for (style, expected) in cases {
+        let actual = vars.map(|var| get_running_style_value(&var, state, style));
+        assert_eq!(actual, expected, "{style:?}");
+    }
+}
+
+#[test]
+fn test_style_temptation_counts() {
+    let mut solver = create_team_race_solver();
+    solver.state.rushed_by_team[0][Style::Front as usize] = 1;
+    solver.state.rushed_by_team[0][Style::Pace as usize] = 2;
+    solver.state.rushed_by_team[0][Style::End as usize] = 3;
+    solver.state.rushed_by_team[1][Style::Front as usize] = 2;
+    solver.state.rushed_by_team[1][Style::End as usize] = 1;
+
+    let runner = team_runner(&solver, 0);
+    let actual = [
+        TemptationVar::RunningStyleTemptationCountNige,
+        TemptationVar::RunningStyleTemptationCountSenko,
+        TemptationVar::RunningStyleTemptationCountSashi,
+        TemptationVar::RunningStyleTemptationCountOikomi,
+        TemptationVar::RunningStyleTemptationOpponentCountNige,
+        TemptationVar::RunningStyleTemptationOpponentCountSenko,
+        TemptationVar::RunningStyleTemptationOpponentCountSashi,
+        TemptationVar::RunningStyleTemptationOpponentCountOikomi,
+    ]
+    .map(|var| get_temptation_value(&var, &solver.state, runner));
+    assert_eq!(actual, [3, 2, 0, 4, 2, 0, 0, 1]);
+}
+
+#[test]
+fn test_variable_value_dispatch() {
+    let mut solver = create_test_race_solver(vec![]);
+    let runner = &mut solver.runners[0];
+    runner.base.speed = 1101;
+    runner.initial_state.fan_count = 12345;
+    runner.order.order = 4;
+    runner.position_diff.from_first = 12.0;
+    runner.position = 1000.0;
+    runner.phase = CoursePhase::Mid;
+    runner.hp.current = runner.hp.maximum / 2.0;
+    runner.visible_count = 11;
+    runner.rush_counter.ahead = 3;
+    runner.trigger_scheduler.activation_counts.all = 6;
+    solver.state.elapsed_time = 42.5;
+
+    let (state, runner) = (&solver.state, &solver.runners[0]);
+    let cases = [
+        (VarType::BaseStat(StatKind::Speed), 1101),
+        (VarType::Entry(EntryVar::FanCount), 12345),
+        (VarType::Order(OrderVar::Order), 4),
+        (VarType::Distance(DistanceVar::DistanceDiffTop), 12),
+        (VarType::Phase(PhaseVar::Phase), 1),
+        (VarType::Course(CourseVar::CourseDistance), 1200),
+        (VarType::Spatial(SpatialVar::RemainDistance), 200),
+        (VarType::Activation(ActivationVar::ActivateCountAll), 6),
+        (VarType::RaceParam(RaceParamVar::Grade), 100),
+        (VarType::RunningStyle(RunningStyleVar::RunningStyle), 3),
+        (VarType::Status(StatusVar::HpPer), 50),
+        (VarType::Blocking(BlockingVar::Visiblehorse), 11),
+        (
+            VarType::Temptation(TemptationVar::TemptationCountInfront),
+            3,
+        ),
+        (VarType::AccumulateTime, 42),
+        (VarType::Always, 1),
+    ];
+    for (var, expected) in cases {
+        let actual = get_variable_value(&var, state, runner, None);
+        assert_eq!(actual, expected, "{var}");
+    }
+}
+
+#[test]
+fn test_run_at_full_speed_random_follows_full_throttle() {
+    let mut solver = create_test_race_solver(vec![]);
+    let var = VarType::RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom);
+
+    let cases = [
+        (FullThrottle::Pending, 0),
+        (FullThrottle::Active { speed_bonus: 0.5 }, 1),
+        (FullThrottle::Ended, 0),
+    ];
+    for (full_throttle, expected) in cases {
+        solver.runners[0].full_throttle = full_throttle;
+        let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
+        assert_eq!(actual, expected, "{full_throttle:?}");
+    }
+}
+
+/// Fresh race state and unready Late Surger, before the race starts.
+fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
+    let solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let state = solver.state;
+    let mut runner = UnreadyRunner::new(uma(Style::Late), 1, Motivation::Good, &state, vec![]);
+    runner.base.speed = 1101;
+    (state, runner)
+}
+
+#[test]
+fn test_out_of_gate_values() {
+    let (state, runner) = create_out_of_gate_runner();
+
+    let cases = [
+        ("base_speed==1101", true),
+        ("base_speed>1101", false),
+        ("motivation==4", true),
+        ("distance_type==1", true),
+        ("weather==1", true),
+        ("weather==3", false),
+        ("running_style==3", true),
+        ("always==1", true),
+    ];
+    for (condition, expected) in cases {
+        let actual = EvaluatorOutOfGate.evaluate(&comp(condition), None, &state, &runner);
+        assert_eq!(actual, expected, "{condition}");
+    }
+}
+
+#[test]
+fn test_out_of_gate_in_race_variables_are_zero() {
+    let (state, runner) = create_out_of_gate_runner();
+
+    for var in ["hp_per", "phase", "order", "corner", "accumulatetime"] {
+        let comp = comp(&format!("{var}==0"));
+        assert!(
+            EvaluatorOutOfGate.evaluate(&comp, None, &state, &runner),
+            "{var}"
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "should be handled in evaluate()")]
+fn test_lineup_variable_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = VarType::Lineup(LineupVar::SameSkillHorseCount);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "it's a trigger variable")]
+fn test_random_variable_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = VarType::Random(RandomVar::RandomLot);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "it's a trigger variable")]
+fn test_random_phase_variable_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = VarType::RandomPhase(RandomPhaseVar::PhaseRandom);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "it's a trigger variable")]
+fn test_random_spatial_variable_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = VarType::RandomSpatial(RandomSpatialVar::CornerRandom);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "it's a trigger variable")]
+fn test_is_last_straight_onetime_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = SpatialVar::IsLastStraightOnetime;
+    get_location_value(&var, &solver.state.course, &solver.runners[0]);
+}
+
+#[test]
+#[should_panic(expected = "should be handled in evaluate()")]
+fn test_is_used_skill_id_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = ActivationVar::IsUsedSkillId;
+    get_activation_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "should be handled in evaluate()")]
+fn test_is_other_character_activate_advantage_skill_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = ActivationVar::IsOtherCharacterActivateAdvantageSkill;
+    get_activation_value(&var, &solver.state, &solver.runners[0], None);
 }
