@@ -222,3 +222,34 @@ fn test_hp_loss_is_not_a_heal() {
     assert_eq!(runner.trigger_scheduler.activation_counts.heal, 0);
     assert!(runner.is_stamina_keep);
 }
+
+#[test]
+fn test_slowest_candidate_when_every_check_fails() {
+    // Low acceptance chance (17.5%), so that every check fails for some seed.
+    for rng_seed in 0..1000 {
+        let mut solver = solver(50, GameVersion::LATEST, rng_seed);
+        move_to_section(&mut solver, 16);
+        set_hp_above_base(&mut solver);
+
+        // Replay the checks, one per candidate, with a copy of the RNG.
+        let runner = &solver.runners[0];
+        let max = last_spurt_speed_max(runner, &solver.state);
+        let base = late_base_target_speed(&solver);
+        let candidates = (0..)
+            .take_while(|&step| max - 0.1 * step as f64 >= base)
+            .count();
+        let chance = 0.15 + 0.0005 * runner.adjusted.wiz as f64;
+        let mut rng = runner.rng.borrow().clone();
+        if (0..candidates).any(|_| rng.random_bool(chance)) {
+            continue;
+        }
+
+        // The slowest candidate takes the longest, so it's the last one.
+        let last_spurt = calculate_last_spurt(&mut solver.runners[0], &solver.state);
+        assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
+        let slowest = max - 0.1 * (candidates - 1) as f64;
+        assert_close!(last_spurt.max_speed, slowest, "seed {rng_seed}");
+        return;
+    }
+    panic!("every check should fail for some seed");
+}
