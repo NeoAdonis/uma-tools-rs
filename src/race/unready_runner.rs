@@ -146,6 +146,7 @@ impl UnreadyRunner {
         // Calculate base stats.
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
+        let skill_count = skills.len();
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
@@ -192,6 +193,7 @@ impl UnreadyRunner {
                 fan_count: 0,
                 // Assigned by the solver when the runner joins the race.
                 team: 0,
+                skill_count,
             },
             start_delay,
             rng,
@@ -470,6 +472,7 @@ impl UnreadyRunner {
         Runner {
             gate_roll: self.gate_roll,
             base: self.base,
+            raw: self.raw,
             adjusted: self.adjusted,
             initial_state: self.initial_state,
             speed: 3.0,

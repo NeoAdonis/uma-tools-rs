@@ -121,6 +121,7 @@ pub(crate) fn alternative(
             skill_type,
             target: SkillTarget::Oneself,
             modifier,
+            value_usage: ValueUsage::Direct,
         }],
     }
 }

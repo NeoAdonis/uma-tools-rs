@@ -23,6 +23,7 @@ use crate::race::solver::RaceState;
 use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::race::value_scaling;
 use crate::skill::*;
 use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{
@@ -94,6 +95,9 @@ pub struct InitialState {
     ///
     /// Runners on the same team are allies; everyone else is an opponent.
     pub team: u8,
+    /// Number of skills the runner has, including those that failed the wisdom
+    /// check.
+    pub skill_count: usize,
 }
 
 /// State related to rushing (temptation, 掛かり).
@@ -173,6 +177,8 @@ pub struct OrderState {
     pub overtakes_since_late: u16,
     /// Number of overtakes since entering last corner.
     pub overtakes_since_last_corner: u16,
+    /// Number of overtakes in corners during the Late race or later.
+    pub overtakes_in_late_corners: u16,
 }
 
 impl Default for OrderState {
@@ -186,6 +192,7 @@ impl Default for OrderState {
             overtakes_since_mid: 0,
             overtakes_since_late: 0,
             overtakes_since_last_corner: 0,
+            overtakes_in_late_corners: 0,
         }
     }
 }
@@ -234,6 +241,9 @@ pub struct PositionDiff {
     /// Distance difference rate from the first-place runner relative to the
     /// distance between first and last place, in percent.
     pub rate_from_first: f64,
+    /// Largest lead over the second-place runner taken before the Late race, in
+    /// meters.
+    pub max_lead: f64,
 }
 
 /// Rush (temptation, 掛かり) counters.
@@ -302,6 +312,11 @@ pub struct BlockedState {
     pub front_time: f64,
     /// Time spent being side-blocked in seconds.
     pub side_time: f64,
+    /// Time spent being side-blocked during the Mid race in seconds. Unlike
+    /// [`Self::side_time`], blocking before the Mid race doesn't count.
+    pub mid_side_time: f64,
+    /// Longest time spent being side-blocked during the Mid race in seconds.
+    pub max_mid_side_time: f64,
 }
 
 impl BlockedState {
@@ -359,6 +374,8 @@ pub struct Runner {
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,
+    /// Raw stats, before halving and motivation. Used to scale some skill values.
+    pub raw: Uma,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
     pub adjusted: Uma,
@@ -2080,23 +2097,30 @@ impl Runner {
     }
 
     /// Update order (rank) and overtakes based on current order.
+    ///
+    /// The order change is negative when overtaking, and positive when being
+    /// overtaken.
     pub fn update_order(&mut self, current_order: u8, course: &Course) {
         let prev_order = self.order.order;
-        self.order.delta = prev_order as i8 - current_order as i8;
+        self.order.delta = current_order as i8 - prev_order as i8;
         self.order.order = current_order;
         if self.order.delta < 0 {
+            let overtakes = self.order.delta.unsigned_abs() as u16;
             if self.phase >= Phase::Mid {
-                self.order.overtakes_since_mid += self.order.delta.unsigned_abs() as u16;
+                self.order.overtakes_since_mid += overtakes;
             }
-            if self.phase >= Phase::Late && self.order.delta < 0 {
-                self.order.overtakes_since_late += self.order.delta.unsigned_abs() as u16;
+            if self.phase >= Phase::Late {
+                self.order.overtakes_since_late += overtakes;
+                if self.current_corner().is_some() {
+                    self.order.overtakes_in_late_corners += overtakes;
+                }
             }
             if course
                 .corners
                 .last()
                 .is_some_and(|x| self.position >= x.start)
             {
-                self.order.overtakes_since_last_corner += 1;
+                self.order.overtakes_since_last_corner += overtakes;
             }
         }
     }
@@ -2129,9 +2153,18 @@ impl Runner {
         self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
     }
 
-    /// Update position difference from the runner behind.
+    /// Update position difference from the runner behind, and the largest lead
+    /// taken before the Late race.
+    ///
+    /// The order must be updated first.
     pub fn update_diff_from_behind(&mut self, position_prev: f64) {
         self.position_diff.from_prev = self.position - position_prev;
+        if self.order.order == 1 && self.phase < Phase::Late {
+            self.position_diff.max_lead = self
+                .position_diff
+                .max_lead
+                .max(self.position_diff.from_prev);
+        }
     }
 
     /// Length of this runner's field of view in meters.
@@ -2252,8 +2285,16 @@ impl Runner {
         }
         if self.blocked.side() {
             self.blocked.side_time += delta_time;
+            if self.phase == Phase::Mid {
+                self.blocked.mid_side_time += delta_time;
+                self.blocked.max_mid_side_time = self
+                    .blocked
+                    .max_mid_side_time
+                    .max(self.blocked.mid_side_time);
+            }
         } else {
             self.blocked.side_time = 0.0;
+            self.blocked.mid_side_time = 0.0;
         }
     }
 
@@ -2470,22 +2511,27 @@ impl Runner {
         // N.B. Pre-race effects were applied before the race (see
         // `UnreadyRunner::apply_out_of_gate_skills`), but still count as activated.
         for effect in &alternative.effects {
-            let is_pre_race = effect.skill_type.is_pre_race_effect();
-            if effect.target == SkillTarget::Oneself {
-                if !is_pre_race {
-                    self.apply_skill_effect(effect, scaled_duration, wiz_bonus, state);
+            if !effect.skill_type.is_pre_race_effect() {
+                // Scale the value with the runner's situation.
+                let scaled = SkillEffect {
+                    modifier: self.scaled_modifier(effect),
+                    ..effect.clone()
+                };
+                if scaled.target == SkillTarget::Oneself {
+                    self.apply_skill_effect(&scaled, scaled_duration, wiz_bonus, state);
+                } else {
+                    self.pending_effects.push(PendingEffect {
+                        effect: scaled,
+                        duration: scaled_duration,
+                        wiz_bonus,
+                    });
                 }
-                if Skill::is_effect_positive(effect) {
-                    self.activation_flags
-                        .buff_activated
-                        .insert(effect.skill_type);
-                }
-            } else if !is_pre_race {
-                self.pending_effects.push(PendingEffect {
-                    effect: effect.clone(),
-                    duration: scaled_duration,
-                    wiz_bonus,
-                });
+            }
+            // Buffs count as activated even if their value scaled down to zero.
+            if effect.target == SkillTarget::Oneself && Skill::is_effect_positive(effect) {
+                self.activation_flags
+                    .buff_activated
+                    .insert(effect.skill_type);
             }
         }
 
@@ -2601,6 +2647,69 @@ impl Runner {
                 // Never checked again.
                 logic.cooldown_until = f64::INFINITY;
             }
+        }
+    }
+
+    /// Value of an effect's modifier scaled with the runner's situation (see
+    /// [`ValueUsage`]).
+    fn scaled_modifier(&self, effect: &SkillEffect) -> f64 {
+        use ValueUsage::*;
+        let modifier = effect.modifier;
+        match effect.value_usage {
+            Direct => modifier,
+            MultiplySkillNum => {
+                modifier * value_scaling::skill_count_multiplier(self.initial_state.skill_count)
+            }
+            Aoharu => modifier * value_scaling::AOHARU_MULTIPLIER,
+            // Both variants share the same multipliers for now.
+            MultiplyRandom1 | MultiplyRandom2 => {
+                let roll = self.rng.borrow_mut().random();
+                modifier * value_scaling::random_multiplier(roll)
+            }
+            Climax => modifier * value_scaling::CLIMAX_MULTIPLIER,
+            MultiplyMaximumRawStatus => {
+                let raw = &self.raw;
+                let max_stat = [raw.speed, raw.stamina, raw.power, raw.guts, raw.wiz]
+                    .into_iter()
+                    .max()
+                    .unwrap();
+                modifier * value_scaling::max_raw_stat_multiplier(max_stat)
+            }
+            MultiplyActivateSpecificTagSkillCount => {
+                let green_count = self
+                    .available_skills
+                    .iter()
+                    .filter(|skill| {
+                        skill.is_green() && self.activated_skill_ids.contains(&skill.id)
+                    })
+                    .count();
+                modifier * value_scaling::green_skill_count_multiplier(green_count)
+            }
+            AddDistanceDiffTop => {
+                modifier + value_scaling::distance_from_first_bonus(self.position_diff.from_first)
+            }
+            MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
+                let time = self.blocked.max_mid_side_time;
+                modifier * value_scaling::mid_side_blocked_time_multiplier(time)
+            }
+            MultiplySpeed1 => modifier * value_scaling::speed_multiplier_1(self.adjusted.speed),
+            MultiplySpeed2 => modifier * value_scaling::speed_multiplier_2(self.adjusted.speed),
+            MultiplyArcGlobalPotentialLevel => modifier * value_scaling::L_ARC_MULTIPLIER,
+            MultiplyTopLeadAmount => {
+                modifier * value_scaling::lead_multiplier(self.position_diff.max_lead)
+            }
+            CornerOvertakeCount => {
+                let overtakes = self.order.overtakes_in_late_corners;
+                modifier * value_scaling::late_corner_overtake_multiplier(overtakes)
+            }
+            FanCount => {
+                modifier * value_scaling::fan_count_multiplier(self.initial_state.fan_count)
+            }
+            UafWinCount => modifier * value_scaling::UAF_WIN_MULTIPLIER,
+            CookingPoints => modifier * value_scaling::COOKING_MULTIPLIER,
+            ResearchLevel => modifier * value_scaling::RESEARCH_MULTIPLIER,
+            FanLove => modifier * value_scaling::FAN_LOVE_MULTIPLIER,
+            DevelopmentPoints => modifier * value_scaling::DEVELOPMENT_MULTIPLIER,
         }
     }
 

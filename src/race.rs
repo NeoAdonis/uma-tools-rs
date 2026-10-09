@@ -15,3 +15,4 @@ pub mod solver;
 pub mod spot_struggle;
 pub mod transitions;
 pub mod unready_runner;
+pub mod value_scaling;

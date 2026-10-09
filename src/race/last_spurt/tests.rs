@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::solver::RaceSolver;
-use crate::skill::{SkillEffect, SkillTarget, SkillType};
+use crate::skill::{SkillEffect, SkillTarget, SkillType, ValueUsage};
 use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
 
@@ -70,6 +70,7 @@ fn recovery(modifier: f64) -> SkillEffect {
         skill_type: SkillType::Recovery,
         target: SkillTarget::Oneself,
         modifier,
+        value_usage: ValueUsage::Direct,
     }
 }
 

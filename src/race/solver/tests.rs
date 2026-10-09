@@ -1,4 +1,5 @@
 use super::*;
+use crate::configuration::Roll;
 use crate::course::LaneType;
 use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
@@ -2002,6 +2003,7 @@ fn test_pending_effects_apply_to_targets() {
             skill_type: SkillType::CurrentSpeed,
             target: SkillTarget::BehindSelf { count: 1 },
             modifier: -0.15,
+            value_usage: ValueUsage::Direct,
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2023,6 +2025,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
         skill_type,
         target,
         modifier,
+        value_usage: ValueUsage::Direct,
     };
     alternative.effects.extend([
         on_others(
@@ -2079,6 +2082,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
             skill_type,
             target: SkillTarget::All,
             modifier,
+            value_usage: ValueUsage::Direct,
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2313,6 +2317,7 @@ fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)])
                 skill_type,
                 target: SkillTarget::Oneself,
                 modifier,
+                value_usage: ValueUsage::Direct,
             })
             .collect(),
         ..alternative("always==1", SkillType::SpeedUp, 0.0)
@@ -2654,4 +2659,368 @@ fn test_activate_unique_skips_other_and_out_of_gate_skills() {
         sorted_activation_ids(&runner),
         vec!["again", "first", "green"]
     );
+}
+
+/// Skill with a target speed effect on oneself whose value scales as
+/// `value_usage`. It never activates on its own.
+fn scaled_skill(id: &str, value_usage: ValueUsage, modifier: f64) -> Skill {
+    let mut alternative = alternative(
+        "is_activate_heal_skill==1",
+        SkillType::TargetSpeed,
+        modifier,
+    );
+    alternative.effects[0].value_usage = value_usage;
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
+}
+
+/// Ready race with a single runner having `skills` and a [`scaled_skill`] last.
+fn scaled_skill_solver(
+    uma: Uma,
+    mut skills: Vec<Skill>,
+    value_usage: ValueUsage,
+    config: &Configuration,
+) -> RaceSolver<Runner> {
+    skills.push(scaled_skill("scaled", value_usage, 0.25));
+    ready_solver(10101, uma, skills, config)
+}
+
+/// Target speed gained by the first runner when activating her last skill.
+fn activate_last_skill(solver: &mut RaceSolver<Runner>) -> f64 {
+    let runner = &mut solver.runners[0];
+    let before = runner.skill_modifiers.target_speed;
+    let skill_index = runner.available_skills.len() - 1;
+    runner.activate_skill(skill_index, 0, &solver.state);
+    runner.skill_modifiers.target_speed - before
+}
+
+#[test]
+fn test_direct_values_are_not_scaled() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::Direct,
+        &seeded_config(0),
+    );
+    assert_close!(activate_last_skill(&mut solver), 0.25);
+}
+
+#[test]
+fn test_skill_count_scaling() {
+    // Nine other skills, plus the scaled skill.
+    let others: Vec<_> = (0..9)
+        .map(|i| {
+            skill(
+                &format!("other{i}"),
+                "always==1",
+                SkillType::TargetSpeed,
+                0.1,
+            )
+        })
+        .collect();
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        others,
+        ValueUsage::MultiplySkillNum,
+        &seeded_config(0),
+    );
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
+}
+
+#[test]
+fn test_skill_count_includes_failed_wisdom_checks() {
+    let config = Configuration {
+        wisdom_checks: Roll::Never,
+        ..seeded_config(0)
+    };
+    let skills = (0..3)
+        .map(|i| {
+            skill(
+                &format!("skill{i}"),
+                "always==1",
+                SkillType::TargetSpeed,
+                0.1,
+            )
+        })
+        .collect();
+    let solver = ready_solver(10101, uma(Style::Late), skills, &config);
+    let runner = &solver.runners[0];
+    assert!(runner.available_skills.is_empty());
+    assert_eq!(runner.initial_state.skill_count, 3);
+}
+
+#[test]
+fn test_scenario_values_assume_the_maximum() {
+    let cases = [
+        (ValueUsage::Aoharu, 1.2),
+        (ValueUsage::Climax, 1.2),
+        (ValueUsage::MultiplyArcGlobalPotentialLevel, 1.2),
+        (ValueUsage::UafWinCount, 1.2),
+        (ValueUsage::CookingPoints, 1.2),
+        (ValueUsage::ResearchLevel, 1.2),
+        (ValueUsage::DevelopmentPoints, 1.2),
+        (ValueUsage::FanLove, 3.0),
+    ];
+    for (value_usage, multiplier) in cases {
+        let mut solver =
+            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+        assert_close!(
+            activate_last_skill(&mut solver),
+            0.25 * multiplier,
+            "{value_usage:?}"
+        );
+    }
+}
+
+#[test]
+fn test_fan_count_scaling() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::FanCount,
+        &seeded_config(0),
+    );
+    // No fans by default.
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 0.8);
+    solver.runners[0].initial_state.fan_count = 120000;
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
+}
+
+#[test]
+fn test_late_race_corner_overtakes_are_tracked() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::CornerOvertakeCount,
+        &seeded_config(0),
+    );
+    // On the 1200m course, the Late race starts at 800m, in the second corner
+    // (675-934m), followed by the final straight.
+    let course = solver.state.course.clone();
+    let runner = &mut solver.runners[0];
+    let overtake = |runner: &mut Runner, position, phase, from, to| {
+        runner.position = position;
+        runner.phase = phase;
+        runner.check_corner_start(&course.corners);
+        runner.check_corner_end(&course.corners);
+        runner.order.order = from;
+        runner.update_order(to, &course);
+    };
+
+    // In a corner, but not in the Late race.
+    overtake(runner, 700.0, Phase::Mid, 9, 8);
+    // Two at once in a Late race corner, and being overtaken doesn't count.
+    overtake(runner, 850.0, Phase::Late, 8, 6);
+    assert_eq!(runner.order.delta, -2);
+    overtake(runner, 860.0, Phase::Late, 6, 7);
+    assert_eq!(runner.order.delta, 1);
+    // On the final straight.
+    overtake(runner, 1000.0, Phase::Last, 7, 5);
+    assert_eq!(runner.order.overtakes_in_late_corners, 2);
+    // Other overtake counters (the last corner starts at 675m).
+    assert_eq!(runner.order.overtakes_since_mid, 5);
+    assert_eq!(runner.order.overtakes_since_late, 4);
+    assert_eq!(runner.order.overtakes_since_last_corner, 5);
+
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
+}
+
+#[test]
+fn test_random_scaling_distribution() {
+    for value_usage in [ValueUsage::MultiplyRandom1, ValueUsage::MultiplyRandom2] {
+        let mut solver =
+            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+        let mut counts = [0; 3];
+        let rolls = 10000;
+        for _ in 0..rolls {
+            let gained = activate_last_skill(&mut solver) / 0.25;
+            let index = [0.0, 0.02, 0.04]
+                .iter()
+                .position(|&multiplier| (gained - multiplier).abs() < 1e-9)
+                .unwrap_or_else(|| panic!("unexpected multiplier {gained}"));
+            counts[index] += 1;
+        }
+        for (count, expected) in counts.into_iter().zip([0.6, 0.3, 0.1]) {
+            assert_close!(count as f64 / rolls as f64, expected, tolerance = 0.02);
+        }
+    }
+}
+
+#[test]
+fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
+    // Raw stats above 1200 are halved in the base stats, but not here.
+    let uma = Uma {
+        stamina: 1500,
+        ..uma(Style::Late)
+    };
+    let mut solver = scaled_skill_solver(
+        uma,
+        vec![],
+        ValueUsage::MultiplyMaximumRawStatus,
+        &seeded_config(0),
+    );
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.2);
+
+    let uma = Uma {
+        speed: 700,
+        stamina: 700,
+        power: 700,
+        guts: 700,
+        wiz: 750,
+        ..uma
+    };
+    let mut solver = scaled_skill_solver(
+        uma,
+        vec![],
+        ValueUsage::MultiplyMaximumRawStatus,
+        &seeded_config(0),
+    );
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 0.9);
+}
+
+#[test]
+fn test_speed_scaling_uses_adjusted_speed() {
+    let cases = [
+        (ValueUsage::MultiplySpeed1, 1850, 2.0),
+        (ValueUsage::MultiplySpeed2, 1500, 2.0),
+    ];
+    for (value_usage, speed, multiplier) in cases {
+        let mut solver =
+            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+        solver.runners[0].adjusted.speed = speed;
+        let gained = activate_last_skill(&mut solver);
+        assert_close!(gained, 0.25 * multiplier, "{value_usage:?}");
+    }
+}
+
+#[test]
+fn test_buffs_scaled_to_zero_still_count() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::MultiplySpeed1,
+        &seeded_config(0),
+    );
+    // Too slow for any bonus.
+    solver.runners[0].adjusted.speed = 1600;
+    assert_close!(activate_last_skill(&mut solver), 0.0);
+    let buffs = &solver.runners[0].activation_flags.buff_activated;
+    assert!(buffs.contains(&SkillType::TargetSpeed));
+}
+
+#[test]
+fn test_green_skill_count_scaling() {
+    let green = |id| skill(id, "always==1", SkillType::SpeedUp, 10.0);
+    // Green skills that never activate don't count.
+    let skills = vec![
+        green("green1"),
+        green("green2"),
+        green("green3"),
+        skill(
+            "never",
+            "is_activate_heal_skill==1",
+            SkillType::SpeedUp,
+            10.0,
+        ),
+    ];
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        skills,
+        ValueUsage::MultiplyActivateSpecificTagSkillCount,
+        &seeded_config(0),
+    );
+    // Before the race starts, no green skill has activated yet.
+    assert_close!(activate_last_skill(&mut solver), 0.0);
+
+    // Green skills activate on the first frame the runner moves.
+    while solver.runners[0].activated_skill_ids.len() < 4 {
+        solver.step(DELTA_TIME);
+    }
+    assert_close!(activate_last_skill(&mut solver), 0.25);
+}
+
+#[test]
+fn test_distance_from_first_adds_to_value() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::AddDistanceDiffTop,
+        &seeded_config(0),
+    );
+    solver.runners[0].position_diff.from_first = 19.0;
+    assert_close!(activate_last_skill(&mut solver), 0.25);
+    solver.runners[0].position_diff.from_first = 20.0;
+    assert_close!(activate_last_skill(&mut solver), 0.35);
+}
+
+#[test]
+fn test_longest_mid_race_side_block_is_tracked() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+        &seeded_config(0),
+    );
+    let runner = &mut solver.runners[0];
+    let block = |runner: &mut Runner, phase, side_in, side_out, time| {
+        runner.phase = phase;
+        runner.blocked.side_in = side_in;
+        runner.blocked.side_out = side_out;
+        runner.update_blocked_time(time);
+    };
+
+    // Before the Mid race, blocking doesn't count.
+    block(runner, Phase::Early, true, false, 5.0);
+    assert_close!(runner.blocked.max_mid_side_time, 0.0);
+    // Blocking that continues into the Mid race only counts from then on, but
+    // the overall timer keeps running. Changing sides doesn't reset either.
+    block(runner, Phase::Mid, false, true, 1.0);
+    block(runner, Phase::Mid, true, false, 2.0);
+    assert_close!(runner.blocked.side_time, 8.0);
+    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+    // Reset once both sides are clear; the longest blocking is kept.
+    block(runner, Phase::Mid, false, false, 1.0);
+    block(runner, Phase::Mid, true, false, 2.0);
+    assert_close!(runner.blocked.side_time, 2.0);
+    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+    // After the Mid race, blocking doesn't count either.
+    block(runner, Phase::Late, true, false, 10.0);
+    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 2.0);
+}
+
+#[test]
+fn test_largest_lead_before_late_race_is_tracked() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let skills = vec![scaled_skill(
+        "scaled",
+        ValueUsage::MultiplyTopLeadAmount,
+        0.25,
+    )];
+    solver.add_runner(uma(Style::Front), Motivation::Normal, skills);
+    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    let update = |solver: &mut RaceSolver<Runner>, front, late, phase| {
+        for runner in &mut solver.runners {
+            let is_front = runner.base.style == Style::Front;
+            runner.position = if is_front { front } else { late };
+            runner.phase = phase;
+        }
+        sort_by_position(solver);
+        solver.update_order_values();
+    };
+
+    update(&mut solver, 100.0, 85.0, Phase::Early);
+    update(&mut solver, 200.0, 195.0, Phase::Mid);
+    // Leads in the Late race, or by the other runner, don't count.
+    update(&mut solver, 1000.0, 950.0, Phase::Late);
+    update(&mut solver, 1100.0, 1200.0, Phase::Late);
+    let front = runner_with_style(&mut solver, Style::Front);
+    assert_close!(front.position_diff.max_lead, 15.0);
+    let late = runner_with_style(&mut solver, Style::Late);
+    assert_close!(late.position_diff.max_lead, 0.0);
+
+    // The other runner is ahead now; move the scaled skill's owner first.
+    solver.runners.swap(0, 1);
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.4);
 }

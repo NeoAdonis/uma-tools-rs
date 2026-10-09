@@ -246,6 +246,98 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
     }
 }
 
+/// Represents how the value of a skill effect scales with the runner's situation
+/// when the skill activates (see [`crate::race::value_scaling`]).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u8")]
+pub enum ValueUsage {
+    /// No scaling (1).
+    Direct,
+    /// Scales with the number of skills the runner has (2).
+    MultiplySkillNum,
+    /// Aoharu (Unity Cup) skills; scales with the team's total base stats in the
+    /// scenario (3-7).
+    Aoharu,
+    /// Random multiplier, first variant (8).
+    ///
+    /// Both variants currently have the same multipliers, but they are separate
+    /// IDs in the game data, so they're kept apart in case an update changes
+    /// either of them.
+    MultiplyRandom1,
+    /// Random multiplier, second variant (9). See [`ValueUsage::MultiplyRandom1`].
+    MultiplyRandom2,
+    /// Climax skills; scales with the number of races won during training (10).
+    Climax,
+    /// Scales with the highest of the runner's raw stats (13).
+    MultiplyMaximumRawStatus,
+    /// Scales with the number of green skills activated by the runner (14).
+    MultiplyActivateSpecificTagSkillCount,
+    /// Adds a flat amount when far enough from the first place (19).
+    AddDistanceDiffTop,
+    /// Scales with the longest time the runner was side-blocked during the Mid
+    /// race (20).
+    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+    /// Scales with the runner's adjusted speed, first variant (22).
+    MultiplySpeed1,
+    /// Scales with the runner's adjusted speed, second variant (23).
+    MultiplySpeed2,
+    /// Scales with the total level of global potential in the L'Arc scenario
+    /// (24).
+    MultiplyArcGlobalPotentialLevel,
+    /// Scales with the largest lead the runner took before the Late race (25).
+    MultiplyTopLeadAmount,
+    /// Scales with the number of overtakes in corners during the Late race or
+    /// later (11).
+    CornerOvertakeCount,
+    /// Scales with the runner's fan count (12).
+    FanCount,
+    /// Scales with the number of U.A.F. tournament wins (26).
+    UafWinCount,
+    /// Scales with the cooking points earned in the Great Food Festival scenario
+    /// (27).
+    CookingPoints,
+    /// Scales with the total research level earned in the Mecha Umamusume
+    /// scenario (28).
+    ResearchLevel,
+    /// Scales with the love received from fans, up to 3x (30).
+    FanLove,
+    /// Scales with the total development points earned in the Design Your Island
+    /// scenario (31).
+    DevelopmentPoints,
+}
+
+impl TryFrom<u8> for ValueUsage {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use ValueUsage::*;
+        Ok(match value {
+            1 => Direct,
+            2 => MultiplySkillNum,
+            3..=7 => Aoharu,
+            8 => MultiplyRandom1,
+            9 => MultiplyRandom2,
+            10 => Climax,
+            11 => CornerOvertakeCount,
+            12 => FanCount,
+            13 => MultiplyMaximumRawStatus,
+            14 => MultiplyActivateSpecificTagSkillCount,
+            19 => AddDistanceDiffTop,
+            20 => MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+            22 => MultiplySpeed1,
+            23 => MultiplySpeed2,
+            24 => MultiplyArcGlobalPotentialLevel,
+            25 => MultiplyTopLeadAmount,
+            26 => UafWinCount,
+            27 => CookingPoints,
+            28 => ResearchLevel,
+            30 => FanLove,
+            31 => DevelopmentPoints,
+            _ => return Err(format!("unknown value usage {value}")),
+        })
+    }
+}
+
 /// Represents a single effect of a skill.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -261,6 +353,8 @@ pub struct SkillEffect {
     /// Stored in 10000ths in the skill data, and converted when deserializing.
     #[serde(deserialize_with = "deserialize_ten_thousandths")]
     pub modifier: f64,
+    /// How the modifier scales when the skill activates.
+    pub value_usage: ValueUsage,
 }
 
 /// Convert a base duration from 10000ths of a second while deserializing. A
@@ -460,6 +554,16 @@ impl Skill {
         )
     }
 
+    /// Check if `self` is a green skill, i.e. one that boosts stats.
+    pub fn is_green(&self) -> bool {
+        // TODO: The game defines green skills by tags (601-615), which aren't in the
+        // skill data yet.
+        self.alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.effects)
+            .any(|effect| effect.skill_type.is_stat_boost())
+    }
+
     /// Check if this skill benefits from the Wiz Limit Break buff (5th Anniversary
     /// onward).
     ///
@@ -581,7 +685,8 @@ mod tests {
     fn alternative(condition: &str, precondition: &str) -> serde_json::Result<SkillAlternative> {
         let json = format!(
             r#"{{"baseDuration": 30000, "condition": "{condition}",
-                "effects": [{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 3500}}],
+                "effects": [{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 3500,
+                    "valueUsage": 1}}],
                 "precondition": "{precondition}"}}"#
         );
         serde_json::from_str(&json)
@@ -722,10 +827,47 @@ mod tests {
                 skill_type,
                 target: SkillTarget::Oneself,
                 modifier,
+                value_usage: ValueUsage::Direct,
             };
             let actual = Skill::is_effect_positive(&effect);
             assert_eq!(actual, expected, "{skill_type:?} with {modifier}");
         }
+    }
+
+    /// Deserialize a value usage from its ID.
+    fn value_usage(id: u8) -> serde_json::Result<ValueUsage> {
+        serde_json::from_str(&id.to_string())
+    }
+
+    #[test]
+    fn test_value_usage_ids() {
+        assert_eq!(value_usage(1).unwrap(), ValueUsage::Direct);
+        assert_eq!(value_usage(2).unwrap(), ValueUsage::MultiplySkillNum);
+        // Several IDs share the same scaling.
+        for id in 3..=7 {
+            assert_eq!(value_usage(id).unwrap(), ValueUsage::Aoharu, "ID {id}");
+        }
+        assert_eq!(value_usage(8).unwrap(), ValueUsage::MultiplyRandom1);
+        assert_eq!(value_usage(9).unwrap(), ValueUsage::MultiplyRandom2);
+        assert_eq!(value_usage(22).unwrap(), ValueUsage::MultiplySpeed1);
+        assert_eq!(value_usage(23).unwrap(), ValueUsage::MultiplySpeed2);
+        assert_eq!(value_usage(25).unwrap(), ValueUsage::MultiplyTopLeadAmount);
+        // Unknown IDs.
+        for id in [0, 15, 21, 29, 32] {
+            assert!(value_usage(id).is_err(), "ID {id}");
+        }
+    }
+
+    #[test]
+    fn test_is_green() {
+        let skill = |skill_type| {
+            let alternatives = vec![test_utils::alternative("always==1", skill_type, 40.0)];
+            Skill::new("test".to_string(), skill_data(alternatives))
+        };
+        assert!(skill(SkillType::SpeedUp).is_green());
+        assert!(skill(SkillType::AllStatsUp).is_green());
+        assert!(!skill(SkillType::TargetSpeed).is_green());
+        assert!(!skill(SkillType::MultiplyStartDelay).is_green());
     }
 
     #[test]
@@ -733,6 +875,18 @@ mod tests {
         // Every condition in the skill data must parse.
         let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
         assert!(!skills.is_empty());
+
+        // Pre-race effects are applied before the race, where values aren't
+        // scaled.
+        let effects = skills
+            .values()
+            .flat_map(|skill| &skill.alternatives)
+            .flat_map(|alternative| &alternative.effects);
+        for effect in effects {
+            if effect.skill_type.is_pre_race_effect() {
+                assert_eq!(effect.value_usage, ValueUsage::Direct, "{effect:?}");
+            }
+        }
     }
 
     #[test]

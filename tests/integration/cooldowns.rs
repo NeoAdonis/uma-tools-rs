@@ -24,6 +24,7 @@ fn skill(condition: &str, base_cooldown: f64) -> Skill {
                     skill_type: SkillType::TargetSpeed,
                     target: SkillTarget::Oneself,
                     modifier: 0.0001,
+                    value_usage: ValueUsage::Direct,
                 }],
                 precondition: None,
             }],

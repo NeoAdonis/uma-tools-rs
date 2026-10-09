@@ -127,6 +127,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
                         modifier: 0.4,
+                        value_usage: ValueUsage::Direct,
                     }],
                 },
                 // Another precondition (accumulatetime>=10)
@@ -139,6 +140,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
                         modifier: 0.3,
+                        value_usage: ValueUsage::Direct,
                     }],
                 },
                 // No precondition
@@ -151,6 +153,7 @@ fn test_multiple_alternatives_precondition_independence() {
                         skill_type: SkillType::TargetSpeed,
                         target: SkillTarget::Oneself,
                         modifier: 0.5,
+                        value_usage: ValueUsage::Direct,
                     }],
                 },
             ],
@@ -217,6 +220,7 @@ fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: Skill
                     skill_type: effect,
                     target: SkillTarget::Oneself,
                     modifier: 0.035,
+                    value_usage: ValueUsage::Direct,
                 }],
             }],
             popularity: None,

@@ -1,0 +1,176 @@
+use super::*;
+use crate::test_utils::assert_close;
+
+#[test]
+fn test_skill_count_multiplier() {
+    assert_close!(skill_count_multiplier(0), 1.0);
+    assert_close!(skill_count_multiplier(10), 1.1);
+    // Capped at 20 skills.
+    assert_close!(skill_count_multiplier(20), 1.2);
+    assert_close!(skill_count_multiplier(30), 1.2);
+}
+
+#[test]
+fn test_random_multiplier() {
+    let cases = [
+        (0.0, 0.0),
+        (0.59, 0.0),
+        (0.6, 0.02),
+        (0.89, 0.02),
+        (0.9, 0.04),
+        (0.99, 0.04),
+    ];
+    for (roll, expected) in cases {
+        assert_eq!(random_multiplier(roll), expected, "roll {roll}");
+    }
+}
+
+#[test]
+fn test_max_raw_stat_multiplier() {
+    let cases = [
+        (1, 0.8),
+        (599, 0.8),
+        (600, 0.9),
+        (799, 0.9),
+        (800, 1.0),
+        (999, 1.0),
+        (1000, 1.1),
+        (1099, 1.1),
+        (1100, 1.2),
+        (2000, 1.2),
+    ];
+    for (stat, expected) in cases {
+        assert_eq!(max_raw_stat_multiplier(stat), expected, "stat {stat}");
+    }
+}
+
+#[test]
+fn test_green_skill_count_multiplier() {
+    let cases = [
+        (0, 0.0),
+        (2, 0.0),
+        (3, 1.0),
+        (4, 1.0),
+        (5, 2.0),
+        (6, 3.0),
+        (9, 3.0),
+    ];
+    for (count, expected) in cases {
+        assert_eq!(
+            green_skill_count_multiplier(count),
+            expected,
+            "count {count}"
+        );
+    }
+}
+
+#[test]
+fn test_distance_from_first_bonus() {
+    assert_eq!(distance_from_first_bonus(0.0), 0.0);
+    assert_eq!(distance_from_first_bonus(19.9), 0.0);
+    assert_eq!(distance_from_first_bonus(20.0), 0.1);
+    assert_eq!(distance_from_first_bonus(50.0), 0.1);
+}
+
+#[test]
+fn test_mid_side_blocked_time_multiplier() {
+    let cases = [
+        (0.0, 1.0),
+        (1.9, 1.0),
+        (2.0, 2.0),
+        (3.9, 2.0),
+        (4.0, 3.0),
+        (5.9, 3.0),
+        (6.0, 4.0),
+        (10.0, 4.0),
+    ];
+    for (time, expected) in cases {
+        assert_eq!(
+            mid_side_blocked_time_multiplier(time),
+            expected,
+            "time {time}"
+        );
+    }
+}
+
+#[test]
+fn test_speed_multipliers() {
+    let cases = [
+        (1699, 0.0),
+        (1700, 1.0),
+        (1799, 1.0),
+        (1800, 2.0),
+        (1900, 3.0),
+        (1999, 3.0),
+        (2000, 4.0),
+    ];
+    for (speed, expected) in cases {
+        assert_eq!(speed_multiplier_1(speed), expected, "speed {speed}");
+    }
+
+    let cases = [
+        (1000, 1.0),
+        (1399, 1.0),
+        (1400, 2.0),
+        (1599, 2.0),
+        (1600, 3.0),
+    ];
+    for (speed, expected) in cases {
+        assert_eq!(speed_multiplier_2(speed), expected, "speed {speed}");
+    }
+}
+
+#[test]
+fn test_lead_multiplier() {
+    let cases = [
+        (0.0, 1.0),
+        (9.9, 1.0),
+        (10.0, 1.4),
+        (24.9, 1.4),
+        (25.0, 1.8),
+    ];
+    for (lead, expected) in cases {
+        assert_eq!(lead_multiplier(lead), expected, "lead {lead}");
+    }
+}
+
+#[test]
+fn test_late_corner_overtake_multiplier() {
+    let cases = [
+        (0, 1.0),
+        (1, 1.0),
+        (2, 1.1),
+        (3, 1.2),
+        (4, 1.25),
+        (10, 1.25),
+    ];
+    for (overtakes, expected) in cases {
+        assert_eq!(
+            late_corner_overtake_multiplier(overtakes),
+            expected,
+            "overtakes {overtakes}"
+        );
+    }
+}
+
+#[test]
+fn test_fan_count_multiplier() {
+    let cases = [
+        (0, 0.8),
+        (19999, 0.8),
+        (20000, 0.9),
+        (49999, 0.9),
+        (50000, 1.0),
+        (99999, 1.0),
+        (100000, 1.1),
+        (159999, 1.1),
+        (160000, 1.2),
+    ];
+    for (fan_count, expected) in cases {
+        assert_eq!(
+            fan_count_multiplier(fan_count),
+            expected,
+            "fans {fan_count}"
+        );
+    }
+}
