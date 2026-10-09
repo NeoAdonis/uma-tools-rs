@@ -230,33 +230,164 @@ fn test_pace_up_ex_not_before_one_point_five_anniversary() {
     }
 }
 
-#[test]
-fn test_single_front_runner_keeps_speeding_up_with_larger_lead() {
-    // A lone front runner may keep speeding up while less than 12.5m ahead;
-    // otherwise the limit is 4.5m.
-    let mut solver = positioning_solver(
-        &[(Style::Front, 108.0), (Style::Pace, 100.0)],
-        GameVersion::LATEST,
-    );
-    runner_with_style(&mut solver, Style::Front).positioning_strategy =
-        PositioningStrategy::FrontSpeedUp;
-    solver.update_positioning_strategy();
-    assert!(matches!(
-        runner_with_style(&mut solver, Style::Front).positioning_strategy,
-        PositioningStrategy::FrontSpeedUp
-    ));
+/// Positioning strategy of the runner at `position`.
+fn strategy_at(solver: &RaceSolver<Runner>, position: f64) -> PositioningStrategy {
+    let mut runners = solver.runners.iter();
+    runners
+        .find(|r| r.position == position)
+        .unwrap()
+        .positioning_strategy
+}
 
+/// Set the positioning strategy of the runner at `position`.
+fn set_strategy_at(solver: &mut RaceSolver<Runner>, position: f64, strategy: PositioningStrategy) {
+    let mut runners = solver.runners.iter_mut();
+    runners
+        .find(|r| r.position == position)
+        .unwrap()
+        .positioning_strategy = strategy;
+}
+
+/// Update positioning strategies many times without moving, so that wisdom
+/// checks to enter a mode eventually pass.
+fn update_positioning_repeatedly(solver: &mut RaceSolver<Runner>) {
+    for _ in 0..50 {
+        for runner in &mut solver.runners {
+            runner.next_positioning_check = 0.0;
+        }
+        solver.update_positioning_strategy();
+    }
+}
+
+#[test]
+fn test_front_speed_up_distance_by_front_runner_count() {
+    use PositioningStrategy::*;
+
+    // A single front runner may keep speeding up while less than 12.5m ahead;
+    // otherwise the limit is 4.5m. Runaways and runners acting as front runners
+    // because they're rushed don't count as front runners.
+    // (style behind, whether rushed and acting as a front runner, expected).
+    let cases = [
+        (Style::Pace, false, FrontSpeedUp),
+        (Style::Runaway, false, FrontSpeedUp),
+        (Style::Pace, true, FrontSpeedUp),
+        (Style::Front, false, Normal),
+    ];
+    for (behind, rushed, expected) in cases {
+        let mut solver = positioning_solver(
+            &[(Style::Front, 108.0), (behind, 100.0)],
+            GameVersion::LATEST,
+        );
+        if rushed {
+            set_rushed(&mut solver, 1);
+            let rush_state = solver.runners[1].rush_state.as_mut().unwrap();
+            rush_state.style = Style::Front;
+        }
+        set_strategy_at(&mut solver, 108.0, FrontSpeedUp);
+        solver.update_positioning_strategy();
+        assert_eq!(
+            strategy_at(&solver, 108.0),
+            expected,
+            "{behind:?} behind (rushed: {rushed})"
+        );
+    }
+}
+
+#[test]
+fn test_front_speed_up_only_exits_when_far_ahead() {
+    use PositioningStrategy::*;
+
+    // Overtaken: stays (before 1.5 Anniv., so that Pace Up Ex doesn't apply).
     let mut solver = positioning_solver(
-        &[(Style::Front, 108.0), (Style::Runaway, 100.0)],
-        GameVersion::LATEST,
+        &[(Style::Front, 100.0), (Style::Pace, 110.0)],
+        GameVersion::FirstAnniversary,
     );
-    runner_with_style(&mut solver, Style::Front).positioning_strategy =
-        PositioningStrategy::FrontSpeedUp;
+    set_strategy_at(&mut solver, 100.0, FrontSpeedUp);
     solver.update_positioning_strategy();
-    assert!(matches!(
-        runner_with_style(&mut solver, Style::Front).positioning_strategy,
-        PositioningStrategy::Normal
-    ));
+    assert_eq!(strategy_at(&solver, 100.0), FrontSpeedUp);
+
+    // First by less than 4.5m: stays; by more: exits.
+    for (lead, expected) in [(4.0, FrontSpeedUp), (5.0, Normal)] {
+        let mut solver = positioning_solver(
+            &[(Style::Front, 100.0 + lead), (Style::Pace, 100.0)],
+            GameVersion::FirstAnniversary,
+        );
+        set_strategy_at(&mut solver, 100.0 + lead, FrontSpeedUp);
+        solver.update_positioning_strategy();
+        assert_eq!(
+            strategy_at(&solver, 100.0 + lead),
+            expected,
+            "{lead}m ahead"
+        );
+    }
+}
+
+#[test]
+fn test_lone_front_runner_never_speeds_up() {
+    use PositioningStrategy::*;
+
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    update_positioning_repeatedly(&mut solver);
+    assert_eq!(strategy_at(&solver, 100.0), Normal);
+
+    set_strategy_at(&mut solver, 100.0, FrontSpeedUp);
+    solver.update_positioning_strategy();
+    assert_eq!(strategy_at(&solver, 100.0), Normal);
+}
+
+#[test]
+fn test_front_overtake_when_not_first_in_strategy() {
+    use PositioningStrategy::*;
+
+    // Before 1.5 Anniv., so that Pace Up Ex doesn't apply. The Pace runner is
+    // first overall, so no front runner can speed up.
+    let mut solver = positioning_solver(
+        &[
+            (Style::Pace, 120.0),
+            (Style::Front, 110.0),
+            (Style::Front, 100.0),
+        ],
+        GameVersion::FirstAnniversary,
+    );
+    update_positioning_repeatedly(&mut solver);
+    // First among front runners.
+    assert_eq!(strategy_at(&solver, 110.0), Normal);
+    assert_eq!(strategy_at(&solver, 100.0), FrontOvertake);
+
+    // Runaways are a different strategy: the Front runner is first in hers.
+    let mut solver = positioning_solver(
+        &[(Style::Runaway, 150.0), (Style::Front, 110.0)],
+        GameVersion::FirstAnniversary,
+    );
+    update_positioning_repeatedly(&mut solver);
+    assert_eq!(strategy_at(&solver, 110.0), Normal);
+}
+
+#[test]
+fn test_front_overtake_exits_when_far_ahead_in_strategy() {
+    use PositioningStrategy::*;
+
+    // (style, lead over the next runner with the same strategy, expected). The
+    // Pace runner ahead shows that the lead only counts the same strategy.
+    let cases = [
+        (Style::Front, 9.0, FrontOvertake),
+        (Style::Front, 11.0, Normal),
+        (Style::Runaway, 27.0, FrontOvertake),
+        (Style::Runaway, 28.0, Normal),
+    ];
+    for (style, lead, expected) in cases {
+        let mut solver = positioning_solver(
+            &[(Style::Pace, 200.0), (style, 100.0 + lead), (style, 100.0)],
+            GameVersion::FirstAnniversary,
+        );
+        set_strategy_at(&mut solver, 100.0 + lead, FrontOvertake);
+        solver.update_positioning_strategy();
+        assert_eq!(
+            strategy_at(&solver, 100.0 + lead),
+            expected,
+            "{style:?} {lead}m ahead"
+        );
+    }
 }
 
 #[test]

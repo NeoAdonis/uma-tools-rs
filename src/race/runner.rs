@@ -198,6 +198,7 @@ pub const POSITIONING_END_SECTION: u8 = 10;
 /// For front-runners, it determines the pacing behavior to stay ahead or catch
 /// up. For non-front-runners, it determines the pacing behavior to keep their
 /// distance from the pacemaker.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PositioningStrategy {
     /// Run at regular pace.
     Normal,
@@ -924,18 +925,25 @@ impl Runner {
 
     /// Update positioning strategy for front-runners during the first 10 sections
     /// (5/12 of the race). The strategy determines whether to pace up to stay ahead
-    /// or catch up with first place.
+    /// (Speed Up) or to catch up with the first runner of the same strategy
+    /// (Overtake).
     ///
-    /// `distance_ahead` is the distance to the runner behind IF this runner is in
-    /// first place, or 0 otherwise.
+    /// `lead` is the distance to the runner behind if this runner is first
+    /// overall, or `None` otherwise. `strategy_lead` is the distance to the next
+    /// runner with the same strategy if this runner is first among them, or `None`
+    /// otherwise. Both are infinite if there's no such runner behind.
     pub fn update_positioning_front(
         &mut self,
-        distance_ahead: f64,
+        lead: Option<f64>,
+        strategy_lead: Option<f64>,
         is_single_front_runner: bool,
         state: &RaceState,
     ) {
         let elapsed_time = state.elapsed_time;
         let game_version = state.config.game_version;
+        let can_speed_up = |runner: &Self, lead| {
+            runner.can_speed_up_to_front(lead, is_single_front_runner, game_version)
+        };
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
@@ -957,36 +965,28 @@ impl Runner {
                     return;
                 }
 
-                if distance_ahead >= 0.0 {
-                    if !self.can_speed_up_to_front(
-                        distance_ahead,
-                        is_single_front_runner,
-                        game_version,
-                    ) {
-                        return;
-                    }
-                    // Try to stay ahead.
+                if lead.is_some_and(|lead| can_speed_up(self, lead)) {
+                    // First and not far enough ahead: try to stay ahead.
                     self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
-                } else {
-                    // Try to catch up with pacemaker.
+                } else if strategy_lead.is_none() {
+                    // Not first in the same strategy: try to catch up.
                     self.positioning_strategy = PositioningStrategy::FrontOvertake;
                 }
             }
             PositioningStrategy::FrontSpeedUp => {
-                // Exit if sufficiently ahead.
-                if !self.can_speed_up_to_front(distance_ahead, is_single_front_runner, game_version)
-                {
+                // Exit if sufficiently ahead (staying if overtaken).
+                if lead.is_some_and(|lead| !can_speed_up(self, lead)) {
                     self.positioning_strategy = PositioningStrategy::Normal;
                 }
             }
             PositioningStrategy::FrontOvertake => {
-                // Exit if already in first place and well ahead.
+                // Exit if well ahead of the rest of the same strategy.
                 let distance_threshold = if matches!(self.positioning_style(), Style::Runaway) {
                     27.5
                 } else {
                     10.0
                 };
-                if distance_ahead > distance_threshold {
+                if strategy_lead.is_some_and(|lead| lead > distance_threshold) {
                     self.positioning_strategy = PositioningStrategy::Normal;
                 }
             }

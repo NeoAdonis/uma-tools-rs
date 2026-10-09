@@ -710,13 +710,12 @@ impl RaceSolver<Runner> {
         // Debug: check sorting.
         self.assert_runners_sorted();
 
-        // Because we are counting how many runners are *currently* behaving as front
-        // runners rather than *actual* front runners, we cannot use runners_by_style
-        // from RaceState.
+        // Front runners for the purpose of Speed Up mode distances: Runaways and
+        // runners acting as front runners because they're rushed don't count.
         let front_runner_count = self
             .runners
             .iter()
-            .filter(|runner| runner.positioning_style().is_front_like())
+            .filter(|runner| runner.adjusted.style == Style::Front)
             .count();
 
         // Find pacemaker.
@@ -761,15 +760,25 @@ impl RaceSolver<Runner> {
 
             let runner = &self.runners[i];
             if style.is_front_like() {
-                // Determine if we are in first place, and by how much.
-                let distance_ahead = if i == 0 && i + 1 < self.runners.len() {
-                    runner.position - self.runners[i + 1].position
-                } else {
-                    0.0
-                };
+                // Lead over the runner behind if first overall (or alone).
+                let lead = (i == 0).then(|| {
+                    self.runners
+                        .get(1)
+                        .map_or(f64::INFINITY, |next| runner.position - next.position)
+                });
+                // Lead over the next runner with the same strategy if first among them.
+                let same_strategy = |other: &Runner| other.positioning_style() == style;
+                let is_first_in_strategy = !self.runners[..i].iter().any(same_strategy);
+                let strategy_lead = is_first_in_strategy.then(|| {
+                    self.runners[i + 1..]
+                        .iter()
+                        .find(|other| same_strategy(other))
+                        .map_or(f64::INFINITY, |next| runner.position - next.position)
+                });
                 let runner = &mut self.runners[i];
                 runner.update_positioning_front(
-                    distance_ahead,
+                    lead,
+                    strategy_lead,
                     front_runner_count == 1,
                     &self.state,
                 )
