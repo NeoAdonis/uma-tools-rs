@@ -524,13 +524,13 @@ fn location_course() -> Course {
 /// (if any).
 fn place(runner: &mut Runner, course: &Course, position: f64) {
     runner.position = position;
-    runner.corner_manager = CornerManager::new();
+    runner.corner_manager = CornerManager::default();
     runner.corner_manager.check_entry(position, &course.corners);
-    runner.straight_manager = StraightManager::new();
+    runner.straight_manager = StraightManager::default();
     runner
         .straight_manager
         .check_entry(position, &course.straights);
-    runner.slope_manager = SlopeManager::new();
+    runner.slope_manager = SlopeManager::default();
     runner.slope_manager.check_entry(position, &course.slopes);
 }
 

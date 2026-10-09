@@ -18,7 +18,7 @@ fn create_test_straight(start: f64, end: f64) -> Straight {
 
 #[test]
 fn test_corner_entry() {
-    let mut manager = CornerManager::new();
+    let mut manager = CornerManager::default();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
     // Before corner.
@@ -33,7 +33,7 @@ fn test_corner_entry() {
 
 #[test]
 fn test_corner_exit() {
-    let mut manager = CornerManager::new();
+    let mut manager = CornerManager::default();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
     // Enter corner.
@@ -51,7 +51,7 @@ fn test_corner_exit() {
 
 #[test]
 fn test_multiple_corners() {
-    let mut manager = CornerManager::new();
+    let mut manager = CornerManager::default();
     let corners = vec![
         create_test_corner(100.0, 50.0),
         create_test_corner(200.0, 30.0),
@@ -72,7 +72,7 @@ fn test_multiple_corners() {
 
 #[test]
 fn test_slope_entry_uphill() {
-    let mut manager = SlopeManager::new();
+    let mut manager = SlopeManager::default();
     // Positive = uphill.
     let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
 
@@ -89,7 +89,7 @@ fn test_slope_entry_uphill() {
 
 #[test]
 fn test_slope_entry_downhill() {
-    let mut manager = SlopeManager::new();
+    let mut manager = SlopeManager::default();
     // Negative = downhill.
     let slopes = vec![create_test_slope(100.0, 50.0, -0.05)];
 
@@ -102,7 +102,7 @@ fn test_slope_entry_downhill() {
 
 #[test]
 fn test_slope_exit() {
-    let mut manager = SlopeManager::new();
+    let mut manager = SlopeManager::default();
     let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
 
     // Enter slope.
@@ -120,7 +120,7 @@ fn test_slope_exit() {
 
 #[test]
 fn test_straight_entry() {
-    let mut manager = StraightManager::new();
+    let mut manager = StraightManager::default();
     let straights = vec![create_test_straight(100.0, 150.0)];
 
     // Before straight.
@@ -135,7 +135,7 @@ fn test_straight_entry() {
 
 #[test]
 fn test_straight_exit() {
-    let mut manager = StraightManager::new();
+    let mut manager = StraightManager::default();
     let straights = vec![create_test_straight(100.0, 150.0)];
 
     // Enter straight.
@@ -153,7 +153,7 @@ fn test_straight_exit() {
 
 #[test]
 fn test_multiple_straights() {
-    let mut manager = StraightManager::new();
+    let mut manager = StraightManager::default();
     let straights = vec![
         create_test_straight(100.0, 150.0),
         create_test_straight(200.0, 230.0),

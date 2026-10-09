@@ -1,17 +1,12 @@
 use crate::course::geometry::*;
 
 /// Structure used for corner entry/exit operations.
+#[derive(Default)]
 pub struct CornerManager {
     current_corner: Option<usize>,
 }
 
 impl CornerManager {
-    pub fn new() -> Self {
-        CornerManager {
-            current_corner: None,
-        }
-    }
-
     /// Check for corner entry, returns corner index if entered.
     pub fn check_entry(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
         if self.current_corner.is_some() {
@@ -46,24 +41,13 @@ impl CornerManager {
     }
 }
 
-impl Default for CornerManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Structure used for slope entry/exit operations.
+#[derive(Default)]
 pub struct SlopeManager {
     current_slope: Option<usize>,
 }
 
 impl SlopeManager {
-    pub fn new() -> Self {
-        SlopeManager {
-            current_slope: None,
-        }
-    }
-
     /// Check for slope entry, returns (slope index, slope type) if entered.
     pub fn check_entry(&mut self, position: f64, slopes: &[Slope]) -> Option<(usize, SlopeType)> {
         if self.current_slope.is_some() {
@@ -99,24 +83,13 @@ impl SlopeManager {
     }
 }
 
-impl Default for SlopeManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Structure used for straight entry/exit operations.
+#[derive(Default)]
 pub struct StraightManager {
     current_straight: Option<usize>,
 }
 
 impl StraightManager {
-    pub fn new() -> Self {
-        StraightManager {
-            current_straight: None,
-        }
-    }
-
     /// Check for straight entry, returns straight index if entered.
     pub fn check_entry(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
         if self.current_straight.is_some() {
@@ -148,12 +121,6 @@ impl StraightManager {
     /// Get the current straight index if in a straight.
     pub fn current_straight(&self) -> Option<usize> {
         self.current_straight
-    }
-}
-
-impl Default for StraightManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
