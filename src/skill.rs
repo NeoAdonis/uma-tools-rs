@@ -919,14 +919,7 @@ mod tests {
             (SkillType::TargetSpeed, -0.1, false),
         ];
         for (skill_type, modifier, expected) in cases {
-            let effect = SkillEffect {
-                skill_type,
-                target: SkillTarget::Oneself,
-                modifier,
-                value_usage: ValueUsage::Direct,
-                additional: AdditionalActivation::Regular,
-            };
-            let actual = Skill::is_effect_positive(&effect);
+            let actual = Skill::is_effect_positive(&test_utils::effect(skill_type, modifier));
             assert_eq!(actual, expected, "{skill_type:?} with {modifier}");
         }
     }

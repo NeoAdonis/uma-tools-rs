@@ -1,8 +1,8 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::solver::RaceSolver;
-use crate::skill::{AdditionalActivation, SkillEffect, SkillTarget, SkillType, ValueUsage};
-use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
+use crate::skill::SkillType;
+use crate::test_utils::{assert_close, effect, ready_solver, seeded_config, uma};
 use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
@@ -63,16 +63,6 @@ fn placeholder() -> LastSpurt {
         max_speed: 0.0,
         target_distance: 0.0,
         category: LastSpurtCategory::CannotFinish,
-    }
-}
-
-fn recovery(modifier: f64) -> SkillEffect {
-    SkillEffect {
-        skill_type: SkillType::Recovery,
-        target: SkillTarget::Oneself,
-        modifier,
-        value_usage: ValueUsage::Direct,
-        additional: AdditionalActivation::Regular,
     }
 }
 
@@ -190,7 +180,7 @@ fn test_recovery_recalculates_only_from_late_phase() {
     move_to_section(&mut solver, 4);
     let runner = &mut solver.runners[0];
     runner.apply_skill_effect(
-        &recovery(0.05),
+        &effect(SkillType::Recovery, 0.05),
         0.0,
         OvertakeExtension::default(),
         0.0,
@@ -202,7 +192,7 @@ fn test_recovery_recalculates_only_from_late_phase() {
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
     runner.apply_skill_effect(
-        &recovery(0.05),
+        &effect(SkillType::Recovery, 0.05),
         0.0,
         OvertakeExtension::default(),
         0.0,
@@ -218,7 +208,7 @@ fn test_recovery_does_not_recalculate_before_first_anniversary() {
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
     runner.apply_skill_effect(
-        &recovery(0.05),
+        &effect(SkillType::Recovery, 0.05),
         0.0,
         OvertakeExtension::default(),
         0.0,
@@ -238,7 +228,7 @@ fn test_hp_loss_is_not_a_heal() {
 
     // 2% of maximum HP.
     runner.apply_skill_effect(
-        &recovery(-0.02),
+        &effect(SkillType::Recovery, -0.02),
         0.0,
         OvertakeExtension::default(),
         0.0,

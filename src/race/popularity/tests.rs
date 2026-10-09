@@ -1,39 +1,6 @@
 use super::*;
-use crate::skill::{
-    AdditionalActivation, DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData,
-    SkillEffect, SkillRarity, SkillTarget, SkillType, TimeUsage, ValueUsage,
-};
-use crate::test_utils::assert_close;
-
-/// Create a skill with a single alternative with the given effects and no
-/// popularity data.
-fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, f64)]) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity,
-            alternatives: vec![SkillAlternative {
-                base_duration: 3.0,
-                base_cooldown: DEFAULT_COOLDOWN,
-                condition: "always==1".parse().unwrap(),
-                precondition: None,
-                effects: effects
-                    .iter()
-                    .map(|&(skill_type, target, modifier)| SkillEffect {
-                        skill_type,
-                        target,
-                        modifier,
-                        value_usage: ValueUsage::Direct,
-                        additional: AdditionalActivation::Regular,
-                    })
-                    .collect(),
-                time_usage: TimeUsage::Direct,
-            }],
-            popularity: None,
-            wisdom_check: true,
-        },
-    )
-}
+use crate::skill::{PopularityStat as Stat, SkillData, SkillType};
+use crate::test_utils::{alternative, assert_close, skill_data};
 
 /// Create popularity points with the given points added to each stat.
 fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
@@ -71,19 +38,12 @@ fn test_skill_popularity_from_data() {
 fn test_skill_popularity_reads_data() {
     use crate::skill::SkillPopularity as Entry;
 
-    let base = skill(
-        "1",
-        SkillRarity::Gold,
-        &[(SkillType::TargetSpeed, SkillTarget::Oneself, 0.35)],
-    );
     let with_popularity = |popularity| {
-        Skill::new(
-            base.id.clone(),
-            SkillData {
-                popularity,
-                ..(*base).clone()
-            },
-        )
+        let data = SkillData {
+            popularity,
+            ..skill_data(vec![])
+        };
+        Skill::new("1".to_string(), data)
     };
     let with_data = |entries: Vec<Entry>| with_popularity(Some(entries));
     let entry = |stat, value| Entry { stat, value };
@@ -154,28 +114,19 @@ fn test_skill_popularity_deserialization() {
 fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
     use crate::skill::SkillPopularity as Entry;
 
-    Skill::new(
-        "1".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: conditions
-                .iter()
-                .map(|condition| SkillAlternative {
-                    base_duration: 3.0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    condition: condition.parse().unwrap(),
-                    precondition: None,
-                    effects: vec![],
-                    time_usage: TimeUsage::Direct,
-                })
-                .collect(),
-            popularity: Some(vec![Entry {
-                stat: Stat::Speed,
-                value: 100,
-            }]),
-            wisdom_check,
-        },
-    )
+    let alternatives = conditions
+        .iter()
+        .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.35))
+        .collect();
+    let data = SkillData {
+        popularity: Some(vec![Entry {
+            stat: Stat::Speed,
+            value: 100,
+        }]),
+        wisdom_check,
+        ..skill_data(alternatives)
+    };
+    Skill::new("1".to_string(), data)
 }
 
 /// Get the speed points a skill adds to a Pace runner with 1000 wisdom on a

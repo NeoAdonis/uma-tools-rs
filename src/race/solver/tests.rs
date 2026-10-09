@@ -4,10 +4,7 @@ use crate::course::LaneType;
 use crate::course::geometry::Slope;
 use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
-use crate::test_utils::{
-    alternative, assert_close, load_course, race_params, ready_solver, seeded_config, skill,
-    skill_data, uma,
-};
+use crate::test_utils::*;
 use crate::trigger::skill_activation::PendingEffect;
 use crate::units::horse_lanes_to_course_widths;
 
@@ -2001,11 +1998,8 @@ fn test_pending_effects_apply_to_targets() {
     let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
     solver.runners[0].pending_effects.push(PendingEffect {
         effect: SkillEffect {
-            skill_type: SkillType::CurrentSpeed,
             target: SkillTarget::BehindSelf { count: 1 },
-            modifier: -0.15,
-            value_usage: ValueUsage::Direct,
-            additional: AdditionalActivation::Regular,
+            ..effect(SkillType::CurrentSpeed, -0.15)
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2023,20 +2017,15 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     // A buff on oneself, a debuff on the runner behind, and a pre-race effect on
     // everyone (applied before the race, if at all, so never queued).
     let mut alternative = alternative("always==1", SkillType::TargetSpeed, 0.1);
-    let on_others = |skill_type, target, modifier| SkillEffect {
-        skill_type,
-        target,
-        modifier,
-        value_usage: ValueUsage::Direct,
-        additional: AdditionalActivation::Regular,
-    };
     alternative.effects.extend([
-        on_others(
-            SkillType::CurrentSpeed,
-            SkillTarget::BehindSelf { count: 1 },
-            -0.15,
-        ),
-        on_others(SkillType::SpeedUp, SkillTarget::All, -60.0),
+        SkillEffect {
+            target: SkillTarget::BehindSelf { count: 1 },
+            ..effect(SkillType::CurrentSpeed, -0.15)
+        },
+        SkillEffect {
+            target: SkillTarget::All,
+            ..effect(SkillType::SpeedUp, -60.0)
+        },
     ]);
     let debuff = Skill::new("debuff".to_string(), skill_data(vec![alternative]));
 
@@ -2082,11 +2071,8 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
 fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
     PendingEffect {
         effect: SkillEffect {
-            skill_type,
             target: SkillTarget::All,
-            modifier,
-            value_usage: ValueUsage::Direct,
-            additional: AdditionalActivation::Regular,
+            ..effect(skill_type, modifier)
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2317,13 +2303,7 @@ fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)])
         base_duration,
         effects: effects
             .iter()
-            .map(|&(skill_type, modifier)| SkillEffect {
-                skill_type,
-                target: SkillTarget::Oneself,
-                modifier,
-                value_usage: ValueUsage::Direct,
-                additional: AdditionalActivation::Regular,
-            })
+            .map(|&(skill_type, modifier)| effect(skill_type, modifier))
             .collect(),
         ..alternative("always==1", SkillType::SpeedUp, 0.0)
     };
@@ -3100,10 +3080,10 @@ fn test_overtakes_extend_effects() {
     // Two effects extended by overtaking, and another skill's effect that isn't.
     let mut alternative =
         timed_skill("extended", TimeUsage::IncrementOrderUp).alternatives[0].clone();
-    alternative.effects.push(SkillEffect {
-        skill_type: SkillType::Acceleration,
-        ..alternative.effects[0].clone()
-    });
+    alternative.effects.push(effect(
+        SkillType::Acceleration,
+        alternative.effects[0].modifier,
+    ));
     let extended = Skill::new("extended".to_string(), skill_data(vec![alternative]));
     let direct = timed_skill("direct", TimeUsage::Direct);
     let mut solver = timed_skill_solver(vec![extended, direct]);
@@ -3181,9 +3161,8 @@ fn test_uphills_climbed_extend_duration() {
 fn additional_skill(id: &str, additional: AdditionalActivation) -> Skill {
     let mut alternative = alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25);
     alternative.effects.push(SkillEffect {
-        modifier: 0.05,
         additional,
-        ..alternative.effects[0].clone()
+        ..effect(SkillType::TargetSpeed, 0.05)
     });
     Skill::new(id.to_string(), skill_data(vec![alternative]))
 }

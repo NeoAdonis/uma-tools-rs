@@ -105,8 +105,21 @@ pub(crate) fn ready_solver(
     solver.ready_runners()
 }
 
-/// Skill alternative with a single effect on oneself, a base duration of 3
-/// seconds and no precondition.
+/// Regular skill effect on oneself with a direct value.
+///
+/// Override fields with `SkillEffect { target, ..effect(...) }`.
+pub(crate) fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
+    SkillEffect {
+        skill_type,
+        target: SkillTarget::Oneself,
+        modifier,
+        value_usage: ValueUsage::Direct,
+        additional: AdditionalActivation::Regular,
+    }
+}
+
+/// Skill alternative with a single [`effect`], a base duration of 3 seconds and
+/// no precondition.
 pub(crate) fn alternative(
     condition: &str,
     skill_type: SkillType,
@@ -117,13 +130,7 @@ pub(crate) fn alternative(
         base_cooldown: DEFAULT_COOLDOWN,
         condition: condition.parse().unwrap(),
         precondition: None,
-        effects: vec![SkillEffect {
-            skill_type,
-            target: SkillTarget::Oneself,
-            modifier,
-            value_usage: ValueUsage::Direct,
-            additional: AdditionalActivation::Regular,
-        }],
+        effects: vec![effect(skill_type, modifier)],
         time_usage: TimeUsage::Direct,
     }
 }
