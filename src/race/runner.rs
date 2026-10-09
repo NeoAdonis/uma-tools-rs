@@ -2760,10 +2760,11 @@ impl Runner {
     pub fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
 
-        // For expiring CurrentSpeedWithNaturalDeceleration effects, compensate speed
-        // then allow natural deceleration to take effect.
+        // Transfer expiring CurrentSpeedWithNaturalDeceleration modifiers into the
+        // runner's speed, so that it decelerates naturally instead of dropping
+        // instantly.
         self.active_timed_effects.iter().for_each(|effect| {
-            if effect.expires_at > elapsed_time
+            if effect.expires_at <= elapsed_time
                 && matches!(
                     effect.effect.skill_type,
                     SkillType::CurrentSpeedWithNaturalDeceleration

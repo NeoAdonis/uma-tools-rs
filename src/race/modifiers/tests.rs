@@ -230,3 +230,39 @@ fn test_track_condition_modifiers() {
     // Heavy track should have more penalty than firm.
     assert!(heavy_modifier > firm_modifier);
 }
+
+#[test]
+fn test_current_speed_with_natural_deceleration_transfers_on_expiry() {
+    let mut solver = high_wiz_race(speed_skill(
+        SkillRarity::White,
+        SkillType::CurrentSpeedWithNaturalDeceleration,
+    ));
+    let runner = &mut solver.runners[0];
+    runner.speed = 20.0;
+    runner.activate_skill(0, 0, &solver.state);
+    let expires_at = runner.active_timed_effects[0].expires_at;
+
+    // While active, only the modifier applies.
+    runner.update_skill_durations(expires_at - 0.1);
+    assert_close!(runner.speed, 20.0);
+    assert_close!(runner.skill_modifiers.current_speed, 0.35);
+
+    // On expiry, the modifier is transferred into the speed.
+    runner.update_skill_durations(expires_at);
+    assert_close!(runner.speed, 20.35);
+    assert_close!(runner.skill_modifiers.current_speed, 0.0);
+    assert!(runner.active_timed_effects.is_empty());
+}
+
+#[test]
+fn test_current_speed_drops_on_expiry() {
+    let mut solver = high_wiz_race(speed_skill(SkillRarity::White, SkillType::CurrentSpeed));
+    let runner = &mut solver.runners[0];
+    runner.speed = 20.0;
+    runner.activate_skill(0, 0, &solver.state);
+    let expires_at = runner.active_timed_effects[0].expires_at;
+
+    runner.update_skill_durations(expires_at);
+    assert_close!(runner.speed, 20.0);
+    assert_close!(runner.skill_modifiers.current_speed, 0.0);
+}

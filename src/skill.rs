@@ -38,9 +38,13 @@ pub enum SkillType {
     RushTimeUp = 13,
     /// Add seconds to start delay.
     AddStartDelay = 14,
-    /// Modify current speed directly.
+    /// Modify current speed directly. The speed drops instantly on expiry.
     CurrentSpeed = 21,
-    /// Modify current speed with natural deceleration.
+    /// Modify current speed but allow for natural deceleration.
+    ///
+    /// When activated, it behaves like [`SkillType::CurrentSpeed`]. On expiry, the
+    /// same amount is added once to the runner's speed, so that it decelerates
+    /// naturally instead of dropping instantly.
     CurrentSpeedWithNaturalDeceleration = 22,
     /// Modify target speed.
     TargetSpeed = 27,
