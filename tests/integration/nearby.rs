@@ -1,4 +1,4 @@
-use crate::common::{load_course, race_params, seeded_config};
+use crate::common::{load_course, race_params, seeded_config, uma};
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::{DELTA_TIME, RaceSolver};
 use uma_tools::uma::*;
@@ -6,20 +6,9 @@ use uma_tools::uma::*;
 fn ready_runners(count: usize) -> Vec<Runner> {
     let course = load_course(10101);
     let params = race_params();
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    };
     let mut solver = RaceSolver::new(course, params, &seeded_config(42));
     for _ in 0..count {
-        solver.add_runner(uma, Motivation::Normal, vec![]);
+        solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
     }
     solver.ready_runners().runners
 }

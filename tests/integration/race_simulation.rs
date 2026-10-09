@@ -2,8 +2,8 @@
 //!
 //! These tests verify the public API of the race simulation system.
 
+use crate::common::{load_course, race_params, seeded_config, uma};
 use uma_tools::configuration::{Configuration, GameVersion};
-use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::uma::*;
@@ -41,8 +41,7 @@ fn test_basic_race_simulation() {
 
 #[test]
 fn test_multi_runner_race_simulation() {
-    let course = Course::from_json_file("data/course_data.json", "10101")
-        .expect("Failed to load course data");
+    let course = load_course(10101);
     let styles = [
         Style::Runaway,
         Style::Front,
@@ -71,31 +70,15 @@ fn test_multi_runner_race_simulation() {
     {
         let config = Configuration {
             game_version,
-            seed: Some(seed),
-            ..Default::default()
+            ..seeded_config(seed)
         };
         let params = RaceParameters {
-            track_condition: TrackCondition::Firm,
-            weather: Weather::Sunny,
-            season: Season::Spring,
-            time: Time::None,
-            grade: Grade::G1,
             gates: styles.len() as u8,
+            ..race_params()
         };
         let mut solver = RaceSolver::new(course.clone(), params, &config);
         for style in styles {
-            let uma = Uma {
-                speed: 1200,
-                stamina: 1000,
-                power: 1000,
-                guts: 800,
-                wiz: 1000,
-                style,
-                distance_aptitude: Aptitude::A,
-                track_aptitude: Aptitude::A,
-                style_aptitude: Aptitude::A,
-            };
-            solver.add_runner(uma, Motivation::Normal, vec![]);
+            solver.add_runner(uma(style), Motivation::Normal, vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();
@@ -122,34 +105,15 @@ fn test_same_seed_gives_same_race() {
 
     // Final position and time of every runner, in gate order
     let race = |seed: u64| {
-        let course = Course::from_json_file("data/course_data.json", "10101")
-            .expect("Failed to load course data");
+        let course = load_course(10101);
         let params = RaceParameters {
-            track_condition: TrackCondition::Firm,
-            weather: Weather::Sunny,
-            season: Season::Spring,
-            time: Time::None,
-            grade: Grade::G1,
             gates: styles.len() as u8,
+            ..race_params()
         };
-        let config = Configuration {
-            seed: Some(seed),
-            ..Default::default()
-        };
+        let config = seeded_config(seed);
         let mut solver = RaceSolver::new(course, params, &config);
         for style in styles {
-            let uma = Uma {
-                speed: 1200,
-                stamina: 1000,
-                power: 1000,
-                guts: 800,
-                wiz: 1000,
-                style,
-                distance_aptitude: Aptitude::A,
-                track_aptitude: Aptitude::A,
-                style_aptitude: Aptitude::A,
-            };
-            solver.add_runner(uma, Motivation::Normal, vec![]);
+            solver.add_runner(uma(style), Motivation::Normal, vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();

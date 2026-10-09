@@ -3,10 +3,11 @@
 //! These tests verify that OR branches properly isolate from each other,
 //! ensuring only one branch can activate per skill (mutual exclusion).
 
-use crate::common::{load_course, make_skill};
+use crate::common::{load_course, skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use uma_tools::condition::parser::parse_condition;
+use uma_tools::skill::SkillType;
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
 
@@ -131,10 +132,11 @@ fn test_or_branch_skill_id_uniqueness() {
     // Test: Each OR branch gets unique skill_id
     // Tests: OR branches are treated as separate skills in the scheduler
 
-    let skill = make_skill(
+    let skill = skill(
         "test_unique_ids",
         "distance_rate>=50@hp_per<=50@accumulatetime>=10",
-        "",
+        SkillType::TargetSpeed,
+        0.4,
     );
 
     let course = load_course(10104);
@@ -170,10 +172,11 @@ fn test_or_branches_independent_activation_tracking() {
     // Test: Each OR branch tracks activation independently
     // Tests: each branch starts off cooldown
 
-    let skill = make_skill(
+    let skill = skill(
         "test_independent_tracking",
         "distance_rate>=50@hp_per<=50",
-        "",
+        SkillType::TargetSpeed,
+        0.4,
     );
 
     let course = load_course(10104);

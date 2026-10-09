@@ -1,67 +1,24 @@
 //! Runtime tests for distance-based triggers (random points, remaining distance,
 //! and ranges made of monotonic comparisons).
 
-use crate::common::{load_course, race_params};
-use uma_tools::configuration::{Configuration, GameVersion};
+use crate::common::{load_course, negligible_skill, ready_solver, seeded_config, uma};
 use uma_tools::course::Phase;
 use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::{DELTA_TIME, RaceSolver};
-use uma_tools::skill::*;
+use uma_tools::race::solver::DELTA_TIME;
 use uma_tools::trigger::skill_activation::TriggerCondition;
 use uma_tools::uma::*;
 
 /// Length of the test course (10104) in meters.
 const COURSE_DISTANCE: f64 = 2000.0;
 
-/// Build a skill with the given condition and a harmless effect.
-/// Wisdom check is disabled so the skill is always available.
-fn skill(condition: &str) -> Skill {
-    Skill::new(
-        "999999".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                base_duration: 1.0,
-                base_cooldown: DEFAULT_COOLDOWN,
-                condition: condition.parse().unwrap(),
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 0.0001,
-                    value_usage: ValueUsage::Direct,
-                    additional: AdditionalActivation::Regular,
-                }],
-                precondition: None,
-                time_usage: TimeUsage::Direct,
-            }],
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
-}
-
 /// Run a single-runner race with the given skill condition and return the runner.
 fn run_race(condition: &str, rng_seed: u64) -> Runner {
-    let params = race_params();
     let uma = Uma {
-        speed: 1200,
         stamina: 1200,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
-    let config = Configuration {
-        game_version: GameVersion::LATEST,
-        seed: Some(rng_seed),
-        ..Default::default()
-    };
-    let mut solver = RaceSolver::new(load_course(10104), params, &config);
-    solver.add_runner(uma, Motivation::Normal, vec![skill(condition)]);
-    let mut solver = solver.ready_runners();
+    let skills = vec![negligible_skill(condition)];
+    let mut solver = ready_solver(10104, uma, skills, &seeded_config(rng_seed));
     solver.run();
     solver.runners.remove(0)
 }
@@ -135,9 +92,9 @@ fn test_distance_windows_are_positions_in_order() {
     use uma_tools::units::furlongs_to_meters;
 
     let skills = [
-        skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
-        skill("distance_rate>=50"),    // 1000m
-        skill("furlong>=3"),           // 3 furlongs
+        negligible_skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
+        negligible_skill("distance_rate>=50"),    // 1000m
+        negligible_skill("furlong>=3"),           // 3 furlongs
     ];
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(&skills, &load_course(10104), &mut rng);
@@ -165,7 +122,7 @@ fn test_reversed_remain_distance_window_range() {
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(
-        &[skill("remain_distance>=350")],
+        &[negligible_skill("remain_distance>=350")],
         &load_course(10104),
         &mut rng,
     );
@@ -183,7 +140,9 @@ fn test_remain_distance_pair_window_range() {
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
     let scheduler = build_trigger_scheduler(
-        &[skill("remain_distance<=401&remain_distance>=399")],
+        &[negligible_skill(
+            "remain_distance<=401&remain_distance>=399",
+        )],
         &load_course(10104),
         &mut rng,
     );

@@ -4,7 +4,10 @@
 //! by focusing on precondition-trigger interaction, edge cases and unlocking skills
 //! during a race.
 
-use crate::common::{activation_logics, load_course, make_skill, race_params, seeded_config};
+use crate::common::{
+    activation_logics, alternative, alternative_with_precondition, load_course, ready_solver,
+    seeded_config, skill, skill_data, uma,
+};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use uma_tools::race::runner::Runner;
@@ -25,10 +28,14 @@ fn test_precondition_with_window_trigger() {
     // Condition: is_last_straight==1
     // Tests: Complex precondition properly separated from spatial window trigger
 
-    let skill = make_skill(
-        "100031",
-        "is_last_straight==1",
-        "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
+    let skill = Skill::new(
+        "100031".to_string(),
+        skill_data(vec![alternative_with_precondition(
+            "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
+            "is_last_straight==1",
+            SkillType::TargetSpeed,
+            0.4,
+        )]),
     );
 
     let course = load_course(10104); // 2000m course
@@ -75,11 +82,13 @@ fn test_precondition_with_or_condition() {
     // Test: Precondition applies to all OR branches equally
     // Tests: Each OR branch inherits the same precondition
 
-    let skill = make_skill(
-        "test_or_precond",
-        "distance_rate>=80@hp_per<=50@accumulatetime>=10", // 3 OR branches
+    let alternative = alternative_with_precondition(
         "phase>=2&ground_type==1",                         // Shared precondition
+        "distance_rate>=80@hp_per<=50@accumulatetime>=10", // 3 OR branches
+        SkillType::TargetSpeed,
+        0.4,
     );
+    let skill = Skill::new("test_or_precond".to_string(), skill_data(vec![alternative]));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -112,60 +121,22 @@ fn test_multiple_alternatives_precondition_independence() {
     // Test: Multiple alternatives with different preconditions
     // Tests: Each alternative's precondition is stored independently
 
+    let alternatives = vec![
+        // Has precondition (phase>=2)
+        alternative_with_precondition("phase>=2", "distance_rate>=80", SkillType::TargetSpeed, 0.4),
+        // Another precondition (accumulatetime>=10)
+        alternative_with_precondition(
+            "accumulatetime>=10",
+            "hp_per<=50",
+            SkillType::TargetSpeed,
+            0.3,
+        ),
+        // No precondition
+        alternative("is_last_straight==1", SkillType::TargetSpeed, 0.5),
+    ];
     let skill = Skill::new(
         "test_multi_alt_precond".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![
-                // Has precondition (phase>=2)
-                SkillAlternative {
-                    condition: "distance_rate>=80".parse().unwrap(),
-                    precondition: Some("phase>=2".parse().unwrap()),
-                    base_duration: 4.0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 0.4,
-                        value_usage: ValueUsage::Direct,
-                        additional: AdditionalActivation::Regular,
-                    }],
-                    time_usage: TimeUsage::Direct,
-                },
-                // Another precondition (accumulatetime>=10)
-                SkillAlternative {
-                    condition: "hp_per<=50".parse().unwrap(),
-                    precondition: Some("accumulatetime>=10".parse().unwrap()),
-                    base_duration: 4.0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 0.3,
-                        value_usage: ValueUsage::Direct,
-                        additional: AdditionalActivation::Regular,
-                    }],
-                    time_usage: TimeUsage::Direct,
-                },
-                // No precondition
-                SkillAlternative {
-                    condition: "is_last_straight==1".parse().unwrap(),
-                    precondition: None,
-                    base_duration: 4.0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 0.5,
-                        value_usage: ValueUsage::Direct,
-                        additional: AdditionalActivation::Regular,
-                    }],
-                    time_usage: TimeUsage::Direct,
-                },
-            ],
-            popularity: None,
-            wisdom_check: true,
-        },
+        skill_data(alternatives),
     );
 
     let course = load_course(10104);
@@ -211,64 +182,29 @@ fn test_multiple_alternatives_precondition_independence() {
 /// 2000m medium turf course with 4 corners and no slopes.
 const RUNTIME_COURSE: u32 = 10104;
 
-/// Build a skill with a single alternative that always passes its wisdom check.
-fn guaranteed_skill(id: &str, condition: &str, precondition: &str, effect: SkillType) -> Skill {
-    Skill::new(
-        id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                condition: condition.parse().unwrap(),
-                precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-                base_duration: 3.0,
-                base_cooldown: DEFAULT_COOLDOWN,
-                effects: vec![SkillEffect {
-                    skill_type: effect,
-                    target: SkillTarget::Oneself,
-                    modifier: 0.035,
-                    value_usage: ValueUsage::Direct,
-                    additional: AdditionalActivation::Regular,
-                }],
-                time_usage: TimeUsage::Direct,
-            }],
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
-}
-
-/// Build a target speed skill that always passes its wisdom check.
+/// Always available target speed skill, locked until `precondition` is
+/// satisfied.
 fn speed_skill(id: &str, condition: &str, precondition: &str) -> Skill {
-    guaranteed_skill(id, condition, precondition, SkillType::TargetSpeed)
+    let alternative =
+        alternative_with_precondition(precondition, condition, SkillType::TargetSpeed, 0.035);
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
 }
 
-/// Get a single ready runner with the given skills.
-fn ready_runner(skills: Vec<Skill>) -> (RaceSolver<Runner>, usize) {
-    let uma = Uma {
-        speed: 1200,
-        stamina: 1000,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Front,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-    };
-    let mut solver = RaceSolver::new(
-        load_course(RUNTIME_COURSE),
-        race_params(),
+/// Ready race with a single runner with the given skills.
+fn ready_runner(skills: Vec<Skill>) -> RaceSolver<Runner> {
+    ready_solver(
+        RUNTIME_COURSE,
+        uma(Style::Front),
+        skills,
         &seeded_config(42),
-    );
-    solver.add_runner(uma, Motivation::Normal, skills);
-    (solver.ready_runners(), 0)
+    )
 }
 
 /// Run a race with a single runner and return where each skill activated.
 fn activation_distances(skills: Vec<Skill>) -> Vec<(String, f64)> {
-    let (mut solver, runner) = ready_runner(skills);
+    let mut solver = ready_runner(skills);
     solver.run();
-    solver.runners[runner]
+    solver.runners[0]
         .activated_skills
         .iter()
         .map(|record| (record.skill_id.clone(), record.distance))
@@ -318,7 +254,7 @@ fn test_heal_precondition_unlocks_on_heal_activation() {
     // Mid phase (17%-42% of the race)
     let precondition = "phase_firsthalf==1&is_activate_heal_skill==1";
     let joy = || speed_skill("joy", "distance_rate>=45&order<=18", precondition);
-    let heal = guaranteed_skill("heal", "distance_rate>=20", "", SkillType::Recovery);
+    let heal = skill("heal", "distance_rate>=20", SkillType::Recovery, 0.035);
 
     let activations = activation_distances(vec![heal, joy()]);
     assert!(activation_distance(&activations, "heal").is_some());
@@ -354,7 +290,7 @@ fn test_last_straight_onetime_precondition() {
 #[test]
 fn test_static_preconditions_resolved_at_race_start() {
     // Course 10104 is a medium distance (distance_type==3) turf course
-    let (solver, runner) = ready_runner(vec![
+    let solver = ready_runner(vec![
         speed_skill("medium", "distance_rate>=10&order<=18", "distance_type==3"),
         speed_skill("short", "distance_rate>=10&order<=18", "distance_type==1"),
         speed_skill(
@@ -363,7 +299,7 @@ fn test_static_preconditions_resolved_at_race_start() {
             "ground_type==1&order<=18",
         ),
     ]);
-    let scheduler = &solver.runners[runner].trigger_scheduler;
+    let scheduler = &solver.runners[0].trigger_scheduler;
 
     // True static comparisons are removed; unsatisfiable windows are dropped
     let windows: Vec<_> = scheduler

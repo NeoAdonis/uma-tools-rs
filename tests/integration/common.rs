@@ -1,11 +1,37 @@
 //! Shared helpers for integration tests.
+//!
+//! These mirror the crate's internal `test_utils`, which isn't available here,
+//! so tests can be moved between both with few changes.
 
 use uma_tools::configuration::Configuration;
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
+use uma_tools::race::runner::Runner;
+use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
 use uma_tools::trigger::skill_activation::{LogicAction, SkillActivationLogic};
 use uma_tools::trigger::system::TriggerScheduler;
+use uma_tools::uma::*;
+
+/// Assert that two floats are equal, or within `1e-9` of each other.
+///
+/// Takes an optional `tolerance = ...` and an optional format string with
+/// arguments, which is prepended to the failure message as context.
+macro_rules! assert_close {
+    ($actual:expr, $expected:expr, tolerance = $tolerance:expr $(, $($arg:tt)+)?) => {{
+        let (actual, expected): (f64, f64) = ($actual, $expected);
+        let message = format!("expected {expected}, got {actual}");
+        $(let message = format!("{}: {message}", format_args!($($arg)+));)?
+        assert!(
+            actual == expected || (actual - expected).abs() < $tolerance,
+            "{message}"
+        );
+    }};
+    ($actual:expr, $expected:expr $(, $($arg:tt)+)?) => {
+        $crate::common::assert_close!($actual, $expected, tolerance = 1e-9 $(, $($arg)+)?)
+    };
+}
+pub(crate) use assert_close;
 
 /// Load a course from `data/course_data.json`.
 pub fn load_course(course_id: u32) -> Course {
@@ -33,39 +59,100 @@ pub fn seeded_config(seed: u64) -> Configuration {
     }
 }
 
-/// Build a white target speed skill with one `(condition, precondition)` pair
-/// per alternative.
-pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -> Skill {
+/// Baseline runner with the given style and A aptitudes.
+///
+/// Override single stats with `Uma { wiz: 100, ..uma(Style::Late) }`.
+pub fn uma(style: Style) -> Uma {
+    Uma {
+        speed: 1200,
+        stamina: 1000,
+        power: 1000,
+        guts: 800,
+        wiz: 1000,
+        style,
+        distance_aptitude: Aptitude::A,
+        track_aptitude: Aptitude::A,
+        style_aptitude: Aptitude::A,
+    }
+}
+
+/// Ready race with standard parameters and a single runner with normal
+/// motivation.
+pub fn ready_solver(
+    course_id: u32,
+    uma: Uma,
+    skills: Vec<Skill>,
+    config: &Configuration,
+) -> RaceSolver<Runner> {
+    let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
+    solver.add_runner(uma, Motivation::Normal, skills);
+    solver.ready_runners()
+}
+
+/// Regular skill effect on oneself with a direct value.
+///
+/// Override fields with `SkillEffect { target, ..effect(...) }`.
+pub fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
+    SkillEffect {
+        skill_type,
+        target: SkillTarget::Oneself,
+        modifier,
+        value_usage: ValueUsage::Direct,
+        additional: AdditionalActivation::Regular,
+    }
+}
+
+/// Skill alternative with a single [`effect`], a base duration of 3 seconds and
+/// no precondition.
+pub fn alternative(condition: &str, skill_type: SkillType, modifier: f64) -> SkillAlternative {
+    SkillAlternative {
+        base_duration: 3.0,
+        base_cooldown: DEFAULT_COOLDOWN,
+        condition: condition.parse().unwrap(),
+        precondition: None,
+        effects: vec![effect(skill_type, modifier)],
+        time_usage: TimeUsage::Direct,
+    }
+}
+
+/// [`alternative`] that is locked until `precondition` is satisfied.
+pub fn alternative_with_precondition(
+    precondition: &str,
+    condition: &str,
+    skill_type: SkillType,
+    modifier: f64,
+) -> SkillAlternative {
+    SkillAlternative {
+        precondition: Some(precondition.parse().unwrap()),
+        ..alternative(condition, skill_type, modifier)
+    }
+}
+
+/// White skill data without popularity data or wisdom check, so the skill is
+/// always available.
+///
+/// Override fields with `SkillData { rarity, ..skill_data(...) }`.
+pub fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
+    SkillData {
+        rarity: SkillRarity::White,
+        alternatives,
+        popularity: None,
+        wisdom_check: false,
+    }
+}
+
+/// Always available white skill with a single [`alternative`].
+pub fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
     Skill::new(
         id.to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: alternatives
-                .iter()
-                .map(|(condition, precondition)| SkillAlternative {
-                    condition: condition.parse().unwrap(),
-                    precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
-                    base_duration: 4.0,
-                    base_cooldown: DEFAULT_COOLDOWN,
-                    effects: vec![SkillEffect {
-                        skill_type: SkillType::TargetSpeed,
-                        target: SkillTarget::Oneself,
-                        modifier: 0.4,
-                        value_usage: ValueUsage::Direct,
-                        additional: AdditionalActivation::Regular,
-                    }],
-                    time_usage: TimeUsage::Direct,
-                })
-                .collect(),
-            popularity: None,
-            wisdom_check: true,
-        },
+        skill_data(vec![alternative(condition, skill_type, modifier)]),
     )
 }
 
-/// Build a white target speed skill with a single alternative.
-pub fn make_skill(id: &str, condition: &str, precondition: &str) -> Skill {
-    make_skill_with_alternatives(id, vec![(condition, precondition)])
+/// Always available skill whose target speed effect is too small to change the
+/// race.
+pub fn negligible_skill(condition: &str) -> Skill {
+    skill("999999", condition, SkillType::TargetSpeed, 0.0001)
 }
 
 /// Logics that activate skills, i.e. excluding the ones that unlock preconditions.

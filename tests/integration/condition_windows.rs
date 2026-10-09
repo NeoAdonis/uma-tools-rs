@@ -1,56 +1,19 @@
 //! Runtime tests for conditions combining several comparisons: every comparison
 //! must hold when the skill activates, wherever it is checked.
 
-use crate::common::{load_course, race_params, seeded_config};
-use uma_tools::race::solver::RaceSolver;
-use uma_tools::skill::*;
+use crate::common::{negligible_skill, ready_solver, seeded_config, uma};
 use uma_tools::uma::*;
-
-/// Build a skill with the given condition, without wisdom check.
-fn skill(condition: &str) -> Skill {
-    Skill::new(
-        "999999".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                base_duration: 1.0,
-                base_cooldown: DEFAULT_COOLDOWN,
-                condition: condition.parse().unwrap(),
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 0.0001,
-                    value_usage: ValueUsage::Direct,
-                    additional: AdditionalActivation::Regular,
-                }],
-                precondition: None,
-                time_usage: TimeUsage::Direct,
-            }],
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
-}
 
 /// Run single-runner races (5 seeds) and return where the skill activated.
 fn activation_positions(course_id: u32, condition: &str) -> Vec<Vec<f64>> {
     (0..5)
         .map(|seed| {
             let uma = Uma {
-                speed: 1200,
                 stamina: 1200,
-                power: 1000,
-                guts: 800,
-                wiz: 1000,
-                style: Style::Pace,
-                distance_aptitude: Aptitude::A,
-                track_aptitude: Aptitude::A,
-                style_aptitude: Aptitude::A,
+                ..uma(Style::Pace)
             };
-            let mut solver =
-                RaceSolver::new(load_course(course_id), race_params(), &seeded_config(seed));
-            solver.add_runner(uma, Motivation::Normal, vec![skill(condition)]);
-            let mut solver = solver.ready_runners();
+            let skills = vec![negligible_skill(condition)];
+            let mut solver = ready_solver(course_id, uma, skills, &seeded_config(seed));
             solver.run();
             solver.runners[0]
                 .activated_skills

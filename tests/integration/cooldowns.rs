@@ -2,60 +2,31 @@
 //! its OR branches can activate again until the cooldown, scaled by the course
 //! distance, is over.
 
-use crate::common::{load_course, race_params, seeded_config};
+use crate::common::{alternative, load_course, ready_solver, seeded_config, skill_data, uma};
 use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
 use uma_tools::uma::*;
 
 const COURSE_ID: u32 = 10104;
 
-/// Build a skill with the given condition and base cooldown, w/o wisdom check.
+/// Always available skill with the given condition and base cooldown, whose
+/// target speed effect is too small to change the race.
 fn skill(condition: &str, base_cooldown: f64) -> Skill {
-    Skill::new(
-        "999999".to_string(),
-        SkillData {
-            rarity: SkillRarity::White,
-            alternatives: vec![SkillAlternative {
-                base_duration: 1.0,
-                base_cooldown,
-                condition: condition.parse().unwrap(),
-                effects: vec![SkillEffect {
-                    skill_type: SkillType::TargetSpeed,
-                    target: SkillTarget::Oneself,
-                    modifier: 0.0001,
-                    value_usage: ValueUsage::Direct,
-                    additional: AdditionalActivation::Regular,
-                }],
-                precondition: None,
-                time_usage: TimeUsage::Direct,
-            }],
-            popularity: None,
-            wisdom_check: false,
-        },
-    )
+    let alternative = SkillAlternative {
+        base_cooldown,
+        ..alternative(condition, SkillType::TargetSpeed, 0.0001)
+    };
+    Skill::new("999999".to_string(), skill_data(vec![alternative]))
 }
 
 /// Run a single-runner race and return the finished runner.
 fn run(condition: &str, base_cooldown: f64) -> Runner {
     let uma = Uma {
-        speed: 1200,
         stamina: 1200,
-        power: 1000,
-        guts: 800,
-        wiz: 1000,
-        style: Style::Pace,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
+        ..uma(Style::Pace)
     };
-    let mut solver = RaceSolver::new(load_course(COURSE_ID), race_params(), &seeded_config(0));
-    solver.add_runner(
-        uma,
-        Motivation::Normal,
-        vec![skill(condition, base_cooldown)],
-    );
-    let mut solver = solver.ready_runners();
+    let skills = vec![skill(condition, base_cooldown)];
+    let mut solver = ready_solver(COURSE_ID, uma, skills, &seeded_config(0));
     solver.run();
     solver.runners.swap_remove(0)
 }
