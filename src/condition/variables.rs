@@ -42,8 +42,6 @@ pub enum VarType {
     Temptation(TemptationVar),
     /// Special value that is always true.
     Always,
-    /// Fallback type for unknown variables.
-    Unknown(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,7 +276,6 @@ impl fmt::Display for VarType {
             Always => write!(f, "always"),
             RandomSpatial(rs) => write!(f, "{}", rs),
             RandomPhase(rp) => write!(f, "{}", rp),
-            Unknown(s) => write!(f, "<unknown:{}>", s),
         }
     }
 }
@@ -332,11 +329,12 @@ impl_display_snake_case!(BlockingVar);
 impl_display_snake_case!(TemptationVar);
 
 impl VarType {
-    /// Parse a variable name string into a [`VarType`].
-    pub fn parse(s: &str) -> Self {
+    /// Parse a variable name string into a [`VarType`], or `None` if the
+    /// variable is unknown.
+    pub fn parse(s: &str) -> Option<Self> {
         use VarType::*;
 
-        match s {
+        let var = match s {
             // Base stats.
             "base_speed" => BaseStat(StatKind::Speed),
             "base_stamina" => BaseStat(StatKind::Stamina),
@@ -559,13 +557,9 @@ impl VarType {
             // Special.
             "always" => Always,
 
-            // Unknown variable - fallback.
-            _ => {
-                #[cfg(debug_assertions)]
-                eprintln!("warning: unknown variable '{}', evaluating to false", s);
-                Unknown(s.to_string())
-            }
-        }
+            _ => return None,
+        };
+        Some(var)
     }
 }
 
@@ -628,42 +622,38 @@ mod tests {
         // Test a sample of known variables.
         assert!(matches!(
             VarType::parse("base_speed"),
-            VarType::BaseStat(StatKind::Speed)
+            Some(VarType::BaseStat(StatKind::Speed))
         ));
         assert!(matches!(
             VarType::parse("accumulatetime"),
-            VarType::AccumulateTime
+            Some(VarType::AccumulateTime)
         ));
         assert!(matches!(
             VarType::parse("order"),
-            VarType::Order(OrderVar::Order)
+            Some(VarType::Order(OrderVar::Order))
         ));
         assert!(matches!(
             VarType::parse("bashin_diff_behind"),
-            VarType::Distance(DistanceVar::BashinDiffBehind)
+            Some(VarType::Distance(DistanceVar::BashinDiffBehind))
         ));
         assert!(matches!(
             VarType::parse("corner_count"),
-            VarType::Course(CourseVar::CornerCount)
+            Some(VarType::Course(CourseVar::CornerCount))
         ));
         assert!(matches!(
             VarType::parse("corner"),
-            VarType::Spatial(SpatialVar::Corner)
+            Some(VarType::Spatial(SpatialVar::Corner))
         ));
         assert!(matches!(
             VarType::parse("random_lot"),
-            VarType::Random(RandomVar::RandomLot)
+            Some(VarType::Random(RandomVar::RandomLot))
         ));
-        assert!(matches!(VarType::parse("always"), VarType::Always));
+        assert!(matches!(VarType::parse("always"), Some(VarType::Always)));
     }
 
     #[test]
-    fn test_unknown_variable_fallback() {
-        let result = VarType::parse("this_var_does_not_exist");
-        assert!(matches!(result, VarType::Unknown(_)));
-        if let VarType::Unknown(s) = result {
-            assert_eq!(s, "this_var_does_not_exist");
-        }
+    fn test_unknown_variable() {
+        assert_eq!(VarType::parse("this_var_does_not_exist"), None);
     }
 
     #[test]

@@ -189,15 +189,18 @@ impl CompEvaluator for EvaluatorFull {
                     CompOp::Equal => skill_exists,
                     CompOp::NotEqual => !skill_exists,
                     // Other operators don't make sense for skill ID checks.
-                    _ => false,
+                    op => panic!("is_used_skill_id doesn't support operator {op:?}"),
                 }
             }
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
                 // Check if any other runner has activated a buff whose type is `comp.value`
                 // this frame, discounting the runner's own activation.
-                let Ok(value) = SkillType::try_from(comp.value as u8) else {
-                    return false;
-                };
+                let value = SkillType::try_from(comp.value as u8).unwrap_or_else(|_| {
+                    panic!(
+                        "is_other_character_activate_advantage_skill: unimplemented skill type {}",
+                        comp.value
+                    )
+                });
                 let own = runner.activation_flags.buff_activated.contains(&value) as u8;
                 state
                     .buffs_activated
@@ -287,8 +290,6 @@ fn get_variable_value(
         AccumulateTime => state.elapsed_time.floor() as i32,
         // Always returns 1 (true).
         Always => 1,
-        // Defaults to 0.
-        Unknown(_) => 0,
         Lineup(_) => panic!(
             "BUG: Lineup variable {:?} should be handled in evaluate()",
             var
@@ -570,7 +571,7 @@ fn evaluate_lineup(var: &LineupVar, comp: &Comparison, state: &RaceState, skill_
                 CompOp::Equal => exists,
                 CompOp::NotEqual => !exists,
                 // Other operators don't make sense for skill ID checks.
-                _ => false,
+                op => panic!("is_exist_skill_id doesn't support operator {op:?}"),
             }
         }
 

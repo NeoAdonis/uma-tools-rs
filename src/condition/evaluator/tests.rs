@@ -104,6 +104,43 @@ fn test_is_exist_skill_id_in_available_skills() {
 }
 
 #[test]
+#[should_panic(expected = "is_used_skill_id doesn't support operator")]
+fn test_is_used_skill_id_unsupported_operator() {
+    let solver = create_test_race_solver(vec![]);
+    let comp = Comparison {
+        var: VarType::Activation(ActivationVar::IsUsedSkillId),
+        op: CompOp::GreaterEqual,
+        value: 202051,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
+}
+
+#[test]
+#[should_panic(expected = "is_exist_skill_id doesn't support operator")]
+fn test_is_exist_skill_id_unsupported_operator() {
+    let solver = create_test_race_solver(vec![]);
+    let comp = Comparison {
+        var: VarType::Lineup(LineupVar::IsExistSkillId),
+        op: CompOp::GreaterEqual,
+        value: 203061,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
+}
+
+#[test]
+#[should_panic(expected = "unimplemented skill type 7")]
+fn test_is_other_character_activate_advantage_skill_unimplemented_type() {
+    let solver = create_test_race_solver(vec![]);
+    // 7 is not a known skill type.
+    let comp = Comparison {
+        var: VarType::Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill),
+        op: CompOp::Equal,
+        value: 7,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
+}
+
+#[test]
 fn test_phase_values_by_position() {
     use crate::course::Phase as CoursePhase;
 

@@ -347,6 +347,7 @@ pub enum ParseError {
     ExpectedCompOp,
     ExpectedVariable,
     ExpectedValue,
+    UnknownVariable(String),
 }
 
 impl fmt::Display for ParseError {
@@ -358,6 +359,7 @@ impl fmt::Display for ParseError {
             ParseError::ExpectedCompOp => write!(f, "Expected comparison operator"),
             ParseError::ExpectedVariable => write!(f, "Expected variable"),
             ParseError::ExpectedValue => write!(f, "Expected value"),
+            ParseError::UnknownVariable(var) => write!(f, "Unknown variable '{}'", var),
         }
     }
 }
@@ -440,7 +442,7 @@ impl Parser {
         self.advance();
 
         // Convert string to VarType enum.
-        let var = VarType::parse(&var_str);
+        let var = VarType::parse(&var_str).ok_or(ParseError::UnknownVariable(var_str))?;
 
         // Parse comparison operator.
         let op = match self.current() {

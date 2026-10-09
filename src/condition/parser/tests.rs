@@ -92,17 +92,17 @@ fn test_multiple_conditions() {
 
 #[test]
 fn test_all_comparison_operators() {
-    assert!(parse_condition("x == 5").is_ok());
-    assert!(parse_condition("x != 5").is_ok());
-    assert!(parse_condition("x > 5").is_ok());
-    assert!(parse_condition("x >= 5").is_ok());
-    assert!(parse_condition("x < 5").is_ok());
-    assert!(parse_condition("x <= 5").is_ok());
+    assert!(parse_condition("hp_per == 5").is_ok());
+    assert!(parse_condition("hp_per != 5").is_ok());
+    assert!(parse_condition("hp_per > 5").is_ok());
+    assert!(parse_condition("hp_per >= 5").is_ok());
+    assert!(parse_condition("hp_per < 5").is_ok());
+    assert!(parse_condition("hp_per <= 5").is_ok());
 }
 
 #[test]
 fn test_negative_numbers() {
-    let result = parse_condition("x > -10").unwrap();
+    let result = parse_condition("hp_per > -10").unwrap();
     match result.comp_tree {
         ComparisonTree::Single(comp) => {
             assert_eq!(comp.value, -10);
@@ -113,9 +113,9 @@ fn test_negative_numbers() {
 
 #[test]
 fn test_whitespace_handling() {
-    let result1 = parse_condition("hp==100").unwrap();
-    let result2 = parse_condition("  hp  ==  100  ").unwrap();
-    let result3 = parse_condition("hp == 100").unwrap();
+    let result1 = parse_condition("hp_per==100").unwrap();
+    let result2 = parse_condition("  hp_per  ==  100  ").unwrap();
+    let result3 = parse_condition("hp_per == 100").unwrap();
 
     assert_eq!(result1.comp_tree, result2.comp_tree);
     assert_eq!(result2.comp_tree, result3.comp_tree);
@@ -123,11 +123,17 @@ fn test_whitespace_handling() {
 
 #[test]
 fn test_variable_names() {
-    assert!(parse_condition("simple == 1").is_ok());
-    assert!(parse_condition("with_underscore == 1").is_ok());
-    assert!(parse_condition("camelCase == 1").is_ok());
-    assert!(parse_condition("PascalCase == 1").is_ok());
-    assert!(parse_condition("var123 == 1").is_ok());
+    // Any identifier is lexed as a variable name, then rejected if unknown.
+    for name in [
+        "simple",
+        "with_underscore",
+        "camelCase",
+        "PascalCase",
+        "var123",
+    ] {
+        let err = parse_condition(&format!("{name} == 1")).unwrap_err();
+        assert_eq!(err.to_string(), format!("Unknown variable '{name}'"));
+    }
 }
 
 #[test]
@@ -155,7 +161,7 @@ fn test_error_cases() {
 #[test]
 fn test_and_precedence_over_or() {
     // "a & b @ c & d" should parse as "(a & b) @ (c & d)".
-    let result = parse_condition("a == 1 & b == 2 @ c == 3 & d == 4").unwrap();
+    let result = parse_condition("hp_per == 1 & phase == 2 @ corner == 3 & order == 4").unwrap();
     match result.comp_tree {
         ComparisonTree::Binary { left, op, right } => {
             // Top level is OR.
@@ -177,7 +183,7 @@ fn test_and_precedence_over_or() {
 #[test]
 fn test_left_associativity_and() {
     // "a & b & c" should parse as "(a & b) & c".
-    let result = parse_condition("a == 1 & b == 2 & c == 3").unwrap();
+    let result = parse_condition("hp_per == 1 & phase == 2 & corner == 3").unwrap();
     match result.comp_tree {
         ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::And);
@@ -196,7 +202,7 @@ fn test_left_associativity_and() {
 #[test]
 fn test_left_associativity_or() {
     // "a @ b @ c" should parse as "(a @ b) @ c".
-    let result = parse_condition("a == 1 @ b == 2 @ c == 3").unwrap();
+    let result = parse_condition("hp_per == 1 @ phase == 2 @ corner == 3").unwrap();
     match result.comp_tree {
         ComparisonTree::Binary { left, op, right } => {
             assert_eq!(op, BinOp::Or);
@@ -250,18 +256,11 @@ fn test_complex_precedence() {
 
 #[test]
 fn test_unknown_variable() {
-    // Unknown variables should be parsed as VarType::Unknown.
-    let result = parse_condition("this_var_does_not_exist == 42").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Single(comp) => {
-            assert!(matches!(comp.var, VarType::Unknown(_)));
-            if let VarType::Unknown(s) = comp.var {
-                assert_eq!(s, "this_var_does_not_exist");
-            }
-            assert_eq!(comp.value, 42);
-        }
-        _ => panic!("Expected Single"),
-    }
+    let err = parse_condition("this_var_does_not_exist == 42").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Unknown variable 'this_var_does_not_exist'"
+    );
 }
 
 #[test]
