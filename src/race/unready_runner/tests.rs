@@ -212,6 +212,45 @@ fn test_rushing_can_be_forced() {
     }
 }
 
+/// Ready runner with the given wisdom and skills.
+fn runner_with_wiz(wiz: u16, skills: Vec<Skill>, seed: u64) -> Runner {
+    let uma = Uma {
+        wiz,
+        ..uma(Style::Pace)
+    };
+    ready_solver(10104, uma, skills, &seeded_config(seed))
+        .runners
+        .remove(0)
+}
+
+#[test]
+fn test_rush_chance_is_rounded_up() {
+    // (base wisdom, rush chance): 19.00%, 13.26%, 11.01% and 9.74% before
+    // rounding.
+    for (wiz, expected) in [(300, 19.0), (600, 14.0), (900, 12.0), (1200, 10.0)] {
+        let runner = runner_with_wiz(wiz, vec![], 0);
+        assert_eq!(runner.rush_chance, expected, "{wiz} wisdom");
+    }
+}
+
+#[test]
+fn test_rush_chance_is_clamped() {
+    // Rush chance down by 3% (as in the skill data).
+    let calm = |i: usize| skill(&i.to_string(), "always==1", SkillType::RushChanceUp, -3.0);
+    for seed in 0..10 {
+        // Very low wisdom: over 100% (about 24,600%).
+        let runner = runner_with_wiz(1, vec![], seed);
+        assert_eq!(runner.rush_chance, 100.0, "seed {seed}");
+        assert!(runner.rush_state.is_some(), "seed {seed}");
+
+        // High wisdom (8.7% at 1600 base wisdom), minus 12%: below 0% even when
+        // rounded up.
+        let runner = runner_with_wiz(2000, (0..4).map(calm).collect(), seed);
+        assert_eq!(runner.rush_chance, 0.0, "seed {seed}");
+        assert!(runner.rush_state.is_none(), "seed {seed}");
+    }
+}
+
 #[test]
 fn test_forced_rolls_do_not_shift_other_random_outcomes() {
     let random = checked_runner(config(Roll::Random, Roll::Random), 20);

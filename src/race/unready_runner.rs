@@ -399,9 +399,13 @@ impl UnreadyRunner {
         let max_hp = calculate_max_hp(self.adjusted.style, self.adjusted.stamina, course);
 
         // Set starting speed (done in the constructor).
-        // Determine rush chance.
-        let rush_chance = (6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
-            + self.rush_chance_modifier;
+        // Determine rush chance, as a percentage. The game rolls integer
+        // percentages, so it's rounded up. Very low wisdom and rush chance effects
+        // can push it out of range.
+        let rush_chance = ((6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
+            + self.rush_chance_modifier)
+            .ceil()
+            .clamp(0.0, 100.0);
         let can_rush = state
             .config
             .rushing
