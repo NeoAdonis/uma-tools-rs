@@ -154,20 +154,25 @@ fn test_rush_style_changes() {
     }
 }
 
-#[test]
-fn test_start_delay_is_added() {
-    let (mut runner, state) = unready_runner(vec![skill(
-        "delay",
-        "always==1",
-        SkillType::AddStartDelay,
-        0.1,
-    )]);
-    let start_delay = runner.start_delay;
-
+/// Start delay of a runner before and after applying an out-of-gate skill with
+/// the given effect.
+fn start_delays(skill_type: SkillType, modifier: f64) -> (f64, f64) {
+    let (mut runner, state) =
+        unready_runner(vec![skill("delay", "always==1", skill_type, modifier)]);
+    let before = runner.start_delay;
     runner.apply_out_of_gate_skills(&state);
-
-    assert_eq!(runner.start_delay, start_delay + 0.1);
     assert_eq!(activated_ids(&runner), vec!["delay"]);
+    (before, runner.start_delay)
+}
+
+#[test]
+fn test_start_delay_modifications() {
+    let (before, after) = start_delays(SkillType::AddStartDelay, 0.1);
+    assert_eq!(after, before + 0.1);
+
+    // Like "Concentration": 40% of the rolled delay.
+    let (before, after) = start_delays(SkillType::MultiplyStartDelay, 0.4);
+    assert_eq!(after, before * 0.4);
 }
 
 #[test]

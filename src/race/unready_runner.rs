@@ -65,20 +65,6 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: f64) {
     }
 }
 
-/// Apply start delay modification effects.
-fn apply_start_delay_modification(start_delay: &mut f64, effect_type: &SkillType, modifier: f64) {
-    match effect_type {
-        SkillType::MultiplyStartDelay => {
-            *start_delay *= modifier;
-        }
-        SkillType::AddStartDelay => {
-            *start_delay += modifier;
-        }
-        // Not a start delay effect.
-        _ => {}
-    }
-}
-
 /// Modify a stat value, ensuring it doesn't go below 1.
 fn modify_stat(stat: &mut u16, modifier: i32) {
     *stat = if modifier >= 0 {
@@ -246,8 +232,10 @@ impl UnreadyRunner {
                 }
             }
             // Apply start delay modifications.
-            else if effect_type.is_start_delay_modification() {
-                apply_start_delay_modification(&mut self.start_delay, effect_type, effect.modifier);
+            else if matches!(effect_type, SkillType::MultiplyStartDelay) {
+                self.start_delay *= effect.modifier;
+            } else if matches!(effect_type, SkillType::AddStartDelay) {
+                self.start_delay += effect.modifier;
             }
             // Apply style changes.
             else if let Some(style) = effect_type.style_change() {
