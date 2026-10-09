@@ -652,6 +652,47 @@ mod tests {
     }
 
     #[test]
+    fn test_is_static() {
+        // Known before the race and never changing.
+        let static_vars = [
+            "ground_condition",
+            "is_exist_skill_id",
+            "same_skill_horse_count",
+            "course_distance",
+            "base_speed",
+            "motivation",
+            "popularity",
+            "is_badstart",
+            "running_style",
+            "running_style_count_same",
+            "always",
+        ];
+        // Changing during the race.
+        let dynamic_vars = [
+            "accumulatetime",
+            "hp_per",
+            "phase",
+            "corner",
+            "order",
+            "distance_diff_top",
+            "is_used_skill_id",
+            "activate_count_all",
+            "is_lastspurt",
+            "blocked_front",
+            "temptation_count_infront",
+            "random_lot",
+            "phase_random",
+            "corner_random",
+        ];
+        for name in static_vars {
+            assert!(VarType::parse(name).unwrap().is_static(), "{name}");
+        }
+        for name in dynamic_vars {
+            assert!(!VarType::parse(name).unwrap().is_static(), "{name}");
+        }
+    }
+
+    #[test]
     fn test_unknown_variable() {
         assert_eq!(VarType::parse("this_var_does_not_exist"), None);
     }
