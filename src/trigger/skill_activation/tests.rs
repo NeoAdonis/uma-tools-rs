@@ -48,7 +48,7 @@ fn create_test_course() -> Course {
 /// for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
     let condition = parse_condition(condition).unwrap();
-    let rolls = vec![Some(vec![1000.0]); condition.comp_tree.or_branches().len()];
+    let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
     compile_condition(&condition, &rolls, &create_test_course())
 }
 
@@ -542,7 +542,7 @@ fn test_skill_data_conditions_compile() {
     {
         for alternative in &skill.alternatives {
             let condition = &alternative.condition;
-            let rolls = vec![Some(vec![1000.0]); condition.comp_tree.or_branches().len()];
+            let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
             compile_condition(condition, &rolls, &course);
             if let Some(precondition) = &alternative.precondition {
                 compile_condition(precondition, &[], &course);

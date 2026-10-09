@@ -19,7 +19,7 @@ pub struct RandomRolls<'a> {
 /// Roll the random variables of every OR branch of a condition.
 ///
 /// Returns one entry per branch (in the order of
-/// [`ComparisonTree::or_branches`]), holding the points where the branch should
+/// [`Condition::branches`]), holding the points where the branch should
 /// be checked, or `None` if a roll failed and the branch can never be
 /// satisfied.
 ///
@@ -34,8 +34,7 @@ pub fn roll_condition<'a>(
     rng: &mut impl Rng,
 ) -> Vec<Option<Vec<f64>>> {
     condition
-        .comp_tree
-        .or_branches()
+        .branches
         .iter()
         .map(|comps| roll_branch(comps, course, rolls, rng))
         .collect()
@@ -47,13 +46,13 @@ pub fn roll_condition<'a>(
 /// Returns the points where the branch should be checked, or `None` if a roll
 /// failed (e.g. a random lot, or no corners for `corner_random`).
 fn roll_branch<'a>(
-    comps: &[&'a Comparison],
+    comps: &'a [Comparison],
     course: &Course,
     rolls: &mut RandomRolls<'a>,
     rng: &mut impl Rng,
 ) -> Option<Vec<f64>> {
     let mut points = Vec::new();
-    for &comp in comps {
+    for comp in comps {
         let result = match rolls.rolled.iter().find(|(prev, _)| *prev == comp) {
             Some((_, result)) => result.clone(),
             None => {

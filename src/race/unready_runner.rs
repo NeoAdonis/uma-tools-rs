@@ -329,7 +329,7 @@ impl UnreadyRunner {
 
             // Satisfied if all comparisons of any OR branch are true.
             let holds = |condition: &Condition| {
-                condition.comp_tree.or_branches().iter().any(|branch| {
+                condition.branches.iter().any(|branch| {
                     branch
                         .iter()
                         .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))

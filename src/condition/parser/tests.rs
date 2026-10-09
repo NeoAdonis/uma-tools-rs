@@ -1,140 +1,96 @@
 use super::*;
 use crate::condition::variables::*;
 
+/// Branches of a parsed condition, with each comparison as a string.
+fn branches(input: &str) -> Vec<Vec<String>> {
+    let condition = parse_condition(input).unwrap();
+    condition
+        .branches
+        .iter()
+        .map(|branch| branch.iter().map(Comparison::to_string).collect())
+        .collect()
+}
+
 #[test]
 fn test_simple_condition() {
-    let result = parse_condition("hp_per == 100").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Single(comp) => {
-            assert!(matches!(comp.var, VarType::Status(_)));
-            assert_eq!(comp.op, CompOp::Equal);
-            assert_eq!(comp.value, 100);
-        }
-        _ => panic!("Expected Single"),
-    }
+    let condition = parse_condition("hp_per==100").unwrap();
+    let [branch] = condition.branches.as_slice() else {
+        panic!("expected a single branch: {condition:?}");
+    };
+    let [comp] = branch.as_slice() else {
+        panic!("expected a single comparison: {condition:?}");
+    };
+    assert!(matches!(comp.var, VarType::Status(_)));
+    assert_eq!(comp.op, CompOp::Equal);
+    assert_eq!(comp.value, 100);
 }
 
 #[test]
-fn test_binary_and() {
-    let result = parse_condition("hp_per > 50 & base_stamina >= 30").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary { left, op, right } => {
-            // Left should be a Single comparison.
-            match *left {
-                ComparisonTree::Single(ref comp) => {
-                    assert!(matches!(comp.var, VarType::Status(_)));
-                    assert_eq!(comp.op, CompOp::Greater);
-                    assert_eq!(comp.value, 50);
-                }
-                _ => panic!("Expected Single on left"),
-            }
-            assert_eq!(op, BinOp::And);
-            // Right should be a Single comparison.
-            match *right {
-                ComparisonTree::Single(ref comp) => {
-                    assert!(matches!(comp.var, VarType::BaseStat(_)));
-                    assert_eq!(comp.op, CompOp::GreaterEqual);
-                    assert_eq!(comp.value, 30);
-                }
-                _ => panic!("Expected Single on right"),
-            }
-        }
-        _ => panic!("Expected Binary"),
-    }
-}
-
-#[test]
-fn test_multiple_conditions() {
-    // With new precedence: "order == 1 & phase != 2 @ corner < 3" parses as
-    // two OR branches: "order == 1 & phase != 2" and "corner < 3".
-    let result = parse_condition("order == 1 & phase != 2 @ corner < 3").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary { left, op, right } => {
-            // Top level is OR.
-            assert_eq!(op, BinOp::Or);
-            // Left side should be "order == 1 & phase != 2".
-            match *left {
-                ComparisonTree::Binary {
-                    left: ref inner_left,
-                    op: inner_op,
-                    right: ref inner_right,
-                } => {
-                    assert_eq!(inner_op, BinOp::And);
-                    match **inner_left {
-                        ComparisonTree::Single(ref comp) => {
-                            assert!(matches!(comp.var, VarType::Order(_)));
-                            assert_eq!(comp.value, 1);
-                        }
-                        _ => panic!("Expected Single"),
-                    }
-                    match **inner_right {
-                        ComparisonTree::Single(ref comp) => {
-                            assert!(matches!(comp.var, VarType::Phase(_)));
-                            assert_eq!(comp.value, 2);
-                        }
-                        _ => panic!("Expected Single"),
-                    }
-                }
-                _ => panic!("Expected Binary on left"),
-            }
-            // Right side should be "corner < 3".
-            match *right {
-                ComparisonTree::Single(ref comp) => {
-                    assert!(matches!(comp.var, VarType::Spatial(_)));
-                    assert_eq!(comp.value, 3);
-                }
-                _ => panic!("Expected Single on right"),
-            }
-        }
-        _ => panic!("Expected Binary"),
+fn test_branches() {
+    let cases: [(&str, &[&[&str]]); 5] = [
+        ("hp_per>50", &[&["hp_per > 50"]]),
+        (
+            "hp_per>50&base_stamina>=30",
+            &[&["hp_per > 50", "base_stamina >= 30"]],
+        ),
+        ("order<3@order<=5", &[&["order < 3"], &["order <= 5"]]),
+        // AND binds tighter than OR.
+        (
+            "order==1@phase==2&corner==3@grade==4",
+            &[
+                &["order == 1"],
+                &["phase == 2", "corner == 3"],
+                &["grade == 4"],
+            ],
+        ),
+        (
+            "hp_per==1&phase==2@corner==3&order==4",
+            &[
+                &["hp_per == 1", "phase == 2"],
+                &["corner == 3", "order == 4"],
+            ],
+        ),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(branches(input), expected, "{input}");
     }
 }
 
 #[test]
 fn test_all_comparison_operators() {
-    assert!(parse_condition("hp_per == 5").is_ok());
-    assert!(parse_condition("hp_per != 5").is_ok());
-    assert!(parse_condition("hp_per > 5").is_ok());
-    assert!(parse_condition("hp_per >= 5").is_ok());
-    assert!(parse_condition("hp_per < 5").is_ok());
-    assert!(parse_condition("hp_per <= 5").is_ok());
+    for op in CompOp::ALL {
+        let condition = parse_condition(&format!("hp_per{op}5")).unwrap();
+        assert_eq!(condition.branches[0][0].op, op);
+    }
 }
 
 #[test]
-fn test_negative_numbers() {
-    let result = parse_condition("hp_per > -10").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Single(comp) => {
-            assert_eq!(comp.value, -10);
-        }
-        _ => panic!("Expected Single"),
+fn test_numbers() {
+    for (input, expected) in [("hp_per>-10", -10), ("hp_per>0", 0), ("hp_per>+7", 7)] {
+        assert_eq!(
+            parse_condition(input).unwrap().branches[0][0].value,
+            expected
+        );
     }
 }
 
 #[test]
 fn test_whitespace_handling() {
-    let result1 = parse_condition("hp_per==100").unwrap();
-    let result2 = parse_condition("  hp_per  ==  100  ").unwrap();
-    let result3 = parse_condition("hp_per == 100").unwrap();
-
-    assert_eq!(result1.comp_tree, result2.comp_tree);
-    assert_eq!(result2.comp_tree, result3.comp_tree);
+    let expected = parse_condition("hp_per==100&order<=3@phase!=2").unwrap();
+    for input in [
+        "hp_per == 100 & order <= 3 @ phase != 2",
+        "  hp_per  ==  100  &order<= 3@  phase!=2  ",
+    ] {
+        assert_eq!(parse_condition(input).unwrap(), expected, "{input:?}");
+    }
 }
 
 #[test]
-fn test_variable_names() {
-    // Any identifier is lexed as a variable name, then rejected if unknown.
-    for name in [
-        "simple",
-        "with_underscore",
-        "_leading_underscore",
-        "camelCase",
-        "PascalCase",
-        "var123",
-    ] {
-        let err = parse_condition(&format!("{name} == 1")).unwrap_err();
-        assert_eq!(err.to_string(), format!("Unknown variable '{name}'"));
-    }
+fn test_variables_with_digits() {
+    assert_eq!(
+        branches("order_rate_in20_continue==1"),
+        [["order_rate_in20_continue == 1"]]
+    );
 }
 
 #[test]
@@ -146,10 +102,9 @@ fn test_display() {
         ),
         ("order<3@order<=5", "order < 3 @ order <= 5"),
         ("corner!=0", "corner != 0"),
-        // Nested expressions are parenthesized.
         (
             "hp_per==1&phase==2@corner<3",
-            "(hp_per == 1 & phase == 2) @ (corner < 3)",
+            "hp_per == 1 & phase == 2 @ corner < 3",
         ),
     ];
     for (input, expected) in cases {
@@ -160,33 +115,52 @@ fn test_display() {
 
 #[test]
 fn test_error_cases() {
+    use ParseError::*;
+
     let cases = [
-        ("", "Expected variable"),
-        ("== 100", "Expected variable"),
-        ("hp_per", "Expected comparison operator"),
-        ("hp_per ==", "Expected value"),
-        // Incomplete.
-        ("hp_per > 50 &", "Expected variable"),
-        ("hp_per > 50 @", "Expected variable"),
-        ("hp_per==1 2", "Unexpected token 'Value(2)' at position 3"),
+        ("", ExpectedOperator("".into())),
+        ("hp_per", ExpectedOperator("hp_per".into())),
+        // Empty branches or comparisons.
+        ("hp_per>50&", ExpectedOperator("".into())),
+        ("hp_per>50@", ExpectedOperator("".into())),
+        ("@hp_per>50", ExpectedOperator("".into())),
+        ("hp_per>50&&order==1", ExpectedOperator("".into())),
         // Single '=' or '!' not allowed.
-        ("hp_per = 100", "Unexpected character '=' at position 7"),
-        ("hp_per !100", "Unexpected character '!' at position 7"),
-        ("hp_per =", "Unexpected character '=' at position 7"),
-        ("hp_per==1 # 2", "Unexpected character '#' at position 10"),
+        ("hp_per=100", ExpectedOperator("hp_per=100".into())),
+        ("hp_per!100", ExpectedOperator("hp_per!100".into())),
+        ("==100", UnknownVariable("".into())),
+        (
+            "this_var_does_not_exist==42",
+            UnknownVariable("this_var_does_not_exist".into()),
+        ),
+        ("hp per==1", UnknownVariable("hp per".into())),
+        ("hp_per==", InvalidValue("hp_per==".into())),
+        ("hp_per==1 2", InvalidValue("hp_per==1 2".into())),
+        ("hp_per==1#2", InvalidValue("hp_per==1#2".into())),
+        ("hp_per!==1", InvalidValue("hp_per!==1".into())),
+        ("hp_per<=>1", InvalidValue("hp_per<=>1".into())),
+        ("hp_per==1.5", InvalidValue("hp_per==1.5".into())),
+        ("hp_per==order", InvalidValue("hp_per==order".into())),
         // Out of `i32` range.
         (
             "hp_per==99999999999",
-            "Invalid number '99999999999' at position 8",
-        ),
-        (
-            "hp_per==-99999999999",
-            "Invalid number '-99999999999' at position 8",
+            InvalidValue("hp_per==99999999999".into()),
         ),
     ];
     for (input, expected) in cases {
-        let error = parse_condition(input).unwrap_err();
-        assert_eq!(error.to_string(), expected, "{input:?}");
+        assert_eq!(parse_condition(input).unwrap_err(), expected, "{input:?}");
+    }
+}
+
+#[test]
+fn test_error_display() {
+    let cases = [
+        ("hp_per=1", "Expected comparison operator in 'hp_per=1'"),
+        ("unknown==1", "Unknown variable 'unknown'"),
+        ("hp_per==x", "Invalid value in 'hp_per==x'"),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(parse_condition(input).unwrap_err().to_string(), expected);
     }
 }
 
@@ -208,126 +182,30 @@ fn test_comp_op_apply() {
 }
 
 #[test]
-fn test_and_precedence_over_or() {
-    // "a & b @ c & d" should parse as "(a & b) @ (c & d)".
-    let result = parse_condition("hp_per == 1 & phase == 2 @ corner == 3 & order == 4").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary { left, op, right } => {
-            // Top level is OR.
-            assert_eq!(op, BinOp::Or);
-            // Both sides should be AND expressions.
-            assert!(matches!(
-                *left,
-                ComparisonTree::Binary { op: BinOp::And, .. }
-            ));
-            assert!(matches!(
-                *right,
-                ComparisonTree::Binary { op: BinOp::And, .. }
-            ));
-        }
-        _ => panic!("Expected Binary with OR at top level"),
-    }
-}
-
-#[test]
-fn test_left_associativity_and() {
-    // "a & b & c" should parse as "(a & b) & c".
-    let result = parse_condition("hp_per == 1 & phase == 2 & corner == 3").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary { left, op, right } => {
-            assert_eq!(op, BinOp::And);
-            // Left should be another AND expression.
-            assert!(matches!(
-                *left,
-                ComparisonTree::Binary { op: BinOp::And, .. }
-            ));
-            // Right should be a single comparison.
-            assert!(matches!(*right, ComparisonTree::Single(_)));
-        }
-        _ => panic!("Expected Binary"),
-    }
-}
-
-#[test]
-fn test_left_associativity_or() {
-    // "a @ b @ c" should parse as "(a @ b) @ c".
-    let result = parse_condition("hp_per == 1 @ phase == 2 @ corner == 3").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary { left, op, right } => {
-            assert_eq!(op, BinOp::Or);
-            // Left should be another OR expression.
-            assert!(matches!(
-                *left,
-                ComparisonTree::Binary { op: BinOp::Or, .. }
-            ));
-            // Right should be a single comparison.
-            assert!(matches!(*right, ComparisonTree::Single(_)));
-        }
-        _ => panic!("Expected Binary"),
-    }
-}
-
-#[test]
-fn test_complex_precedence() {
-    // "a @ b & c @ d" should parse as "a @ (b & c) @ d".
-    let result = parse_condition("order == 1 @ phase == 2 & corner == 3 @ grade == 4").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Binary {
-            left: left1,
-            op: op1,
-            right: right1,
-        } => {
-            assert_eq!(op1, BinOp::Or);
-            // Left should be another OR expression.
-            match *left1 {
-                ComparisonTree::Binary {
-                    left: ref left2,
-                    op: op2,
-                    right: ref right2,
-                } => {
-                    assert_eq!(op2, BinOp::Or);
-                    // `left2` should be 'order == 1'.
-                    assert!(matches!(**left2, ComparisonTree::Single(_)));
-                    // `right2` should be 'phase == 2 & corner == 3'.
-                    assert!(matches!(
-                        **right2,
-                        ComparisonTree::Binary { op: BinOp::And, .. }
-                    ));
-                }
-                _ => panic!("Expected nested OR on left"),
-            }
-            // Right should be 'grade == 4'.
-            assert!(matches!(*right1, ComparisonTree::Single(_)));
-        }
-        _ => panic!("Expected Binary"),
-    }
-}
-
-#[test]
-fn test_unknown_variable() {
-    let err = parse_condition("this_var_does_not_exist == 42").unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Unknown variable 'this_var_does_not_exist'"
-    );
-}
-
-#[test]
 fn test_known_variables() {
-    // Test a few known variables to ensure they parse correctly.
-    let result = parse_condition("always == 1").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Single(comp) => {
-            assert!(matches!(comp.var, VarType::Always));
-        }
-        _ => panic!("Expected Single"),
-    }
+    let var = |input: &str| parse_condition(input).unwrap().branches[0][0].var.clone();
+    assert!(matches!(var("always==1"), VarType::Always));
+    assert!(matches!(var("random_lot==30"), VarType::Random(_)));
+}
 
-    let result = parse_condition("random_lot == 30").unwrap();
-    match result.comp_tree {
-        ComparisonTree::Single(comp) => {
-            assert!(matches!(comp.var, VarType::Random(_)));
+#[test]
+fn test_all_skill_conditions() {
+    // Every condition in the skill data displays back to itself (without spaces).
+    let json = std::fs::read_to_string("data/skill_data.json").unwrap();
+    let skills: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let alternatives = skills
+        .as_object()
+        .unwrap()
+        .values()
+        .flat_map(|skill| skill["alternatives"].as_array().unwrap());
+    for alternative in alternatives {
+        for key in ["condition", "precondition"] {
+            let input = alternative[key].as_str().unwrap();
+            if input.is_empty() {
+                continue;
+            }
+            let condition = parse_condition(input).unwrap_or_else(|e| panic!("{input}: {e}"));
+            assert_eq!(condition.to_string().replace(' ', ""), input);
         }
-        _ => panic!("Expected Single"),
     }
 }

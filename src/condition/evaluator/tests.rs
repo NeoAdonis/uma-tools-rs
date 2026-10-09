@@ -330,8 +330,11 @@ fn test_activate_count_all_team_reads_own_team() {
 
 /// Single comparison parsed from a condition string, e.g. `"hp_per>=50"`.
 fn comp(condition: &str) -> Comparison {
-    match condition.parse::<Condition>().unwrap().comp_tree {
-        ComparisonTree::Single(comp) => comp,
+    match condition.parse::<Condition>().unwrap().branches.as_slice() {
+        [branch] => match branch.as_slice() {
+            [comp] => comp.clone(),
+            _ => panic!("expected a single comparison: {condition}"),
+        },
         _ => panic!("expected a single comparison: {condition}"),
     }
 }

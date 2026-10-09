@@ -517,14 +517,9 @@ impl SkillAlternative {
     /// alternative did.
     pub fn is_continuation(&self) -> bool {
         let requires_other = |condition: &Condition| {
-            condition
-                .comp_tree
-                .or_branches()
-                .iter()
-                .flatten()
-                .any(|comp| {
-                    comp.var == VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
-                })
+            condition.branches.iter().flatten().any(|comp| {
+                comp.var == VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
+            })
         };
         requires_other(&self.condition) || self.precondition.as_ref().is_some_and(requires_other)
     }
@@ -708,9 +703,9 @@ impl Skill {
     ) -> bool {
         use crate::condition::evaluator::check_popularity_guards;
 
-        self.alternatives.iter().any(|alternative| {
-            check_popularity_guards(&alternative.condition.comp_tree, state, runner)
-        })
+        self.alternatives
+            .iter()
+            .any(|alternative| check_popularity_guards(&alternative.condition, state, runner))
     }
 
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.

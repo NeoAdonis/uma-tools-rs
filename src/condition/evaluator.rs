@@ -8,12 +8,10 @@
 //!
 //! ## Architecture
 //!
-//! Conditions are parsed into tree structures ([`Condition`] ->
-//! [`ComparisonTree`] -> [`Comparison`]), then split into OR branches, each one
-//! being a flat list of comparisons that must all be true (see
-//! [`ComparisonTree::or_branches`]). This module evaluates those lists with
-//! [`evaluate_comparison_list`], one comparison (e.g., `hp_per <= 50`) at a
-//! time.
+//! Conditions are parsed into OR branches ([`Condition::branches`]), each one
+//! being a flat list of comparisons that must all be true. This module
+//! evaluates those lists with [`evaluate_comparison_list`], one comparison
+//! (e.g., `hp_per <= 50`) at a time.
 //!
 //! The [`CompEvaluator`] trait abstracts the evaluation context, allowing
 //! different implementations for various scenarios. For instance,
@@ -834,32 +832,22 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
     }
 }
 
-/// Recursively check popularity guards in a condition tree.
+/// Check popularity guards in a condition.
 ///
-/// Returns true if all popularity guards pass (see
+/// Returns true if all popularity guards pass in at least one OR branch (see
 /// [`VarType::is_popularity_guard`]). Comparisons on any other variable are
-/// assumed to be satisfiable. Uses short-circuit evaluation for AND/OR logic.
+/// assumed to be satisfiable.
 pub fn check_popularity_guards(
-    tree: &ComparisonTree,
+    condition: &Condition,
     state: &RaceState,
     runner: &UnreadyRunner,
 ) -> bool {
-    match tree {
-        ComparisonTree::Single(comp) => {
+    condition.branches.iter().any(|branch| {
+        branch.iter().all(|comp| {
             !comp.var.is_popularity_guard()
                 || EvaluatorOutOfGate::evaluate(&EvaluatorOutOfGate, comp, None, state, runner)
-        }
-        ComparisonTree::Binary { left, op, right } => match op {
-            BinOp::And => {
-                check_popularity_guards(left, state, runner)
-                    && check_popularity_guards(right, state, runner)
-            }
-            BinOp::Or => {
-                check_popularity_guards(left, state, runner)
-                    || check_popularity_guards(right, state, runner)
-            }
-        },
-    }
+        })
+    })
 }
 
 #[cfg(test)]

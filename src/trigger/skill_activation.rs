@@ -266,9 +266,8 @@ pub fn compile_condition(
     course: &Course,
 ) -> Vec<CompiledBranch> {
     condition
-        .comp_tree
-        .or_branches()
-        .into_iter()
+        .branches
+        .iter()
         .enumerate()
         .filter_map(|(idx, comps)| {
             let points = match rolls.get(idx) {
@@ -277,24 +276,20 @@ pub fn compile_condition(
                 // Not rolled: random variables would be ignored.
                 None => {
                     debug_assert!(
-                        !comps.iter().any(|comp| is_random(comp)),
+                        !comps.iter().any(is_random),
                         "random variables in a condition without rolls: {comps:?}"
                     );
                     &[]
                 }
             };
-            compile_branch(&comps, points, course)
+            compile_branch(comps, points, course)
         })
         .collect()
 }
 
 /// Compile an AND chain, with the segment starts (`points`) rolled for its
 /// random variables. Returns `None` if it can never be true on this course.
-fn compile_branch(
-    comps: &[&Comparison],
-    points: &[f64],
-    course: &Course,
-) -> Option<CompiledBranch> {
+fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Option<CompiledBranch> {
     use VarType::*;
 
     // The rolled points of a branch don't tell which comparison they come from,
@@ -341,14 +336,14 @@ fn compile_branch(
                 if let Some(activation_event) = activation_event(comp) {
                     event = Some(activation_event);
                 }
-                guards.push((*comp).clone());
+                guards.push(comp.clone());
             }
 
             _ => {
                 position = intersect(position, position_range(comp, course)?);
                 time = intersect(time, time_range(comp));
                 hp = intersect(hp, hp_range(comp));
-                guards.push((*comp).clone());
+                guards.push(comp.clone());
             }
         }
     }
