@@ -169,7 +169,8 @@ pub struct Lexer {
 #[derive(Debug)]
 pub enum LexError {
     UnexpectedChar(char, usize),
-    UnexpectedEnd,
+    /// Number that doesn't fit in an `i32`, and its position.
+    InvalidNumber(String, usize),
 }
 
 impl fmt::Display for LexError {
@@ -178,7 +179,9 @@ impl fmt::Display for LexError {
             LexError::UnexpectedChar(c, pos) => {
                 write!(f, "Unexpected character '{}' at position {}", c, pos)
             }
-            LexError::UnexpectedEnd => write!(f, "Unexpected end of input"),
+            LexError::InvalidNumber(number, pos) => {
+                write!(f, "Invalid number '{}' at position {}", number, pos)
+            }
         }
     }
 }
@@ -316,7 +319,7 @@ impl Lexer {
         let num_str: String = self.input[start..self.pos].iter().collect();
         let value = num_str
             .parse::<i32>()
-            .map_err(|_| LexError::UnexpectedEnd)?;
+            .map_err(|_| LexError::InvalidNumber(num_str.clone(), start))?;
         Ok(Token::Value(value))
     }
 

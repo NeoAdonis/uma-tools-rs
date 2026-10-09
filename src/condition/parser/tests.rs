@@ -127,6 +127,7 @@ fn test_variable_names() {
     for name in [
         "simple",
         "with_underscore",
+        "_leading_underscore",
         "camelCase",
         "PascalCase",
         "var123",
@@ -137,25 +138,73 @@ fn test_variable_names() {
 }
 
 #[test]
-fn test_display_trait() {
-    let condition = parse_condition("hp_per > 50 & base_stamina >= 30").unwrap();
-    let display = format!("{}", condition);
-    assert!(display.contains("hp_per") || display.contains("hp"));
-    assert!(display.contains("50"));
-    assert!(display.contains("stamina"));
-    assert!(display.contains("30"));
+fn test_display() {
+    let cases = [
+        (
+            "hp_per>50&base_stamina>=30",
+            "hp_per > 50 & base_stamina >= 30",
+        ),
+        ("order<3@order<=5", "order < 3 @ order <= 5"),
+        ("corner!=0", "corner != 0"),
+        // Nested expressions are parenthesized.
+        (
+            "hp_per==1&phase==2@corner<3",
+            "(hp_per == 1 & phase == 2) @ (corner < 3)",
+        ),
+    ];
+    for (input, expected) in cases {
+        let condition = parse_condition(input).unwrap();
+        assert_eq!(condition.to_string(), expected, "{input}");
+    }
 }
 
 #[test]
 fn test_error_cases() {
-    assert!(parse_condition("").is_err());
-    assert!(parse_condition("hp").is_err());
-    assert!(parse_condition("hp ==").is_err());
-    assert!(parse_condition("== 100").is_err());
-    // Single '=' not allowed.
-    assert!(parse_condition("hp = 100").is_err());
-    // Incomplete.
-    assert!(parse_condition("hp > 50 &").is_err());
+    let cases = [
+        ("", "Expected variable"),
+        ("== 100", "Expected variable"),
+        ("hp_per", "Expected comparison operator"),
+        ("hp_per ==", "Expected value"),
+        // Incomplete.
+        ("hp_per > 50 &", "Expected variable"),
+        ("hp_per > 50 @", "Expected variable"),
+        ("hp_per==1 2", "Unexpected token 'Value(2)' at position 3"),
+        // Single '=' or '!' not allowed.
+        ("hp_per = 100", "Unexpected character '=' at position 7"),
+        ("hp_per !100", "Unexpected character '!' at position 7"),
+        ("hp_per =", "Unexpected character '=' at position 7"),
+        ("hp_per==1 # 2", "Unexpected character '#' at position 10"),
+        // Out of `i32` range.
+        (
+            "hp_per==99999999999",
+            "Invalid number '99999999999' at position 8",
+        ),
+        (
+            "hp_per==-99999999999",
+            "Invalid number '-99999999999' at position 8",
+        ),
+    ];
+    for (input, expected) in cases {
+        let error = parse_condition(input).unwrap_err();
+        assert_eq!(error.to_string(), expected, "{input:?}");
+    }
+}
+
+#[test]
+fn test_comp_op_apply() {
+    // Results for values below, equal to and above 5.
+    let cases = [
+        (CompOp::Equal, [false, true, false]),
+        (CompOp::NotEqual, [true, false, true]),
+        (CompOp::Greater, [false, false, true]),
+        (CompOp::GreaterEqual, [false, true, true]),
+        (CompOp::Less, [true, false, false]),
+        (CompOp::LessEqual, [true, true, false]),
+    ];
+    for (op, expected) in cases {
+        let actual = [4, 5, 6].map(|lhs| op.apply(lhs, 5));
+        assert_eq!(actual, expected, "{op}");
+    }
 }
 
 #[test]
