@@ -22,14 +22,16 @@ pub struct LastSpurt {
 }
 
 /// Category of last spurt based on achievable speed and HP.
+///
+/// Values match those of the `lastspurt` condition variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LastSpurtCategory {
-    /// Last spurt can not be fully carried out even at base target speed.
-    CannotFinish = 1,
+    /// Last spurt cannot be fully carried out even at base target speed.
+    CannotFinish = 0,
     /// Last spurt can be carried out above base target speed but not at max speed.
-    AboveBase = 2,
+    AboveBase = 1,
     /// Last spurt can be carried out at max speed without HP issues.
-    Full = 3,
+    Full = 2,
 }
 
 /// Candidate last spurt option during calculation.

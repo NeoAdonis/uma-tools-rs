@@ -718,10 +718,11 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Last spurt state:
         // 0=can't finish at base speed, 1=above base speed, 2=max speed.
+        // -1 if not calculated yet, so that it doesn't match any state.
         Lastspurt => runner
             .last_spurt
             .as_ref()
-            .map_or(0, |spurt| spurt.category as i32),
+            .map_or(-1, |spurt| spurt.category as i32),
 
         // Start is too late.
         IsBadstart => matches!(runner.start_type(), StartType::Late) as i32,

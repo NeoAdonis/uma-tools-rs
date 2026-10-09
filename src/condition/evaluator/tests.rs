@@ -807,6 +807,30 @@ fn test_is_lastspurt_by_position() {
 }
 
 #[test]
+fn test_lastspurt_values() {
+    let mut solver = create_test_race_solver(vec![]);
+    let var = StatusVar::Lastspurt;
+
+    // Not calculated yet.
+    assert_eq!(get_status_value(&var, &solver.runners[0]), -1);
+
+    let cases = [
+        (LastSpurtCategory::CannotFinish, 0),
+        (LastSpurtCategory::AboveBase, 1),
+        (LastSpurtCategory::Full, 2),
+    ];
+    for (category, expected) in cases {
+        solver.runners[0].last_spurt = Some(LastSpurt {
+            max_speed: 20.0,
+            target_distance: 1000.0,
+            category,
+        });
+        let actual = get_status_value(&var, &solver.runners[0]);
+        assert_eq!(actual, expected, "{category:?}");
+    }
+}
+
+#[test]
 fn test_is_badstart_by_start_delay() {
     let mut solver = create_test_race_solver(vec![]);
 
