@@ -240,11 +240,6 @@ impl Course {
         self.distance as f64 / 24.0
     }
 
-    /// Get quarterway point in meters.
-    pub fn quarterway(&self) -> f64 {
-        self.distance as f64 / 4.0
-    }
-
     /// Get halfway point in meters.
     pub fn halfway(&self) -> f64 {
         self.distance as f64 / 2.0
@@ -524,11 +519,12 @@ mod tests {
         let courses: std::collections::HashMap<String, CourseData> =
             serde_json::from_str(&json).unwrap();
         for (id, data) in courses {
+            let course = Course::new_test(id.parse().unwrap(), data);
             for language in [Language::Japanese, Language::English] {
-                let name = get_track_name(data.race_track_id, language);
+                let name = course.track_name(language);
                 assert!(name.is_some(), "course {id} ({language:?})");
             }
         }
-        assert_eq!(get_track_name(0, Language::English), None);
+        assert_eq!(create_test_course(0).track_name(Language::English), None);
     }
 }
