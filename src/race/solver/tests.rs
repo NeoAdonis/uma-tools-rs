@@ -2005,6 +2005,7 @@ fn test_pending_effects_apply_to_targets() {
             target: SkillTarget::BehindSelf { count: 1 },
             modifier: -0.15,
             value_usage: ValueUsage::Direct,
+            additional: AdditionalActivation::Regular,
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2027,6 +2028,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
         target,
         modifier,
         value_usage: ValueUsage::Direct,
+        additional: AdditionalActivation::Regular,
     };
     alternative.effects.extend([
         on_others(
@@ -2084,6 +2086,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
             target: SkillTarget::All,
             modifier,
             value_usage: ValueUsage::Direct,
+            additional: AdditionalActivation::Regular,
         },
         duration: 3.0,
         wiz_bonus: 0.0,
@@ -2319,6 +2322,7 @@ fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)])
                 target: SkillTarget::Oneself,
                 modifier,
                 value_usage: ValueUsage::Direct,
+                additional: AdditionalActivation::Regular,
             })
             .collect(),
         ..alternative("always==1", SkillType::SpeedUp, 0.0)
@@ -3170,4 +3174,96 @@ fn test_uphills_climbed_extend_duration() {
         let durations = remaining_durations(&solver);
         assert_close!(durations[0], base_duration * 1.2, "{uphills} uphills");
     }
+}
+
+/// Skill with a 0.25 target speed effect, and a 0.05 one applied as
+/// `additional`. It never activates on its own.
+fn additional_skill(id: &str, additional: AdditionalActivation) -> Skill {
+    let mut alternative = alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25);
+    alternative.effects.push(SkillEffect {
+        modifier: 0.05,
+        additional,
+        ..alternative.effects[0].clone()
+    });
+    Skill::new(id.to_string(), skill_data(vec![alternative]))
+}
+
+#[test]
+fn test_additional_effects_apply_on_overtakes() {
+    let skills = vec![additional_skill(
+        "additional",
+        AdditionalActivation::OrderUp,
+    )];
+    let mut solver = timed_skill_solver(skills);
+    let course = solver.state.course.clone();
+    let change_order = |solver: &mut RaceSolver<Runner>, from, to| {
+        let runner = &mut solver.runners[0];
+        runner.order.order = from;
+        runner.update_order(to, &course);
+        runner.skill_modifiers.target_speed
+    };
+
+    // Only the regular effect applies on activation.
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+    assert_close!(solver.runners[0].skill_modifiers.target_speed, 0.25);
+    // Two overtakes at once; being overtaken doesn't count.
+    assert_close!(change_order(&mut solver, 5, 3), 0.35);
+    assert_close!(change_order(&mut solver, 3, 4), 0.35);
+    // Up to three times.
+    assert_close!(change_order(&mut solver, 4, 2), 0.4);
+
+    // Expires with the other effects.
+    solver.state.elapsed_time = 3.0 * 1.2;
+    solver.runners[0].update_skill_durations(solver.state.elapsed_time);
+    assert!(solver.runners[0].active_timed_effects.is_empty());
+    assert_close!(change_order(&mut solver, 2, 1), 0.0);
+}
+
+#[test]
+fn test_additional_effects_apply_on_other_skill_activations() {
+    // Other skills only boost acceleration, so that target speed only comes from
+    // the skill with additional effects.
+    let other = |id| {
+        skill(
+            id,
+            "is_activate_heal_skill==1",
+            SkillType::Acceleration,
+            0.1,
+        )
+    };
+    let mut skills = vec![
+        additional_skill("first", AdditionalActivation::ActivateAnySkill1),
+        additional_skill("second", AdditionalActivation::ActivateAnySkill2),
+    ];
+    skills.extend(["a", "b", "c", "d"].map(other));
+    let mut solver = timed_skill_solver(skills);
+    let activate = |solver: &mut RaceSolver<Runner>, skill_index| {
+        let runner = &mut solver.runners[0];
+        runner.activate_skill(skill_index, 0, &solver.state);
+        let additional_triggers = |additional| {
+            runner
+                .active_timed_effects
+                .iter()
+                .find(|timed| timed.effect.additional == additional)
+                .map(|timed| timed.additional_triggers)
+        };
+        (
+            additional_triggers(AdditionalActivation::ActivateAnySkill1),
+            additional_triggers(AdditionalActivation::ActivateAnySkill2),
+        )
+    };
+
+    // A skill's own activation doesn't count.
+    assert_eq!(activate(&mut solver, 0), (Some(0), None));
+    assert_close!(solver.runners[0].skill_modifiers.target_speed, 0.25);
+    // Activating a skill with additional effects counts for the others.
+    assert_eq!(activate(&mut solver, 1), (Some(1), Some(0)));
+    assert_eq!(activate(&mut solver, 2), (Some(2), Some(1)));
+    // Up to three and two times respectively.
+    assert_eq!(activate(&mut solver, 3), (Some(3), Some(2)));
+    assert_eq!(activate(&mut solver, 4), (Some(3), Some(2)));
+    assert_close!(
+        solver.runners[0].skill_modifiers.target_speed,
+        0.25 + 0.05 * 3.0 + 0.25 + 0.05 * 2.0
+    );
 }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::solver::RaceSolver;
-use crate::skill::{SkillEffect, SkillTarget, SkillType, ValueUsage};
+use crate::skill::{AdditionalActivation, SkillEffect, SkillTarget, SkillType, ValueUsage};
 use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
@@ -72,6 +72,7 @@ fn recovery(modifier: f64) -> SkillEffect {
         target: SkillTarget::Oneself,
         modifier,
         value_usage: ValueUsage::Direct,
+        additional: AdditionalActivation::Regular,
     }
 }
 

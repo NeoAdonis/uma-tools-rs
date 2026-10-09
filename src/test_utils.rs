@@ -122,6 +122,7 @@ pub(crate) fn alternative(
             target: SkillTarget::Oneself,
             modifier,
             value_usage: ValueUsage::Direct,
+            additional: AdditionalActivation::Regular,
         }],
         time_usage: TimeUsage::Direct,
     }

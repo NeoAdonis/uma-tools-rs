@@ -1,7 +1,7 @@
 use super::*;
 use crate::skill::{
-    DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData, SkillEffect,
-    SkillRarity, SkillTarget, SkillType, TimeUsage, ValueUsage,
+    AdditionalActivation, DEFAULT_COOLDOWN, PopularityStat as Stat, SkillAlternative, SkillData,
+    SkillEffect, SkillRarity, SkillTarget, SkillType, TimeUsage, ValueUsage,
 };
 use crate::test_utils::assert_close;
 
@@ -24,6 +24,7 @@ fn skill(id: &str, rarity: SkillRarity, effects: &[(SkillType, SkillTarget, f64)
                         target,
                         modifier,
                         value_usage: ValueUsage::Direct,
+                        additional: AdditionalActivation::Regular,
                     })
                     .collect(),
                 time_usage: TimeUsage::Direct,

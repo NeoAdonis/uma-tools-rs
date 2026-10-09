@@ -2117,6 +2117,7 @@ impl Runner {
                 }
             }
             self.extend_effects_on_overtake(overtakes);
+            self.trigger_additional_effects(&[AdditionalActivation::OrderUp], overtakes);
             if course
                 .corners
                 .last()
@@ -2135,6 +2136,24 @@ impl Runner {
             let count = overtakes.min(extension.remaining as u16) as u8;
             timed.expires_at += extension.duration * count as f64;
             extension.remaining -= count;
+        }
+    }
+
+    /// Trigger the active additional effects applied on any of `triggers`,
+    /// `count` times, up to their maximum.
+    fn trigger_additional_effects(&mut self, triggers: &[AdditionalActivation], count: u16) {
+        let mut triggered = false;
+        for timed in &mut self.active_timed_effects {
+            let additional = timed.effect.additional;
+            if triggers.contains(&additional) {
+                let total = (timed.additional_triggers as u16 + count)
+                    .min(additional.max_triggers() as u16);
+                triggered |= total as u8 != timed.additional_triggers;
+                timed.additional_triggers = total as u8;
+            }
+        }
+        if triggered {
+            self.recalculate_skill_modifiers();
         }
     }
 
@@ -2499,6 +2518,16 @@ impl Runner {
         alternative_index: usize,
         state: &RaceState,
     ) {
+        // Activating a skill triggers the additional effects of those already active,
+        // before this skill's own effects are applied.
+        self.trigger_additional_effects(
+            &[
+                AdditionalActivation::ActivateAnySkill1,
+                AdditionalActivation::ActivateAnySkill2,
+            ],
+            1,
+        );
+
         // Clone the skill data we need to avoid borrow checker issues.
         let skill_id = self.available_skills[skill_index].id.clone();
         let alternative =
@@ -2805,6 +2834,7 @@ impl Runner {
                 value: effect.modifier * (1.0 + bonus),
                 expires_at,
                 overtake_extension,
+                additional_triggers: 0,
             });
         }
         // Recovery (HP restoration, or HP loss if negative), as a fraction of max HP.
@@ -2946,7 +2976,7 @@ impl Runner {
                     SkillType::CurrentSpeedWithNaturalDeceleration
                 )
             {
-                self.speed += effect.value;
+                self.speed += effect.current_value();
             }
         });
 
@@ -2968,29 +2998,29 @@ impl Runner {
         for timed in &self.active_timed_effects {
             match timed.effect.skill_type {
                 Acceleration => {
-                    mods.acceleration += timed.value;
+                    mods.acceleration += timed.current_value();
                 }
                 AccelerationFullThrottle => {
-                    mods.full_throttle_acceleration += timed.value;
+                    mods.full_throttle_acceleration += timed.current_value();
                 }
                 TargetSpeed => {
-                    mods.target_speed += timed.value;
+                    mods.target_speed += timed.current_value();
                 }
                 CurrentSpeed | CurrentSpeedWithNaturalDeceleration => {
-                    mods.current_speed += timed.value;
+                    mods.current_speed += timed.current_value();
                 }
                 LaneMovementSpeed => {
-                    mods.lane_speed += timed.value;
+                    mods.lane_speed += timed.current_value();
                 }
                 Fov => {
-                    mods.visible_distance += timed.value;
+                    mods.visible_distance += timed.current_value();
                 }
                 LaneChange => {
-                    mods.target_lane = Some(timed.value);
+                    mods.target_lane = Some(timed.current_value());
                 }
                 ExtendEvolvedDuration => {
                     // Duration scaling is multiplicative.
-                    mods.duration_scaling *= timed.value;
+                    mods.duration_scaling *= timed.current_value();
                 }
                 _ => {}
             }

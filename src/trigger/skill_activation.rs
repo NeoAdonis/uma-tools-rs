@@ -39,7 +39,7 @@
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::*;
-use crate::skill::SkillEffect;
+use crate::skill::{AdditionalActivation, SkillEffect};
 use crate::trigger::random::SEGMENT_LENGTH;
 use crate::units::furlongs_to_meters;
 
@@ -154,6 +154,21 @@ pub struct ActiveTimedEffect {
     pub expires_at: f64,
     /// Extension of the effect when overtaking while it's active.
     pub overtake_extension: OvertakeExtension,
+    /// Number of times an additional effect has been triggered (see
+    /// [`AdditionalActivation`]). Unused for regular effects.
+    pub additional_triggers: u8,
+}
+
+impl ActiveTimedEffect {
+    /// Value currently applied by the effect. An additional effect applies its
+    /// value once per trigger, so nothing until triggered.
+    pub fn current_value(&self) -> f64 {
+        if self.effect.additional == AdditionalActivation::Regular {
+            self.value
+        } else {
+            self.value * self.additional_triggers as f64
+        }
+    }
 }
 
 /// Extension of a timed effect each time the runner overtakes while it's active

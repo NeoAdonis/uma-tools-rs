@@ -338,6 +338,54 @@ impl TryFrom<u8> for ValueUsage {
     }
 }
 
+/// Represents when a skill effect applies: on activation, or later, each time
+/// an event happens while the skill's effects are active (追加効果).
+///
+/// Additional effects apply their value once per event, up to a maximum number
+/// of times (see [`AdditionalActivation::max_triggers`]), and expire with the
+/// skill's other effects.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u8")]
+pub enum AdditionalActivation {
+    /// Applies on activation (0).
+    #[default]
+    Regular,
+    /// Applies each time the runner overtakes (1).
+    OrderUp,
+    /// Applies each time the runner activates another skill, first variant (2).
+    ActivateAnySkill1,
+    /// Applies each time the runner activates another skill, second variant (3).
+    ActivateAnySkill2,
+}
+
+impl AdditionalActivation {
+    /// Maximum number of times an additional effect applies, or 0 for regular
+    /// effects.
+    pub fn max_triggers(self) -> u8 {
+        match self {
+            AdditionalActivation::Regular => 0,
+            AdditionalActivation::OrderUp => 3,
+            AdditionalActivation::ActivateAnySkill1 => 3,
+            AdditionalActivation::ActivateAnySkill2 => 2,
+        }
+    }
+}
+
+impl TryFrom<u8> for AdditionalActivation {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        use AdditionalActivation::*;
+        Ok(match value {
+            0 => Regular,
+            1 => OrderUp,
+            2 => ActivateAnySkill1,
+            3 => ActivateAnySkill2,
+            _ => return Err(format!("unknown additional activation {value}")),
+        })
+    }
+}
+
 /// Represents a single effect of a skill.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -355,6 +403,9 @@ pub struct SkillEffect {
     pub modifier: f64,
     /// How the modifier scales when the skill activates.
     pub value_usage: ValueUsage,
+    /// When the effect applies. Regular (on activation) if missing.
+    #[serde(default)]
+    pub additional: AdditionalActivation,
 }
 
 /// Convert a base duration from 10000ths of a second while deserializing. A
@@ -873,6 +924,7 @@ mod tests {
                 target: SkillTarget::Oneself,
                 modifier,
                 value_usage: ValueUsage::Direct,
+                additional: AdditionalActivation::Regular,
             };
             let actual = Skill::is_effect_positive(&effect);
             assert_eq!(actual, expected, "{skill_type:?} with {modifier}");
@@ -932,6 +984,30 @@ mod tests {
     }
 
     #[test]
+    fn test_additional_activation_ids() {
+        let effect = |additional: &str| {
+            let json = format!(
+                r#"{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 500,
+                    "valueUsage": 1{additional}}}"#
+            );
+            serde_json::from_str::<SkillEffect>(&json).map(|effect| effect.additional)
+        };
+        // Regular when missing.
+        assert_eq!(effect("").unwrap(), AdditionalActivation::Regular);
+        let cases = [
+            (0, AdditionalActivation::Regular),
+            (1, AdditionalActivation::OrderUp),
+            (2, AdditionalActivation::ActivateAnySkill1),
+            (3, AdditionalActivation::ActivateAnySkill2),
+        ];
+        for (id, expected) in cases {
+            let parsed = effect(&format!(r#", "additional": {id}"#)).unwrap();
+            assert_eq!(parsed, expected, "ID {id}");
+        }
+        assert!(effect(r#", "additional": 4"#).is_err());
+    }
+
+    #[test]
     fn test_is_green() {
         let skill = |skill_type| {
             let alternatives = vec![test_utils::alternative("always==1", skill_type, 40.0)];
@@ -958,6 +1034,20 @@ mod tests {
         for effect in effects {
             if effect.skill_type.is_pre_race_effect() {
                 assert_eq!(effect.value_usage, ValueUsage::Direct, "{effect:?}");
+            }
+            // Additional effects stack their values while the skill's timed effects
+            // are active, so only additive timed effects on oneself are supported.
+            if effect.additional != AdditionalActivation::Regular {
+                let skill_type = effect.skill_type;
+                assert!(skill_type.is_timed_effect(), "{effect:?}");
+                assert!(
+                    !matches!(
+                        skill_type,
+                        SkillType::LaneChange | SkillType::ExtendEvolvedDuration
+                    ),
+                    "{effect:?}"
+                );
+                assert_eq!(effect.target, SkillTarget::Oneself, "{effect:?}");
             }
         }
     }

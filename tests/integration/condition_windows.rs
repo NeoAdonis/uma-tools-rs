@@ -21,6 +21,7 @@ fn skill(condition: &str) -> Skill {
                     target: SkillTarget::Oneself,
                     modifier: 0.0001,
                     value_usage: ValueUsage::Direct,
+                    additional: AdditionalActivation::Regular,
                 }],
                 precondition: None,
                 time_usage: TimeUsage::Direct,

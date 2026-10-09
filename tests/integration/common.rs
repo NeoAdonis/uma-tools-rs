@@ -52,6 +52,7 @@ pub fn make_skill_with_alternatives(id: &str, alternatives: Vec<(&str, &str)>) -
                         target: SkillTarget::Oneself,
                         modifier: 0.4,
                         value_usage: ValueUsage::Direct,
+                        additional: AdditionalActivation::Regular,
                     }],
                     time_usage: TimeUsage::Direct,
                 })
