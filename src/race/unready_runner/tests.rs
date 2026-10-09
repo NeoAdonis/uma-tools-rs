@@ -1,9 +1,7 @@
 use super::*;
 use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
-use crate::test_utils::{
-    alternative, load_course, race_params, ready_solver, seeded_config, skill, skill_data, uma,
-};
+use crate::test_utils::*;
 
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
 /// race state it was built with.
@@ -46,6 +44,114 @@ fn test_stat_boost_is_applied() {
 
     assert_eq!(runner.adjusted.speed, speed + 80);
     assert_eq!(activated_ids(&runner), vec!["speed"]);
+}
+
+#[test]
+fn test_stat_boosts_by_type() {
+    let stats = |uma: Uma| [uma.speed, uma.stamina, uma.power, uma.guts, uma.wiz];
+    let base = Uma {
+        speed: 1000,
+        stamina: 900,
+        power: 800,
+        guts: 700,
+        wiz: 600,
+        ..uma(Style::Pace)
+    };
+
+    // (effect, modifier, [speed, stamina, power, guts, wiz]).
+    let cases = [
+        (SkillType::SpeedUp, 60.0, [1060, 900, 800, 700, 600]),
+        (SkillType::StaminaUp, 60.0, [1000, 960, 800, 700, 600]),
+        (SkillType::PowerUp, 60.0, [1000, 900, 860, 700, 600]),
+        (SkillType::GutsUp, 60.0, [1000, 900, 800, 760, 600]),
+        (SkillType::WizUp, 60.0, [1000, 900, 800, 700, 660]),
+        (SkillType::AllStatsUp, 60.0, [1060, 960, 860, 760, 660]),
+        // Negative boosts lower stats, down to 1.
+        (SkillType::AllStatsUp, -50.0, [950, 850, 750, 650, 550]),
+        (SkillType::SpeedUp, -2000.0, [1, 900, 800, 700, 600]),
+        // Not a stat boost.
+        (SkillType::TargetSpeed, 60.0, [1000, 900, 800, 700, 600]),
+    ];
+    for (skill_type, modifier, expected) in cases {
+        let mut uma = base;
+        apply_stat_boost(&mut uma, &skill_type, modifier);
+        assert_eq!(stats(uma), expected, "{skill_type:?} {modifier}");
+    }
+
+    // Stats never overflow.
+    let mut uma = Uma {
+        speed: u16::MAX - 10,
+        ..base
+    };
+    apply_stat_boost(&mut uma, &SkillType::SpeedUp, 60.0);
+    assert_eq!(uma.speed, u16::MAX);
+}
+
+#[test]
+fn test_gate_brackets() {
+    // Brackets of gates 1, 2, 3...
+    let cases: [(u8, &[u8]); 7] = [
+        // One gate per bracket.
+        (5, &[1, 2, 3, 4, 5]),
+        (8, &[1, 2, 3, 4, 5, 6, 7, 8]),
+        // Extra gates go to the last brackets.
+        (9, &[1, 2, 3, 4, 5, 6, 7, 8, 8]),
+        (10, &[1, 2, 3, 4, 5, 6, 7, 7, 8, 8]),
+        (16, &[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8]),
+        // Then again from the last bracket.
+        (17, &[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8]),
+        (18, &[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8]),
+    ];
+    for (gates, expected) in cases {
+        let brackets: Vec<u8> = (1..=gates)
+            .map(|gate| UnreadyRunner::get_gate_bracket(gate, gates))
+            .collect();
+        assert_eq!(brackets, expected, "{gates} gates");
+    }
+}
+
+#[test]
+fn test_rush_style_changes() {
+    // Every runner rushes.
+    let config = Configuration {
+        rushing: Roll::Always,
+        ..seeded_config(0)
+    };
+    let state = RaceSolver::new(load_course(10104), race_params(), &config).state;
+    let rush_styles = |style: Style| -> Vec<Style> {
+        (0..2000)
+            .map(|_| {
+                let runner = UnreadyRunner::new(uma(style), 1, Motivation::Normal, &state, vec![]);
+                runner.build(&state).rush_state.unwrap().style
+            })
+            .collect()
+    };
+    // Share of `styles` that are `style`.
+    let share = |styles: &[Style], style| {
+        styles.iter().filter(|&&s| s == style).count() as f64 / styles.len() as f64
+    };
+
+    // Front-like styles keep their style; Pace runners always rush as Front.
+    for (style, expected) in [
+        (Style::Runaway, Style::Runaway),
+        (Style::Front, Style::Front),
+        (Style::Pace, Style::Front),
+    ] {
+        let styles = rush_styles(style);
+        assert!(styles.iter().all(|&s| s == expected), "{style:?}");
+    }
+
+    // (style, [Front, Pace, Late] shares).
+    for (style, expected) in [
+        (Style::Late, [0.75, 0.25, 0.0]),
+        (Style::End, [0.7, 0.2, 0.1]),
+    ] {
+        let styles = rush_styles(style);
+        let actual = [Style::Front, Style::Pace, Style::Late].map(|s| share(&styles, s));
+        for (actual, expected) in actual.into_iter().zip(expected) {
+            assert_close!(actual, expected, tolerance = 0.04, "{style:?}");
+        }
+    }
 }
 
 #[test]
