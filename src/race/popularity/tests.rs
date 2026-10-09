@@ -275,6 +275,10 @@ fn test_calculate_stats() {
     let values = vec![10.0, 20.0, 30.0];
     let (mean, std_dev) = calculate_stats(&values);
 
-    assert_close!(mean, 20.0, tolerance = 0.001);
-    assert!(std_dev > 0.0);
+    assert_close!(mean, 20.0);
+    // Population standard deviation: sqrt(200 / 3).
+    assert_close!(std_dev, (200.0_f64 / 3.0).sqrt());
+
+    // No values (e.g. no runners).
+    assert_eq!(calculate_stats(&[]), (0.0, 0.0));
 }
