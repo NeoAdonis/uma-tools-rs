@@ -514,6 +514,21 @@ mod tests {
     }
 
     #[test]
+    fn test_from_json_str_errors() {
+        // Course data of 10101 under its own ID and under a non-numeric one.
+        let json = std::fs::read_to_string("data/course_data.json").unwrap();
+        let courses: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let data = &courses["10101"];
+        let json = serde_json::json!({ "10101": data, "abc": data }).to_string();
+
+        assert_eq!(Course::from_json_str(&json, "10101").unwrap().id, 10101);
+        let error = Course::from_json_str(&json, "10102").unwrap_err();
+        assert_eq!(error.to_string(), "Course ID '10102' not found in JSON");
+        let error = Course::from_json_str(&json, "abc").unwrap_err();
+        assert_eq!(error.to_string(), "Invalid course ID format: 'abc'");
+    }
+
+    #[test]
     fn test_every_course_has_a_track_name() {
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
         let courses: std::collections::HashMap<String, CourseData> =
