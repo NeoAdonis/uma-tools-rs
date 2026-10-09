@@ -7,8 +7,7 @@ pub enum VarType {
     AccumulateTime,
     /// Variable representing base stats.
     BaseStat(StatKind),
-    /// Variables related to the runner's entry in the race (gate, popularity,
-    /// etc.).
+    /// Variables related to the runner's entry in the race (gate, popularity...).
     Entry(EntryVar),
     /// Variables related to order/rank.
     Order(OrderVar),
