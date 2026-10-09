@@ -124,65 +124,144 @@ impl RaceParametersData {
     }
 }
 
-// Random distribution implementations for race parameters.
-use rand::distr::{Distribution, StandardUniform};
-use rand::prelude::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl Distribution<TrackCondition> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TrackCondition {
-        match rng.random_range(0..4) {
-            0 => TrackCondition::Firm,
-            1 => TrackCondition::Good,
-            2 => TrackCondition::Soft,
-            _ => TrackCondition::Heavy,
+    /// JSON for [`RaceParametersData`] with every field set, and the weather as
+    /// given.
+    fn parameters_json(weather: &str) -> String {
+        format!(
+            r#"{{
+                "trackCondition": "Soft",
+                "weather": "{weather}",
+                "season": "Sakura",
+                "time": "Evening",
+                "grade": "PreOP",
+                "gates": 12,
+                "courseId": "10101"
+            }}"#
+        )
+    }
+
+    #[test]
+    fn test_from_json() {
+        let expected = RaceParametersData {
+            race: RaceParameters {
+                track_condition: TrackCondition::Soft,
+                weather: Weather::Snowy,
+                season: Season::Sakura,
+                time: Time::Evening,
+                grade: Grade::PreOP,
+                gates: 12,
+            },
+            course_id: "10101".to_string(),
+        };
+        let actual = RaceParametersData::from_json(&parameters_json("Snowy")).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    /// Parse a single enum value from its JSON name.
+    fn parse<T: serde::de::DeserializeOwned>(name: &str) -> T {
+        serde_json::from_str(&format!("\"{name}\"")).unwrap()
+    }
+
+    #[test]
+    fn test_variant_names() {
+        let track_conditions = [
+            ("Firm", TrackCondition::Firm),
+            ("Good", TrackCondition::Good),
+            ("Soft", TrackCondition::Soft),
+            ("Heavy", TrackCondition::Heavy),
+        ];
+        for (name, expected) in track_conditions {
+            assert_eq!(parse::<TrackCondition>(name), expected, "{name}");
+        }
+
+        let weathers = [
+            ("Sunny", Weather::Sunny),
+            ("Cloudy", Weather::Cloudy),
+            ("Rainy", Weather::Rainy),
+            ("Snowy", Weather::Snowy),
+        ];
+        for (name, expected) in weathers {
+            assert_eq!(parse::<Weather>(name), expected, "{name}");
+        }
+
+        let seasons = [
+            ("Spring", Season::Spring),
+            ("Summer", Season::Summer),
+            ("Autumn", Season::Autumn),
+            ("Winter", Season::Winter),
+            ("Sakura", Season::Sakura),
+        ];
+        for (name, expected) in seasons {
+            assert_eq!(parse::<Season>(name), expected, "{name}");
+        }
+
+        let times = [
+            ("None", Time::None),
+            ("Morning", Time::Morning),
+            ("Noon", Time::Noon),
+            ("Evening", Time::Evening),
+            ("Night", Time::Night),
+        ];
+        for (name, expected) in times {
+            assert_eq!(parse::<Time>(name), expected, "{name}");
+        }
+
+        let grades = [
+            ("G1", Grade::G1),
+            ("G2", Grade::G2),
+            ("G3", Grade::G3),
+            ("OP", Grade::OP),
+            ("PreOP", Grade::PreOP),
+            ("Maiden", Grade::Maiden),
+            ("Debut", Grade::Debut),
+            ("Daily", Grade::Daily),
+        ];
+        for (name, expected) in grades {
+            assert_eq!(parse::<Grade>(name), expected, "{name}");
         }
     }
-}
 
-impl Distribution<Weather> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Weather {
-        match rng.random_range(0..4) {
-            0 => Weather::Sunny,
-            1 => Weather::Cloudy,
-            2 => Weather::Rainy,
-            _ => Weather::Snowy,
+    #[test]
+    fn test_from_invalid_json() {
+        let valid = parameters_json("Sunny");
+        let mut without_course_id: serde_json::Value = serde_json::from_str(&valid).unwrap();
+        without_course_id
+            .as_object_mut()
+            .unwrap()
+            .remove("courseId");
+
+        let invalid = [
+            // Unknown variant.
+            parameters_json("Foggy"),
+            // Missing course ID.
+            without_course_id.to_string(),
+            // Course ID as a number.
+            valid.replace(r#""courseId": "10101""#, r#""courseId": 10101"#),
+            // Too many gates for a `u8`.
+            valid.replace(r#""gates": 12"#, r#""gates": 256"#),
+            // Malformed.
+            "{".to_string(),
+        ];
+        for json in invalid {
+            assert!(RaceParametersData::from_json(&json).is_err(), "{json}");
         }
     }
-}
 
-impl Distribution<Season> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Season {
-        match rng.random_range(0..5) {
-            0 => Season::Spring,
-            1 => Season::Summer,
-            2 => Season::Autumn,
-            3 => Season::Winter,
-            _ => Season::Sakura,
-        }
+    #[test]
+    fn test_from_json_file() {
+        let parameters = RaceParametersData::from_json_file("parameters.json").unwrap();
+        assert_eq!(parameters.race.track_condition, TrackCondition::Firm);
+        assert_eq!(parameters.race.grade, Grade::G1);
+        assert_eq!(parameters.race.gates, 18);
+        assert_eq!(parameters.course_id, "10913");
     }
-}
 
-impl Distribution<Time> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Time {
-        match rng.random_range(0..4) {
-            0 => Time::Morning,
-            1 => Time::Noon,
-            2 => Time::Evening,
-            _ => Time::Night,
-        }
-    }
-}
-
-impl Distribution<Grade> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Grade {
-        match rng.random_range(0..7) {
-            0 => Grade::G1,
-            1 => Grade::G2,
-            2 => Grade::G3,
-            3 => Grade::OP,
-            4 => Grade::PreOP,
-            5 => Grade::Maiden,
-            _ => Grade::Debut,
-        }
+    #[test]
+    fn test_from_missing_file() {
+        assert!(RaceParametersData::from_json_file("does_not_exist.json").is_err());
     }
 }
