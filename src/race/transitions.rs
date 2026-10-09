@@ -1,126 +1,77 @@
 use crate::course::geometry::*;
 
-/// Structure used for corner entry/exit operations.
-#[derive(Default)]
-pub struct CornerManager {
-    current_corner: Option<usize>,
+/// Course segment (corner, slope or straight) spanning from `start()`
+/// (inclusive) to `end()` (exclusive), in meters.
+pub trait Segment {
+    fn start(&self) -> f64;
+    fn end(&self) -> f64;
 }
 
-impl CornerManager {
-    /// Check for corner entry, returns corner index if entered.
-    pub fn check_entry(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
-        if self.current_corner.is_some() {
-            // Already in a corner.
+impl Segment for Corner {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.start + self.length
+    }
+}
+
+impl Segment for Slope {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.start + self.length
+    }
+}
+
+impl Segment for Straight {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.end
+    }
+}
+
+/// Structure used for segment entry/exit operations, tracking which segment of
+/// a kind (e.g. corners) a runner is in.
+#[derive(Default)]
+pub struct SegmentManager {
+    current: Option<usize>,
+}
+
+impl SegmentManager {
+    /// Check for segment entry, returns segment index if entered.
+    pub fn check_entry<S: Segment>(&mut self, position: f64, segments: &[S]) -> Option<usize> {
+        if self.current.is_some() {
+            // Already in a segment.
             return None;
         }
 
-        for (idx, corner) in corners.iter().enumerate() {
-            if position >= corner.start && position < corner.start + corner.length {
-                self.current_corner = Some(idx);
-                return Some(idx);
-            }
+        let idx = segments
+            .iter()
+            .position(|segment| position >= segment.start() && position < segment.end())?;
+        self.current = Some(idx);
+        Some(idx)
+    }
+
+    /// Check for segment exit, returns segment index if exited.
+    pub fn check_exit<S: Segment>(&mut self, position: f64, segments: &[S]) -> Option<usize> {
+        let idx = self.current?;
+        if position >= segments[idx].end() {
+            self.current = None;
+            return Some(idx);
         }
         None
     }
 
-    /// Check for corner exit, returns corner index if exited.
-    pub fn check_exit(&mut self, position: f64, corners: &[Corner]) -> Option<usize> {
-        if let Some(idx) = self.current_corner {
-            let corner = &corners[idx];
-            if position >= corner.start + corner.length {
-                self.current_corner = None;
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    /// Get the current corner index if in a corner.
-    pub fn current_corner(&self) -> Option<usize> {
-        self.current_corner
-    }
-}
-
-/// Structure used for slope entry/exit operations.
-#[derive(Default)]
-pub struct SlopeManager {
-    current_slope: Option<usize>,
-}
-
-impl SlopeManager {
-    /// Check for slope entry, returns (slope index, slope type) if entered.
-    pub fn check_entry(&mut self, position: f64, slopes: &[Slope]) -> Option<(usize, SlopeType)> {
-        if self.current_slope.is_some() {
-            // Already on a slope.
-            return None;
-        }
-
-        for (idx, slope) in slopes.iter().enumerate() {
-            if position >= slope.start && position < slope.start + slope.length {
-                self.current_slope = Some(idx);
-                let slope_type = slope.slope_type();
-                return Some((idx, slope_type));
-            }
-        }
-        None
-    }
-
-    /// Check for slope exit, returns slope index if exited.
-    pub fn check_exit(&mut self, position: f64, slopes: &[Slope]) -> Option<usize> {
-        if let Some(idx) = self.current_slope {
-            let slope = &slopes[idx];
-            if position >= slope.start + slope.length {
-                self.current_slope = None;
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    /// Get the current slope index if on a slope.
-    pub fn current_slope(&self) -> Option<usize> {
-        self.current_slope
-    }
-}
-
-/// Structure used for straight entry/exit operations.
-#[derive(Default)]
-pub struct StraightManager {
-    current_straight: Option<usize>,
-}
-
-impl StraightManager {
-    /// Check for straight entry, returns straight index if entered.
-    pub fn check_entry(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
-        if self.current_straight.is_some() {
-            // Already in a straight.
-            return None;
-        }
-
-        for (idx, straight) in straights.iter().enumerate() {
-            if position >= straight.start && position < straight.end {
-                self.current_straight = Some(idx);
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    /// Check for straight exit, returns straight index if exited.
-    pub fn check_exit(&mut self, position: f64, straights: &[Straight]) -> Option<usize> {
-        if let Some(idx) = self.current_straight {
-            let straight = &straights[idx];
-            if position >= straight.end {
-                self.current_straight = None;
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    /// Get the current straight index if in a straight.
-    pub fn current_straight(&self) -> Option<usize> {
-        self.current_straight
+    /// Get the current segment index if in a segment.
+    pub fn current(&self) -> Option<usize> {
+        self.current
     }
 }
 

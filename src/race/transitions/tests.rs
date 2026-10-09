@@ -4,170 +4,96 @@ fn create_test_corner(start: f64, length: f64) -> Corner {
     Corner { start, length }
 }
 
-fn create_test_slope(start: f64, length: f64, slope: f64) -> Slope {
-    Slope::new(start, length, slope)
-}
+#[test]
+fn test_segment_bounds() {
+    let corner = create_test_corner(100.0, 50.0);
+    assert_eq!((corner.start(), corner.end()), (100.0, 150.0));
 
-fn create_test_straight(start: f64, end: f64) -> Straight {
-    Straight {
-        start,
-        end,
+    let slope = Slope::new(200.0, 30.0, 1.5);
+    assert_eq!((slope.start(), slope.end()), (200.0, 230.0));
+
+    let straight = Straight {
+        start: 300.0,
+        end: 400.0,
         front_type: FrontType::Audience,
-    }
+    };
+    assert_eq!((straight.start(), straight.end()), (300.0, 400.0));
 }
 
 #[test]
-fn test_corner_entry() {
-    let mut manager = CornerManager::default();
+fn test_segment_entry() {
+    let mut manager = SegmentManager::default();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
-    // Before corner.
+    // Before segment.
     assert_eq!(manager.check_entry(50.0, &corners), None);
+    assert_eq!(manager.current(), None);
 
-    // At corner start.
+    // At segment start.
     assert_eq!(manager.check_entry(100.0, &corners), Some(0));
+    assert_eq!(manager.current(), Some(0));
 
-    // Already in corner.
+    // Already in segment.
     assert_eq!(manager.check_entry(125.0, &corners), None);
+    assert_eq!(manager.current(), Some(0));
 }
 
 #[test]
-fn test_corner_exit() {
-    let mut manager = CornerManager::default();
+fn test_segment_exit() {
+    let mut manager = SegmentManager::default();
     let corners = vec![create_test_corner(100.0, 50.0)];
 
-    // Enter corner.
-    manager.check_entry(100.0, &corners);
-
-    // Still in corner.
+    // Not in a segment.
     assert_eq!(manager.check_exit(125.0, &corners), None);
 
-    // At corner end.
+    // Enter segment.
+    manager.check_entry(100.0, &corners);
+
+    // Still in segment.
+    assert_eq!(manager.check_exit(125.0, &corners), None);
+
+    // At segment end.
     assert_eq!(manager.check_exit(150.0, &corners), Some(0));
+    assert_eq!(manager.current(), None);
 
     // Already exited.
     assert_eq!(manager.check_exit(175.0, &corners), None);
 }
 
 #[test]
-fn test_multiple_corners() {
-    let mut manager = CornerManager::default();
+fn test_multiple_segments() {
+    let mut manager = SegmentManager::default();
     let corners = vec![
         create_test_corner(100.0, 50.0),
         create_test_corner(200.0, 30.0),
     ];
 
-    // Enter first corner.
+    // Enter first segment.
     assert_eq!(manager.check_entry(100.0, &corners), Some(0));
 
-    // Exit first corner.
+    // Exit first segment.
     assert_eq!(manager.check_exit(150.0, &corners), Some(0));
 
-    // Enter second corner.
+    // Between segments.
+    assert_eq!(manager.check_entry(175.0, &corners), None);
+
+    // Enter second segment.
     assert_eq!(manager.check_entry(200.0, &corners), Some(1));
 
-    // Exit second corner.
+    // Exit second segment.
     assert_eq!(manager.check_exit(230.0, &corners), Some(1));
 }
 
 #[test]
-fn test_slope_entry_uphill() {
-    let mut manager = SlopeManager::default();
-    // Positive = uphill.
-    let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
-
-    // Before slope.
-    assert_eq!(manager.check_entry(50.0, &slopes), None);
-
-    // At slope start.
-    let entry = manager.check_entry(100.0, &slopes);
-    assert!(entry.is_some());
-    let (idx, slope_type) = entry.unwrap();
-    assert_eq!(idx, 0);
-    assert_eq!(slope_type, SlopeType::Uphill);
-}
-
-#[test]
-fn test_slope_entry_downhill() {
-    let mut manager = SlopeManager::default();
-    // Negative = downhill.
-    let slopes = vec![create_test_slope(100.0, 50.0, -0.05)];
-
-    let entry = manager.check_entry(100.0, &slopes);
-    assert!(entry.is_some());
-    let (idx, slope_type) = entry.unwrap();
-    assert_eq!(idx, 0);
-    assert_eq!(slope_type, SlopeType::Downhill);
-}
-
-#[test]
-fn test_slope_exit() {
-    let mut manager = SlopeManager::default();
-    let slopes = vec![create_test_slope(100.0, 50.0, 0.05)];
-
-    // Enter slope.
-    manager.check_entry(100.0, &slopes);
-
-    // Still on slope.
-    assert_eq!(manager.check_exit(125.0, &slopes), None);
-
-    // At slope end.
-    assert_eq!(manager.check_exit(150.0, &slopes), Some(0));
-
-    // Already exited.
-    assert_eq!(manager.check_exit(175.0, &slopes), None);
-}
-
-#[test]
-fn test_straight_entry() {
-    let mut manager = StraightManager::default();
-    let straights = vec![create_test_straight(100.0, 150.0)];
-
-    // Before straight.
-    assert_eq!(manager.check_entry(50.0, &straights), None);
-
-    // At straight start.
-    assert_eq!(manager.check_entry(100.0, &straights), Some(0));
-
-    // Already in straight.
-    assert_eq!(manager.check_entry(125.0, &straights), None);
-}
-
-#[test]
-fn test_straight_exit() {
-    let mut manager = StraightManager::default();
-    let straights = vec![create_test_straight(100.0, 150.0)];
-
-    // Enter straight.
-    manager.check_entry(100.0, &straights);
-
-    // Still in straight.
-    assert_eq!(manager.check_exit(125.0, &straights), None);
-
-    // At straight end.
-    assert_eq!(manager.check_exit(150.0, &straights), Some(0));
-
-    // Already exited.
-    assert_eq!(manager.check_exit(175.0, &straights), None);
-}
-
-#[test]
-fn test_multiple_straights() {
-    let mut manager = StraightManager::default();
-    let straights = vec![
-        create_test_straight(100.0, 150.0),
-        create_test_straight(200.0, 230.0),
+fn test_adjacent_segments() {
+    let mut manager = SegmentManager::default();
+    let corners = vec![
+        create_test_corner(100.0, 50.0),
+        create_test_corner(150.0, 50.0),
     ];
+    manager.check_entry(100.0, &corners);
 
-    // Enter first straight.
-    assert_eq!(manager.check_entry(100.0, &straights), Some(0));
-
-    // Exit first straight.
-    assert_eq!(manager.check_exit(150.0, &straights), Some(0));
-
-    // Enter second straight.
-    assert_eq!(manager.check_entry(200.0, &straights), Some(1));
-
-    // Exit second straight.
-    assert_eq!(manager.check_exit(230.0, &straights), Some(1));
+    // Exiting first lets the next one be entered at the same position.
+    assert_eq!(manager.check_exit(150.0, &corners), Some(0));
+    assert_eq!(manager.check_entry(150.0, &corners), Some(1));
 }

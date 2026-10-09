@@ -91,3 +91,22 @@ pub struct Straight {
     /// Whether the straight is facing the audience or not.
     pub front_type: FrontType,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slope_type() {
+        // Positive is uphill, negative is downhill.
+        let cases = [
+            (1.5, SlopeType::Uphill),
+            (0.0, SlopeType::Flat),
+            (-1.5, SlopeType::Downhill),
+        ];
+        for (gradient, expected) in cases {
+            let slope = Slope::new(100.0, 50.0, gradient);
+            assert_eq!(slope.slope_type(), expected, "gradient {gradient}");
+        }
+    }
+}

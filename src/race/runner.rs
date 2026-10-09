@@ -513,13 +513,13 @@ pub struct Runner {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Structure used to determine corner entries and exits, along with skills
     /// triggered by those events.
-    pub corner_manager: CornerManager,
+    pub corner_manager: SegmentManager,
     /// Structure used to determine slope entries and exits, along with their
     /// acceleration/deceleration effects as well as skills triggered by slopes.
-    pub slope_manager: SlopeManager,
+    pub slope_manager: SegmentManager,
     /// Structure used to determine straight entries and exits, along with skills
     /// triggered by those events.
-    pub straight_manager: StraightManager,
+    pub straight_manager: SegmentManager,
     /// Straight entered since skills were last checked, if any.
     pub entered_straight: Option<usize>,
     /// Scheduler for skill triggers. It contains many queues for different trigger
@@ -1989,7 +1989,7 @@ impl Runner {
 
     /// Get the current corner index if in a corner.
     pub fn current_corner(&self) -> Option<usize> {
-        self.corner_manager.current_corner()
+        self.corner_manager.current()
     }
 
     /// Check for corner entry and update state.
@@ -2004,7 +2004,7 @@ impl Runner {
 
     /// Get the current straight index if on a straight.
     pub fn current_straight(&self) -> Option<usize> {
-        self.straight_manager.current_straight()
+        self.straight_manager.current()
     }
 
     /// Check for straight entry.
@@ -2025,7 +2025,7 @@ impl Runner {
 
     /// Get the current slope index if on a slope.
     pub fn current_slope(&self) -> Option<usize> {
-        self.slope_manager.current_slope()
+        self.slope_manager.current()
     }
 
     /// Update slope state and apply slope-based acceleration/deceleration.
@@ -2041,9 +2041,7 @@ impl Runner {
             self.stop_slope_acceleration();
         }
 
-        if let Some((slope_idx, _slope_type)) =
-            self.slope_manager.check_entry(self.position, slopes)
-        {
+        if let Some(slope_idx) = self.slope_manager.check_entry(self.position, slopes) {
             // Entering slope - apply uphill deceleration if applicable.
             if slopes[slope_idx].is_uphill() {
                 self.start_uphill_deceleration(slopes[slope_idx].slope);
