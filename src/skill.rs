@@ -448,48 +448,6 @@ impl Skill {
         }
     }
 
-    /// Check if a skill affects you positively (buff).
-    ///
-    /// N.B. Because a skill can have both positive and negative effects, a skill
-    /// can be both a buff and a nerf.
-    pub fn is_buff(self: &Skill) -> bool {
-        for alternative in &self.alternatives {
-            for effect in &alternative.effects {
-                if effect.target == SkillTarget::Oneself && Skill::is_effect_positive(effect) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    /// Check if a skill affects you negatively (nerf).
-    ///
-    /// N.B. Because a skill can have both positive and negative effects, a skill
-    /// can be both a buff and a nerf.
-    pub fn is_nerf(self: &Skill) -> bool {
-        for alternative in &self.alternatives {
-            for effect in &alternative.effects {
-                if effect.target == SkillTarget::Oneself && !Skill::is_effect_positive(effect) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    /// Check if a skill affects others negatively (debuff).
-    pub fn is_debuff(self: &Skill) -> bool {
-        for alternative in &self.alternatives {
-            for effect in &alternative.effects {
-                if effect.target != SkillTarget::Oneself && !Skill::is_effect_positive(effect) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     /// Check if `self` is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(self: &Skill) -> bool {
         matches!(
@@ -705,6 +663,17 @@ mod tests {
             target(20, 10).unwrap(),
             SkillTarget::RushedBehind { max: 10 }
         );
+        assert_eq!(target(2, 0).unwrap(), SkillTarget::All);
+        assert_eq!(target(11, 0).unwrap(), SkillTarget::AllAllies);
+        assert_eq!(target(19, 2).unwrap(), SkillTarget::RushedAhead { max: 2 });
+        assert_eq!(
+            target(22, 1001).unwrap(),
+            SkillTarget::UmaId { value: 1001 }
+        );
+        assert_eq!(
+            target(23, 9).unwrap(),
+            SkillTarget::UsedRecovery { value: 9 }
+        );
     }
 
     #[test]
@@ -713,8 +682,46 @@ mod tests {
         assert!(target(3, 0).is_err());
         // Runaway (0) isn't a valid target style.
         assert!(target(18, 0).is_err());
-        // Negative count.
-        assert!(target(9, -1).is_err());
+        // Negative or too large counts.
+        for target_type in [4, 7, 9, 10, 19, 20] {
+            assert!(target(target_type, -1).is_err(), "type {target_type}");
+            assert!(target(target_type, 256).is_err(), "type {target_type}");
+        }
+        // Unknown style.
+        for target_type in [18, 21] {
+            assert!(target(target_type, 5).is_err(), "type {target_type}");
+        }
+    }
+
+    #[test]
+    fn test_is_effect_positive() {
+        let cases = [
+            // Purely positive.
+            (SkillType::ActivateRandomGold, 0.0, true),
+            (SkillType::ChangeStyleRunaway, 0.0, true),
+            // Less start delay is good.
+            (SkillType::AddStartDelay, -0.1, true),
+            (SkillType::AddStartDelay, 0.1, false),
+            (SkillType::MultiplyStartDelay, 0.5, true),
+            (SkillType::MultiplyStartDelay, 1.5, false),
+            // Less rush chance or time is good.
+            (SkillType::RushChanceUp, -0.1, true),
+            (SkillType::RushChanceUp, 0.1, false),
+            (SkillType::RushTimeUp, -0.1, true),
+            (SkillType::RushTimeUp, 0.1, false),
+            // Anything else is good when positive.
+            (SkillType::TargetSpeed, 0.1, true),
+            (SkillType::TargetSpeed, -0.1, false),
+        ];
+        for (skill_type, modifier, expected) in cases {
+            let effect = SkillEffect {
+                skill_type,
+                target: SkillTarget::Oneself,
+                modifier,
+            };
+            let actual = Skill::is_effect_positive(&effect);
+            assert_eq!(actual, expected, "{skill_type:?} with {modifier}");
+        }
     }
 
     #[test]
