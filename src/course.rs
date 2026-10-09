@@ -517,4 +517,18 @@ mod tests {
             assert_eq!(numbers, expected, "{count} corners");
         }
     }
+
+    #[test]
+    fn test_every_course_has_a_track_name() {
+        let json = std::fs::read_to_string("data/course_data.json").unwrap();
+        let courses: std::collections::HashMap<String, CourseData> =
+            serde_json::from_str(&json).unwrap();
+        for (id, data) in courses {
+            for language in [Language::Japanese, Language::English] {
+                let name = get_track_name(data.race_track_id, language);
+                assert!(name.is_some(), "course {id} ({language:?})");
+            }
+        }
+        assert_eq!(get_track_name(0, Language::English), None);
+    }
 }
