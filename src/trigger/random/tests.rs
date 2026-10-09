@@ -370,12 +370,19 @@ fn test_phase_first_half_straight_random_no_straight() {
 }
 
 #[test]
-fn test_phase_first_half_straight_random_invalid_phase() {
+fn test_phase_random_invalid_phase() {
     let course = create_test_course();
-    let condition = parse_condition("phase_first_half_straight_random==4").unwrap();
     let mut rng = rand::rng();
 
-    assert!(roll(&condition, &course, &mut rng).is_none());
+    for var in [
+        "phase_corner_random",
+        "phase_straight_random",
+        "phase_first_half_straight_random",
+        "phase_latter_half_straight_random",
+    ] {
+        let condition = parse_condition(&format!("{var}==4")).unwrap();
+        assert!(roll(&condition, &course, &mut rng).is_none(), "{var}");
+    }
 }
 
 #[test]
@@ -819,4 +826,71 @@ fn test_shared_rolls_apply_across_conditions() {
         let second_points = roll_condition(&second, &course, &mut rolls, &mut rng);
         assert_eq!(first_points, second_points);
     }
+}
+
+#[test]
+fn test_is_finalcorner_random() {
+    // Corners [100-300] and [500-650]: only the last one is picked.
+    let course = create_test_course();
+    let points = rolled_points("is_finalcorner_random==1", &course);
+    assert_covers(&points, 500.0, 640.0, "final corner");
+
+    // No corners on course fails the roll.
+    let course = create_test_course_with(vec![], vec![], course.straights.clone());
+    let condition = parse_condition("is_finalcorner_random==1").unwrap();
+    assert!(roll(&condition, &course, &mut rand::rng()).is_none());
+}
+
+#[test]
+fn test_distance_rate_after_random() {
+    // Course has 2400m; segments must fit before the finish.
+    let course = create_test_course();
+    for (rate, start) in [(50, 1200.0), (75, 1800.0)] {
+        let points = rolled_points(&format!("distance_rate_after_random=={rate}"), &course);
+        assert_covers(&points, start, 2390.0, &format!("after {rate}%"));
+    }
+}
+
+#[test]
+fn test_down_slope_random() {
+    // Downhills [800-900] and [1500-1550], uphill [1000-1200] (never picked).
+    let course = create_test_course_with_slopes(vec![
+        Slope::new(800.0, 100.0, -0.05),
+        Slope::new(1000.0, 200.0, 0.05),
+        Slope::new(1500.0, 50.0, -0.02),
+    ]);
+    let (first, second): (Vec<f64>, Vec<f64>) = rolled_points("down_slope_random==1", &course)
+        .into_iter()
+        .partition(|&point| point < 1000.0);
+    assert_covers(&first, 800.0, 890.0, "first downhill");
+    assert_covers(&second, 1500.0, 1540.0, "second downhill");
+
+    // Only uphills on course fails the roll.
+    let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, 0.05)]);
+    let condition = parse_condition("down_slope_random==1").unwrap();
+    assert!(roll(&condition, &course, &mut rand::rng()).is_none());
+}
+
+#[test]
+fn test_last_straight_random() {
+    // Straights [0-100] and [1800-2400]: only the last one is picked.
+    let course = create_test_course_with_straights(vec![
+        Straight {
+            start: 0.0,
+            end: 100.0,
+            front_type: FrontType::Audience,
+        },
+        Straight {
+            start: 1800.0,
+            end: 2400.0,
+            front_type: FrontType::Opposite,
+        },
+    ]);
+    let points = rolled_points("last_straight_random==1", &course);
+    assert_covers(&points, 1800.0, 2390.0, "last straight");
+
+    // No straights on course fails the roll.
+    let course = create_test_course_with_straights(vec![]);
+    let condition = parse_condition("last_straight_random==1").unwrap();
+    assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
