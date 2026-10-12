@@ -3,5 +3,6 @@
     "language": "English",
     "seed": 42,
     "wisdomChecks": "Random",
-    "rushing": "Random"
+    "rushing": "Random",
+    "defaultFanCount": 500000
 }
