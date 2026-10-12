@@ -290,7 +290,7 @@ pub enum ValueUsage {
     AddDistanceDiffTop = 19,
     /// Scales with the longest time the runner was side-blocked during the Mid
     /// race.
-    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun = 20,
+    MultiplyBlockedSideMaxTimeMidRace = 20,
     /// Scales with the runner's adjusted speed, first variant.
     MultiplySpeed1 = 22,
     /// Scales with the runner's adjusted speed, second variant.

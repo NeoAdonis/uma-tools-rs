@@ -2785,7 +2785,7 @@ impl Runner {
             AddDistanceDiffTop => {
                 modifier + skill_scaling::distance_from_first_bonus(self.position_diff.from_first)
             }
-            MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
+            MultiplyBlockedSideMaxTimeMidRace => {
                 let time = self.blocked.max_mid_side_time;
                 modifier * skill_scaling::mid_side_blocked_time_multiplier(time)
             }

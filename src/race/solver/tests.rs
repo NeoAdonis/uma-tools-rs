@@ -2944,7 +2944,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+        ValueUsage::MultiplyBlockedSideMaxTimeMidRace,
         &seeded_config(0),
     );
     let runner = &mut solver.runners[0];
