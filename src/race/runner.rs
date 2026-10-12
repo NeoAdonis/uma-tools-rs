@@ -2756,7 +2756,9 @@ impl Runner {
             MultiplySkillNum => {
                 modifier * skill_scaling::skill_count_multiplier(self.skill_count())
             }
-            Aoharu => modifier * skill_scaling::AOHARU_MULTIPLIER,
+            AoharuSpeed | AoharuStamina | AoharuPower | AoharuGuts | AoharuWisdom => {
+                modifier * skill_scaling::AOHARU_MULTIPLIER
+            }
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {
                 let roll = self.rng.borrow_mut().random();

@@ -248,94 +248,69 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 
 /// Represents how the value of a skill effect scales with the runner's situation
 /// when the skill activates (see [`crate::race::skill_scaling`]).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(try_from = "u8")]
+///
+/// Each variant's discriminant is its ID in the skill data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[repr(u8)]
 pub enum ValueUsage {
-    /// No scaling (1).
-    Direct,
-    /// Scales with the number of skills the runner has (2).
-    MultiplySkillNum,
-    /// Aoharu (Unity Cup) skills; scales with the team's total base stats in the
-    /// scenario (3-7).
-    Aoharu,
-    /// Random multiplier, first variant (8).
+    /// No scaling.
+    Direct = 1,
+    /// Scales with the number of skills the runner has.
+    MultiplySkillNum = 2,
+    /// Unity Cup skills; scales with the team's total speed in the scenario.
+    AoharuSpeed = 3,
+    /// Unity Cup skills; scales with the team's total stamina in the scenario.
+    AoharuStamina = 4,
+    /// Unity Cup skills; scales with the team's total power in the scenario.
+    AoharuPower = 5,
+    /// Unity Cup skills; scales with the team's total guts in the scenario.
+    AoharuGuts = 6,
+    /// Unity Cup skills; scales with the team's total wits in the scenario.
+    AoharuWisdom = 7,
+    /// Random multiplier, first variant.
     ///
     /// Both variants currently have the same multipliers, but they are separate
-    /// IDs in the game data, so they're kept apart in case an update changes
+    /// IDs in the skill data, so they're kept apart in case an update changes
     /// either of them.
-    MultiplyRandom1,
-    /// Random multiplier, second variant (9). See [`ValueUsage::MultiplyRandom1`].
-    MultiplyRandom2,
-    /// Climax skills; scales with the number of races won during training (10).
-    Climax,
-    /// Scales with the highest of the runner's raw stats (13).
-    MultiplyMaximumRawStatus,
-    /// Scales with the number of green skills activated by the runner (14).
-    MultiplyActivateSpecificTagSkillCount,
-    /// Adds a flat amount when far enough from the first place (19).
-    AddDistanceDiffTop,
+    MultiplyRandom1 = 8,
+    /// Random multiplier, second variant. See [`ValueUsage::MultiplyRandom1`].
+    MultiplyRandom2 = 9,
+    /// Climax skills; scales with the number of races won during training.
+    Climax = 10,
+    /// Scales with the number of overtakes in corners during the late race or
+    /// later.
+    CornerOvertakeCount = 11,
+    /// Scales with the runner's fan count.
+    FanCount = 12,
+    /// Scales with the highest of the runner's raw stats.
+    MultiplyMaximumRawStatus = 13,
+    /// Scales with the number of green skills activated by the runner.
+    MultiplyActivateSpecificTagSkillCount = 14,
+    /// Adds a flat amount when far enough from the first place.
+    AddDistanceDiffTop = 19,
     /// Scales with the longest time the runner was side-blocked during the Mid
-    /// race (20).
-    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-    /// Scales with the runner's adjusted speed, first variant (22).
-    MultiplySpeed1,
-    /// Scales with the runner's adjusted speed, second variant (23).
-    MultiplySpeed2,
-    /// Scales with the total level of global potential in the L'Arc scenario
-    /// (24).
-    MultiplyArcGlobalPotentialLevel,
-    /// Scales with the largest lead the runner took before the Late race (25).
-    MultiplyTopLeadAmount,
-    /// Scales with the number of overtakes in corners during the Late race or
-    /// later (11).
-    CornerOvertakeCount,
-    /// Scales with the runner's fan count (12).
-    FanCount,
-    /// Scales with the number of U.A.F. tournament wins (26).
-    UafWinCount,
-    /// Scales with the cooking points earned in the Great Food Festival scenario
-    /// (27).
-    CookingPoints,
+    /// race.
+    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun = 20,
+    /// Scales with the runner's adjusted speed, first variant.
+    MultiplySpeed1 = 22,
+    /// Scales with the runner's adjusted speed, second variant.
+    MultiplySpeed2 = 23,
+    /// Scales with the total level of global potential in the L'Arc scenario.
+    MultiplyArcGlobalPotentialLevel = 24,
+    /// Scales with the largest lead the runner took before the late race.
+    MultiplyTopLeadAmount = 25,
+    /// Scales with the number of U.A.F. tournament wins.
+    UafWinCount = 26,
+    /// Scales with the cooking points earned in the Great Food Festival scenario.
+    CookingPoints = 27,
     /// Scales with the total research level earned in the Mecha Umamusume
-    /// scenario (28).
-    ResearchLevel,
-    /// Scales with the love received from fans, up to 3x (30).
-    FanLove,
+    /// scenario.
+    ResearchLevel = 28,
+    /// Scales with the love received from fans, up to 3x.
+    FanLove = 30,
     /// Scales with the total development points earned in the Design Your Island
-    /// scenario (31).
-    DevelopmentPoints,
-}
-
-impl TryFrom<u8> for ValueUsage {
-    type Error = String;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use ValueUsage::*;
-        Ok(match value {
-            1 => Direct,
-            2 => MultiplySkillNum,
-            3..=7 => Aoharu,
-            8 => MultiplyRandom1,
-            9 => MultiplyRandom2,
-            10 => Climax,
-            11 => CornerOvertakeCount,
-            12 => FanCount,
-            13 => MultiplyMaximumRawStatus,
-            14 => MultiplyActivateSpecificTagSkillCount,
-            19 => AddDistanceDiffTop,
-            20 => MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-            22 => MultiplySpeed1,
-            23 => MultiplySpeed2,
-            24 => MultiplyArcGlobalPotentialLevel,
-            25 => MultiplyTopLeadAmount,
-            26 => UafWinCount,
-            27 => CookingPoints,
-            28 => ResearchLevel,
-            30 => FanLove,
-            31 => DevelopmentPoints,
-            _ => return Err(format!("unknown value usage {value}")),
-        })
-    }
+    /// scenario.
+    DevelopmentPoints = 31,
 }
 
 /// Represents when a skill effect applies: on activation, or later, each time
@@ -344,18 +319,20 @@ impl TryFrom<u8> for ValueUsage {
 /// Additional effects apply their value once per event, up to a maximum number
 /// of times (see [`AdditionalActivation::max_triggers`]), and expire with the
 /// skill's other effects.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(try_from = "u8")]
+///
+/// Each variant's discriminant is its ID in the skill data.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[repr(u8)]
 pub enum AdditionalActivation {
-    /// Applies on activation (0).
+    /// Applies on activation.
     #[default]
-    Regular,
-    /// Applies each time the runner overtakes (1).
-    OrderUp,
-    /// Applies each time the runner activates another skill, first variant (2).
-    ActivateAnySkill1,
-    /// Applies each time the runner activates another skill, second variant (3).
-    ActivateAnySkill2,
+    Regular = 0,
+    /// Applies each time the runner overtakes.
+    OrderUp = 1,
+    /// Applies each time the runner activates another skill, first variant.
+    ActivateAnySkill1 = 2,
+    /// Applies each time the runner activates another skill, second variant.
+    ActivateAnySkill2 = 3,
 }
 
 impl AdditionalActivation {
@@ -368,21 +345,6 @@ impl AdditionalActivation {
             AdditionalActivation::ActivateAnySkill1 => 3,
             AdditionalActivation::ActivateAnySkill2 => 2,
         }
-    }
-}
-
-impl TryFrom<u8> for AdditionalActivation {
-    type Error = String;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use AdditionalActivation::*;
-        Ok(match value {
-            0 => Regular,
-            1 => OrderUp,
-            2 => ActivateAnySkill1,
-            3 => ActivateAnySkill2,
-            _ => return Err(format!("unknown additional activation {value}")),
-        })
     }
 }
 
@@ -435,43 +397,27 @@ fn default_cooldown() -> f64 {
 /// when the skill activates (see [`crate::race::skill_scaling`]).
 ///
 /// The scaling is applied on top of the course distance scaling.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(try_from = "u8")]
+///
+/// Each variant's discriminant is its ID in the skill data.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[repr(u8)]
 pub enum TimeUsage {
-    /// No scaling (1).
-    Direct,
-    /// Scales with the distance behind the first place (2).
-    MultiplyDistanceDiffTop,
-    /// Scales with the remaining HP, first variant (3).
-    MultiplyRemainHp1,
+    /// No scaling.
+    Direct = 1,
+    /// Scales with the distance behind the first place.
+    MultiplyDistanceDiffTop = 2,
+    /// Scales with the remaining HP, first variant.
+    MultiplyRemainHp1 = 3,
     /// Extended each time the runner overtakes while the effects are active, up
-    /// to a few times (4).
-    IncrementOrderUp,
+    /// to a few times.
+    IncrementOrderUp = 4,
     /// Scales with the longest time the runner was side-blocked during the Mid
-    /// race (5).
-    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-    /// Scales with the remaining HP, second variant (7).
-    MultiplyRemainHp2,
-    /// Extended for each uphill climbed before activation, up to a few times (8).
-    IncrementUphillCount,
-}
-
-impl TryFrom<u8> for TimeUsage {
-    type Error = String;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        use TimeUsage::*;
-        Ok(match value {
-            1 => Direct,
-            2 => MultiplyDistanceDiffTop,
-            3 => MultiplyRemainHp1,
-            4 => IncrementOrderUp,
-            5 => MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-            7 => MultiplyRemainHp2,
-            8 => IncrementUphillCount,
-            _ => return Err(format!("unknown time usage {value}")),
-        })
-    }
+    /// race.
+    MultiplyBlockedSideMaxContinueTimePhaseMiddleRun = 5,
+    /// Scales with the remaining HP, second variant.
+    MultiplyRemainHp2 = 7,
+    /// Extended for each uphill climbed before activation, up to a few times.
+    IncrementUphillCount = 8,
 }
 
 /// Represents an alternative version of a skill, with its own conditions and
@@ -928,15 +874,19 @@ mod tests {
     fn test_value_usage_ids() {
         assert_eq!(value_usage(1).unwrap(), ValueUsage::Direct);
         assert_eq!(value_usage(2).unwrap(), ValueUsage::MultiplySkillNum);
-        // Several IDs share the same scaling.
-        for id in 3..=7 {
-            assert_eq!(value_usage(id).unwrap(), ValueUsage::Aoharu, "ID {id}");
-        }
+        assert_eq!(value_usage(3).unwrap(), ValueUsage::AoharuSpeed);
+        assert_eq!(value_usage(7).unwrap(), ValueUsage::AoharuWisdom);
         assert_eq!(value_usage(8).unwrap(), ValueUsage::MultiplyRandom1);
         assert_eq!(value_usage(9).unwrap(), ValueUsage::MultiplyRandom2);
         assert_eq!(value_usage(22).unwrap(), ValueUsage::MultiplySpeed1);
         assert_eq!(value_usage(23).unwrap(), ValueUsage::MultiplySpeed2);
         assert_eq!(value_usage(25).unwrap(), ValueUsage::MultiplyTopLeadAmount);
+        // IDs are preserved.
+        assert_eq!(ValueUsage::MultiplyRandom1 as u8, 8);
+        assert_eq!(
+            ValueUsage::try_from(31).unwrap(),
+            ValueUsage::DevelopmentPoints
+        );
         // Unknown IDs.
         for id in [0, 15, 21, 29, 32] {
             assert!(value_usage(id).is_err(), "ID {id}");

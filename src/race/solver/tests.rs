@@ -2737,7 +2737,8 @@ fn test_skill_count_includes_failed_wisdom_checks() {
 #[test]
 fn test_scenario_values_assume_the_maximum() {
     let cases = [
-        (ValueUsage::Aoharu, 1.2),
+        (ValueUsage::AoharuSpeed, 1.2),
+        (ValueUsage::AoharuWisdom, 1.2),
         (ValueUsage::Climax, 1.2),
         (ValueUsage::MultiplyArcGlobalPotentialLevel, 1.2),
         (ValueUsage::UafWinCount, 1.2),
