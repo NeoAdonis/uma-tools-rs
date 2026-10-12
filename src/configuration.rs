@@ -110,6 +110,8 @@ pub struct Configuration {
     pub wisdom_checks: Roll,
     /// How runners' rush checks are resolved before the race.
     pub rushing: Roll,
+    /// Fan count for runners that don't define their own.
+    pub default_fan_count: u32,
 }
 
 impl Default for Configuration {
@@ -120,6 +122,7 @@ impl Default for Configuration {
             seed: None,
             wisdom_checks: Roll::Random,
             rushing: Roll::Random,
+            default_fan_count: 0,
         }
     }
 }

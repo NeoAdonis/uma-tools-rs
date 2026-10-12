@@ -155,6 +155,11 @@ pub struct Uma {
     /// on the running style.
     #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,
+    /// Number of fans. Used by some skill conditions and effects.
+    ///
+    /// If `None`, the configured default is used (see
+    /// [`Configuration::default_fan_count`](crate::configuration::Configuration::default_fan_count)).
+    pub fan_count: Option<u32>,
 }
 
 /// Helper struct for deserializing [`Uma`] with motivation and skills from
@@ -244,6 +249,7 @@ impl Uma {
             distance_aptitude: raw.distance_aptitude,
             track_aptitude: raw.track_aptitude,
             style_aptitude: raw.style_aptitude,
+            fan_count: raw.fan_count,
         }
     }
 }
@@ -306,9 +312,10 @@ mod tests {
             distance_aptitude: Aptitude::S,
             track_aptitude: Aptitude::B,
             style_aptitude: Aptitude::C,
+            fan_count: Some(120000),
         };
 
-        // Style and aptitudes are kept.
+        // Style, aptitudes and fan count are kept.
         let expected = Uma {
             speed: 1404,
             stamina: 832,
@@ -333,6 +340,7 @@ mod tests {
                 "distanceAptitude": "S",
                 "surfaceAptitude": "B",
                 "strategyAptitude": "C",
+                "fanCount": 98765,
                 "motivation": "Bad",
                 "skills": [200642, 201161]
             }}"#
@@ -352,6 +360,7 @@ mod tests {
                 distance_aptitude: Aptitude::S,
                 track_aptitude: Aptitude::B,
                 style_aptitude: Aptitude::C,
+                fan_count: Some(98765),
             },
             motivation: Motivation::Bad,
             skills: vec![200642, 201161],

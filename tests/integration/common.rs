@@ -73,6 +73,7 @@ pub fn uma(style: Style) -> Uma {
         distance_aptitude: Aptitude::A,
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
+        fan_count: None,
     }
 }
 

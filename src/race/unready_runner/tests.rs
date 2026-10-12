@@ -88,6 +88,27 @@ fn test_stat_boosts_by_type() {
 }
 
 #[test]
+fn test_fan_count_falls_back_to_configured_default() {
+    let config = Configuration {
+        default_fan_count: 500000,
+        ..seeded_config(0)
+    };
+    let state = RaceSolver::new(load_course(10104), race_params(), &config).state;
+    let fan_count = |fan_count| {
+        let uma = Uma {
+            fan_count,
+            ..uma(Style::Pace)
+        };
+        UnreadyRunner::new(uma, 1, Motivation::Normal, &state, vec![])
+            .initial_state
+            .fan_count
+    };
+
+    assert_eq!(fan_count(None), 500000);
+    assert_eq!(fan_count(Some(12345)), 12345);
+}
+
+#[test]
 fn test_gate_brackets() {
     // Brackets of gates 1, 2, 3...
     let cases: [(u8, &[u8]); 7] = [

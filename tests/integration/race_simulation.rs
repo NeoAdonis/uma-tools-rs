@@ -21,6 +21,7 @@ fn test_basic_race_simulation() {
         distance_aptitude: Aptitude::A,
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
+        fan_count: None,
     };
 
     // Create race parameters

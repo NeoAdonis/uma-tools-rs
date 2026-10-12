@@ -39,6 +39,7 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
         distance_aptitude: uma.distance_aptitude,
         track_aptitude: uma.track_aptitude,
         style_aptitude: uma.style_aptitude,
+        fan_count: uma.fan_count,
     }
 }
 
@@ -189,8 +190,7 @@ impl UnreadyRunner {
                 gate_block,
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
-                // TODO: Determine fan count from race state or parameters.
-                fan_count: 0,
+                fan_count: uma.fan_count.unwrap_or(state.config.default_fan_count),
                 // Assigned by the solver when the runner joins the race.
                 team: 0,
                 skill_count,
