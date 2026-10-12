@@ -109,6 +109,10 @@ pub struct UnreadyRunner {
     /// Skills that passed the wisdom check. Out-of-gate skills among them are
     /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
     pub skills: Vec<Skill>,
+    /// Skills that failed the wisdom check. They can't activate, but they still
+    /// count towards the runner's skills (e.g. for popularity or skill count
+    /// scaling).
+    pub failed_skills: Vec<Skill>,
     /// Popularity points added to stats by all skills, including those that
     /// failed the wisdom check.
     pub(crate) popularity_bonus: SkillPopularity,
@@ -147,18 +151,16 @@ impl UnreadyRunner {
         // Calculate base stats.
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
         let base_uma = Uma::raw_to_base(uma, motivation);
-        let skill_count = skills.len();
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
-        let (skills, failed_check_skills): (Vec<_>, Vec<_>) =
-            skills.into_iter().partition(|skill| {
-                state.config.wisdom_checks.resolve(
-                    &mut *rng.borrow_mut(),
-                    skill.activation_chance(base_uma.wiz),
-                )
-            });
+        let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
+            state.config.wisdom_checks.resolve(
+                &mut *rng.borrow_mut(),
+                skill.activation_chance(base_uma.wiz),
+            )
+        });
 
         let trigger_scheduler = build_trigger_scheduler(&skills, course, &mut *rng.borrow_mut());
 
@@ -193,13 +195,13 @@ impl UnreadyRunner {
                 fan_count: uma.fan_count.unwrap_or(state.config.default_fan_count),
                 // Assigned by the solver when the runner joins the race.
                 team: 0,
-                skill_count,
             },
             start_delay,
             rng,
             trigger_scheduler,
             golden_skill_indices,
             skills,
+            failed_skills,
             popularity_bonus: SkillPopularity::default(),
             evaluated_skill_id: String::new(),
             evaluated_skill_lot_draw: Cell::new(None),
@@ -210,7 +212,7 @@ impl UnreadyRunner {
 
         // Popularity guards are known before the race, so the skill bonus can be
         // calculated now. The runner is needed to evaluate the guards.
-        let all_skills = runner.skills.iter().chain(&failed_check_skills);
+        let all_skills = runner.skills.iter().chain(&runner.failed_skills);
         runner.popularity_bonus = popularity::skill_bonus(all_skills, &runner, state);
 
         runner
@@ -490,6 +492,7 @@ impl UnreadyRunner {
             surrounded: SurroundState::default(),
             start_delay: self.start_delay,
             available_skills: self.skills,
+            failed_skills: self.failed_skills,
             activated_skills: Vec::new(),
             activated_skill_ids: HashSet::new(),
             activated_alternatives: HashSet::new(),

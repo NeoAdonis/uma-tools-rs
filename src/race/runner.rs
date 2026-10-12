@@ -95,9 +95,6 @@ pub struct InitialState {
     ///
     /// Runners on the same team are allies; everyone else is an opponent.
     pub team: u8,
-    /// Number of skills the runner has, including those that failed the wisdom
-    /// check.
-    pub skill_count: usize,
 }
 
 /// State related to rushing (temptation, 掛かり).
@@ -407,6 +404,8 @@ pub struct Runner {
     pub section_speed_modifier: f64,
     /// List of skills available for activation.
     pub available_skills: Vec<Skill>,
+    /// List of skills that failed the wisdom check, so they can't activate.
+    pub failed_skills: Vec<Skill>,
     // Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
     /// Distance in meters behind the runner that placed immediately ahead.
@@ -568,6 +567,12 @@ impl Runner {
     /// Get the base style, treating Runaway as a variant of Front.
     pub fn base_style(&self) -> Style {
         self.adjusted.style.base_style()
+    }
+
+    /// Number of skills the runner has, including those that failed the wisdom
+    /// check.
+    pub fn skill_count(&self) -> usize {
+        self.available_skills.len() + self.failed_skills.len()
     }
 
     /// Determine the lane type based on the current lane position.
@@ -2745,7 +2750,7 @@ impl Runner {
         match effect.value_usage {
             Direct => modifier,
             MultiplySkillNum => {
-                modifier * skill_scaling::skill_count_multiplier(self.initial_state.skill_count)
+                modifier * skill_scaling::skill_count_multiplier(self.skill_count())
             }
             Aoharu => modifier * skill_scaling::AOHARU_MULTIPLIER,
             // Both variants share the same multipliers for now.

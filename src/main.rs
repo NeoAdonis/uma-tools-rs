@@ -162,5 +162,11 @@ fn main() {
                 skill.skill_id, skill.distance
             );
         }
+        if !runner.failed_skills.is_empty() {
+            println!("Failed wisdom check:");
+            for skill in &runner.failed_skills {
+                println!("  Skill ID: {}", skill.id);
+            }
+        }
     }
 }

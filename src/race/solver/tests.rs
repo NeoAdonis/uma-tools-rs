@@ -2730,7 +2730,8 @@ fn test_skill_count_includes_failed_wisdom_checks() {
     let solver = ready_solver(10101, uma(Style::Late), skills, &config);
     let runner = &solver.runners[0];
     assert!(runner.available_skills.is_empty());
-    assert_eq!(runner.initial_state.skill_count, 3);
+    assert_eq!(runner.failed_skills.len(), 3);
+    assert_eq!(runner.skill_count(), 3);
 }
 
 #[test]
