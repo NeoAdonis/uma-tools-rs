@@ -80,8 +80,8 @@ pub const FORCE_IN_MIN_LANE: f64 = 0.12;
 const EPSILON: f64 = 0.0001;
 
 pub struct InitialState {
-    /// Runner motivation level. It affects initial stat adjustments,
-    /// and is also used to evaluate some skill conditions.
+    /// Runner mood level. It affects initial stat adjustments and is also used to
+    /// evaluate some skill conditions.
     pub motivation: Motivation,
     /// Popularity rank (favorite rank) in the race (1-indexed).
     pub popularity_rank: u8,
@@ -371,7 +371,7 @@ pub struct Runner {
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,
-    /// Raw stats, before halving and motivation. Used to scale some skill values.
+    /// Raw stats, before halving and mood multiplier. Used for skill value scaling.
     pub raw: Uma,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.

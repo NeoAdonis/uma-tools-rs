@@ -84,7 +84,7 @@ pub struct UnreadyRunner {
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
     /// skills.
     pub base: Uma,
-    /// Raw stats, before halving and motivation. Used for popularity and Charge Up.
+    /// Raw stats before halving and adjustments. Used for popularity and Charge Up.
     pub raw: Uma,
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.

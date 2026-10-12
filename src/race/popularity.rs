@@ -14,11 +14,11 @@
 //! Each skill gives a number of points to one or two stats, read from the skill
 //! data (e.g. 20 for white skills, 60 for gold skills; negative skills take
 //! points away), scaled by its activation chance with raw wisdom. The sum is
-//! then multiplied by motivation and aptitude coefficients:
+//! then multiplied by mood and aptitude coefficients:
 //!
-//! - **Speed**: motivation and distance aptitude.
-//! - **Stamina**: motivation.
-//! - **Power**: motivation, distance aptitude (acceleration) and ground type
+//! - **Speed**: mood and distance aptitude.
+//! - **Stamina**: mood.
+//! - **Power**: mood, distance aptitude (acceleration) and ground type
 //!   aptitude.
 //!
 //! For each judge, the runners receive marks based on their rank; first five

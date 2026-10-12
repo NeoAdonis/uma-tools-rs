@@ -29,7 +29,7 @@ fn solver(
     solver.ready_runners()
 }
 
-/// Solver with an eligible Late Surger (raw power 1600, normal motivation).
+/// Solver with an eligible late surger (raw power 1600, normal mood).
 fn eligible_solver() -> RaceSolver<Runner> {
     solver(
         1600,
@@ -88,7 +88,7 @@ fn test_motivation_affects_base_part_only() {
         GameVersion::LATEST,
         42,
     );
-    // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without motivation.
+    // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without mood multiplier.
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
     assert_close!(charge_up.power, 1656.0);
 }

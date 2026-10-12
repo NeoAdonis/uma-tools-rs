@@ -1,7 +1,7 @@
 //! Core data structures to represent an Umamusume (Uma).
 //!
 //! This module includes data structures for stats, aptitudes, running styles
-//! and motivation, as well as functions to convert raw stats into base stats.
+//! and mood, as well as functions to convert raw stats into base stats.
 
 use serde::Deserialize;
 
@@ -102,7 +102,7 @@ pub enum Aptitude {
     G,
 }
 
-/// Motivation, mood or condition of the Uma. Affects base stat multipliers.
+/// Mood or condition of the Uma. Affects base stat multipliers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
 pub enum Motivation {
     /// 絶不調, very bad.
@@ -162,14 +162,13 @@ pub struct Uma {
     pub fan_count: Option<u32>,
 }
 
-/// Helper struct for deserializing [`Uma`] with motivation and skills from
-/// JSON.
+/// Helper struct for deserializing [`Uma`] with mood and skills from JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
     #[serde(flatten)]
     pub uma: Uma,
-    /// Motivation, mood or condition of the Uma. Affects base stat multipliers.
+    /// Mood or condition of the Uma. Affects base stat multipliers.
     pub motivation: Motivation,
     /// List of [`skill`](crate::skill::Skill)s by ID that the Uma has.
     pub skills: Vec<u32>,
@@ -214,7 +213,7 @@ impl UmaData {
     }
 }
 
-/// Calculate base stat and apply motivation multiplier.
+/// Calculate base stat and apply mood multiplier.
 ///
 /// Any stat above 1200 has its excess halved before applying multiplier.
 pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
@@ -225,18 +224,18 @@ pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
     ((computed).max(1) as f64 * multiplier) as u16
 }
 
-/// Calculate base stats multiplier from motivation.
+/// Calculate base stats multiplier from mood.
 ///
-/// Returns `motivation_value × 0.02 + 1.0`, where motivation values range from
-/// -2 (awful) to +2 (great).
+/// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2 (awful)
+/// to +2 (great).
 pub fn motivation_multiplier(motivation: Motivation) -> f64 {
     1.0 + (motivation as i8 as f64) * 0.02
 }
 
 impl Uma {
-    /// Convert raw Uma stats to base stats using motivation multiplier.
+    /// Convert raw Uma stats to base stats using mood multiplier.
     pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
-        // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before motivation
+        // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
         // multiplier based on team rank. This is out of scope for this simulator.
         let motivation_multiplier = motivation_multiplier(motivation);
         Uma {
@@ -279,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_calculate_base_stat() {
-        // (raw stat, motivation, base stat).
+        // (raw stat, mood, base stat).
         let cases = [
             (1000, Motivation::Normal, 1000),
             (1200, Motivation::Normal, 1200),

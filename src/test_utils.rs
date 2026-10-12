@@ -93,8 +93,7 @@ pub(crate) fn uma(style: Style) -> Uma {
     }
 }
 
-/// Ready race with standard parameters and a single runner with normal
-/// motivation.
+/// Ready race with standard parameters and a single runner with normal mood.
 pub(crate) fn ready_solver(
     course_id: u32,
     uma: Uma,

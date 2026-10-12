@@ -94,8 +94,8 @@ impl ChargeUp {
 
 /// Power stat used by this mechanic.
 ///
-/// Unlike the regular base stat, only the part up to 1200 is affected by
-/// motivation: `base_power` is the halved stat after motivation, and the halved
+/// Unlike the regular base stat, only the part up to 1200 is affected by mood:
+/// `base_power` is the halved stat after mood multiplier, and the halved
 /// excess of `raw_power` over 1200 is added back without it.
 pub fn charge_power(base_power: u16, raw_power: u16, skill_bonus: i32) -> f64 {
     base_power as f64 + 0.5 * (raw_power as f64 - POWER_THRESHOLD).max(0.0) + skill_bonus as f64
