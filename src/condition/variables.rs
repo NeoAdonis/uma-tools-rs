@@ -167,6 +167,7 @@ pub enum ActivationVar {
     IsActivateOtherSkillDetail,
     IsOtherCharacterActivateAdvantageSkill,
     IsUsedSkillId,
+    IsUsedSkillIdWithDetailOne,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -451,6 +452,9 @@ impl VarType {
                 Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
             }
             "is_used_skill_id" => Activation(ActivationVar::IsUsedSkillId),
+            "is_used_skill_id_with_detail_one" => {
+                Activation(ActivationVar::IsUsedSkillIdWithDetailOne)
+            }
 
             // Race parameters.
             "grade" => RaceParam(RaceParamVar::Grade),

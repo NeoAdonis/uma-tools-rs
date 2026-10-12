@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::prelude::*;
@@ -413,8 +413,9 @@ pub struct Runner {
     pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
-    /// Set of activated skill IDs.
-    pub activated_skill_ids: HashSet<String>,
+    /// Activated skill IDs, each with a mask of its activated alternatives (bit
+    /// `i` set when alternative `i` activated).
+    pub activated_skill_ids: HashMap<String, u32>,
     /// Set of activated skill alternatives (skill_index, alternative_index).
     pub activated_alternatives: HashSet<(usize, usize)>,
     /// Modifiers from skills applied to this runner's stats.
@@ -2606,7 +2607,10 @@ impl Runner {
         self.disable_other_alternatives(skill_index, alternative_index);
 
         // Track skill activation.
-        self.activated_skill_ids.insert(skill_id.clone());
+        *self
+            .activated_skill_ids
+            .entry(skill_id.clone())
+            .or_default() |= 1 << alternative_index;
         self.activated_alternatives
             .insert((skill_index, alternative_index));
         self.activated_skills.push(SkillActivationRecord {
@@ -2772,7 +2776,7 @@ impl Runner {
                     .available_skills
                     .iter()
                     .filter(|skill| {
-                        skill.is_green() && self.activated_skill_ids.contains(&skill.id)
+                        skill.is_green() && self.activated_skill_ids.contains_key(&skill.id)
                     })
                     .count();
                 modifier * skill_scaling::green_skill_count_multiplier(green_count)

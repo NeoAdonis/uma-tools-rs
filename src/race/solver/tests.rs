@@ -2171,7 +2171,7 @@ fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
                         .eq(ids.iter())
                 })
                 .unwrap();
-            runner.activated_skill_ids.contains(skill_id)
+            runner.activated_skill_ids.contains_key(skill_id)
         })
         .collect()
 }

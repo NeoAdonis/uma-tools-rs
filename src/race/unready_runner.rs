@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::RngExt;
@@ -494,7 +494,7 @@ impl UnreadyRunner {
             available_skills: self.skills,
             failed_skills: self.failed_skills,
             activated_skills: Vec::new(),
-            activated_skill_ids: HashSet::new(),
+            activated_skill_ids: HashMap::new(),
             activated_alternatives: HashSet::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),

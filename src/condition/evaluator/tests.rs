@@ -9,9 +9,7 @@ use crate::race::runner::{Runner, RushState};
 use crate::race::solver::RaceSolver;
 use crate::race::transitions::SegmentManager;
 use crate::skill::Skill;
-use crate::test_utils::{
-    course_data, load_course, race_params, ready_solver, seeded_config, skill_data, uma,
-};
+use crate::test_utils::*;
 
 /// Ready race with a single Late Surger with the given skills.
 fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
@@ -25,7 +23,7 @@ fn test_is_used_skill_id_with_activated_skill() {
     // Add skill ID "202051" to activated_skill_ids.
     solver.runners[0]
         .activated_skill_ids
-        .insert("202051".to_string());
+        .insert("202051".to_string(), 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -63,7 +61,7 @@ fn test_is_used_skill_id_with_different_skill() {
     // checking).
     solver.runners[0]
         .activated_skill_ids
-        .insert("203781".to_string());
+        .insert("203781".to_string(), 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -83,7 +81,7 @@ fn test_is_used_skill_id_not_equal() {
     // Add skill ID "202051" to activated_skill_ids.
     state.runners[0]
         .activated_skill_ids
-        .insert("202051".to_string());
+        .insert("202051".to_string(), 1);
 
     // Create comparison: is_used_skill_id != 202051.
     let comp = Comparison {
@@ -94,6 +92,78 @@ fn test_is_used_skill_id_not_equal() {
 
     // Should return false because skill 202051 IS activated.
     assert!(!EvaluatorFull.evaluate(&comp, None, &state.state, &state.runners[0]));
+}
+
+/// Ready race with a skill with two alternatives (like "聖女の試練"), the given
+/// one activated if any, and the results of `is_used_skill_id==204452` and
+/// `is_used_skill_id_with_detail_one==204452`.
+fn is_used_skill_id_with_alternative(activated: Option<usize>) -> (bool, bool) {
+    let alternatives = vec![
+        alternative("phase==1", SkillType::TargetSpeed, 0.35),
+        alternative("phase==1", SkillType::CurrentSpeed, -0.15),
+    ];
+    let skill = Skill::new("204452".to_string(), skill_data(alternatives));
+    let mut solver = create_test_race_solver(vec![skill]);
+    if let Some(alternative_index) = activated {
+        solver.runners[0].activate_skill(0, alternative_index, &solver.state);
+    }
+
+    let evaluate = |var| {
+        let comp = Comparison {
+            var: VarType::Activation(var),
+            op: CompOp::Equal,
+            value: 204452,
+        };
+        EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+    };
+    (
+        evaluate(ActivationVar::IsUsedSkillId),
+        evaluate(ActivationVar::IsUsedSkillIdWithDetailOne),
+    )
+}
+
+#[test]
+fn test_is_used_skill_id_with_detail_one_first_alternative() {
+    assert_eq!(is_used_skill_id_with_alternative(Some(0)), (true, true));
+}
+
+#[test]
+fn test_is_used_skill_id_with_detail_one_second_alternative() {
+    // The skill was used, but not through its first alternative.
+    assert_eq!(is_used_skill_id_with_alternative(Some(1)), (true, false));
+}
+
+#[test]
+fn test_is_used_skill_id_with_detail_one_not_activated() {
+    assert_eq!(is_used_skill_id_with_alternative(None), (false, false));
+}
+
+#[test]
+fn test_is_used_skill_id_with_detail_one_not_equal() {
+    let mut solver = create_test_race_solver(vec![]);
+    // Only the second alternative activated.
+    solver.runners[0]
+        .activated_skill_ids
+        .insert("204452".to_string(), 0b10);
+
+    let comp = Comparison {
+        var: VarType::Activation(ActivationVar::IsUsedSkillIdWithDetailOne),
+        op: CompOp::NotEqual,
+        value: 204452,
+    };
+    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
+}
+
+#[test]
+#[should_panic(expected = "is_used_skill_id_with_detail_one doesn't support operator")]
+fn test_is_used_skill_id_with_detail_one_unsupported_operator() {
+    let solver = create_test_race_solver(vec![]);
+    let comp = Comparison {
+        var: VarType::Activation(ActivationVar::IsUsedSkillIdWithDetailOne),
+        op: CompOp::GreaterEqual,
+        value: 204452,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
 }
 
 #[test]
@@ -1145,6 +1215,14 @@ fn test_is_last_straight_onetime_value_panics() {
 fn test_is_used_skill_id_value_panics() {
     let solver = create_test_race_solver(vec![]);
     let var = ActivationVar::IsUsedSkillId;
+    get_activation_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+#[should_panic(expected = "should be handled in evaluate()")]
+fn test_is_used_skill_id_with_detail_one_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    let var = ActivationVar::IsUsedSkillIdWithDetailOne;
     get_activation_value(&var, &solver.state, &solver.runners[0], None);
 }
 

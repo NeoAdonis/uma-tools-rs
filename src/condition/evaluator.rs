@@ -177,16 +177,22 @@ impl CompEvaluator for EvaluatorFull {
         let runner = context;
         // Special cases: skill ID checks require different logic.
         match &comp.var {
-            Activation(ActivationVar::IsUsedSkillId) => {
-                // Check if skill with ID == `comp.value` has been activated.
-                let skill_id_str = comp.value.to_string();
-                let skill_exists = runner.activated_skill_ids.contains(&skill_id_str);
+            Activation(
+                var @ (ActivationVar::IsUsedSkillId | ActivationVar::IsUsedSkillIdWithDetailOne),
+            ) => {
+                // Check if skill with ID == `comp.value` has been activated (through
+                // its first alternative for `is_used_skill_id_with_detail_one`).
+                let mask = runner.activated_skill_ids.get(&comp.value.to_string());
+                let is_used = match var {
+                    ActivationVar::IsUsedSkillId => mask.is_some(),
+                    _ => mask.is_some_and(|mask| mask & 1 != 0),
+                };
 
                 match comp.op {
-                    CompOp::Equal => skill_exists,
-                    CompOp::NotEqual => !skill_exists,
+                    CompOp::Equal => is_used,
+                    CompOp::NotEqual => !is_used,
                     // Other operators don't make sense for skill ID checks.
-                    op => panic!("is_used_skill_id doesn't support operator {op:?}"),
+                    op => panic!("{var} doesn't support operator {op:?}"),
                 }
             }
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
@@ -627,8 +633,8 @@ fn get_activation_value(
         IsOtherCharacterActivateAdvantageSkill => {
             panic!("is_other_character_activate_advantage_skill: should be handled in evaluate()")
         }
-        IsUsedSkillId => {
-            panic!("is_used_skill_id: should be handled in evaluate()")
+        IsUsedSkillId | IsUsedSkillIdWithDetailOne => {
+            panic!("{var}: should be handled in evaluate()")
         }
 
         // Skill activations by the runner's team (including the runner).
