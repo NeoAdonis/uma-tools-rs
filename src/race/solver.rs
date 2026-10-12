@@ -125,19 +125,19 @@ impl RaceSolver<UnreadyRunner> {
     /// Add an individual runner to the race BEFORE it starts.
     ///
     /// The runner gets a team of its own, so every other runner is an opponent.
-    pub fn add_runner(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>) {
+    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>) {
         if self.builders.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
         let team = self.new_team();
-        self.add_member(uma, motivation, skills, team);
+        self.add_member(uma, mood, skills, team);
     }
 
     /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
     ///
     /// Members are allies of each other and opponents of everyone else.
-    pub fn add_team(&mut self, members: Vec<(Uma, Motivation, Vec<Skill>)>) {
+    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Skill>)>) {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
@@ -147,8 +147,8 @@ impl RaceSolver<UnreadyRunner> {
         }
 
         let team = self.new_team();
-        for (uma, motivation, skills) in members {
-            self.add_member(uma, motivation, skills, team);
+        for (uma, mood, skills) in members {
+            self.add_member(uma, mood, skills, team);
         }
     }
 
@@ -163,7 +163,7 @@ impl RaceSolver<UnreadyRunner> {
 
     /// Add a runner as a member of `team`. Gate capacity must be checked by the
     /// caller.
-    fn add_member(&mut self, uma: Uma, motivation: Motivation, skills: Vec<Skill>, team: u8) {
+    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>, team: u8) {
         // Get existing skills before moving them into builder.
         for skill in &skills {
             *self
@@ -186,7 +186,7 @@ impl RaceSolver<UnreadyRunner> {
         };
 
         // Create builder.
-        let mut builder = UnreadyRunner::new(uma, gate_roll, motivation, &self.state, skills);
+        let mut builder = UnreadyRunner::new(uma, gate_roll, mood, &self.state, skills);
         builder.initial_state.team = team;
 
         // Update runnners-by-style count before moving builder.

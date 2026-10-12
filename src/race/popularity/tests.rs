@@ -134,7 +134,7 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
 fn speed_bonus(skill: &Skill) -> f64 {
     use crate::race::solver::RaceSolver;
     use crate::test_utils::{load_course, race_params, seeded_config, uma};
-    use crate::uma::{Motivation, Style, Uma};
+    use crate::uma::{Mood, Style, Uma};
 
     let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
     let uma = Uma {
@@ -142,7 +142,7 @@ fn speed_bonus(skill: &Skill) -> f64 {
         guts: 1000,
         ..uma(Style::Pace)
     };
-    let runner = UnreadyRunner::new(uma, 1, Motivation::Normal, &state, vec![]);
+    let runner = UnreadyRunner::new(uma, 1, Mood::Normal, &state, vec![]);
     skill_bonus([skill], &runner, &state).speed
 }
 

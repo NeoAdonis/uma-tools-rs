@@ -11,7 +11,7 @@ use crate::uma::*;
 fn solver(
     power: u16,
     style: Style,
-    motivation: Motivation,
+    mood: Mood,
     game_version: GameVersion,
     rng_seed: u64,
 ) -> RaceSolver<Runner> {
@@ -25,7 +25,7 @@ fn solver(
         ..seeded_config(rng_seed)
     };
     let mut solver = RaceSolver::new(load_course(10204), race_params(), &config);
-    solver.add_runner(uma, motivation, vec![]);
+    solver.add_runner(uma, mood, vec![]);
     solver.ready_runners()
 }
 
@@ -34,7 +34,7 @@ fn eligible_solver() -> RaceSolver<Runner> {
     solver(
         1600,
         Style::Late,
-        Motivation::Normal,
+        Mood::Normal,
         GameVersion::LATEST,
         42,
     )
@@ -80,11 +80,11 @@ fn test_charge_power() {
 }
 
 #[test]
-fn test_motivation_affects_base_part_only() {
+fn test_mood_affects_base_part_only() {
     let solver = solver(
         1600,
         Style::Late,
-        Motivation::Great,
+        Mood::Great,
         GameVersion::LATEST,
         42,
     );
@@ -95,23 +95,23 @@ fn test_motivation_affects_base_part_only() {
 
 #[test]
 fn test_eligibility() {
-    let is_eligible = |power, motivation, version| {
-        solver(power, Style::Late, motivation, version, 42).runners[0]
+    let is_eligible = |power, mood, version| {
+        solver(power, Style::Late, mood, version, 42).runners[0]
             .charge_up
             .is_some()
     };
     assert!(is_eligible(
         1600,
-        Motivation::Normal,
+        Mood::Normal,
         GameVersion::SecondAnniversary
     ));
-    assert!(is_eligible(1202, Motivation::Normal, GameVersion::LATEST));
-    assert!(!is_eligible(1200, Motivation::Normal, GameVersion::LATEST));
+    assert!(is_eligible(1202, Mood::Normal, GameVersion::LATEST));
+    assert!(!is_eligible(1200, Mood::Normal, GameVersion::LATEST));
     // 1200 * 0.96 = 1152, plus 0.5 * 20.
-    assert!(!is_eligible(1220, Motivation::Awful, GameVersion::LATEST));
+    assert!(!is_eligible(1220, Mood::Awful, GameVersion::LATEST));
     assert!(!is_eligible(
         1600,
-        Motivation::Normal,
+        Mood::Normal,
         GameVersion::OnePointFiveAnniversary
     ));
 }
@@ -192,7 +192,7 @@ fn test_conservation_rate() {
     let mut end_closer = solver(
         1600,
         Style::End,
-        Motivation::Normal,
+        Mood::Normal,
         GameVersion::LATEST,
         42,
     );
@@ -243,7 +243,7 @@ fn test_spot_struggle_penalty() {
     let mut solver = solver(
         1600,
         Style::Front,
-        Motivation::Normal,
+        Mood::Normal,
         GameVersion::LATEST,
         42,
     );
@@ -268,7 +268,7 @@ fn test_rush_penalty() {
             solver(
                 1600,
                 Style::Late,
-                Motivation::Normal,
+                Mood::Normal,
                 GameVersion::LATEST,
                 seed,
             )
@@ -360,7 +360,7 @@ fn test_full_race() {
         let mut solver = solver(
             1600,
             Style::Late,
-            Motivation::Normal,
+            Mood::Normal,
             GameVersion::LATEST,
             seed,
         );

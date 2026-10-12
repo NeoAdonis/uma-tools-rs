@@ -82,7 +82,7 @@ const EPSILON: f64 = 0.0001;
 pub struct InitialState {
     /// Runner mood level. It affects initial stat adjustments and is also used to
     /// evaluate some skill conditions.
-    pub motivation: Motivation,
+    pub mood: Mood,
     /// Popularity rank (favorite rank) in the race (1-indexed).
     pub popularity_rank: u8,
     /// Scores and marks from the three judges used for popularity calculation.

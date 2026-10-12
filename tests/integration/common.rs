@@ -85,7 +85,7 @@ pub fn ready_solver(
     config: &Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
-    solver.add_runner(uma, Motivation::Normal, skills);
+    solver.add_runner(uma, Mood::Normal, skills);
     solver.ready_runners()
 }
 

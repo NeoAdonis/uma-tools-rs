@@ -140,7 +140,7 @@ impl UnreadyRunner {
     pub(crate) fn new(
         uma: Uma,
         gate_roll: u8,
-        motivation: Motivation,
+        mood: Mood,
         state: &RaceState,
         skills: Vec<Skill>,
     ) -> Self {
@@ -150,7 +150,7 @@ impl UnreadyRunner {
 
         // Calculate base stats.
         let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
-        let base_uma = Uma::raw_to_base(uma, motivation);
+        let base_uma = Uma::raw_to_base(uma, mood);
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
@@ -188,7 +188,7 @@ impl UnreadyRunner {
             gate_roll,
             adjusted: adjusted_uma,
             initial_state: InitialState {
-                motivation,
+                mood,
                 gate_block,
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),

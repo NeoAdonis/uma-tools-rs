@@ -7,7 +7,7 @@ use crate::test_utils::*;
 /// race state it was built with.
 fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
     let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
-    let runner = UnreadyRunner::new(uma(Style::Pace), 1, Motivation::Normal, &state, skills);
+    let runner = UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
     assert!(
         runner.skills.iter().all(Skill::should_activate_out_of_gate),
         "All skills should be out-of-gate"
@@ -99,7 +99,7 @@ fn test_fan_count_falls_back_to_configured_default() {
             fan_count,
             ..uma(Style::Pace)
         };
-        UnreadyRunner::new(uma, 1, Motivation::Normal, &state, vec![])
+        UnreadyRunner::new(uma, 1, Mood::Normal, &state, vec![])
             .initial_state
             .fan_count
     };
@@ -142,7 +142,7 @@ fn test_rush_style_changes() {
     let rush_styles = |style: Style| -> Vec<Style> {
         (0..2000)
             .map(|_| {
-                let runner = UnreadyRunner::new(uma(style), 1, Motivation::Normal, &state, vec![]);
+                let runner = UnreadyRunner::new(uma(style), 1, Mood::Normal, &state, vec![]);
                 runner.build(&state).rush_state.unwrap().style
             })
             .collect()
@@ -416,7 +416,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[&str]]) -> Vec<Runner> {
             ..uma(Style::Pace)
         };
         let skills = ids.iter().map(|id| skills[*id].clone()).collect();
-        solver.add_runner(uma, Motivation::Normal, skills);
+        solver.add_runner(uma, Mood::Normal, skills);
     }
     let mut runners = solver.ready_runners().runners;
     runners.sort_by_key(|runner| runner.base.guts);
@@ -533,7 +533,7 @@ fn test_gambler_activation_rate() {
         .filter(|&seed| {
             let mut solver = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed));
             let gambler = skills[GAMBLER_ID].clone();
-            solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![gambler]);
+            solver.add_runner(uma(Style::Pace), Mood::Normal, vec![gambler]);
             let runner = &solver.ready_runners().runners[0];
             !race_start_ids(&runner.available_skills, &runner.trigger_scheduler).is_empty()
         })
@@ -579,7 +579,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
             let state = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed)).state;
             let skills = vec![skill.clone()];
             let mut runner =
-                UnreadyRunner::new(uma(Style::Pace), 1, Motivation::Normal, &state, skills);
+                UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
             let speed = runner.adjusted.speed;
             runner.apply_out_of_gate_skills(&state);
             runner.adjusted.speed - speed

@@ -8,7 +8,7 @@ fn ready_runners(count: usize) -> Vec<Runner> {
     let params = race_params();
     let mut solver = RaceSolver::new(course, params, &seeded_config(42));
     for _ in 0..count {
-        solver.add_runner(uma(Style::Pace), Motivation::Normal, vec![]);
+        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }
     solver.ready_runners().runners
 }

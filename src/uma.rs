@@ -104,7 +104,7 @@ pub enum Aptitude {
 
 /// Mood or condition of the Uma. Affects base stat multipliers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
-pub enum Motivation {
+pub enum Mood {
     /// 絶不調, very bad.
     Awful = -2,
     /// 不調, bad.
@@ -168,8 +168,9 @@ pub struct Uma {
 pub struct UmaData {
     #[serde(flatten)]
     pub uma: Uma,
-    /// Mood or condition of the Uma. Affects base stat multipliers.
-    pub motivation: Motivation,
+    /// Mood, motivation or condition of the Uma. Affects base stat multipliers.
+    #[serde(rename = "motivation")]
+    pub mood: Mood,
     /// List of [`skill`](crate::skill::Skill)s by ID that the Uma has.
     pub skills: Vec<u32>,
 }
@@ -228,22 +229,22 @@ pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
 ///
 /// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2 (awful)
 /// to +2 (great).
-pub fn motivation_multiplier(motivation: Motivation) -> f64 {
-    1.0 + (motivation as i8 as f64) * 0.02
+pub fn mood_multiplier(mood: Mood) -> f64 {
+    1.0 + (mood as i8 as f64) * 0.02
 }
 
 impl Uma {
     /// Convert raw Uma stats to base stats using mood multiplier.
-    pub fn raw_to_base(raw: Uma, motivation: Motivation) -> Self {
+    pub fn raw_to_base(raw: Uma, mood: Mood) -> Self {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
         // multiplier based on team rank. This is out of scope for this simulator.
-        let motivation_multiplier = motivation_multiplier(motivation);
+        let mood_multiplier = mood_multiplier(mood);
         Uma {
-            speed: calculate_base_stat(raw.speed, motivation_multiplier),
-            stamina: calculate_base_stat(raw.stamina, motivation_multiplier),
-            power: calculate_base_stat(raw.power, motivation_multiplier),
-            guts: calculate_base_stat(raw.guts, motivation_multiplier),
-            wit: calculate_base_stat(raw.wit, motivation_multiplier),
+            speed: calculate_base_stat(raw.speed, mood_multiplier),
+            stamina: calculate_base_stat(raw.stamina, mood_multiplier),
+            power: calculate_base_stat(raw.power, mood_multiplier),
+            guts: calculate_base_stat(raw.guts, mood_multiplier),
+            wit: calculate_base_stat(raw.wit, mood_multiplier),
             style: raw.style,
             distance_aptitude: raw.distance_aptitude,
             track_aptitude: raw.track_aptitude,
@@ -259,19 +260,19 @@ mod tests {
     use crate::test_utils::assert_close;
 
     #[test]
-    fn test_motivation_multiplier() {
+    fn test_mood_multiplier() {
         let cases = [
-            (Motivation::Awful, 0.96),
-            (Motivation::Bad, 0.98),
-            (Motivation::Normal, 1.0),
-            (Motivation::Good, 1.02),
-            (Motivation::Great, 1.04),
+            (Mood::Awful, 0.96),
+            (Mood::Bad, 0.98),
+            (Mood::Normal, 1.0),
+            (Mood::Good, 1.02),
+            (Mood::Great, 1.04),
         ];
-        for (motivation, expected) in cases {
+        for (mood, expected) in cases {
             assert_close!(
-                motivation_multiplier(motivation),
+                mood_multiplier(mood),
                 expected,
-                "{motivation:?}"
+                "{mood:?}"
             );
         }
     }
@@ -280,22 +281,22 @@ mod tests {
     fn test_calculate_base_stat() {
         // (raw stat, mood, base stat).
         let cases = [
-            (1000, Motivation::Normal, 1000),
-            (1200, Motivation::Normal, 1200),
+            (1000, Mood::Normal, 1000),
+            (1200, Mood::Normal, 1200),
             // Excess above 1200 is halved, rounding down.
-            (1201, Motivation::Normal, 1200),
-            (1500, Motivation::Normal, 1350),
+            (1201, Mood::Normal, 1200),
+            (1500, Mood::Normal, 1350),
             // Multiplier is applied after halving, truncating.
-            (1000, Motivation::Awful, 960),
-            (1500, Motivation::Great, 1404),
-            (1199, Motivation::Good, 1222),
+            (1000, Mood::Awful, 960),
+            (1500, Mood::Great, 1404),
+            (1199, Mood::Good, 1222),
             // Stats are at least 1 before the multiplier.
-            (0, Motivation::Normal, 1),
-            (0, Motivation::Great, 1),
+            (0, Mood::Normal, 1),
+            (0, Mood::Great, 1),
         ];
-        for (stat, motivation, expected) in cases {
-            let actual = calculate_base_stat(stat, motivation_multiplier(motivation));
-            assert_eq!(actual, expected, "{stat} with {motivation:?}");
+        for (stat, mood, expected) in cases {
+            let actual = calculate_base_stat(stat, mood_multiplier(mood));
+            assert_eq!(actual, expected, "{stat} with {mood:?}");
         }
     }
 
@@ -323,7 +324,7 @@ mod tests {
             wit: 1300,
             ..raw
         };
-        assert_eq!(Uma::raw_to_base(raw, Motivation::Great), expected);
+        assert_eq!(Uma::raw_to_base(raw, Mood::Great), expected);
     }
 
     /// JSON for [`UmaData`] with every field set, and the style as given.
@@ -361,7 +362,7 @@ mod tests {
                 style_aptitude: Aptitude::C,
                 fan_count: Some(98765),
             },
-            motivation: Motivation::Bad,
+            mood: Mood::Bad,
             skills: vec![200642, 201161],
         };
         assert_eq!(UmaData::from_json(&uma_json("Senkou")).unwrap(), expected);
@@ -398,7 +399,7 @@ mod tests {
         let uma_data = UmaData::from_json_file("uma.json").unwrap();
         assert_eq!(uma_data.uma.speed, 1500);
         assert_eq!(uma_data.uma.style, Style::End);
-        assert_eq!(uma_data.motivation, Motivation::Great);
+        assert_eq!(uma_data.mood, Mood::Great);
         assert_eq!(uma_data.skills, vec![200642]);
     }
 

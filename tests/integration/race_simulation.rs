@@ -79,7 +79,7 @@ fn test_multi_runner_race_simulation() {
         };
         let mut solver = RaceSolver::new(course.clone(), params, &config);
         for style in styles {
-            solver.add_runner(uma(style), Motivation::Normal, vec![]);
+            solver.add_runner(uma(style), Mood::Normal, vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();
@@ -114,7 +114,7 @@ fn test_same_seed_gives_same_race() {
         let config = seeded_config(seed);
         let mut solver = RaceSolver::new(course, params, &config);
         for style in styles {
-            solver.add_runner(uma(style), Motivation::Normal, vec![]);
+            solver.add_runner(uma(style), Mood::Normal, vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();

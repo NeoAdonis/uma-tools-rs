@@ -41,7 +41,7 @@ use crate::race::modifiers::{
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::{PopularityStat, Skill};
-use crate::uma::motivation_multiplier;
+use crate::uma::mood_multiplier;
 
 /// Popularity points a skill adds to each stat.
 ///
@@ -334,7 +334,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
         let bonus = &runner.popularity_bonus;
 
         // Get coefficients.
-        let mood_coef = motivation_multiplier(runner.initial_state.motivation);
+        let mood_coef = mood_multiplier(runner.initial_state.mood);
         let raw = &runner.raw;
         let speed_distance_coef = distance_proficiency_multiplier(raw.distance_aptitude);
         let power_distance_coef =

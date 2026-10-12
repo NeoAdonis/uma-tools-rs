@@ -46,7 +46,7 @@ fn main() {
     let uma_data = UmaData::from_json_file(uma_path.to_str().expect("Invalid --uma path"))
         .expect("Failed to parse uma JSON");
     let uma = uma_data.uma;
-    let motivation = uma_data.motivation;
+    let mood = uma_data.mood;
     let skill_ids = uma_data.skills;
 
     // Load race parameters from JSON file.
@@ -91,7 +91,7 @@ fn main() {
 
     // Initialize the race state.
     let mut solver = RaceSolver::new(course, race_parameters, &config);
-    solver.add_runner(uma, motivation, skills);
+    solver.add_runner(uma, mood, skills);
 
     // Initialize runners.
     let mut solver = solver.ready_runners();

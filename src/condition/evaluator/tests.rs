@@ -231,9 +231,9 @@ fn test_phase_values_by_position() {
 /// Surger (team 1).
 fn create_team_race_solver() -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
-    let member = || (uma(Style::Late), Motivation::Normal, vec![]);
+    let member = || (uma(Style::Late), Mood::Normal, vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(uma(Style::Late), Motivation::Normal, vec![]);
+    solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
     solver.ready_runners()
 }
 
@@ -308,7 +308,7 @@ fn test_temptation_opponent_count_by_position() {
 fn test_runaways_count_as_front_runners() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     for style in [Style::Runaway, Style::Front, Style::Pace] {
-        solver.add_runner(uma(style), Motivation::Normal, vec![]);
+        solver.add_runner(uma(style), Mood::Normal, vec![]);
     }
     let solver = solver.ready_runners();
     let state = &solver.state;
@@ -413,20 +413,20 @@ fn test_entry_values() {
 }
 
 #[test]
-fn test_motivation_values() {
+fn test_mood_values() {
     let mut solver = create_test_race_solver(vec![]);
 
     let cases = [
-        (Motivation::Awful, 1),
-        (Motivation::Bad, 2),
-        (Motivation::Normal, 3),
-        (Motivation::Good, 4),
-        (Motivation::Great, 5),
+        (Mood::Awful, 1),
+        (Mood::Bad, 2),
+        (Mood::Normal, 3),
+        (Mood::Good, 4),
+        (Mood::Great, 5),
     ];
-    for (motivation, expected) in cases {
-        solver.runners[0].initial_state.motivation = motivation;
+    for (mood, expected) in cases {
+        solver.runners[0].initial_state.mood = mood;
         let actual = get_entry_value(&EntryVar::Motivation, &solver.runners[0].initial_state);
-        assert_eq!(actual, expected, "{motivation:?}");
+        assert_eq!(actual, expected, "{mood:?}");
     }
 }
 
@@ -970,7 +970,7 @@ fn test_running_style_counts() {
         Style::End,
     ];
     for style in styles {
-        solver.add_runner(uma(style), Motivation::Normal, vec![]);
+        solver.add_runner(uma(style), Mood::Normal, vec![]);
     }
     let solver = solver.ready_runners();
     let state = &solver.state;
@@ -1083,7 +1083,7 @@ fn test_run_at_full_speed_random_follows_all_out_spurt() {
 fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
     let solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     let state = solver.state;
-    let mut runner = UnreadyRunner::new(uma(Style::Late), 1, Motivation::Good, &state, vec![]);
+    let mut runner = UnreadyRunner::new(uma(Style::Late), 1, Mood::Good, &state, vec![]);
     runner.base.speed = 1101;
     (state, runner)
 }
