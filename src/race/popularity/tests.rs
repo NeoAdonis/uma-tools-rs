@@ -23,7 +23,7 @@ fn test_skill_popularity_from_data() {
         ("200011", points(&[(Stat::Speed, 45.0)])),
         ("200342", points(&[(Stat::Power, 20.0)])),
         ("200433", points(&[(Stat::Speed, -30.0)])),
-        ("200851", points(&[(Stat::Speed, 10.0), (Stat::Wiz, 10.0)])),
+        ("200851", points(&[(Stat::Speed, 10.0), (Stat::Wit, 10.0)])),
         ("202521", points(&[(Stat::Power, 60.0)])),
         ("10071", points(&[(Stat::Speed, 30.0)])),
         ("900011", points(&[(Stat::Power, 15.0)])),
@@ -102,7 +102,7 @@ fn test_skill_popularity_deserialization() {
     );
     assert_eq!(
         parse(r#""popularity": [{"stat": 1, "value": 10}, {"stat": 5, "value": 10}],"#),
-        Some(vec![(Stat::Speed, 10), (Stat::Wiz, 10)]),
+        Some(vec![(Stat::Speed, 10), (Stat::Wit, 10)]),
     );
     assert_eq!(
         parse(r#""popularity": [{"stat": 2, "value": -30}],"#),

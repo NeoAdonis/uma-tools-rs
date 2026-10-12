@@ -232,7 +232,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
         });
     }
 
-    let acceptance_chance = (0.15 + 0.0005 * runner.adjusted.wiz as f64).min(1.0);
+    let acceptance_chance = (0.15 + 0.0005 * runner.adjusted.wit as f64).min(1.0);
     let mut rng = runner.rng.borrow_mut();
 
     // Try each candidate from best to worst.

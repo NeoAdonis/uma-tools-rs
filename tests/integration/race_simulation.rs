@@ -16,7 +16,7 @@ fn test_basic_race_simulation() {
         stamina: 800,
         power: 1000,
         guts: 600,
-        wiz: 1000,
+        wit: 1000,
         style: Style::End,
         distance_aptitude: Aptitude::A,
         track_aptitude: Aptitude::A,

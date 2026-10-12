@@ -983,7 +983,7 @@ impl Runner {
                     return;
                 }
 
-                let chance = 0.2 * (self.adjusted.wiz as f64 * 0.1).log10();
+                let chance = 0.2 * (self.adjusted.wit as f64 * 0.1).log10();
                 let pass_roll = self.rng.borrow_mut().random_bool(chance);
                 if !pass_roll {
                     return;
@@ -1053,7 +1053,7 @@ impl Runner {
 
                 if distance_behind > range.end {
                     // Catch up to a certain distance (if wit allows).
-                    let chance = 0.15 * (self.adjusted.wiz as f64 * 0.1).log10();
+                    let chance = 0.15 * (self.adjusted.wit as f64 * 0.1).log10();
                     let pass_roll = self.rng.borrow_mut().random_bool(chance);
                     if !pass_roll {
                         return;
@@ -1181,7 +1181,7 @@ impl Runner {
             // Update section speed modifier.
             self.section_speed_modifier = roll_section_speed_modifier(
                 &mut self.rng.borrow_mut(),
-                self.adjusted.wiz,
+                self.adjusted.wit,
                 state.course.base_speed(),
             );
 
@@ -1509,7 +1509,7 @@ impl Runner {
             && self
                 .rng
                 .borrow_mut()
-                .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wiz))
+                .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wit))
         {
             self.is_stamina_keep = true;
         }
@@ -2092,7 +2092,7 @@ impl Runner {
                         }
                     } else {
                         // Wit * 0.04% chance to start each second.
-                        let chance = self.adjusted.wiz as f64 * 0.0004;
+                        let chance = self.adjusted.wit as f64 * 0.0004;
                         if rng.random_bool(chance) {
                             self.start_downhill_acceleration(slopes[idx].slope);
                         }
@@ -2555,11 +2555,11 @@ impl Runner {
         };
 
         // Wit limit break bonus, fixed at activation time (5th Anniv. onward).
-        let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
-            && self.available_skills[skill_index].is_wiz_limit_break_eligible()
+        let wit_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
+            && self.available_skills[skill_index].is_wit_limit_break_eligible()
         {
-            wiz_limit_break_phase_coefficient(self.adjusted.style, self.phase)
-                * wiz_limit_break_multiplier(self.adjusted.wiz)
+            wit_limit_break_phase_coefficient(self.adjusted.style, self.phase)
+                * wit_limit_break_multiplier(self.adjusted.wit)
         } else {
             0.0
         };
@@ -2580,14 +2580,14 @@ impl Runner {
                         &scaled,
                         scaled_duration,
                         overtake_extension,
-                        wiz_bonus,
+                        wit_bonus,
                         state,
                     );
                 } else {
                     self.pending_effects.push(PendingEffect {
                         effect: scaled,
                         duration: scaled_duration,
-                        wiz_bonus,
+                        wit_bonus,
                     });
                 }
             }
@@ -2766,7 +2766,7 @@ impl Runner {
             Climax => modifier * skill_scaling::CLIMAX_MULTIPLIER,
             MultiplyMaximumRawStatus => {
                 let raw = &self.raw;
-                let max_stat = [raw.speed, raw.stamina, raw.power, raw.guts, raw.wiz]
+                let max_stat = [raw.speed, raw.stamina, raw.power, raw.guts, raw.wit]
                     .into_iter()
                     .max()
                     .unwrap();
@@ -2821,7 +2821,7 @@ impl Runner {
         effect: &SkillEffect,
         scaled_duration: f64,
         overtake_extension: OvertakeExtension,
-        wiz_bonus: f64,
+        wit_bonus: f64,
         state: &RaceState,
     ) {
         let effect_type = &effect.skill_type;
@@ -2835,7 +2835,7 @@ impl Runner {
             // Apply wit limit break bonus to target and current speed effects.
             let bonus = match effect_type {
                 SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
-                    wiz_bonus
+                    wit_bonus
                 }
                 _ => 0.0,
             };
@@ -2954,7 +2954,7 @@ impl Runner {
             &pending.effect,
             pending.duration,
             OvertakeExtension::default(),
-            pending.wiz_bonus,
+            pending.wit_bonus,
             state,
         );
         self.recalculate_skill_modifiers();

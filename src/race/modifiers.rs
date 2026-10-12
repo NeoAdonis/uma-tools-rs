@@ -29,9 +29,9 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
 /// Wit multiplier for the wit limit break buff (5th Anniversary onward).
 ///
 /// Zero at 1200 wit or less; it then grows in brackets up to a maximum of 1.12.
-pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
-    let brackets = |from: u16, step: f64| ((wiz - from) as f64 / step).ceil();
-    match wiz {
+pub fn wit_limit_break_multiplier(wit: u16) -> f64 {
+    let brackets = |from: u16, step: f64| ((wit - from) as f64 / step).ceil();
+    match wit {
         0..=1200 => 0.0,
         1201..=1400 => brackets(1200, 20.0) * 0.02,
         1401..=1600 => 0.2 + brackets(1400, 20.0) * 0.06,
@@ -41,7 +41,7 @@ pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
 }
 
 /// Phase strategy coefficient for the wit limit break buff (5th Anniv. onward).
-pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
+pub fn wit_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         (Style::Front | Style::Runaway, Phase::Early) => 0.26,
         (Style::Front | Style::Runaway, Phase::Mid) => 0.23,
@@ -187,10 +187,10 @@ pub fn base_target_speed(
 /// Roll section speed modifier range randomly based on wit stat.
 pub fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng: &mut R,
-    wiz_stat: u16,
+    wit_stat: u16,
     base_speed: f64,
 ) -> f64 {
-    let max = wiz_stat as f64 * (wiz_stat as f64 * 0.1).log10() / 550000.0;
+    let max = wit_stat as f64 * (wit_stat as f64 * 0.1).log10() / 550000.0;
     let min = max - 0.0065;
     rng.random_range(min..=max) * base_speed
 }
@@ -255,9 +255,9 @@ pub fn calculate_adjusted_power(
 }
 
 /// Calculate adjusted wit after applying style aptitude modifier.
-pub fn calculate_adjusted_wiz(base_wiz: u16, style_aptitude: Aptitude) -> u16 {
+pub fn calculate_adjusted_wit(base_wit: u16, style_aptitude: Aptitude) -> u16 {
     let aptitude_mod = strategy_proficiency_multiplier(style_aptitude);
-    ((base_wiz as f64 * aptitude_mod) as u16).max(1)
+    ((base_wit as f64 * aptitude_mod) as u16).max(1)
 }
 
 /// Given a [`ThresholdStat`], return the corresponding base stat from an Uma.
@@ -267,7 +267,7 @@ pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
         ThresholdStat::Stamina => uma.stamina,
         ThresholdStat::Power => uma.power,
         ThresholdStat::Guts => uma.guts,
-        ThresholdStat::Wiz => uma.wiz,
+        ThresholdStat::Wit => uma.wit,
     }
 }
 

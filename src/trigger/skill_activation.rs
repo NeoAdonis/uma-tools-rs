@@ -196,7 +196,7 @@ pub struct PendingEffect {
     /// Duration in seconds, already scaled.
     pub duration: f64,
     /// Wit limit break bonus of the caster.
-    pub wiz_bonus: f64,
+    pub wit_bonus: f64,
 }
 
 /// Record of a skill activation during the race.

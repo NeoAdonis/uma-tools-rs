@@ -508,7 +508,7 @@ fn test_runners_bound_to_rush_do_rush() {
     for _ in 0..9 {
         // Low wit for a high rush chance.
         let uma = Uma {
-            wiz: 100,
+            wit: 100,
             ..uma(Style::Late)
         };
         solver.add_runner(uma, Motivation::Normal, vec![]);
@@ -1721,7 +1721,7 @@ fn test_rushed_by_team_matches_runners() {
     // Low wit for a high rush chance.
     let member = |style| {
         let uma = Uma {
-            wiz: 100,
+            wit: 100,
             ..uma(style)
         };
         (uma, Motivation::Normal, vec![])
@@ -2002,7 +2002,7 @@ fn test_pending_effects_apply_to_targets() {
             ..effect(SkillType::CurrentSpeed, -0.15)
         },
         duration: 3.0,
-        wiz_bonus: 0.0,
+        wit_bonus: 0.0,
     });
     solver.apply_pending_effects();
 
@@ -2075,7 +2075,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
             ..effect(skill_type, modifier)
         },
         duration: 3.0,
-        wiz_bonus: 0.0,
+        wit_bonus: 0.0,
     }
 }
 
@@ -2378,7 +2378,7 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
         ..out_of_gate_skill(
             "fov",
             f64::INFINITY,
-            &[(SkillType::WizUp, 40.0), (SkillType::Fov, 10.0)],
+            &[(SkillType::WitUp, 40.0), (SkillType::Fov, 10.0)],
         )
         .alternatives[0]
             .clone()
@@ -2852,7 +2852,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
         stamina: 700,
         power: 700,
         guts: 700,
-        wiz: 750,
+        wit: 750,
         ..uma
     };
     let mut solver = scaled_skill_solver(

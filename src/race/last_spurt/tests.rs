@@ -7,7 +7,7 @@ use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
 /// Build a solver with a single runner on a 2000m course.
-fn solver(wiz: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runner> {
+fn solver(wit: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runner> {
     let config = Configuration {
         game_version,
         ..seeded_config(rng_seed)
@@ -15,7 +15,7 @@ fn solver(wiz: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runn
     ready_solver(
         10204,
         Uma {
-            wiz,
+            wit,
             ..uma(Style::Late)
         },
         vec![],
@@ -159,7 +159,7 @@ fn test_candidate_speeds_are_steps_from_max() {
 }
 
 #[test]
-fn test_high_wiz_always_accepts_best_candidate() {
+fn test_high_wit_always_accepts_best_candidate() {
     // 15 + 0.05 * 2000 = 115% chance, which must not panic.
     let results: Vec<_> = (0..10)
         .map(|rng_seed| {
@@ -255,7 +255,7 @@ fn test_slowest_candidate_when_every_check_fails() {
         let candidates = (0..)
             .take_while(|&step| max - 0.1 * step as f64 >= base)
             .count();
-        let chance = 0.15 + 0.0005 * runner.adjusted.wiz as f64;
+        let chance = 0.15 + 0.0005 * runner.adjusted.wit as f64;
         let mut rng = runner.rng.borrow().clone();
         if (0..candidates).any(|_| rng.random_bool(chance)) {
             continue;

@@ -77,14 +77,14 @@ pub(crate) fn seeded_config(seed: u64) -> Configuration {
 
 /// Baseline runner with the given style and A aptitudes.
 ///
-/// Override single stats with `Uma { wiz: 100, ..uma(Style::Late) }`.
+/// Override single stats with `Uma { wit: 100, ..uma(Style::Late) }`.
 pub(crate) fn uma(style: Style) -> Uma {
     Uma {
         speed: 1200,
         stamina: 1000,
         power: 1000,
         guts: 800,
-        wiz: 1000,
+        wit: 1000,
         style,
         distance_aptitude: Aptitude::A,
         track_aptitude: Aptitude::A,

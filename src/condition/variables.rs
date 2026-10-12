@@ -6,7 +6,7 @@ pub enum VarType {
     /// Variable representing accumulated (elapsed) time.
     AccumulateTime,
     /// Variable representing base stats.
-    BaseStat(StatKind),
+    BaseStat(BaseStatVar),
     /// Variables related to the runner's entry in the race (gate, popularity...).
     Entry(EntryVar),
     /// Variables related to order/rank.
@@ -44,12 +44,12 @@ pub enum VarType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StatKind {
-    Speed,
-    Stamina,
-    Power,
-    Guts,
-    Wiz,
+pub enum BaseStatVar {
+    BaseSpeed,
+    BaseStamina,
+    BasePower,
+    BaseGuts,
+    BaseWiz,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -257,7 +257,7 @@ impl fmt::Display for VarType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use VarType::*;
         match self {
-            BaseStat(s) => write!(f, "base_{}", s),
+            BaseStat(s) => write!(f, "{}", s),
             Entry(e) => write!(f, "{}", e),
             Order(o) => write!(f, "{}", o),
             Distance(d) => write!(f, "{}", d),
@@ -276,18 +276,6 @@ impl fmt::Display for VarType {
             Always => write!(f, "always"),
             RandomSpatial(rs) => write!(f, "{}", rs),
             RandomPhase(rp) => write!(f, "{}", rp),
-        }
-    }
-}
-
-impl fmt::Display for StatKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            StatKind::Speed => write!(f, "speed"),
-            StatKind::Stamina => write!(f, "stamina"),
-            StatKind::Power => write!(f, "power"),
-            StatKind::Guts => write!(f, "guts"),
-            StatKind::Wiz => write!(f, "wiz"),
         }
     }
 }
@@ -311,6 +299,7 @@ macro_rules! impl_display_snake_case {
     };
 }
 
+impl_display_snake_case!(BaseStatVar);
 impl_display_snake_case!(EntryVar);
 impl_display_snake_case!(OrderVar);
 impl_display_snake_case!(DistanceVar);
@@ -336,11 +325,11 @@ impl VarType {
 
         let var = match s {
             // Base stats.
-            "base_speed" => BaseStat(StatKind::Speed),
-            "base_stamina" => BaseStat(StatKind::Stamina),
-            "base_power" => BaseStat(StatKind::Power),
-            "base_guts" => BaseStat(StatKind::Guts),
-            "base_wiz" => BaseStat(StatKind::Wiz),
+            "base_speed" => BaseStat(BaseStatVar::BaseSpeed),
+            "base_stamina" => BaseStat(BaseStatVar::BaseStamina),
+            "base_power" => BaseStat(BaseStatVar::BasePower),
+            "base_guts" => BaseStat(BaseStatVar::BaseGuts),
+            "base_wiz" => BaseStat(BaseStatVar::BaseWiz),
 
             // Runner entry.
             "fan_count" => Entry(EntryVar::FanCount),
@@ -625,7 +614,7 @@ mod tests {
         // Test a sample of known variables.
         assert!(matches!(
             VarType::parse("base_speed"),
-            Some(VarType::BaseStat(StatKind::Speed))
+            Some(VarType::BaseStat(BaseStatVar::BaseSpeed))
         ));
         assert!(matches!(
             VarType::parse("accumulatetime"),
@@ -703,7 +692,7 @@ mod tests {
     #[test]
     fn test_display_formatting() {
         assert_eq!(
-            format!("{}", VarType::BaseStat(StatKind::Speed)),
+            format!("{}", VarType::BaseStat(BaseStatVar::BaseSpeed)),
             "base_speed"
         );
         assert_eq!(format!("{}", VarType::Always), "always");

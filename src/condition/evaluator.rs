@@ -331,14 +331,14 @@ pub fn get_variable_value_out_of_gate(
 }
 
 /// Get base stat value.
-fn get_base_stat(stat: &StatKind, uma: &Uma) -> i32 {
-    use StatKind::*;
+fn get_base_stat(stat: &BaseStatVar, uma: &Uma) -> i32 {
+    use BaseStatVar::*;
     match stat {
-        Speed => uma.speed as i32,
-        Stamina => uma.stamina as i32,
-        Power => uma.power as i32,
-        Guts => uma.guts as i32,
-        Wiz => uma.wiz as i32,
+        BaseSpeed => uma.speed as i32,
+        BaseStamina => uma.stamina as i32,
+        BasePower => uma.power as i32,
+        BaseGuts => uma.guts as i32,
+        BaseWiz => uma.wit as i32,
     }
 }
 

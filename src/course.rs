@@ -152,7 +152,7 @@ pub enum ThresholdStat {
     Stamina = 2,
     Power = 3,
     Guts = 4,
-    Wiz = 5,
+    Wit = 5,
 }
 
 /// Lane type an Uma is running in.

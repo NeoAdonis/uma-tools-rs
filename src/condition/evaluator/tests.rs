@@ -378,17 +378,17 @@ fn test_base_stat_values() {
         stamina: 902,
         power: 803,
         guts: 704,
-        wiz: 605,
+        wit: 605,
         ..uma(Style::Late)
     };
 
     let base = &solver.runners[0].base;
     let actual = [
-        StatKind::Speed,
-        StatKind::Stamina,
-        StatKind::Power,
-        StatKind::Guts,
-        StatKind::Wiz,
+        BaseStatVar::BaseSpeed,
+        BaseStatVar::BaseStamina,
+        BaseStatVar::BasePower,
+        BaseStatVar::BaseGuts,
+        BaseStatVar::BaseWiz,
     ]
     .map(|stat| get_base_stat(&stat, base));
     assert_eq!(actual, [1101, 902, 803, 704, 605]);
@@ -1037,7 +1037,7 @@ fn test_variable_value_dispatch() {
 
     let (state, runner) = (&solver.state, &solver.runners[0]);
     let cases = [
-        (VarType::BaseStat(StatKind::Speed), 1101),
+        (VarType::BaseStat(BaseStatVar::BaseSpeed), 1101),
         (VarType::Entry(EntryVar::FanCount), 12345),
         (VarType::Order(OrderVar::Order), 4),
         (VarType::Distance(DistanceVar::DistanceDiffTop), 12),

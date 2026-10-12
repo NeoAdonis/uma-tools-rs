@@ -13,7 +13,7 @@ use crate::race::compete_before_spurt;
 use crate::race::duel::Duel;
 use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
-    calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wiz,
+    calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wit,
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
@@ -34,7 +34,7 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
         stamina: uma.stamina,
         power: calculate_adjusted_power(uma.power, course.surface, parameters.track_condition),
         guts: uma.guts,
-        wiz: calculate_adjusted_wiz(uma.wiz, uma.style_aptitude),
+        wit: calculate_adjusted_wit(uma.wit, uma.style_aptitude),
         style: uma.style,
         distance_aptitude: uma.distance_aptitude,
         track_aptitude: uma.track_aptitude,
@@ -53,13 +53,13 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: f64) {
         SkillType::StaminaUp => modify_stat(&mut uma.stamina, modifier),
         SkillType::PowerUp => modify_stat(&mut uma.power, modifier),
         SkillType::GutsUp => modify_stat(&mut uma.guts, modifier),
-        SkillType::WizUp => modify_stat(&mut uma.wiz, modifier),
+        SkillType::WitUp => modify_stat(&mut uma.wit, modifier),
         SkillType::AllStatsUp => {
             modify_stat(&mut uma.speed, modifier);
             modify_stat(&mut uma.stamina, modifier);
             modify_stat(&mut uma.power, modifier);
             modify_stat(&mut uma.guts, modifier);
-            modify_stat(&mut uma.wiz, modifier);
+            modify_stat(&mut uma.wit, modifier);
         }
         // Not a stat boost effect.
         _ => {}
@@ -158,7 +158,7 @@ impl UnreadyRunner {
         let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
             state.config.wisdom_checks.resolve(
                 &mut *rng.borrow_mut(),
-                skill.activation_chance(base_uma.wiz),
+                skill.activation_chance(base_uma.wit),
             )
         });
 
@@ -394,7 +394,7 @@ impl UnreadyRunner {
         // Determine rush chance, as a percentage. The game rolls integer
         // percentages, so it's rounded up. Very low wit and rush chance effects
         // can push it out of range.
-        let rush_chance = ((6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
+        let rush_chance = ((6.5 / (0.1 * self.base.wit as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier)
             .ceil()
             .clamp(0.0, 100.0);
@@ -445,7 +445,7 @@ impl UnreadyRunner {
         // Calculate section modifier for base speed adjustment.
         let section_speed_modifier = roll_section_speed_modifier(
             &mut self.rng.borrow_mut(),
-            self.adjusted.wiz,
+            self.adjusted.wit,
             course.base_speed(),
         );
 

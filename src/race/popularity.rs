@@ -53,7 +53,7 @@ pub(crate) struct SkillPopularity {
     stamina: f64,
     power: f64,
     guts: f64,
-    wiz: f64,
+    wit: f64,
 }
 
 impl SkillPopularity {
@@ -64,7 +64,7 @@ impl SkillPopularity {
             PopularityStat::Stamina => self.stamina += points,
             PopularityStat::Power => self.power += points,
             PopularityStat::Guts => self.guts += points,
-            PopularityStat::Wiz => self.wiz += points,
+            PopularityStat::Wit => self.wit += points,
             PopularityStat::None => {}
         }
         self
@@ -184,13 +184,13 @@ pub(crate) fn skill_bonus<'a>(
         .filter(|skill| skill.is_popularity_eligible(state, runner))
         .fold(SkillPopularity::default(), |total, skill| {
             let points = skill_popularity(skill);
-            let chance = skill.activation_chance(runner.raw.wiz);
+            let chance = skill.activation_chance(runner.raw.wit);
             SkillPopularity {
                 speed: total.speed + points.speed * chance,
                 stamina: total.stamina + points.stamina * chance,
                 power: total.power + points.power * chance,
                 guts: total.guts + points.guts * chance,
-                wiz: total.wiz + points.wiz * chance,
+                wit: total.wit + points.wit * chance,
             }
         })
 }
@@ -243,7 +243,7 @@ struct RunnerPopData {
     adjusted_stamina: f64,
     adjusted_power: f64,
     raw_guts: f64,
-    raw_wiz: f64,
+    raw_wit: f64,
 }
 
 /// Calculate the three judge scores for each runner.
@@ -252,19 +252,19 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
 
     // Calculate φ scores for raw stats across all runners.
     let guts_values: Vec<f64> = runners_data.iter().map(|r| r.raw_guts).collect();
-    let wiz_values: Vec<f64> = runners_data.iter().map(|r| r.raw_wiz).collect();
+    let wit_values: Vec<f64> = runners_data.iter().map(|r| r.raw_wit).collect();
 
     let (guts_mean, guts_std) = calculate_stats(&guts_values);
-    let (wiz_mean, wiz_std) = calculate_stats(&wiz_values);
+    let (wit_mean, wit_std) = calculate_stats(&wit_values);
 
     let guts_phi: Vec<f64> = guts_values
         .iter()
         .map(|&v| calculate_phi(v, guts_mean, guts_std))
         .collect();
 
-    let wiz_phi: Vec<f64> = wiz_values
+    let wit_phi: Vec<f64> = wit_values
         .iter()
-        .map(|&v| calculate_phi(v, wiz_mean, wiz_std))
+        .map(|&v| calculate_phi(v, wit_mean, wit_std))
         .collect();
 
     // Calculate intermediate values for each judge.
@@ -277,10 +277,10 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
         left_values.push(runner.adjusted_speed * guts_phi[i].powf(0.5));
 
         // Center Judge: AdjustedStamina * φ(RawGuts)^0.8 * φ(RawWit)^0.6.
-        center_values.push(runner.adjusted_stamina * guts_phi[i].powf(0.8) * wiz_phi[i].powf(0.6));
+        center_values.push(runner.adjusted_stamina * guts_phi[i].powf(0.8) * wit_phi[i].powf(0.6));
 
         // Right Judge: AdjustedPower * φ(RawWit)^0.5.
-        right_values.push(runner.adjusted_power * wiz_phi[i].powf(0.5));
+        right_values.push(runner.adjusted_power * wit_phi[i].powf(0.5));
     }
 
     // Calculate φ scores for each judge's values.
@@ -353,7 +353,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
             adjusted_stamina,
             adjusted_power,
             raw_guts: raw.guts as f64,
-            raw_wiz: raw.wiz as f64,
+            raw_wit: raw.wit as f64,
         });
     }
 

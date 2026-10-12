@@ -79,9 +79,9 @@ pub fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -> f64 {
 
 /// Chance of noticing the lack of HP and entering Stamina Keep on each check.
 // ? Highly speculative.
-pub fn stamina_keep_chance(wiz: u16) -> f64 {
-    let wiz = wiz as f64;
-    (0.3 * (wiz / 1000.0 + wiz.powf(0.03))).min(1.0)
+pub fn stamina_keep_chance(wit: u16) -> f64 {
+    let wit = wit as f64;
+    (0.3 * (wit / 1000.0 + wit.powf(0.03))).min(1.0)
 }
 
 #[cfg(test)]

@@ -42,7 +42,7 @@ pub enum Style {
     /// makes a late surge.
     #[serde(rename = "Sasi")]
     Late = 3,
-    /// 追込, oikomi - Stays at the back and sprints towards the end.
+    /// End closer (追込, oikomi) - Stays at the back and sprints towards the end.
     #[serde(rename = "Oikomi")]
     End = 4,
 }
@@ -140,7 +140,7 @@ pub struct Uma {
     /// Specifically, it affects skill activation rate, chance of avoiding getting
     /// rushed, position keeping, last spurt planning, and more.
     #[serde(rename = "wisdom")]
-    pub wiz: u16,
+    pub wit: u16,
     /// Running style or strategy. Affects mainly positioning strategy.
     #[serde(rename = "strategy")]
     pub style: Style,
@@ -243,7 +243,7 @@ impl Uma {
             stamina: calculate_base_stat(raw.stamina, motivation_multiplier),
             power: calculate_base_stat(raw.power, motivation_multiplier),
             guts: calculate_base_stat(raw.guts, motivation_multiplier),
-            wiz: calculate_base_stat(raw.wiz, motivation_multiplier),
+            wit: calculate_base_stat(raw.wit, motivation_multiplier),
             style: raw.style,
             distance_aptitude: raw.distance_aptitude,
             track_aptitude: raw.track_aptitude,
@@ -306,7 +306,7 @@ mod tests {
             stamina: 800,
             power: 1200,
             guts: 700,
-            wiz: 1300,
+            wit: 1300,
             style: Style::End,
             distance_aptitude: Aptitude::S,
             track_aptitude: Aptitude::B,
@@ -320,7 +320,7 @@ mod tests {
             stamina: 832,
             power: 1248,
             guts: 728,
-            wiz: 1300,
+            wit: 1300,
             ..raw
         };
         assert_eq!(Uma::raw_to_base(raw, Motivation::Great), expected);
@@ -354,7 +354,7 @@ mod tests {
                 stamina: 802,
                 power: 1203,
                 guts: 704,
-                wiz: 1205,
+                wit: 1205,
                 style: Style::Pace,
                 distance_aptitude: Aptitude::S,
                 track_aptitude: Aptitude::B,

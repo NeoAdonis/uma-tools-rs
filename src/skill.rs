@@ -25,7 +25,7 @@ pub enum SkillType {
     /// Modify guts stat.
     GutsUp = 4,
     /// Modify wit stat.
-    WizUp = 5,
+    WitUp = 5,
     /// Change running style to Runaway.
     ChangeStyleRunaway = 6,
     /// Modify field of view.
@@ -76,7 +76,7 @@ impl SkillType {
         use SkillType::*;
         matches!(
             self,
-            SpeedUp | StaminaUp | PowerUp | GutsUp | WizUp | AllStatsUp
+            SpeedUp | StaminaUp | PowerUp | GutsUp | WitUp | AllStatsUp
         )
     }
 
@@ -505,7 +505,7 @@ pub enum PopularityStat {
     Stamina = 2,
     Power = 3,
     Guts = 4,
-    Wiz = 5,
+    Wit = 5,
 }
 
 /// Represents the popularity points granted by a skill to a specific stat.
@@ -606,7 +606,7 @@ impl Skill {
     ///
     /// Only unique, evolved and gold skills are affected. Inherited uniques
     /// are stored as white skills, so they are excluded as well.
-    pub fn is_wiz_limit_break_eligible(&self) -> bool {
+    pub fn is_wit_limit_break_eligible(&self) -> bool {
         !matches!(self.rarity, SkillRarity::White)
     }
 
@@ -614,11 +614,11 @@ impl Skill {
     ///
     /// Skills that don't require a wit check always pass; otherwise the chance
     /// depends on the runner's base wit (minimum 20%).
-    pub fn activation_chance(&self, base_wiz: u16) -> f64 {
+    pub fn activation_chance(&self, base_wit: u16) -> f64 {
         if !self.wisdom_check {
             return 1.0;
         }
-        (1.0 - 90.0 / base_wiz as f64).max(0.2)
+        (1.0 - 90.0 / base_wit as f64).max(0.2)
     }
 
     /// Check if this skill should activate out of gate (before race begins).
@@ -702,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wiz_limit_break_eligibility() {
+    fn test_wit_limit_break_eligibility() {
         let skill = |rarity| {
             let data = SkillData {
                 rarity,
@@ -710,12 +710,12 @@ mod tests {
             };
             Skill::new("test".to_string(), data)
         };
-        assert!(!skill(SkillRarity::White).is_wiz_limit_break_eligible());
-        assert!(skill(SkillRarity::Gold).is_wiz_limit_break_eligible());
-        assert!(skill(SkillRarity::Unique).is_wiz_limit_break_eligible());
-        assert!(skill(SkillRarity::UniqueUpgraded).is_wiz_limit_break_eligible());
-        assert!(skill(SkillRarity::UniqueNatural).is_wiz_limit_break_eligible());
-        assert!(skill(SkillRarity::Evolution).is_wiz_limit_break_eligible());
+        assert!(!skill(SkillRarity::White).is_wit_limit_break_eligible());
+        assert!(skill(SkillRarity::Gold).is_wit_limit_break_eligible());
+        assert!(skill(SkillRarity::Unique).is_wit_limit_break_eligible());
+        assert!(skill(SkillRarity::UniqueUpgraded).is_wit_limit_break_eligible());
+        assert!(skill(SkillRarity::UniqueNatural).is_wit_limit_break_eligible());
+        assert!(skill(SkillRarity::Evolution).is_wit_limit_break_eligible());
     }
 
     /// Deserialize an alternative with the given condition and precondition.

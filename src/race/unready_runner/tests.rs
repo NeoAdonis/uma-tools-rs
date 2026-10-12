@@ -48,23 +48,23 @@ fn test_stat_boost_is_applied() {
 
 #[test]
 fn test_stat_boosts_by_type() {
-    let stats = |uma: Uma| [uma.speed, uma.stamina, uma.power, uma.guts, uma.wiz];
+    let stats = |uma: Uma| [uma.speed, uma.stamina, uma.power, uma.guts, uma.wit];
     let base = Uma {
         speed: 1000,
         stamina: 900,
         power: 800,
         guts: 700,
-        wiz: 600,
+        wit: 600,
         ..uma(Style::Pace)
     };
 
-    // (effect, modifier, [speed, stamina, power, guts, wiz]).
+    // (effect, modifier, [speed, stamina, power, guts, wit]).
     let cases = [
         (SkillType::SpeedUp, 60.0, [1060, 900, 800, 700, 600]),
         (SkillType::StaminaUp, 60.0, [1000, 960, 800, 700, 600]),
         (SkillType::PowerUp, 60.0, [1000, 900, 860, 700, 600]),
         (SkillType::GutsUp, 60.0, [1000, 900, 800, 760, 600]),
-        (SkillType::WizUp, 60.0, [1000, 900, 800, 700, 660]),
+        (SkillType::WitUp, 60.0, [1000, 900, 800, 700, 660]),
         (SkillType::AllStatsUp, 60.0, [1060, 960, 860, 760, 660]),
         // Negative boosts lower stats, down to 1.
         (SkillType::AllStatsUp, -50.0, [950, 850, 750, 650, 550]),
@@ -301,7 +301,7 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
         })
         .collect();
     let uma = Uma {
-        wiz: 100,
+        wit: 100,
         ..uma(Style::Pace)
     };
     let mut solver = ready_solver(10104, uma, skills, &config);
@@ -345,9 +345,9 @@ fn test_rushing_can_be_forced() {
 }
 
 /// Ready runner with the given wit and skills.
-fn runner_with_wiz(wiz: u16, skills: Vec<Skill>, seed: u64) -> Runner {
+fn runner_with_wit(wit: u16, skills: Vec<Skill>, seed: u64) -> Runner {
     let uma = Uma {
-        wiz,
+        wit,
         ..uma(Style::Pace)
     };
     ready_solver(10104, uma, skills, &seeded_config(seed))
@@ -358,9 +358,9 @@ fn runner_with_wiz(wiz: u16, skills: Vec<Skill>, seed: u64) -> Runner {
 #[test]
 fn test_rush_chance_is_rounded_up() {
     // (base wit, rush chance): 19.00%, 13.26%, 11.01% and 9.74% before rounding.
-    for (wiz, expected) in [(300, 19.0), (600, 14.0), (900, 12.0), (1200, 10.0)] {
-        let runner = runner_with_wiz(wiz, vec![], 0);
-        assert_eq!(runner.rush_chance, expected, "{wiz} wit");
+    for (wit, expected) in [(300, 19.0), (600, 14.0), (900, 12.0), (1200, 10.0)] {
+        let runner = runner_with_wit(wit, vec![], 0);
+        assert_eq!(runner.rush_chance, expected, "{wit} wit");
     }
 }
 
@@ -370,12 +370,12 @@ fn test_rush_chance_is_clamped() {
     let calm = |i: usize| skill(&i.to_string(), "always==1", SkillType::RushChanceUp, -3.0);
     for seed in 0..10 {
         // Very low wit: over 100% (about 24,600%).
-        let runner = runner_with_wiz(1, vec![], seed);
+        let runner = runner_with_wit(1, vec![], seed);
         assert_eq!(runner.rush_chance, 100.0, "seed {seed}");
         assert!(runner.rush_state.is_some(), "seed {seed}");
 
         // High wit (8.7% at 1600 base wit), minus 12%: below 0% even when rounded up.
-        let runner = runner_with_wiz(2000, (0..4).map(calm).collect(), seed);
+        let runner = runner_with_wit(2000, (0..4).map(calm).collect(), seed);
         assert_eq!(runner.rush_chance, 0.0, "seed {seed}");
         assert!(runner.rush_state.is_none(), "seed {seed}");
     }

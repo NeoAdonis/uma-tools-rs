@@ -10,7 +10,7 @@ use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, 
 use crate::uma::*;
 
 #[test]
-fn test_wiz_limit_break_multiplier_brackets() {
+fn test_wit_limit_break_multiplier_brackets() {
     let cases = [
         (0, 0.0),
         (1200, 0.0),
@@ -29,14 +29,14 @@ fn test_wiz_limit_break_multiplier_brackets() {
         (3200, 1.12),
         (5000, 1.12),
     ];
-    for (wiz, expected) in cases {
-        let actual = wiz_limit_break_multiplier(wiz);
-        assert_close!(actual, expected, "wiz {wiz}");
+    for (wit, expected) in cases {
+        let actual = wit_limit_break_multiplier(wit);
+        assert_close!(actual, expected, "wit {wit}");
     }
 }
 
 #[test]
-fn test_wiz_limit_break_phase_coefficient() {
+fn test_wit_limit_break_phase_coefficient() {
     use Phase::*;
     let phases = [Early, Mid, Late, Last];
     let table = [
@@ -48,7 +48,7 @@ fn test_wiz_limit_break_phase_coefficient() {
     ];
     for (style, row) in table {
         for (phase, expected) in phases.into_iter().zip(row) {
-            assert_eq!(wiz_limit_break_phase_coefficient(style, phase), expected);
+            assert_eq!(wit_limit_break_phase_coefficient(style, phase), expected);
         }
     }
 }
@@ -66,9 +66,9 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
 
 /// Build a ready race with a single high-wit runner that only has the given
 /// skill.
-fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
+fn high_wit_race(skill: Skill) -> RaceSolver<Runner> {
     let uma = Uma {
-        wiz: 1500,
+        wit: 1500,
         ..uma(Style::Pace)
     };
     ready_solver(10101, uma, vec![skill], &seeded_config(42))
@@ -77,12 +77,12 @@ fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
 /// Activate the only skill of a single runner with high wit and return
 /// (target speed modifier, current speed modifier, expected wit limit break
 /// bonus rate).
-fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
-    let mut solver = high_wiz_race(skill);
+fn activate_on_high_wit_runner(skill: Skill) -> (f64, f64, f64) {
+    let mut solver = high_wit_race(skill);
     let runner = &mut solver.runners[0];
 
-    let bonus = wiz_limit_break_phase_coefficient(runner.adjusted.style, runner.phase)
-        * wiz_limit_break_multiplier(runner.adjusted.wiz);
+    let bonus = wit_limit_break_phase_coefficient(runner.adjusted.style, runner.phase)
+        * wit_limit_break_multiplier(runner.adjusted.wit);
     runner.activate_skill(0, 0, &solver.state);
     (
         runner.skill_modifiers.target_speed,
@@ -93,7 +93,7 @@ fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
 
 #[test]
 fn test_skill_duration_scales_with_course_distance() {
-    let mut solver = high_wiz_race(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
+    let mut solver = high_wit_race(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
     let runner = &mut solver.runners[0];
     runner.activate_skill(0, 0, &solver.state);
 
@@ -109,16 +109,16 @@ fn boosted(bonus: f64) -> f64 {
 }
 
 #[test]
-fn test_wiz_limit_break_boosts_gold_target_speed() {
+fn test_wit_limit_break_boosts_gold_target_speed() {
     let (target_speed, _, bonus) =
-        activate_on_high_wiz_runner(speed_skill(SkillRarity::Gold, SkillType::TargetSpeed));
+        activate_on_high_wit_runner(speed_skill(SkillRarity::Gold, SkillType::TargetSpeed));
     assert!(bonus > 0.0);
     assert_close!(target_speed, boosted(bonus));
 }
 
 #[test]
-fn test_wiz_limit_break_boosts_unique_current_speed_with_deceleration() {
-    let (_, current_speed, bonus) = activate_on_high_wiz_runner(speed_skill(
+fn test_wit_limit_break_boosts_unique_current_speed_with_deceleration() {
+    let (_, current_speed, bonus) = activate_on_high_wit_runner(speed_skill(
         SkillRarity::UniqueNatural,
         SkillType::CurrentSpeedWithNaturalDeceleration,
     ));
@@ -126,16 +126,16 @@ fn test_wiz_limit_break_boosts_unique_current_speed_with_deceleration() {
 }
 
 #[test]
-fn test_wiz_limit_break_ignores_white_skills() {
+fn test_wit_limit_break_ignores_white_skills() {
     let (target_speed, _, _) =
-        activate_on_high_wiz_runner(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
+        activate_on_high_wit_runner(speed_skill(SkillRarity::White, SkillType::TargetSpeed));
     assert_close!(target_speed, 0.35);
 }
 
 #[test]
-fn test_wiz_limit_break_ignores_plain_current_speed() {
+fn test_wit_limit_break_ignores_plain_current_speed() {
     let (_, current_speed, _) =
-        activate_on_high_wiz_runner(speed_skill(SkillRarity::Gold, SkillType::CurrentSpeed));
+        activate_on_high_wit_runner(speed_skill(SkillRarity::Gold, SkillType::CurrentSpeed));
     assert_close!(current_speed, 0.35);
 }
 
@@ -233,7 +233,7 @@ fn test_track_condition_modifiers() {
 
 #[test]
 fn test_current_speed_with_natural_deceleration_transfers_on_expiry() {
-    let mut solver = high_wiz_race(speed_skill(
+    let mut solver = high_wit_race(speed_skill(
         SkillRarity::White,
         SkillType::CurrentSpeedWithNaturalDeceleration,
     ));
@@ -256,7 +256,7 @@ fn test_current_speed_with_natural_deceleration_transfers_on_expiry() {
 
 #[test]
 fn test_current_speed_drops_on_expiry() {
-    let mut solver = high_wiz_race(speed_skill(SkillRarity::White, SkillType::CurrentSpeed));
+    let mut solver = high_wit_race(speed_skill(SkillRarity::White, SkillType::CurrentSpeed));
     let runner = &mut solver.runners[0];
     runner.speed = 20.0;
     runner.activate_skill(0, 0, &solver.state);
