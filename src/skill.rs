@@ -24,7 +24,7 @@ pub enum SkillType {
     PowerUp = 3,
     /// Modify guts stat.
     GutsUp = 4,
-    /// Modify wisdom stat.
+    /// Modify wit stat.
     WizUp = 5,
     /// Change running style to Runaway.
     ChangeStyleRunaway = 6,
@@ -550,7 +550,7 @@ pub struct SkillData {
     /// the points are estimated from the skill rarity and effects.
     #[serde(default)]
     pub popularity: Option<Vec<SkillPopularity>>,
-    /// Whether this skill requires a wisdom check to activate.
+    /// Whether this skill requires a wit check to activate.
     #[serde_as(as = "BoolFromInt")]
     pub wisdom_check: bool,
 }
@@ -601,7 +601,7 @@ impl Skill {
             .any(|effect| effect.skill_type.is_stat_boost())
     }
 
-    /// Check if this skill benefits from the Wiz Limit Break buff (5th Anniversary
+    /// Check if this skill benefits from the wit limit break buff (5th Anniversary
     /// onward).
     ///
     /// Only unique, evolved and gold skills are affected. Inherited uniques
@@ -612,8 +612,8 @@ impl Skill {
 
     /// Chance that this skill passes its pre-race activation check.
     ///
-    /// Skills that don't require a wisdom check always pass; otherwise the chance
-    /// depends on the runner's base wisdom (minimum 20%).
+    /// Skills that don't require a wit check always pass; otherwise the chance
+    /// depends on the runner's base wit (minimum 20%).
     pub fn activation_chance(&self, base_wiz: u16) -> f64 {
         if !self.wisdom_check {
             return 1.0;
@@ -696,7 +696,7 @@ mod tests {
     fn test_activation_chance_with_wisdom_check() {
         let skill = skill_with_wisdom_check(true);
         assert_close!(skill.activation_chance(900), 0.9);
-        // Low wisdom is clamped to the minimum chance.
+        // Low wit is clamped to the minimum chance.
         assert_eq!(skill.activation_chance(100), 0.2);
         assert_eq!(skill.activation_chance(0), 0.2);
     }

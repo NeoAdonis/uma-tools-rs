@@ -18,7 +18,7 @@ pub const DURATION: f64 = 2.0;
 /// Cooldown after the speed boost ends in seconds.
 pub const COOLDOWN: f64 = 1.0;
 /// Base chance of attempting to secure the lead on each check.
-// ? Should scale with wiz, but the formula is unknown.
+// ? Should scale with wit, but the formula is unknown.
 pub const CHANCE: f64 = 0.2;
 
 /// Desirable lead (in meters) of a runner with `style` over a runner with

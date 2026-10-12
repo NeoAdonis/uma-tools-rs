@@ -64,7 +64,7 @@ fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
     )
 }
 
-/// Build a ready race with a single high-wiz runner that only has the given
+/// Build a ready race with a single high-wit runner that only has the given
 /// skill.
 fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
     let uma = Uma {
@@ -74,8 +74,8 @@ fn high_wiz_race(skill: Skill) -> RaceSolver<Runner> {
     ready_solver(10101, uma, vec![skill], &seeded_config(42))
 }
 
-/// Activate the only skill of a single runner with high wiz and return
-/// (target speed modifier, current speed modifier, expected Wiz Limit Break
+/// Activate the only skill of a single runner with high wit and return
+/// (target speed modifier, current speed modifier, expected wit limit break
 /// bonus rate).
 fn activate_on_high_wiz_runner(skill: Skill) -> (f64, f64, f64) {
     let mut solver = high_wiz_race(skill);

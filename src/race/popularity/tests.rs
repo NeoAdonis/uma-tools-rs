@@ -129,8 +129,8 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
     Skill::new("1".to_string(), data)
 }
 
-/// Get the speed points a skill adds to a Pace runner with 1000 wisdom on a
-/// 2000m (medium distance) course.
+/// Get the speed points a skill adds to a Pace runner with 1000 wit on a 2000m
+/// (medium distance) course.
 fn speed_bonus(skill: &Skill) -> f64 {
     use crate::race::solver::RaceSolver;
     use crate::test_utils::{load_course, race_params, seeded_config, uma};
@@ -171,7 +171,7 @@ fn test_skill_bonus_popularity_guards() {
 
 #[test]
 fn test_skill_bonus_activation_chance() {
-    // With 1000 raw wisdom, the activation chance is 91%.
+    // With 1000 raw wit, the activation chance is 91%.
     let bonus = speed_bonus(&popularity_skill(&["always==1"], true));
     assert_close!(bonus, 91.0);
 }

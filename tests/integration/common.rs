@@ -128,7 +128,7 @@ pub fn alternative_with_precondition(
     }
 }
 
-/// White skill data without popularity data or wisdom check, so the skill is
+/// White skill data without popularity data or wit check, so the skill is
 /// always available.
 ///
 /// Override fields with `SkillData { rarity, ..skill_data(...) }`.

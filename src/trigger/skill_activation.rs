@@ -147,8 +147,8 @@ pub enum TriggerCondition {
 pub struct ActiveTimedEffect {
     /// Skill effect being applied.
     pub effect: SkillEffect,
-    /// Final modifier value, including any activation-time bonus such as the Wiz
-    /// Limit Break buff.
+    /// Final modifier value, including any activation-time bonus such as the wit
+    /// limit break buff.
     pub value: f64,
     /// Race time in seconds when effect expires.
     pub expires_at: f64,
@@ -187,7 +187,7 @@ pub struct OvertakeExtension {
 
 /// A skill effect that targets other runners, waiting to be applied to them.
 ///
-/// Values that depend on the caster (duration, Wiz Limit Break bonus) are fixed
+/// Values that depend on the caster (duration, wit limit break bonus) are fixed
 /// at activation time.
 #[derive(Debug, Clone)]
 pub struct PendingEffect {
@@ -195,7 +195,7 @@ pub struct PendingEffect {
     pub effect: SkillEffect,
     /// Duration in seconds, already scaled.
     pub duration: f64,
-    /// Wiz Limit Break bonus of the caster.
+    /// Wit limit break bonus of the caster.
     pub wiz_bonus: f64,
 }
 

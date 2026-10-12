@@ -134,8 +134,8 @@ pub struct Uma {
     /// consumption late-race and last spurt performance; the higher
     /// the Guts, the better the performance on the final stretch.
     pub guts: u16,
-    /// Also known as wit or wisdom. Stat that affects skill activation rate and
-    /// decision-making.
+    /// Wit, also known as wisdom or wiz. Stat that affects skill activation rate
+    /// and decision-making.
     ///
     /// Specifically, it affects skill activation rate, chance of avoiding getting
     /// rushed, position keeping, last spurt planning, and more.
@@ -151,7 +151,7 @@ pub struct Uma {
     /// performance depending on the track type.
     #[serde(rename = "surfaceAptitude")]
     pub track_aptitude: Aptitude,
-    /// Aptitude for the current running style. Affects wisdom performance depending
+    /// Aptitude for the current running style. Affects wit performance depending
     /// on the running style.
     #[serde(rename = "strategyAptitude")]
     pub style_aptitude: Aptitude,

@@ -45,7 +45,7 @@ pub enum GameVersion {
     MechaUmaUpdate,
     /// After the 5th anniversary update in Japan.
     ///
-    /// This update introduced the all-out spurt and wiz limit break mechanics,
+    /// This update introduced the all-out spurt and wit limit break mechanics,
     /// increased stat caps and added a buff for front-runners when securing the
     /// lead.
     FifthAnniversary,
@@ -65,7 +65,7 @@ pub enum Language {
 
 /// How a random check is resolved.
 ///
-/// Used to force the outcome of random checks (e.g. wisdom checks or rushing)
+/// Used to force the outcome of random checks (e.g. wit checks or rushing)
 /// for analysis purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 pub enum Roll {
@@ -106,7 +106,7 @@ pub struct Configuration {
     ///
     /// If `None`, a random seed is used.
     pub seed: Option<u64>,
-    /// How skill wisdom checks are resolved before the race.
+    /// How skill wit checks are resolved before the race.
     pub wisdom_checks: Roll,
     /// How runners' rush checks are resolved before the race.
     pub rushing: Roll,

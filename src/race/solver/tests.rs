@@ -247,8 +247,8 @@ fn set_strategy_at(solver: &mut RaceSolver<Runner>, position: f64, strategy: Pos
         .positioning_strategy = strategy;
 }
 
-/// Update positioning strategies many times without moving, so that wisdom
-/// checks to enter a mode eventually pass.
+/// Update positioning strategies many times without moving, so that wit checks
+/// to enter a mode eventually pass.
 fn update_positioning_repeatedly(solver: &mut RaceSolver<Runner>) {
     for _ in 0..50 {
         for runner in &mut solver.runners {
@@ -506,7 +506,7 @@ fn test_position_never_decreases_regardless_of_start_delay() {
 fn test_runners_bound_to_rush_do_rush() {
     let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
     for _ in 0..9 {
-        // Low wisdom for a high rush chance.
+        // Low wit for a high rush chance.
         let uma = Uma {
             wiz: 100,
             ..uma(Style::Late)
@@ -1718,7 +1718,7 @@ fn test_rush_counters_by_position_count_opponents() {
 #[test]
 fn test_rushed_by_team_matches_runners() {
     let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
-    // Low wisdom for a high rush chance.
+    // Low wit for a high rush chance.
     let member = |style| {
         let uma = Uma {
             wiz: 100,

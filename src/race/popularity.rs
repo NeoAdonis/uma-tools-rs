@@ -4,8 +4,8 @@
 //! judge gives a score based on various stats:
 //!
 //! - **Left Judge**: φ(AdjustedSpeed * φ(RawGuts)^0.5)
-//! - **Center Judge**: φ(AdjustedStamina * φ(RawGuts)^0.8 * φ(RawWiz)^0.6)
-//! - **Right Judge**: φ(AdjustedPower * φ(RawWiz)^0.5)
+//! - **Center Judge**: φ(AdjustedStamina * φ(RawGuts)^0.8 * φ(RawWit)^0.6)
+//! - **Right Judge**: φ(AdjustedPower * φ(RawWit)^0.5)
 //!
 //! Where φ(Stat) is the standard deviation score for the computed stat across
 //! all runners (mean 50, std dev 10).
@@ -13,7 +13,7 @@
 //! Stats are adjusted by adding points from activable skills to the raw stats.
 //! Each skill gives a number of points to one or two stats, read from the skill
 //! data (e.g. 20 for white skills, 60 for gold skills; negative skills take
-//! points away), scaled by its activation chance with raw wisdom. The sum is
+//! points away), scaled by its activation chance with raw wit. The sum is
 //! then multiplied by mood and aptitude coefficients:
 //!
 //! - **Speed**: mood and distance aptitude.
@@ -45,8 +45,8 @@ use crate::uma::motivation_multiplier;
 
 /// Popularity points a skill adds to each stat.
 ///
-/// Guts and wisdom points don't affect the judges (they use base guts and
-/// wisdom), but they are tracked because they take part of a skill's points.
+/// Guts and wit points don't affect the judges (they use base guts and wit),
+/// but they are tracked because they take part of a skill's points.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct SkillPopularity {
     speed: f64,
@@ -172,8 +172,8 @@ fn judge_impact(score: f64, mark: PopularityMark, high: bool) -> f64 {
 /// Calculate the popularity points added to a runner's stats by its skills.
 ///
 /// Skills that don't pass the popularity guards for this race add no points.
-/// The points of each skill are weighted by its activation chance with raw
-/// wisdom, regardless of whether the skill passed its wisdom check.
+/// The points of each skill are weighted by its activation chance with raw wit,
+/// regardless of whether the skill passed its wit check.
 pub(crate) fn skill_bonus<'a>(
     skills: impl IntoIterator<Item = &'a Skill>,
     runner: &UnreadyRunner,
@@ -276,10 +276,10 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
         // Left Judge: AdjustedSpeed * φ(RawGuts)^0.5.
         left_values.push(runner.adjusted_speed * guts_phi[i].powf(0.5));
 
-        // Center Judge: AdjustedStamina * φ(RawGuts)^0.8 * φ(RawWiz)^0.6.
+        // Center Judge: AdjustedStamina * φ(RawGuts)^0.8 * φ(RawWit)^0.6.
         center_values.push(runner.adjusted_stamina * guts_phi[i].powf(0.8) * wiz_phi[i].powf(0.6));
 
-        // Right Judge: AdjustedPower * φ(RawWiz)^0.5.
+        // Right Judge: AdjustedPower * φ(RawWit)^0.5.
         right_values.push(runner.adjusted_power * wiz_phi[i].powf(0.5));
     }
 

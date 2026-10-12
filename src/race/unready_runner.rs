@@ -106,15 +106,15 @@ pub struct UnreadyRunner {
     // === Skills ===
     /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
-    /// Skills that passed the wisdom check. Out-of-gate skills among them are
+    /// Skills that passed the wit check. Out-of-gate skills among them are
     /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
     pub skills: Vec<Skill>,
-    /// Skills that failed the wisdom check. They can't activate, but they still
+    /// Skills that failed the wit check. They can't activate, but they still
     /// count towards the runner's skills (e.g. for popularity or skill count
     /// scaling).
     pub failed_skills: Vec<Skill>,
     /// Popularity points added to stats by all skills, including those that
-    /// failed the wisdom check.
+    /// failed the wit check.
     pub(crate) popularity_bonus: SkillPopularity,
     /// Indices of golden skills in `skills` for activation by skills that activate
     /// golden skills.
@@ -392,7 +392,7 @@ impl UnreadyRunner {
 
         // Set starting speed (done in the constructor).
         // Determine rush chance, as a percentage. The game rolls integer
-        // percentages, so it's rounded up. Very low wisdom and rush chance effects
+        // percentages, so it's rounded up. Very low wit and rush chance effects
         // can push it out of range.
         let rush_chance = ((6.5 / (0.1 * self.base.wiz as f64 + 1.0).log10()).powf(2.0)
             + self.rush_chance_modifier)

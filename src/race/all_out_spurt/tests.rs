@@ -8,7 +8,7 @@ use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, 
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 
-/// Same as skill 204222, but without wisdom check so it is always available.
+/// Same as skill 204222, but without wit check so it is always available.
 fn all_out_spurt_skill() -> Skill {
     let alternative = SkillAlternative {
         base_duration: 2.0,

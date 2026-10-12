@@ -404,7 +404,7 @@ pub struct Runner {
     pub section_speed_modifier: f64,
     /// List of skills available for activation.
     pub available_skills: Vec<Skill>,
-    /// List of skills that failed the wisdom check, so they can't activate.
+    /// List of skills that failed the wit check, so they can't activate.
     pub failed_skills: Vec<Skill>,
     // Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
@@ -570,8 +570,7 @@ impl Runner {
         self.adjusted.style.base_style()
     }
 
-    /// Number of skills the runner has, including those that failed the wisdom
-    /// check.
+    /// Number of skills the runner has, including those that failed the wit check.
     pub fn skill_count(&self) -> usize {
         self.available_skills.len() + self.failed_skills.len()
     }
@@ -1053,7 +1052,7 @@ impl Runner {
                 }
 
                 if distance_behind > range.end {
-                    // Catch up to a certain distance (if wiz allows).
+                    // Catch up to a certain distance (if wit allows).
                     let chance = 0.15 * (self.adjusted.wiz as f64 * 0.1).log10();
                     let pass_roll = self.rng.borrow_mut().random_bool(chance);
                     if !pass_roll {
@@ -2092,7 +2091,7 @@ impl Runner {
                             self.stop_slope_acceleration();
                         }
                     } else {
-                        // Wisdom * 0.04% chance to start each second.
+                        // Wit * 0.04% chance to start each second.
                         let chance = self.adjusted.wiz as f64 * 0.0004;
                         if rng.random_bool(chance) {
                             self.start_downhill_acceleration(slopes[idx].slope);
@@ -2555,7 +2554,7 @@ impl Runner {
             OvertakeExtension::default()
         };
 
-        // Wiz Limit Break bonus, fixed at activation time (5th Anniv. onward).
+        // Wit limit break bonus, fixed at activation time (5th Anniv. onward).
         let wiz_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
             && self.available_skills[skill_index].is_wiz_limit_break_eligible()
         {
@@ -2833,7 +2832,7 @@ impl Runner {
         // Timed effects (tracked in active_timed_effects).
         if effect_type.is_timed_effect() {
             let expires_at = state.elapsed_time + scaled_duration;
-            // Apply Wiz Limit Break bonus to target and current speed effects.
+            // Apply wit limit break bonus to target and current speed effects.
             let bonus = match effect_type {
                 SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
                     wiz_bonus
@@ -2918,8 +2917,8 @@ impl Runner {
     /// Activate up to `count` unique skills, bypassing their conditions and
     /// cooldowns.
     ///
-    /// Each activation is a new instance of the skill: its values (duration, Wiz
-    /// Limit Break bonus...) are calculated anew, and its effects stack with any
+    /// Each activation is a new instance of the skill: its values (duration, wit
+    /// limit break bonus...) are calculated anew, and its effects stack with any
     /// still active from a previous activation. The (first) alternative that
     /// activated before is used, or the first one if the skill hasn't activated
     /// yet.

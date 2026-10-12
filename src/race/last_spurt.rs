@@ -122,7 +122,7 @@ pub fn hp_required_to_finish(runner: &Runner, state: &RaceState) -> f64 {
 /// For each candidate speed, the distance that can be covered with the
 /// remaining HP is estimated, and from there, the total time to finish the
 /// race. A candidate is picked based on a probability influenced by the
-/// runner's wisdom stat. A higher wisdom increases the chance of picking a
+/// runner's wit stat. A higher wit increases the chance of picking a
 /// higher speed.
 pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt {
     let course = &state.course;

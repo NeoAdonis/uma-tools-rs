@@ -26,9 +26,9 @@ pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64
     }
 }
 
-/// Wiz multiplier for the Wiz Limit Break buff (5th Anniversary onward).
+/// Wit multiplier for the wit limit break buff (5th Anniversary onward).
 ///
-/// Zero at 1200 wiz or less; it then grows in brackets up to a maximum of 1.12.
+/// Zero at 1200 wit or less; it then grows in brackets up to a maximum of 1.12.
 pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
     let brackets = |from: u16, step: f64| ((wiz - from) as f64 / step).ceil();
     match wiz {
@@ -40,7 +40,7 @@ pub fn wiz_limit_break_multiplier(wiz: u16) -> f64 {
     }
 }
 
-/// Phase strategy coefficient for the Wiz Limit Break buff (5th Anniv. onward).
+/// Phase strategy coefficient for the wit limit break buff (5th Anniv. onward).
 pub fn wiz_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         (Style::Front | Style::Runaway, Phase::Early) => 0.26,
@@ -184,7 +184,7 @@ pub fn base_target_speed(
     }
 }
 
-/// Roll section speed modifier range randomly based on wiz stat.
+/// Roll section speed modifier range randomly based on wit stat.
 pub fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng: &mut R,
     wiz_stat: u16,
@@ -219,7 +219,7 @@ pub fn track_power_modifier(track: Track, track_condition: TrackCondition) -> u1
 
 /// Strategy (style) proficiency multiplier based on style aptitude.
 ///
-/// Applied to the wiz stat and to the spot struggle duration.
+/// Applied to the wit stat and to the spot struggle duration.
 pub fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
     match style_aptitude {
         Aptitude::S => 1.1,
@@ -254,7 +254,7 @@ pub fn calculate_adjusted_power(
     base_power.saturating_sub(modifier).max(1)
 }
 
-/// Calculate adjusted wiz after applying style aptitude modifier.
+/// Calculate adjusted wit after applying style aptitude modifier.
 pub fn calculate_adjusted_wiz(base_wiz: u16, style_aptitude: Aptitude) -> u16 {
     let aptitude_mod = strategy_proficiency_multiplier(style_aptitude);
     ((base_wiz as f64 * aptitude_mod) as u16).max(1)
