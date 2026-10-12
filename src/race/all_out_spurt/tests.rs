@@ -9,12 +9,12 @@ use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 
 /// Same as skill 204222, but without wisdom check so it is always available.
-fn full_throttle_skill() -> Skill {
+fn all_out_spurt_skill() -> Skill {
     let alternative = SkillAlternative {
         base_duration: 2.0,
         ..alternative(
             "run_at_full_speed_random==1&distance_type==3",
-            SkillType::AccelerationFullThrottle,
+            SkillType::AccelerationAllOutSpurt,
             0.2,
         )
     };
@@ -75,15 +75,15 @@ fn test_base_acceleration() {
 fn test_activates_at_last_spurt_speed() {
     let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     assert_eq!(solver.runners[0].adjusted.speed, 2220);
-    assert!(solver.runners[0].full_throttle_base > 0.0);
+    assert!(solver.runners[0].all_out_spurt_base > 0.0);
 
     enter_last_spurt(&mut solver, 19.9);
-    assert_eq!(solver.runners[0].full_throttle, FullThrottle::Pending);
+    assert_eq!(solver.runners[0].all_out_spurt, AllOutSpurt::Pending);
 
     enter_last_spurt(&mut solver, 20.0);
     assert_eq!(
-        solver.runners[0].full_throttle,
-        FullThrottle::Active { speed_bonus: 0.0 }
+        solver.runners[0].all_out_spurt,
+        AllOutSpurt::Active { speed_bonus: 0.0 }
     );
 }
 
@@ -95,9 +95,9 @@ fn test_ineligible_runner_never_activates() {
         (2500, GameVersion::MechaUmaUpdate),
     ] {
         let mut solver = solver(speed, behavior, vec![], 42);
-        assert_eq!(solver.runners[0].full_throttle_base, 0.0);
+        assert_eq!(solver.runners[0].all_out_spurt_base, 0.0);
         enter_last_spurt(&mut solver, 20.0);
-        assert_eq!(solver.runners[0].full_throttle, FullThrottle::Pending);
+        assert_eq!(solver.runners[0].all_out_spurt, AllOutSpurt::Pending);
     }
 }
 
@@ -108,11 +108,11 @@ fn test_speed_bonus_increases_target_speed() {
     let target_before = solver.runners[0].target_speed;
 
     let runner = &mut solver.runners[0];
-    runner.skill_modifiers.full_throttle_acceleration = 0.4;
+    runner.skill_modifiers.all_out_spurt_acceleration = 0.4;
     runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
 
-    let expected = (runner.full_throttle_base + 0.04) * DELTA_TIME;
-    assert_close!(runner.full_throttle.speed_bonus(), expected);
+    let expected = (runner.all_out_spurt_base + 0.04) * DELTA_TIME;
+    assert_close!(runner.all_out_spurt.speed_bonus(), expected);
 
     runner.update_target_speed(&solver.state);
     assert_close!(runner.target_speed - target_before, expected);
@@ -128,13 +128,13 @@ fn test_hp_out_drops_speed_to_minimum() {
     runner.hp.current = 0.001;
     runner.update_hp(DELTA_TIME, &solver.state);
     assert_eq!(runner.speed, runner.min_speed);
-    assert_eq!(runner.full_throttle, FullThrottle::Ended);
+    assert_eq!(runner.all_out_spurt, AllOutSpurt::Ended);
 
     // Can't be activated again, even if HP is recovered.
     runner.hp.recover(100.0);
     runner.speed = 20.0;
     runner.update_target_speed(&solver.state);
-    assert_eq!(runner.full_throttle, FullThrottle::Ended);
+    assert_eq!(runner.all_out_spurt, AllOutSpurt::Ended);
 }
 
 #[test]
@@ -150,12 +150,12 @@ fn test_speed_is_capped() {
 
 #[test]
 fn test_random_trigger_scheduled_on_activation() {
-    let mut solver = solver(2500, GameVersion::LATEST, vec![full_throttle_skill()], 42);
+    let mut solver = solver(2500, GameVersion::LATEST, vec![all_out_spurt_skill()], 42);
     {
         let scheduler = &solver.runners[0].trigger_scheduler;
-        assert_eq!(scheduler.full_throttle_triggers, vec![0]);
+        assert_eq!(scheduler.all_out_spurt_triggers, vec![0]);
         let logic = &scheduler.skill_logics[0];
-        assert!(matches!(logic.trigger, TriggerCondition::FullThrottleStart));
+        assert!(matches!(logic.trigger, TriggerCondition::AllOutSpurtStart));
         // `distance_type==3` is resolved when the runner is created.
         assert!(logic.guards.is_empty());
         assert!(scheduler.position_windows.is_empty());
@@ -164,7 +164,7 @@ fn test_random_trigger_scheduled_on_activation() {
     enter_last_spurt(&mut solver, 20.0);
 
     let scheduler = &solver.runners[0].trigger_scheduler;
-    assert!(scheduler.full_throttle_triggers.is_empty());
+    assert!(scheduler.all_out_spurt_triggers.is_empty());
     // A single 10m segment between the current position and the goal.
     let windows: Vec<_> = scheduler.position_windows.iter().collect();
     assert_eq!(windows.len(), 1);
@@ -177,10 +177,10 @@ fn test_random_trigger_scheduled_on_activation() {
 fn test_full_race() {
     let mut activated_any = false;
     for seed in 0..5 {
-        let mut with = solver(2500, GameVersion::LATEST, vec![full_throttle_skill()], seed);
+        let mut with = solver(2500, GameVersion::LATEST, vec![all_out_spurt_skill()], seed);
         with.run();
         let runner = &with.runners[0];
-        assert_ne!(runner.full_throttle, FullThrottle::Pending, "seed {seed}");
+        assert_ne!(runner.all_out_spurt, AllOutSpurt::Pending, "seed {seed}");
 
         // The skill activates after the last spurt begins.
         let target_distance = runner.last_spurt.as_ref().unwrap().target_distance;
@@ -189,7 +189,7 @@ fn test_full_race() {
         }
         activated_any |= !runner.activated_skills.is_empty();
 
-        // Without Full-Throttle Sprint (and skills), the runner is slower.
+        // Without the all-out spurt (and skills), the runner is slower.
         // Nothing else differs between these game behaviors for this runner.
         let mut with = solver(2500, GameVersion::LATEST, vec![], seed);
         let mut without = solver(2500, GameVersion::MechaUmaUpdate, vec![], seed);

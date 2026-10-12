@@ -1,21 +1,23 @@
-//! Full-Throttle Sprint (全開スパート) formulas (5th Anniversary onward).
+//! All-out spurt (全開スパート) formulas (5th Anniversary onward).
 //!
 //! A runner with more than 2000 speed stat keeps gaining target speed after
 //! reaching her last spurt speed, until she finishes the race or runs out of
 //! HP.
+//!
+//! Also known as "zenkai spurt" or "full-throttle sprint".
 
 use crate::configuration::GameVersion;
 
 /// Adjusted speed stat that must be exceeded to be eligible.
 pub const SPEED_THRESHOLD: u16 = 2000;
-/// Fraction of the listed value of Full-Throttle acceleration skills (type 48)
+/// Fraction of the listed value of all-out spurt acceleration skills (type 48)
 /// that is actually applied.
 // ? Observed to be close to 10%; the reason is unknown.
 pub const SKILL_SCALE: f64 = 0.1;
 
-/// Full-Throttle Sprint state.
+/// All-out spurt state.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum FullThrottle {
+pub enum AllOutSpurt {
     /// Not activated yet (or the runner is not eligible).
     Pending,
     /// Active. `speed_bonus` is the target speed gained so far in m/s.
@@ -24,22 +26,22 @@ pub enum FullThrottle {
     Ended,
 }
 
-impl FullThrottle {
-    /// Check if the Full-Throttle Sprint is currently active.
+impl AllOutSpurt {
+    /// Check if the all-out spurt is currently active.
     pub fn is_active(&self) -> bool {
-        matches!(self, FullThrottle::Active { .. })
+        matches!(self, AllOutSpurt::Active { .. })
     }
 
     /// Target speed gained so far in m/s (zero if not active).
     pub fn speed_bonus(&self) -> f64 {
         match self {
-            FullThrottle::Active { speed_bonus } => *speed_bonus,
+            AllOutSpurt::Active { speed_bonus } => *speed_bonus,
             _ => 0.0,
         }
     }
 }
 
-/// Full-Throttle Sprint acceleration in m/s² before skill modifiers.
+/// All-out spurt acceleration in m/s² before skill modifiers.
 ///
 /// Zero if the runner is not eligible, i.e. adjusted speed stat of 2000 or
 /// below.

@@ -1,8 +1,8 @@
 use super::*;
 use crate::course::geometry::*;
 use crate::course::{CourseData, Phase as CoursePhase};
+use crate::race::all_out_spurt::AllOutSpurt;
 use crate::race::duel::Duel;
-use crate::race::full_throttle::FullThrottle;
 use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
 use crate::race::parameters::*;
 use crate::race::runner::{Runner, RushState};
@@ -1042,19 +1042,19 @@ fn test_variable_value_dispatch() {
 }
 
 #[test]
-fn test_run_at_full_speed_random_follows_full_throttle() {
+fn test_run_at_full_speed_random_follows_all_out_spurt() {
     let mut solver = create_test_race_solver(vec![]);
     let var = VarType::RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom);
 
     let cases = [
-        (FullThrottle::Pending, 0),
-        (FullThrottle::Active { speed_bonus: 0.5 }, 1),
-        (FullThrottle::Ended, 0),
+        (AllOutSpurt::Pending, 0),
+        (AllOutSpurt::Active { speed_bonus: 0.5 }, 1),
+        (AllOutSpurt::Ended, 0),
     ];
-    for (full_throttle, expected) in cases {
-        solver.runners[0].full_throttle = full_throttle;
+    for (all_out_spurt, expected) in cases {
+        solver.runners[0].all_out_spurt = all_out_spurt;
         let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
-        assert_eq!(actual, expected, "{full_throttle:?}");
+        assert_eq!(actual, expected, "{all_out_spurt:?}");
     }
 }
 

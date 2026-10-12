@@ -123,10 +123,10 @@ pub enum TriggerCondition {
     /// Used for out-of-gate skills, whose condition is evaluated before the race.
     RaceStart,
 
-    /// Random point after Full-Throttle Sprint starts. The point is rolled when the
+    /// Random point after the all-out spurt starts. The point is rolled when the
     /// sprint starts and scheduled as a position trigger.
     /// Used for `run_at_full_speed_random==1` conditions.
-    FullThrottleStart,
+    AllOutSpurtStart,
 
     /// Checked when any skill activates.
     /// Used for `is_activate_any_skill==1` conditions.
@@ -313,7 +313,7 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
 
             // Random segments: checked while inside the rolled segments.
             RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-                event = Some(TriggerCondition::FullThrottleStart);
+                event = Some(TriggerCondition::AllOutSpurtStart);
             }
             RandomSpatial(_) | RandomPhase(_) => {
                 // No activation points rolled: the branch can't be triggered.

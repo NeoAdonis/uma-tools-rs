@@ -291,9 +291,9 @@ pub fn get_variable_value(
             "BUG: Lineup variable {:?} should be handled in evaluate()",
             var
         ),
-        // Normally a trigger; evaluates to whether Full-Throttle Sprint is active.
+        // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-            runner.full_throttle.is_active() as i32
+            runner.all_out_spurt.is_active() as i32
         }
         Random(_) | RandomSpatial(_) | RandomPhase(_) => {
             panic!(

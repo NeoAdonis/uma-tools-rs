@@ -133,7 +133,7 @@ pub enum RandomSpatialVar {
     DownSlopeRandom,
     IsFinalcornerRandom,
     LastStraightRandom,
-    /// Random point after Full-Throttle Sprint starts. Rolled during the race.
+    /// Random point after the all-out spurt starts. Rolled during the race.
     RunAtFullSpeedRandom,
     StraightRandom,
     UpSlopeRandom,

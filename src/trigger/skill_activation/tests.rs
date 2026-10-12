@@ -118,7 +118,7 @@ fn test_events_are_the_trigger() {
             "phase_random==1&order<=3",
             "Segments { ranges: [(1000.0, 1010.0)] }",
         ),
-        ("run_at_full_speed_random==1", "FullThrottleStart"),
+        ("run_at_full_speed_random==1", "AllOutSpurtStart"),
         ("is_last_straight_onetime==1", "LastStraightEntry"),
         ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
         ("is_activate_heal_skill==1&phase>=2", "HealSkillActivation"),

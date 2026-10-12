@@ -256,7 +256,7 @@ fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut T
 
         LastStraightEntry => scheduler.last_straight_triggers.push(logic_idx),
         RaceStart => scheduler.race_start_triggers.push(logic_idx),
-        FullThrottleStart => scheduler.full_throttle_triggers.push(logic_idx),
+        AllOutSpurtStart => scheduler.all_out_spurt_triggers.push(logic_idx),
         AnySkillActivation => scheduler.any_activation_triggers.push(logic_idx),
         BuffSkillActivation => scheduler.buff_activation_triggers.push(logic_idx),
         HealSkillActivation => scheduler.heal_activation_triggers.push(logic_idx),

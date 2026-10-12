@@ -7,10 +7,10 @@ use rand::RngExt;
 use crate::condition::parser::Condition;
 use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
+use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt;
 use crate::race::duel::Duel;
-use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
     calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wiz,
@@ -517,13 +517,13 @@ impl UnreadyRunner {
                 game_version,
             ),
             stamina_limit_break: 0.0,
-            full_throttle_base: full_throttle::base_acceleration(
+            all_out_spurt_base: all_out_spurt::base_acceleration(
                 self.adjusted.speed,
                 self.adjusted.power,
                 course.distance,
                 game_version,
             ),
-            full_throttle: FullThrottle::Pending,
+            all_out_spurt: AllOutSpurt::Pending,
             charge_up: ChargeUp::new(
                 charge_up::charge_power(self.base.power, self.raw.power, self.power_skill_bonus),
                 game_version,

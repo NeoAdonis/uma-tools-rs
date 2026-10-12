@@ -219,7 +219,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
 
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
             // "run_at_full_speed_random==1".
-            // Rolled when Full-Throttle starts, since that can't be known in advance.
+            // Rolled when the all-out spurt starts, since that can't be known in advance.
             Some(vec![])
         }
 

@@ -30,8 +30,8 @@ pub struct TriggerScheduler {
     pub race_start_triggers: Vec<usize>,
 
     // Deferred random triggers - scheduled as distance triggers once
-    // Full-Throttle Sprint starts.
-    pub full_throttle_triggers: Vec<usize>,
+    // the all-out spurt starts.
+    pub all_out_spurt_triggers: Vec<usize>,
 
     // Activation-dependent triggers - checked when skills activate.
     pub any_activation_triggers: Vec<usize>,
@@ -60,7 +60,7 @@ impl TriggerScheduler {
         for list in [
             &mut self.last_straight_triggers,
             &mut self.race_start_triggers,
-            &mut self.full_throttle_triggers,
+            &mut self.all_out_spurt_triggers,
             &mut self.any_activation_triggers,
             &mut self.buff_activation_triggers,
             &mut self.heal_activation_triggers,
@@ -100,7 +100,7 @@ pub struct WindowQueue {
 
 impl WindowQueue {
     /// Add a window, at build time or during the race (e.g. random segments rolled
-    /// once the Full-Throttle Sprint starts).
+    /// once the all-out spurt starts).
     pub fn push(&mut self, trigger: WindowTrigger) {
         let idx = self
             .pending
@@ -205,7 +205,7 @@ mod tests {
             scheduler.hp_windows.push(window());
             scheduler.last_straight_triggers.push(logic_idx);
             scheduler.race_start_triggers.push(logic_idx);
-            scheduler.full_throttle_triggers.push(logic_idx);
+            scheduler.all_out_spurt_triggers.push(logic_idx);
             scheduler.any_activation_triggers.push(logic_idx);
             scheduler.buff_activation_triggers.push(logic_idx);
             scheduler.heal_activation_triggers.push(logic_idx);
@@ -235,8 +235,8 @@ mod tests {
             ),
             ("race_start_triggers", scheduler.race_start_triggers.clone()),
             (
-                "full_throttle_triggers",
-                scheduler.full_throttle_triggers.clone(),
+                "all_out_spurt_triggers",
+                scheduler.all_out_spurt_triggers.clone(),
             ),
             (
                 "any_activation_triggers",

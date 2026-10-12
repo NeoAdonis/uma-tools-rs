@@ -1,7 +1,7 @@
+pub mod all_out_spurt;
 pub mod charge_up;
 pub mod compete_before_spurt;
 pub mod duel;
-pub mod full_throttle;
 pub mod hp;
 pub mod last_spurt;
 pub mod margin;

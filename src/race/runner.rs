@@ -9,10 +9,10 @@ use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::geometry::{Corner, Slope, Straight};
 use crate::course::*;
+use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
 use crate::race::compete_before_spurt;
 use crate::race::duel::Duel;
-use crate::race::full_throttle::{self, FullThrottle};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
@@ -42,8 +42,8 @@ pub struct SkillModifiers {
     pub current_speed: f64,
     /// Modifies acceleration. Positive values increase it.
     pub acceleration: f64,
-    /// Modifies Full-Throttle Sprint acceleration (listed value, before scaling).
-    pub full_throttle_acceleration: f64,
+    /// Modifies all-out spurt acceleration (listed value, before scaling).
+    pub all_out_spurt_acceleration: f64,
     /// Modifies lane movement speed. Positive values increase lane change speed.
     pub lane_speed: f64,
     /// Modifies visible distance. Positive values increase it.
@@ -60,7 +60,7 @@ impl Default for SkillModifiers {
             target_speed: 0.0,
             current_speed: 0.0,
             acceleration: 0.0,
-            full_throttle_acceleration: 0.0,
+            all_out_spurt_acceleration: 0.0,
             lane_speed: 0.0,
             visible_distance: 0.0,
             target_lane: None,
@@ -515,15 +515,15 @@ pub struct Runner {
     /// It's set once the runner reaches its last spurt speed and lasts until the
     /// end of the race.
     pub stamina_limit_break: f64,
-    /// Full-Throttle Sprint (全開スパート) acceleration in m/s² before skill modifiers.
+    /// All-out spurt (全開スパート) acceleration in m/s² before skill modifiers.
     ///
     /// Calculated before race begins; zero if the runner is not eligible.
-    pub full_throttle_base: f64,
-    /// Full-Throttle Sprint (全開スパート) state.
+    pub all_out_spurt_base: f64,
+    /// All-out spurt (全開スパート) state.
     ///
     /// It is activated once the runner reaches its last spurt speed, and keeps
     /// increasing target speed until the end of the race.
-    pub full_throttle: FullThrottle,
+    pub all_out_spurt: AllOutSpurt,
     /// Charge Up (足を貯める) state.
     ///
     /// It records the power conserved during the first 10 sections and its release
@@ -714,11 +714,11 @@ impl Runner {
         // ? Is overshooting allowed? Cap it for now to avoid spikes.
         self.speed = self.speed.min(MAX_TARGET_SPEED);
 
-        // Full-Throttle Sprint keeps increasing target speed.
+        // The all-out spurt keeps increasing target speed.
         // It ignores the usual acceleration formula and acceleration skills.
-        if let FullThrottle::Active { speed_bonus } = &mut self.full_throttle {
-            let acceleration = self.full_throttle_base
-                + full_throttle::SKILL_SCALE * self.skill_modifiers.full_throttle_acceleration;
+        if let AllOutSpurt::Active { speed_bonus } = &mut self.all_out_spurt {
+            let acceleration = self.all_out_spurt_base
+                + all_out_spurt::SKILL_SCALE * self.skill_modifiers.all_out_spurt_acceleration;
             *speed_bonus += acceleration * delta_time;
         }
     }
@@ -776,14 +776,14 @@ impl Runner {
                 * stamina_limit_break_random_factor(&mut *self.rng.borrow_mut());
         }
 
-        // Full-Throttle is activated upon reaching last spurt speed (from 5th Anniv.).
-        if self.full_throttle == FullThrottle::Pending
-            && self.full_throttle_base > 0.0
+        // The all-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
+        if self.all_out_spurt == AllOutSpurt::Pending
+            && self.all_out_spurt_base > 0.0
             && !self.hp.is_empty()
             && self.has_reached_last_spurt_speed()
         {
-            self.full_throttle = FullThrottle::Active { speed_bonus: 0.0 };
-            self.schedule_full_throttle_triggers(state);
+            self.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.0 };
+            self.schedule_all_out_spurt_triggers(state);
         }
 
         // Lane state is updated after target speed within a frame, so `speed` still
@@ -828,11 +828,11 @@ impl Runner {
             + secure_lead_modifier
             + compete_modifier
             + self.stamina_limit_break
-            + self.full_throttle.speed_bonus())
+            + self.all_out_spurt.speed_bonus())
         .min(MAX_TARGET_SPEED)
     }
 
-    /// Schedule skills triggered in a random segment after the Full-Throttle Sprint
+    /// Schedule skills triggered in a random segment after the all-out spurt
     /// starts (`run_at_full_speed_random`). The segment is picked between the
     /// current position and the goal, and checked like any other position window.
     ///
@@ -842,10 +842,10 @@ impl Runner {
     /// variable, only one branch is left for evaluation; other branches would have
     /// contained a non-overlapping static guard that would have been false and
     /// therefore were removed when the runner was created.
-    fn schedule_full_throttle_triggers(&mut self, state: &RaceState) {
+    fn schedule_all_out_spurt_triggers(&mut self, state: &RaceState) {
         let course_distance = state.course.distance as f64;
         let mut rng = self.rng.borrow_mut();
-        for logic_idx in self.trigger_scheduler.full_throttle_triggers.drain(..) {
+        for logic_idx in self.trigger_scheduler.all_out_spurt_triggers.drain(..) {
             let start = random_segment(self.position, course_distance, &mut *rng);
             self.trigger_scheduler.position_windows.push(WindowTrigger {
                 logic_idx,
@@ -1308,11 +1308,11 @@ impl Runner {
         ) * delta_time;
         if self.hp.is_empty() {
             self.hp.has_emptied = true;
-            // Running out of HP during Full-Throttle Sprint drops speed to minimum
+            // Running out of HP during the all-out spurt drops speed to minimum
             // immediately instead of decelerating (confirmed game bug).
-            if self.full_throttle.is_active() {
+            if self.all_out_spurt.is_active() {
                 self.speed = self.min_speed;
-                self.full_throttle = FullThrottle::Ended;
+                self.all_out_spurt = AllOutSpurt::Ended;
             }
         }
     }
@@ -3000,8 +3000,8 @@ impl Runner {
                 Acceleration => {
                     mods.acceleration += timed.current_value();
                 }
-                AccelerationFullThrottle => {
-                    mods.full_throttle_acceleration += timed.current_value();
+                AccelerationAllOutSpurt => {
+                    mods.all_out_spurt_acceleration += timed.current_value();
                 }
                 TargetSpeed => {
                     mods.target_speed += timed.current_value();

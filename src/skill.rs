@@ -64,8 +64,8 @@ pub enum SkillType {
     ActivateSympathy = 41,
     /// Extend evolved skill duration.
     ExtendEvolvedDuration = 42,
-    /// Modify acceleration during Full-throttle spurt (5th Anniversary onward).
-    AccelerationFullThrottle = 48,
+    /// Modify acceleration during the all-out spurt (5th Anniversary onward).
+    AccelerationAllOutSpurt = 48,
     /// (Re-)activate a unique skill.
     ActivateUnique = 49,
 }
@@ -118,7 +118,7 @@ impl SkillType {
         matches!(
             self,
             Acceleration
-                | AccelerationFullThrottle
+                | AccelerationAllOutSpurt
                 | TargetSpeed
                 | CurrentSpeed
                 | CurrentSpeedWithNaturalDeceleration

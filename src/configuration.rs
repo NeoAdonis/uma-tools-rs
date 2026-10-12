@@ -45,7 +45,7 @@ pub enum GameVersion {
     MechaUmaUpdate,
     /// After the 5th anniversary update in Japan.
     ///
-    /// This update introduce full-throttle sprint and wiz limit break mechanics,
+    /// This update introduced the all-out spurt and wiz limit break mechanics,
     /// increased stat caps and added a buff for front-runners when securing the
     /// lead.
     FifthAnniversary,
