@@ -1,6 +1,6 @@
 //! Race parameters that define the conditions of a race.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error};
 
 /// Track condition (a.k.a. ground condition) enumeration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -92,8 +92,26 @@ pub struct RaceParameters {
     pub season: Season,
     pub time: Time,
     pub grade: Grade,
-    /// Number of gates (participants) in the race.
+    /// Number of gates (participants) in the race, from 1 to [`MAX_GATES`].
+    #[serde(deserialize_with = "deserialize_gates")]
     pub gates: u8,
+}
+
+/// Maximum number of gates (participants) in a race.
+///
+/// Popularity relies on it: with 26 or more runners, φ can reach zero or below,
+/// which makes judge impacts infinite or NaN.
+pub const MAX_GATES: u8 = 18;
+
+fn deserialize_gates<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u8, D::Error> {
+    let gates = u8::deserialize(deserializer)?;
+    if (1..=MAX_GATES).contains(&gates) {
+        Ok(gates)
+    } else {
+        Err(D::Error::custom(format!(
+            "invalid gates {gates}: expected 1 to {MAX_GATES}"
+        )))
+    }
 }
 
 /// On-disk representation of `parameters.json`.
@@ -241,6 +259,10 @@ mod tests {
             without_course_id.to_string(),
             // Course ID as a number.
             valid.replace(r#""courseId": "10101""#, r#""courseId": 10101"#),
+            // No gates.
+            valid.replace(r#""gates": 12"#, r#""gates": 0"#),
+            // Too many gates.
+            valid.replace(r#""gates": 12"#, r#""gates": 19"#),
             // Too many gates for a `u8`.
             valid.replace(r#""gates": 12"#, r#""gates": 256"#),
             // Malformed.
