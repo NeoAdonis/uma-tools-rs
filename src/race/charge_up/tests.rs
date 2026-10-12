@@ -31,13 +31,7 @@ fn solver(
 
 /// Solver with an eligible late surger (raw power 1600, normal mood).
 fn eligible_solver() -> RaceSolver<Runner> {
-    solver(
-        1600,
-        Style::Late,
-        Mood::Normal,
-        GameVersion::LATEST,
-        42,
-    )
+    solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, 42)
 }
 
 /// Run `update_charge_up` for `seconds`, starting at `start`. Returns end time.
@@ -81,13 +75,7 @@ fn test_charge_power() {
 
 #[test]
 fn test_mood_affects_base_part_only() {
-    let solver = solver(
-        1600,
-        Style::Late,
-        Mood::Great,
-        GameVersion::LATEST,
-        42,
-    );
+    let solver = solver(1600, Style::Late, Mood::Great, GameVersion::LATEST, 42);
     // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without mood multiplier.
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
     assert_close!(charge_up.power, 1656.0);
@@ -189,13 +177,7 @@ fn test_conservation_rate() {
     conserve_for(runner, 1.0, 1.0);
     assert_close!(conserved(runner), 6.7, tolerance = 1e-6);
 
-    let mut end_closer = solver(
-        1600,
-        Style::End,
-        Mood::Normal,
-        GameVersion::LATEST,
-        42,
-    );
+    let mut end_closer = solver(1600, Style::End, Mood::Normal, GameVersion::LATEST, 42);
     let runner = &mut end_closer.runners[0];
     conserve_for(runner, 0.0, 1.0);
     assert_close!(conserved(runner), 4.2 * 0.7, tolerance = 1e-6);
@@ -240,13 +222,7 @@ fn test_no_conservation_after_section_10() {
 
 #[test]
 fn test_spot_struggle_penalty() {
-    let mut solver = solver(
-        1600,
-        Style::Front,
-        Mood::Normal,
-        GameVersion::LATEST,
-        42,
-    );
+    let mut solver = solver(1600, Style::Front, Mood::Normal, GameVersion::LATEST, 42);
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
     runner.start_spot_struggle(10.0);
@@ -264,15 +240,7 @@ fn test_spot_struggle_penalty() {
 fn test_rush_penalty() {
     // Find a seed where the runner is bound to rush.
     let mut solver = (0..)
-        .map(|seed| {
-            solver(
-                1600,
-                Style::Late,
-                Mood::Normal,
-                GameVersion::LATEST,
-                seed,
-            )
-        })
+        .map(|seed| solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, seed))
         .find(|s| s.runners[0].rush_state.is_some())
         .unwrap();
     let rush_section = solver.runners[0].rush_state.as_ref().unwrap().section;
@@ -357,13 +325,7 @@ fn test_insufficient_release() {
 #[test]
 fn test_full_race() {
     for seed in 0..5 {
-        let mut solver = solver(
-            1600,
-            Style::Late,
-            Mood::Normal,
-            GameVersion::LATEST,
-            seed,
-        );
+        let mut solver = solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, seed);
         solver.run();
         let runner = &solver.runners[0];
         let charge_up = runner.charge_up.as_ref().unwrap();

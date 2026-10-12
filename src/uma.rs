@@ -269,11 +269,7 @@ mod tests {
             (Mood::Great, 1.04),
         ];
         for (mood, expected) in cases {
-            assert_close!(
-                mood_multiplier(mood),
-                expected,
-                "{mood:?}"
-            );
+            assert_close!(mood_multiplier(mood), expected, "{mood:?}");
         }
     }
 

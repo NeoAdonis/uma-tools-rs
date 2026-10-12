@@ -578,8 +578,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
         .map(|seed| {
             let state = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed)).state;
             let skills = vec![skill.clone()];
-            let mut runner =
-                UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
+            let mut runner = UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
             let speed = runner.adjusted.speed;
             runner.apply_out_of_gate_skills(&state);
             runner.adjusted.speed - speed
