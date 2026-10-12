@@ -107,7 +107,7 @@ pub struct Configuration {
     /// If `None`, a random seed is used.
     pub seed: Option<u64>,
     /// How skill wit checks are resolved before the race.
-    pub wisdom_checks: Roll,
+    pub wit_checks: Roll,
     /// How runners' rush checks are resolved before the race.
     pub rushing: Roll,
     /// Fan count for runners that don't define their own.
@@ -120,7 +120,7 @@ impl Default for Configuration {
             game_version: GameVersion::LATEST,
             language: Language::English,
             seed: None,
-            wisdom_checks: Roll::Random,
+            wit_checks: Roll::Random,
             rushing: Roll::Random,
             default_fan_count: 0,
         }
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_unknown_fields_are_rejected() {
-        assert!(Configuration::from_json(r#"{ "wisdomCheck": "Always" }"#).is_err());
+        assert!(Configuration::from_json(r#"{ "witCheck": "Always" }"#).is_err());
     }
 
     #[test]

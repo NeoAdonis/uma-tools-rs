@@ -294,7 +294,7 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
         .map(|i| {
             let alternative = alternative("distance_rate>=50", SkillType::TargetSpeed, 0.0001);
             let data = SkillData {
-                wisdom_check: true,
+                wit_check: true,
                 ..skill_data(vec![alternative])
             };
             Skill::new(i.to_string(), data)
@@ -308,16 +308,16 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
     solver.runners.remove(0)
 }
 
-fn config(wisdom_checks: Roll, rushing: Roll) -> Configuration {
+fn config(wit_checks: Roll, rushing: Roll) -> Configuration {
     Configuration {
-        wisdom_checks,
+        wit_checks,
         rushing,
         ..seeded_config(0)
     }
 }
 
 #[test]
-fn test_wisdom_checks_can_be_forced() {
+fn test_wit_checks_can_be_forced() {
     // With 100 wit, each skill has a 20% chance to pass the check.
     let runner = checked_runner(config(Roll::Always, Roll::Random), 20);
     assert_eq!(runner.available_skills.len(), 20);

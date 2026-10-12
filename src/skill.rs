@@ -258,15 +258,15 @@ pub enum ValueUsage {
     /// Scales with the number of skills the runner has.
     MultiplySkillNum = 2,
     /// Unity Cup skills; scales with the team's total speed in the scenario.
-    AoharuSpeed = 3,
+    UnityCupSpeed = 3,
     /// Unity Cup skills; scales with the team's total stamina in the scenario.
-    AoharuStamina = 4,
+    UnityCupStamina = 4,
     /// Unity Cup skills; scales with the team's total power in the scenario.
-    AoharuPower = 5,
+    UnityCupPower = 5,
     /// Unity Cup skills; scales with the team's total guts in the scenario.
-    AoharuGuts = 6,
-    /// Unity Cup skills; scales with the team's total wits in the scenario.
-    AoharuWisdom = 7,
+    UnityCupGuts = 6,
+    /// Unity Cup skills; scales with the team's total wit in the scenario.
+    UnityCupWit = 7,
     /// Random multiplier, first variant.
     ///
     /// Both variants currently have the same multipliers, but they are separate
@@ -552,7 +552,7 @@ pub struct SkillData {
     pub popularity: Option<Vec<SkillPopularity>>,
     /// Whether this skill requires a wit check to activate.
     #[serde_as(as = "BoolFromInt")]
-    pub wisdom_check: bool,
+    pub wit_check: bool,
 }
 
 impl Skill {
@@ -615,7 +615,7 @@ impl Skill {
     /// Skills that don't require a wit check always pass; otherwise the chance
     /// depends on the runner's base wit (minimum 20%).
     pub fn activation_chance(&self, base_wit: u16) -> f64 {
-        if !self.wisdom_check {
+        if !self.wit_check {
             return 1.0;
         }
         (1.0 - 90.0 / base_wit as f64).max(0.2)
@@ -677,24 +677,24 @@ mod tests {
     use super::*;
     use crate::test_utils::{self, assert_close, skill_data};
 
-    fn skill_with_wisdom_check(wisdom_check: bool) -> Skill {
+    fn skill_with_wit_check(wit_check: bool) -> Skill {
         let data = SkillData {
-            wisdom_check,
+            wit_check,
             ..skill_data(vec![])
         };
         Skill::new("test".to_string(), data)
     }
 
     #[test]
-    fn test_activation_chance_without_wisdom_check() {
-        let skill = skill_with_wisdom_check(false);
+    fn test_activation_chance_without_wit_check() {
+        let skill = skill_with_wit_check(false);
         assert_eq!(skill.activation_chance(1), 1.0);
         assert_eq!(skill.activation_chance(1200), 1.0);
     }
 
     #[test]
-    fn test_activation_chance_with_wisdom_check() {
-        let skill = skill_with_wisdom_check(true);
+    fn test_activation_chance_with_wit_check() {
+        let skill = skill_with_wit_check(true);
         assert_close!(skill.activation_chance(900), 0.9);
         // Low wit is clamped to the minimum chance.
         assert_eq!(skill.activation_chance(100), 0.2);
@@ -874,8 +874,8 @@ mod tests {
     fn test_value_usage_ids() {
         assert_eq!(value_usage(1).unwrap(), ValueUsage::Direct);
         assert_eq!(value_usage(2).unwrap(), ValueUsage::MultiplySkillNum);
-        assert_eq!(value_usage(3).unwrap(), ValueUsage::AoharuSpeed);
-        assert_eq!(value_usage(7).unwrap(), ValueUsage::AoharuWisdom);
+        assert_eq!(value_usage(3).unwrap(), ValueUsage::UnityCupSpeed);
+        assert_eq!(value_usage(7).unwrap(), ValueUsage::UnityCupWit);
         assert_eq!(value_usage(8).unwrap(), ValueUsage::MultiplyRandom1);
         assert_eq!(value_usage(9).unwrap(), ValueUsage::MultiplyRandom2);
         assert_eq!(value_usage(22).unwrap(), ValueUsage::MultiplySpeed1);

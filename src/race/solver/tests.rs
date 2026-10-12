@@ -2712,9 +2712,9 @@ fn test_skill_count_scaling() {
 }
 
 #[test]
-fn test_skill_count_includes_failed_wisdom_checks() {
+fn test_skill_count_includes_failed_wit_checks() {
     let config = Configuration {
-        wisdom_checks: Roll::Never,
+        wit_checks: Roll::Never,
         ..seeded_config(0)
     };
     let skills = (0..3)
@@ -2737,8 +2737,8 @@ fn test_skill_count_includes_failed_wisdom_checks() {
 #[test]
 fn test_scenario_values_assume_the_maximum() {
     let cases = [
-        (ValueUsage::AoharuSpeed, 1.2),
-        (ValueUsage::AoharuWisdom, 1.2),
+        (ValueUsage::UnityCupSpeed, 1.2),
+        (ValueUsage::UnityCupWit, 1.2),
         (ValueUsage::Climax, 1.2),
         (ValueUsage::MultiplyArcGlobalPotentialLevel, 1.2),
         (ValueUsage::UafWinCount, 1.2),

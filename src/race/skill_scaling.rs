@@ -5,10 +5,10 @@
 /// Multiplier for Unity Cup (アオハル杯) skills.
 ///
 /// It depends on the team's total of the stat the skill is tied to (e.g. Speed
-/// for [`ValueUsage::AoharuSpeed`](crate::skill::ValueUsage::AoharuSpeed)):
+/// for [`ValueUsage::UnityCupSpeed`](crate::skill::ValueUsage::UnityCupSpeed)):
 /// 0.8x below 1200, 0.9x below 1800, 1.0x below 2600, 1.1x below 3600, and 1.2x
 /// from 3600. The maximum is assumed for now.
-pub const AOHARU_MULTIPLIER: f64 = 1.2;
+pub const UNITY_CUP_MULTIPLIER: f64 = 1.2;
 
 /// Multiplier for Climax skills.
 ///

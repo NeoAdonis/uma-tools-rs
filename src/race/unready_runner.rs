@@ -156,7 +156,7 @@ impl UnreadyRunner {
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
         let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
-            state.config.wisdom_checks.resolve(
+            state.config.wit_checks.resolve(
                 &mut *rng.borrow_mut(),
                 skill.activation_chance(base_uma.wit),
             )

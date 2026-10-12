@@ -2755,8 +2755,8 @@ impl Runner {
             MultiplySkillNum => {
                 modifier * skill_scaling::skill_count_multiplier(self.skill_count())
             }
-            AoharuSpeed | AoharuStamina | AoharuPower | AoharuGuts | AoharuWisdom => {
-                modifier * skill_scaling::AOHARU_MULTIPLIER
+            UnityCupSpeed | UnityCupStamina | UnityCupPower | UnityCupGuts | UnityCupWit => {
+                modifier * skill_scaling::UNITY_CUP_MULTIPLIER
             }
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {

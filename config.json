@@ -2,7 +2,7 @@
     "gameVersion": "OnePointFiveAnniversary",
     "language": "English",
     "seed": 42,
-    "wisdomChecks": "Random",
+    "witChecks": "Random",
     "rushing": "Random",
     "defaultFanCount": 500000
 }

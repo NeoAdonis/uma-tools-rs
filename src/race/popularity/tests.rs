@@ -82,7 +82,7 @@ fn test_skill_popularity_reads_data() {
 #[test]
 fn test_skill_popularity_deserialization() {
     let parse = |popularity: &str| {
-        let json = format!(r#"{{"rarity": 1, "alternatives": [], {popularity} "wisdomCheck": 1}}"#);
+        let json = format!(r#"{{"rarity": 1, "alternatives": [], {popularity} "witCheck": 1}}"#);
         serde_json::from_str::<SkillData>(&json)
             .expect("Failed to parse skill data")
             .popularity
@@ -111,7 +111,7 @@ fn test_skill_popularity_deserialization() {
 }
 
 /// Build a skill with one alternative per condition, giving 100 speed points.
-fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
+fn popularity_skill(conditions: &[&str], wit_check: bool) -> Skill {
     use crate::skill::SkillPopularity as Entry;
 
     let alternatives = conditions
@@ -123,7 +123,7 @@ fn popularity_skill(conditions: &[&str], wisdom_check: bool) -> Skill {
             stat: Stat::Speed,
             value: 100,
         }]),
-        wisdom_check,
+        wit_check,
         ..skill_data(alternatives)
     };
     Skill::new("1".to_string(), data)

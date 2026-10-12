@@ -144,7 +144,7 @@ pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
         rarity: SkillRarity::White,
         alternatives,
         popularity: None,
-        wisdom_check: false,
+        wit_check: false,
     }
 }
 
