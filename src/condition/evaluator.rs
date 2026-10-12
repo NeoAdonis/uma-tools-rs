@@ -70,7 +70,6 @@ use crate::race::runner::InitialState;
 use crate::race::runner::{Runner, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
-use crate::skill::SkillType;
 use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
@@ -191,15 +190,16 @@ impl CompEvaluator for EvaluatorFull {
                 match comp.op {
                     CompOp::Equal => is_used,
                     CompOp::NotEqual => !is_used,
-                    // Other operators don't make sense for skill ID checks.
-                    op => panic!("{var} doesn't support operator {op:?}"),
+                    // Rejected by the parser.
+                    op => unreachable!("{var} doesn't support operator {op:?}"),
                 }
             }
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
                 // Check if any other runner has activated a buff whose type is `comp.value`
                 // this frame, discounting the runner's own activation.
-                let value = SkillType::try_from(comp.value as u8).unwrap_or_else(|_| {
-                    panic!(
+                // Unimplemented skill types are rejected by the parser.
+                let value = skill_type(comp.value).unwrap_or_else(|| {
+                    unreachable!(
                         "is_other_character_activate_advantage_skill: unimplemented skill type {}",
                         comp.value
                     )
@@ -573,8 +573,8 @@ fn evaluate_lineup(var: &LineupVar, comp: &Comparison, state: &RaceState, skill_
             match comp.op {
                 CompOp::Equal => exists,
                 CompOp::NotEqual => !exists,
-                // Other operators don't make sense for skill ID checks.
-                op => panic!("is_exist_skill_id doesn't support operator {op:?}"),
+                // Rejected by the parser.
+                op => unreachable!("is_exist_skill_id doesn't support operator {op:?}"),
             }
         }
 

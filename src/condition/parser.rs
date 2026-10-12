@@ -1,4 +1,5 @@
-use crate::condition::variables::VarType;
+use crate::condition::variables::{ActivationVar, LineupVar, RandomSpatialVar, VarType};
+use crate::skill::SkillType;
 use std::fmt;
 use std::str::FromStr;
 
@@ -104,6 +105,9 @@ pub enum ParseError {
     ExpectedOperator(String),
     UnknownVariable(String),
     InvalidValue(String),
+    /// A comparison the evaluator can't evaluate, such as a skill ID check
+    /// with an operator other than `==` or `!=`.
+    UnsupportedComparison(String),
 }
 
 impl fmt::Display for ParseError {
@@ -114,6 +118,9 @@ impl fmt::Display for ParseError {
             }
             ParseError::UnknownVariable(var) => write!(f, "Unknown variable '{var}'"),
             ParseError::InvalidValue(comp) => write!(f, "Invalid value in '{comp}'"),
+            ParseError::UnsupportedComparison(comp) => {
+                write!(f, "Unsupported comparison '{comp}'")
+            }
         }
     }
 }
@@ -151,7 +158,48 @@ fn parse_comparison(input: &str) -> Result<Comparison, ParseError> {
         .parse()
         .map_err(|_| ParseError::InvalidValue(input.into()))?;
 
-    Ok(Comparison { var, op, value })
+    let comp = Comparison { var, op, value };
+    if !comp.is_supported() {
+        return Err(ParseError::UnsupportedComparison(input.into()));
+    }
+    Ok(comp)
+}
+
+impl Comparison {
+    /// Whether the evaluator can evaluate this comparison.
+    ///
+    /// Variables that use the comparison value as parameter (e.g. a skill ID),
+    /// and flags such as `always`, only support some operators or values.
+    fn is_supported(&self) -> bool {
+        use VarType::*;
+        let is_equal = self.op == CompOp::Equal;
+        match self.var {
+            Activation(
+                ActivationVar::IsUsedSkillId | ActivationVar::IsUsedSkillIdWithDetailOne,
+            )
+            | Lineup(LineupVar::IsExistSkillId | LineupVar::IsExistCharaId) => {
+                is_equal || self.op == CompOp::NotEqual
+            }
+            // The value is the type of the activated buff.
+            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
+                is_equal && skill_type(self.value).is_some()
+            }
+            // The value is the chance of success, as a percentage.
+            Random(_) => is_equal && (0..=100).contains(&self.value),
+            // Flags; any other comparison is potentially a typo.
+            Always | RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
+                is_equal && self.value == 1
+            }
+            // The value selects where the random point is (e.g. which phase).
+            RandomSpatial(_) | RandomPhase(_) => is_equal,
+            _ => true,
+        }
+    }
+}
+
+/// Skill type with the given ID, if it's implemented.
+pub fn skill_type(id: i32) -> Option<SkillType> {
+    u8::try_from(id).ok()?.try_into().ok()
 }
 
 impl FromStr for Condition {

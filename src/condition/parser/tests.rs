@@ -146,6 +146,74 @@ fn test_error_cases() {
             "hp_per==99999999999",
             InvalidValue("hp_per==99999999999".into()),
         ),
+        // Skill ID checks only support `==` and `!=`.
+        (
+            "is_used_skill_id>=202051",
+            UnsupportedComparison("is_used_skill_id>=202051".into()),
+        ),
+        (
+            "is_used_skill_id_with_detail_one<204452",
+            UnsupportedComparison("is_used_skill_id_with_detail_one<204452".into()),
+        ),
+        (
+            "is_exist_skill_id>203061",
+            UnsupportedComparison("is_exist_skill_id>203061".into()),
+        ),
+        // Buff type checks only support `==` and implemented skill types.
+        (
+            "is_other_character_activate_advantage_skill!=27",
+            UnsupportedComparison("is_other_character_activate_advantage_skill!=27".into()),
+        ),
+        (
+            "is_other_character_activate_advantage_skill==7",
+            UnsupportedComparison("is_other_character_activate_advantage_skill==7".into()),
+        ),
+        (
+            "is_other_character_activate_advantage_skill==-1",
+            UnsupportedComparison("is_other_character_activate_advantage_skill==-1".into()),
+        ),
+        (
+            "is_other_character_activate_advantage_skill==283",
+            UnsupportedComparison("is_other_character_activate_advantage_skill==283".into()),
+        ),
+        (
+            "is_exist_chara_id<=1001",
+            UnsupportedComparison("is_exist_chara_id<=1001".into()),
+        ),
+        // Random points only support `==`.
+        (
+            "phase_random!=1",
+            UnsupportedComparison("phase_random!=1".into()),
+        ),
+        (
+            "corner_random>=2",
+            UnsupportedComparison("corner_random>=2".into()),
+        ),
+        (
+            "all_corner_random==0",
+            UnsupportedComparison("all_corner_random==0".into()),
+        ),
+        // Lotteries only support `==` and percentages.
+        (
+            "random_lot>=30",
+            UnsupportedComparison("random_lot>=30".into()),
+        ),
+        (
+            "random_lot==101",
+            UnsupportedComparison("random_lot==101".into()),
+        ),
+        (
+            "random_lot_shared!=30",
+            UnsupportedComparison("random_lot_shared!=30".into()),
+        ),
+        (
+            "random_lot_shared==-1",
+            UnsupportedComparison("random_lot_shared==-1".into()),
+        ),
+        // `always` only supports `==1`.
+        ("always==0", UnsupportedComparison("always==0".into())),
+        ("always!=1", UnsupportedComparison("always!=1".into())),
+        ("always>=1", UnsupportedComparison("always>=1".into())),
     ];
     for (input, expected) in cases {
         assert_eq!(parse_condition(input).unwrap_err(), expected, "{input:?}");
@@ -158,6 +226,10 @@ fn test_error_display() {
         ("hp_per=1", "Expected comparison operator in 'hp_per=1'"),
         ("unknown==1", "Unknown variable 'unknown'"),
         ("hp_per==x", "Invalid value in 'hp_per==x'"),
+        (
+            "is_exist_skill_id<1",
+            "Unsupported comparison 'is_exist_skill_id<1'",
+        ),
     ];
     for (input, expected) in cases {
         assert_eq!(parse_condition(input).unwrap_err().to_string(), expected);
