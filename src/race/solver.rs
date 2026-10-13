@@ -7,12 +7,12 @@ use std::vec;
 use rand::prelude::*;
 
 use crate::configuration::{Configuration, GameVersion};
-use crate::course::{Course, Phase};
+use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
 use crate::race::parameters::RaceParameters;
 use crate::race::proximity;
-use crate::race::runner::{LaneDecision, POSITIONING_END_SECTION, PositioningStrategy, Runner};
+use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
@@ -618,38 +618,14 @@ impl RaceSolver<Runner> {
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
-        let move_lane_point = self.state.course.move_lane_point();
-
         // Calculate lane targets.
         for i in 0..num_runners {
             // Borrow all runners along with a single runner in an immutable state first.
             let all_runners = &self.runners;
-            let runner = &all_runners[i];
-
-            if !runner.should_update_target_lane() {
+            let Some(decision) =
+                all_runners[i].target_lane_decision(&self.state.course, all_runners)
+            else {
                 continue;
-            }
-
-            // Determine which mode to use: fixed (while a skill sets the target
-            // lane), normal or overtake.
-            let distance_to_move_lane = move_lane_point - runner.position;
-            let within_200m_of_move_lane = (0.0..=200.0).contains(&distance_to_move_lane);
-
-            // Use normal mode if:
-            // 1. Not in overtake mode, OR;
-            // 2. In Early/Mid phase AND within 200m of move lane point.
-            let use_normal_mode = !runner.is_in_overtake_mode()
-                || (matches!(runner.phase, Phase::Early | Phase::Mid) && within_200m_of_move_lane);
-
-            let decision = if let Some(target) = runner.fixed_mode_lane_target() {
-                LaneDecision {
-                    target,
-                    extra_move_lane: runner.extra_move_lane,
-                }
-            } else if use_normal_mode {
-                runner.normal_mode_lane_decision(&self.state.course, all_runners)
-            } else {
-                runner.overtake_lane_decision(&self.state.course, all_runners)
             };
 
             // Shared borrow of all runners ends here; result can be written back.
