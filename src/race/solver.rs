@@ -12,7 +12,7 @@ use crate::race::compete_before_spurt;
 use crate::race::duel;
 use crate::race::parameters::RaceParameters;
 use crate::race::proximity;
-use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
+use crate::race::runner::{LaneDecision, POSITIONING_END_SECTION, PositioningStrategy, Runner};
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
@@ -333,6 +333,11 @@ impl RaceSolver<Runner> {
             // consistent state.
             runner.update_phase(&mut self.state);
             let transitions = runner.segments.update(runner.position, &self.state.course);
+            runner.update_final_extra_move_lane(
+                &transitions,
+                &self.state.course,
+                self.state.config.game_version,
+            );
             runner.update_slope(
                 &self.state.course.slopes,
                 &transitions.slope,
@@ -544,7 +549,8 @@ impl RaceSolver<Runner> {
             .fold(5.0, f64::max);
         for i in 0..num_runners {
             let (left, right) = self.runners.split_at_mut(i + 1);
-            let runner_i = &mut left[i];
+            let (ahead, runner_i) = left.split_at_mut(i);
+            let runner_i = &mut runner_i[0];
             let mut was_runner_behind_checked = false;
 
             for runner_j in right {
@@ -599,10 +605,16 @@ impl RaceSolver<Runner> {
                 }
             }
 
-            // Checked all runners behind i within a reasonable distance.
-            // runner_i's block and near statuses can be updated now.
+            // Checked all runners behind i within a reasonable distance, and
+            // runner_i was checked against all runners ahead before. Her block and
+            // near statuses can be updated now.
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
+            if let Some(gate_roll) = runner_i.track_front_blocker_target(delta_time)
+                && let Some(blocker) = ahead.iter_mut().find(|r| r.gate_roll == gate_roll)
+            {
+                blocker.being_overtake_target_time += delta_time;
+            }
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
 
@@ -614,12 +626,12 @@ impl RaceSolver<Runner> {
             let all_runners = &self.runners;
             let runner = &all_runners[i];
 
-            // Skip if side-blocked (can't change lanes anyway), unless forced.
-            if runner.blocked.side() && !runner.force_lane_update {
+            if !runner.should_update_target_lane() {
                 continue;
             }
 
-            // Determine which mode to use: normal vs overtake.
+            // Determine which mode to use: fixed (while a skill sets the target
+            // lane), normal or overtake.
             let distance_to_move_lane = move_lane_point - runner.position;
             let within_200m_of_move_lane = (0.0..=200.0).contains(&distance_to_move_lane);
 
@@ -629,7 +641,12 @@ impl RaceSolver<Runner> {
             let use_normal_mode = !runner.is_in_overtake_mode()
                 || (matches!(runner.phase, Phase::Early | Phase::Mid) && within_200m_of_move_lane);
 
-            let decision = if use_normal_mode {
+            let decision = if let Some(target) = runner.fixed_mode_lane_target() {
+                LaneDecision {
+                    target,
+                    extra_move_lane: runner.extra_move_lane,
+                }
+            } else if use_normal_mode {
                 runner.normal_mode_lane_decision(&self.state.course, all_runners)
             } else {
                 runner.overtake_lane_decision(&self.state.course, all_runners)
@@ -639,7 +656,6 @@ impl RaceSolver<Runner> {
             let runner = &mut self.runners[i];
             runner.lane.target = decision.target;
             runner.extra_move_lane = decision.extra_move_lane;
-            runner.force_lane_update = false;
         }
     }
 
@@ -692,9 +708,9 @@ impl RaceSolver<Runner> {
                     moved = true;
                 }
                 // Keep the new lane unless the target lane update decides otherwise;
-                // the old target may lead right back into the other runner.
+                // the old target may lead right back into the other runner. Being on
+                // the target lane also forces that update, even if side-blocked.
                 runner.lane.target = runner.lane.current;
-                runner.force_lane_update = true;
             }
             if !moved {
                 return;

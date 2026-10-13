@@ -1291,10 +1291,15 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
 #[test]
 fn test_skill_target_lane_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let runner = &mut solver.runners[0];
+    runner.lane = crate::race::runner::LaneState::new(0.4);
+    runner.skill_modifiers.target_lane = Some(0.5);
+    // Fixed mode.
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[0].lane.target, 0.5);
+
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
-    runner.lane.current = 0.4;
-    runner.skill_modifiers.target_lane = Some(0.5);
     for _ in 0..2000 {
         runner.update_lane(&state.course, DELTA_TIME);
     }
@@ -1421,9 +1426,8 @@ fn test_overlap_bumps_outer_runner_ahead() {
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
     assert_close!(ahead.lane.current, 0.19 + horse_lanes_to_course_widths(0.4));
     assert_eq!(ahead.lane.target, ahead.lane.current);
-    assert!(ahead.force_lane_update);
+    assert!(ahead.should_update_target_lane());
     assert_eq!(behind.lane.current, 0.19);
-    assert!(!behind.force_lane_update);
 }
 
 #[test]
@@ -1435,12 +1439,12 @@ fn test_overlap_bumps_outer_runner_behind() {
     solver.resolve_overlaps();
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
     assert_eq!(ahead.lane.current, 0.19);
-    assert!(!ahead.force_lane_update);
     assert_close!(
         behind.lane.current,
         0.19 + horse_lanes_to_course_widths(0.4)
     );
-    assert!(behind.force_lane_update);
+    assert_eq!(behind.lane.target, behind.lane.current);
+    assert!(behind.should_update_target_lane());
 }
 
 #[test]
@@ -1462,7 +1466,6 @@ fn test_no_bump_without_overlap() {
     solver.resolve_overlaps();
     assert_eq!(solver.runners[0].lane.current, 0.215);
     assert_eq!(solver.runners[1].lane.current, 0.19);
-    assert!(solver.runners.iter().all(|r| !r.force_lane_update));
 }
 
 #[test]
@@ -1481,10 +1484,8 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     solver.update_blocking_status(DELTA_TIME);
     let bumped = &solver.runners[0];
     assert!(bumped.blocked.side_in);
-    assert!(!bumped.force_lane_update);
     // Too close to the runner inside in mid-race, so she targets 2 horse lanes
-    // away from her. Without the forced update, the target would have stayed at
-    // the bumped lane.
+    // away from her. Being on her target lane after the bump forces the update.
     let expected = 0.19 + horse_lanes_to_course_widths(2.0);
     assert_close!(bumped.lane.target, expected);
 }
@@ -1515,6 +1516,33 @@ fn test_runners_beyond_base_field_of_view_are_not_seen() {
     assert_eq!(solver.runners[1].visible_count, 0);
     assert!(!solver.runners[1].is_in_overtake_mode());
     assert_eq!(solver.runners[0].being_overtake_target_time, 0.0);
+}
+
+#[test]
+fn test_closest_front_blocker_is_overtake_target() {
+    // Less than 1m ahead and not slower, so only a target as the closest blocker.
+    let mut solver = struggle_solver(
+        &[
+            (Style::Pace, 201.5, 0.2),
+            (Style::Pace, 200.5, 0.2),
+            (Style::Pace, 200.0, 0.2),
+        ],
+        GameVersion::LATEST,
+    );
+    for runner in &mut solver.runners {
+        runner.speed = 15.0;
+        runner.target_speed = 15.0;
+    }
+
+    solver.update_blocking_status(DELTA_TIME);
+    let gate_roll = solver.runners[1].gate_roll;
+    let behind = &solver.runners[2];
+    assert_eq!(behind.blocked.front_blocker, Some(gate_roll));
+    assert!(behind.is_in_overtake_mode());
+    assert_close!(solver.runners[1].being_overtake_target_time, DELTA_TIME);
+    // The runner furthest ahead also blocks both runners behind, but she's only
+    // the closest blocker of the one right behind her.
+    assert_close!(solver.runners[0].being_overtake_target_time, DELTA_TIME);
 }
 
 #[test]
