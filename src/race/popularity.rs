@@ -34,6 +34,7 @@
 
 use std::collections::HashMap;
 
+use crate::condition::evaluator::check_popularity_guards;
 use crate::race::modifiers::{
     acceleration_distance_proficiency_multiplier, distance_proficiency_multiplier,
     ground_type_proficiency_multiplier,
@@ -83,6 +84,23 @@ fn skill_popularity(skill: &Skill) -> SkillPopularity {
             }),
         None => SkillPopularity::default(),
     }
+}
+
+/// Check if a skill adds popularity points to a runner in a race.
+///
+/// This evaluates only popularity guards (distance type, ground type, running
+/// style, etc.; see [`VarType::is_popularity_guard`]). Any other condition is
+/// assumed to be satisfiable.
+///
+/// Returns `true` if the guards pass for at least one alternative.
+///
+/// [`VarType::is_popularity_guard`]:
+/// crate::condition::variables::VarType::is_popularity_guard
+fn is_popularity_eligible(skill: &Skill, state: &RaceState, runner: &UnreadyRunner) -> bool {
+    skill
+        .alternatives
+        .iter()
+        .any(|alternative| check_popularity_guards(&alternative.condition, state, runner))
 }
 
 /// Popularity mark assigned by a judge.
@@ -181,7 +199,7 @@ pub(crate) fn skill_bonus<'a>(
 ) -> SkillPopularity {
     skills
         .into_iter()
-        .filter(|skill| skill.is_popularity_eligible(state, runner))
+        .filter(|skill| is_popularity_eligible(skill, state, runner))
         .fold(SkillPopularity::default(), |total, skill| {
             let points = skill_popularity(skill);
             let chance = skill.activation_chance(runner.raw.wit);

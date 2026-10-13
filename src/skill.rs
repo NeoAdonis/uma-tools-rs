@@ -632,28 +632,6 @@ impl Skill {
             .any(|effect| effect.skill_type.is_pre_race_effect())
     }
 
-    /// Check if this skill adds popularity points to a runner in a race.
-    ///
-    /// This evaluates only popularity guards (distance type, ground type,
-    /// running style, etc.; see [`VarType::is_popularity_guard`]). Any other
-    /// condition is assumed to be satisfiable.
-    ///
-    /// Returns `true` if the guards pass for at least one alternative.
-    ///
-    /// [`VarType::is_popularity_guard`]:
-    /// crate::condition::variables::VarType::is_popularity_guard
-    pub fn is_popularity_eligible(
-        &self,
-        state: &crate::race::solver::RaceState,
-        runner: &crate::race::unready_runner::UnreadyRunner,
-    ) -> bool {
-        use crate::condition::evaluator::check_popularity_guards;
-
-        self.alternatives
-            .iter()
-            .any(|alternative| check_popularity_guards(&alternative.condition, state, runner))
-    }
-
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
     pub fn load_skills_from_file(
         json_path: &str,
