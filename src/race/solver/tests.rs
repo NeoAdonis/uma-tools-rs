@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::Roll;
 use crate::course::geometry::{Segment, Slope};
-use crate::course::{CourseData, LaneType};
+use crate::course::CourseData;
 use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
@@ -1286,27 +1286,6 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
     let blocked_in = target_speed_with(true, false);
     let force_in = solver.runners[0].force_in_modifier;
     assert_close!(blocked_in - open, force_in);
-}
-
-#[test]
-fn test_lane_type_in_course_widths() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
-    let runner = &mut solver.runners[0];
-    // Thresholds are 0.2, 0.4 and 0.6 course widths, regardless of the course's
-    // total width.
-    let cases = [
-        (0.0, LaneType::Inner),
-        (0.2, LaneType::Inner),
-        (0.21, LaneType::Middle),
-        (0.4, LaneType::Middle),
-        (0.41, LaneType::Outer),
-        (0.6, LaneType::Outer),
-        (0.61, LaneType::Outside),
-    ];
-    for (lane, expected) in cases {
-        runner.lane.current = lane;
-        assert_eq!(runner.lane_type(), expected, "lane {lane}");
-    }
 }
 
 #[test]

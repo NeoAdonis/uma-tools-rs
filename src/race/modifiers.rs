@@ -184,6 +184,19 @@ pub fn base_target_speed(
     }
 }
 
+/// Target speed modifier (m/s) in downhill mode on a `slope` (percent; negative
+/// downhill).
+pub fn downhill_speed_modifier(slope: f64) -> f64 {
+    debug_assert!(slope < 0.0, "Not a downhill slope");
+    -slope / 10.0 + 0.3
+}
+
+/// Target speed modifier (m/s) on an uphill `slope` (percent), given the power
+/// stat. It's negative, as uphills reduce speed.
+pub fn uphill_speed_modifier(slope: f64, power: u16) -> f64 {
+    -slope * 200.0 / power as f64
+}
+
 /// Roll section speed modifier range randomly based on wit stat.
 pub fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng: &mut R,

@@ -70,6 +70,30 @@ impl Default for SkillModifiers {
     }
 }
 
+impl SkillModifiers {
+    /// Sum up the modifiers of the active timed `effects`.
+    pub fn from_effects(effects: &[ActiveTimedEffect]) -> Self {
+        use SkillType::*;
+        let mut mods = SkillModifiers::default();
+        for timed in effects {
+            let value = timed.current_value();
+            match timed.effect.skill_type {
+                Acceleration => mods.acceleration += value,
+                AccelerationAllOutSpurt => mods.all_out_spurt_acceleration += value,
+                TargetSpeed => mods.target_speed += value,
+                CurrentSpeed | CurrentSpeedWithNaturalDeceleration => mods.current_speed += value,
+                LaneMovementSpeed => mods.lane_speed += value,
+                Fov => mods.visible_distance += value,
+                LaneChange => mods.target_lane = Some(value),
+                // Duration scaling is multiplicative.
+                ExtendEvolvedDuration => mods.duration_scaling *= value,
+                _ => {}
+            }
+        }
+        mods
+    }
+}
+
 /// Maximum target speed a runner can reach in m/s.
 pub const MAX_TARGET_SPEED: f64 = 30.0;
 
@@ -215,6 +239,26 @@ pub enum PositioningStrategy {
     /// when the pacemaker is such a runner. Exits once no such runner is ahead.
     /// Takes priority over all other strategies.
     PaceUpEx,
+}
+
+impl PositioningStrategy {
+    /// Base target speed multiplier while following this strategy.
+    pub fn speed_multiplier(self, phase: Phase, game_version: GameVersion) -> f64 {
+        match self {
+            PositioningStrategy::Normal => 1.0,
+            PositioningStrategy::FrontSpeedUp => 1.04,
+            PositioningStrategy::FrontOvertake => 1.05,
+            PositioningStrategy::PaceUp(_) => 1.04,
+            PositioningStrategy::PaceDown(_) => {
+                if game_version >= GameVersion::OnePointFiveAnniversary && phase >= Phase::Mid {
+                    0.945
+                } else {
+                    0.915
+                }
+            }
+            PositioningStrategy::PaceUpEx => 2.0,
+        }
+    }
 }
 
 /// Distance differences from other runners.
@@ -543,6 +587,21 @@ pub enum StartType {
     Late,
 }
 
+impl StartType {
+    /// Type of start given the start delay in seconds:
+    ///
+    /// - Good Start: start delay < 0.02s; gives bonus points in Team Trials.
+    /// - Normal Start: 0.02s <= start delay <= 0.08s.
+    /// - Late Start: start delay > 0.08s; used in some skill conditions.
+    pub fn from_delay(start_delay: f64) -> Self {
+        match start_delay {
+            d if d < 0.02 => StartType::Good,
+            d if d > 0.08 => StartType::Late,
+            _ => StartType::Normal,
+        }
+    }
+}
+
 impl Runner {
     /// Create a new Runner from an UnreadyRunner, whose out-of-gate skills have
     /// already been applied, and RaceState.
@@ -564,29 +623,12 @@ impl Runner {
 
     /// Determine the lane type based on the current lane position.
     pub fn lane_type(&self) -> LaneType {
-        let lane = self.lane.current;
-        if lane <= 0.2 {
-            LaneType::Inner
-        } else if lane <= 0.4 {
-            LaneType::Middle
-        } else if lane <= 0.6 {
-            LaneType::Outer
-        } else {
-            LaneType::Outside
-        }
+        LaneType::from_lane(self.lane.current)
     }
 
-    /// Determine the type of start based on start delay:
-    ///
-    /// - Good Start: start delay < 0.02s; gives bonus points in Team Trials.
-    /// - Normal Start: 0.02s <= start delay <= 0.08s.
-    /// - Late Start: start delay > 0.08s; used in some skill conditions.
+    /// Determine the type of start (see [`StartType::from_delay`]).
     pub fn start_type(&self) -> StartType {
-        match self.start_delay {
-            d if d < 0.02 => StartType::Good,
-            d if d > 0.08 => StartType::Late,
-            _ => StartType::Normal,
-        }
+        StartType::from_delay(self.start_delay)
     }
 
     /// Check if the runner is currently in position keep pace down mode.
@@ -666,27 +708,6 @@ impl Runner {
         self.slope_speed_modifier.is_some_and(|s| s < 0.0)
     }
 
-    /// Start downhill mode and set a speed gain based on slope percent.
-    ///
-    /// Downhill mode is based on a wit check; just going downhill does not
-    /// guarantee a speed gain.
-    fn start_downhill_mode(&mut self, slope: f64) {
-        debug_assert!(slope < 0.0, "Not a downhill slope");
-        self.slope_speed_modifier = Some(-slope / 10.0 + 0.3);
-    }
-
-    /// Start uphill speed reduction based on slope percent.
-    ///
-    /// This should always happen while on an uphill.
-    fn start_uphill_speed_reduction(&mut self, slope: f64) {
-        self.slope_speed_modifier = Some(-slope * 200.0 / self.adjusted.power as f64);
-    }
-
-    /// Stop any slope-based speed modification.
-    fn clear_slope_speed_modifier(&mut self) {
-        self.slope_speed_modifier = None;
-    }
-
     /// Get the effective speed including skill modifiers.
     /// This is the actual speed used for position calculations.
     fn effective_speed(&self) -> f64 {
@@ -734,22 +755,9 @@ impl Runner {
         {
             last_spurt.max_speed
         } else {
-            let position_multiplier = match self.positioning_strategy {
-                PositioningStrategy::Normal => 1.0,
-                PositioningStrategy::FrontSpeedUp => 1.04,
-                PositioningStrategy::FrontOvertake => 1.05,
-                PositioningStrategy::PaceUp(_) => 1.04,
-                PositioningStrategy::PaceDown(_) => {
-                    if game_version >= GameVersion::OnePointFiveAnniversary
-                        && self.phase >= Phase::Mid
-                    {
-                        0.945
-                    } else {
-                        0.915
-                    }
-                }
-                PositioningStrategy::PaceUpEx => 2.0,
-            };
+            let position_multiplier = self
+                .positioning_strategy
+                .speed_multiplier(self.phase, game_version);
             let base_target_speed = base_target_speed(
                 state.course.base_speed(),
                 self.adjusted.style,
@@ -1996,7 +2004,7 @@ impl Runner {
         rng: &mut impl Rng,
     ) {
         if let Some(idx) = transition.exited {
-            self.clear_slope_speed_modifier();
+            self.slope_speed_modifier = None;
             if slopes[idx].is_uphill() {
                 self.uphills_climbed += 1;
             }
@@ -2007,7 +2015,8 @@ impl Runner {
         };
         if slope.is_uphill() {
             if transition.entered.is_some() {
-                self.start_uphill_speed_reduction(slope.slope);
+                self.slope_speed_modifier =
+                    Some(uphill_speed_modifier(slope.slope, self.adjusted.power));
             }
             return;
         }
@@ -2028,12 +2037,12 @@ impl Runner {
 
         if self.is_in_downhill_mode() {
             if rng.random_bool(0.2) {
-                self.clear_slope_speed_modifier();
+                self.slope_speed_modifier = None;
             }
         } else {
             let chance = (self.adjusted.wit as f64 * 0.0004).min(1.0);
             if rng.random_bool(chance) {
-                self.start_downhill_mode(slope.slope);
+                self.slope_speed_modifier = Some(downhill_speed_modifier(slope.slope));
             }
         }
     }
@@ -2938,40 +2947,9 @@ impl Runner {
 
     /// Recalculate skill modifiers from active timed effects.
     fn recalculate_skill_modifiers(&mut self) {
-        use SkillType::*;
-        let mut mods = SkillModifiers::default();
-
-        for timed in &self.active_timed_effects {
-            match timed.effect.skill_type {
-                Acceleration => {
-                    mods.acceleration += timed.current_value();
-                }
-                AccelerationAllOutSpurt => {
-                    mods.all_out_spurt_acceleration += timed.current_value();
-                }
-                TargetSpeed => {
-                    mods.target_speed += timed.current_value();
-                }
-                CurrentSpeed | CurrentSpeedWithNaturalDeceleration => {
-                    mods.current_speed += timed.current_value();
-                }
-                LaneMovementSpeed => {
-                    mods.lane_speed += timed.current_value();
-                }
-                Fov => {
-                    mods.visible_distance += timed.current_value();
-                }
-                LaneChange => {
-                    mods.target_lane = Some(timed.current_value());
-                }
-                ExtendEvolvedDuration => {
-                    // Duration scaling is multiplicative.
-                    mods.duration_scaling *= timed.current_value();
-                }
-                _ => {}
-            }
-        }
-
-        self.skill_modifiers = mods;
+        self.skill_modifiers = SkillModifiers::from_effects(&self.active_timed_effects);
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -266,3 +266,16 @@ fn test_current_speed_drops_on_expiry() {
     assert_close!(runner.speed, 20.0);
     assert_close!(runner.skill_modifiers.current_speed, 0.0);
 }
+
+#[test]
+fn test_slope_speed_modifiers() {
+    // (slope percent, downhill modifier).
+    for (slope, expected) in [(-1.0, 0.4), (-2.0, 0.5), (-4.0, 0.7)] {
+        assert_close!(downhill_speed_modifier(slope), expected, "slope {slope}");
+    }
+    // (slope percent, power, uphill modifier).
+    for (slope, power, expected) in [(1.0, 1000, -0.2), (2.0, 1000, -0.4), (2.0, 800, -0.5)] {
+        let actual = uphill_speed_modifier(slope, power);
+        assert_close!(actual, expected, "slope {slope}, power {power}");
+    }
+}

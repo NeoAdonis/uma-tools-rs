@@ -167,6 +167,21 @@ pub enum LaneType {
     Outside,
 }
 
+impl LaneType {
+    /// Lane type of a runner at `lane`, in course widths from the inner fence.
+    pub fn from_lane(lane: f64) -> Self {
+        if lane <= 0.2 {
+            LaneType::Inner
+        } else if lane <= 0.4 {
+            LaneType::Middle
+        } else if lane <= 0.6 {
+            LaneType::Outer
+        } else {
+            LaneType::Outside
+        }
+    }
+}
+
 /// Structure representing a race course.
 #[derive(Clone, Debug)]
 pub struct Course {
@@ -541,5 +556,22 @@ mod tests {
             }
         }
         assert_eq!(create_test_course(0).track_name(Language::English), None);
+    }
+
+    #[test]
+    fn test_lane_type_from_lane() {
+        // Thresholds are in course widths, regardless of the course's total width.
+        let cases = [
+            (0.0, LaneType::Inner),
+            (0.2, LaneType::Inner),
+            (0.21, LaneType::Middle),
+            (0.4, LaneType::Middle),
+            (0.41, LaneType::Outer),
+            (0.6, LaneType::Outer),
+            (0.61, LaneType::Outside),
+        ];
+        for (lane, expected) in cases {
+            assert_eq!(LaneType::from_lane(lane), expected, "lane {lane}");
+        }
     }
 }
