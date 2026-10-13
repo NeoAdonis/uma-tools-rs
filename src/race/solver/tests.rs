@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::Roll;
-use crate::course::geometry::{Segment, Slope};
 use crate::course::CourseData;
+use crate::course::geometry::{Segment, Slope};
 use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;

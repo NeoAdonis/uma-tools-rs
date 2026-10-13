@@ -223,7 +223,7 @@ fn test_hp_loss_is_not_a_heal() {
     move_to_section(&mut solver, 17);
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
-    runner.is_stamina_keep = true;
+    runner.stamina_keep.is_active = true;
     let hp_before = runner.hp.current;
 
     // 2% of maximum HP.
@@ -237,7 +237,7 @@ fn test_hp_loss_is_not_a_heal() {
     assert_close!(runner.hp.current, hp_before - runner.hp.maximum * 0.02);
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
     assert_eq!(runner.trigger_scheduler.activation_counts.heal, 0);
-    assert!(runner.is_stamina_keep);
+    assert!(runner.stamina_keep.is_active);
 }
 
 #[test]

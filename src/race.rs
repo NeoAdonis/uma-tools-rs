@@ -15,5 +15,6 @@ pub mod secure_lead;
 pub mod skill_scaling;
 pub mod solver;
 pub mod spot_struggle;
+pub mod timed_boost;
 pub mod transitions;
 pub mod unready_runner;

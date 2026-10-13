@@ -46,6 +46,14 @@ impl HpState {
         self.current / self.maximum * 100.0
     }
 
+    /// Consume HP by a given amount, recording whether it has been emptied.
+    pub fn consume(&mut self, amount: f64) {
+        self.current -= amount;
+        if self.is_empty() {
+            self.has_emptied = true;
+        }
+    }
+
     /// Recover HP by a given amount, clamped to maximum.
     pub fn recover(&mut self, amount: f64) {
         self.current = (self.current + amount).min(self.maximum);

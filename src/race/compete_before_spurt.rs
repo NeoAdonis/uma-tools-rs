@@ -7,6 +7,9 @@
 
 use std::ops::RangeInclusive;
 
+use rand::prelude::*;
+
+use crate::configuration::GameVersion;
 use crate::race::secure_lead;
 use crate::uma::Style;
 
@@ -26,6 +29,32 @@ pub const ALONE_DISTANCE: f64 = 10.0;
 /// Range of the ratio of HP required to finish the race that the runner tries
 /// to keep. Rolled once per race.
 pub const STAMINA_KEEP_RATIO: RangeInclusive<f64> = 1.035..=1.04;
+
+/// Stamina Keep (持久力温存) state (2.5 Anniv. onward).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StaminaKeep {
+    /// Ratio of the HP required to finish the race that the runner tries to
+    /// keep. Rolled before the race begins; zero before 2.5 Anniv.
+    pub ratio: f64,
+    /// Whether the runner is keeping stamina. While keeping it, she won't
+    /// compete before spurt. Reset by recovery skills.
+    pub is_active: bool,
+}
+
+impl StaminaKeep {
+    /// Roll the HP ratio the runner tries to keep (see [`STAMINA_KEEP_RATIO`]).
+    pub fn roll(game_version: GameVersion, rng: &mut impl Rng) -> Self {
+        let ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
+            0.0
+        } else {
+            rng.random_range(STAMINA_KEEP_RATIO)
+        };
+        StaminaKeep {
+            ratio,
+            is_active: false,
+        }
+    }
+}
 
 /// Distance (m) from the first place above which the runner is considered too
 /// far from the lead.

@@ -9,7 +9,7 @@ use crate::configuration::GameVersion;
 use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp};
-use crate::race::compete_before_spurt;
+use crate::race::compete_before_spurt::StaminaKeep;
 use crate::race::duel::Duel;
 use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
@@ -20,6 +20,7 @@ use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
+use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
 use crate::trigger::system::*;
@@ -420,14 +421,7 @@ impl UnreadyRunner {
                 }
         };
 
-        // Roll the HP ratio kept by Stamina Keep (2.5 Anniv. onward).
-        let stamina_keep_ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
-            0.0
-        } else {
-            self.rng
-                .borrow_mut()
-                .random_range(compete_before_spurt::STAMINA_KEEP_RATIO)
-        };
+        let stamina_keep = StaminaKeep::roll(game_version, &mut *self.rng.borrow_mut());
 
         // Initialize race state.
         Runner {
@@ -497,12 +491,9 @@ impl UnreadyRunner {
             finish_margin: None,
             spot_struggle: SpotStruggle::Pending,
             duel: Duel::Pending,
-            secure_lead: None,
-            next_secure_lead_check: 0.0,
-            compete_before_spurt: None,
-            next_compete_check: 0.0,
-            stamina_keep_ratio,
-            is_stamina_keep: false,
+            secure_lead: TimedBoost::Idle { next_check: 0.0 },
+            compete_before_spurt: TimedBoost::Idle { next_check: 0.0 },
+            stamina_keep,
             overtake_state: None,
             overtake_target_time: 0.0,
             being_overtake_target_time: 0.0,

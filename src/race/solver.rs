@@ -795,7 +795,7 @@ impl RaceSolver<Runner> {
         let course_distance = self.state.course.distance as f64;
 
         for i in 0..self.runners.len() {
-            self.runners[i].expire_secure_lead(elapsed_time);
+            self.runners[i].secure_lead.expire(elapsed_time);
             if !self.runners[i].is_secure_lead_check_due(&self.state) {
                 continue;
             }
@@ -1014,7 +1014,7 @@ impl RaceSolver<Runner> {
         let course_distance = self.state.course.distance as f64;
 
         for i in 0..self.runners.len() {
-            self.runners[i].expire_compete_before_spurt(elapsed_time);
+            self.runners[i].compete_before_spurt.expire(elapsed_time);
             if !self.runners[i].is_compete_check_due(&self.state) {
                 continue;
             }

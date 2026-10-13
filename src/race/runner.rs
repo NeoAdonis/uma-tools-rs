@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use rand::prelude::*;
@@ -11,7 +12,7 @@ use crate::course::geometry::Slope;
 use crate::course::*;
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
-use crate::race::compete_before_spurt;
+use crate::race::compete_before_spurt::{self, StaminaKeep};
 use crate::race::duel::Duel;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
@@ -23,6 +24,7 @@ use crate::race::secure_lead;
 use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
 use crate::race::spot_struggle::{self, SpotStruggle};
+use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
@@ -120,19 +122,6 @@ pub struct InitialState {
     ///
     /// Runners on the same team are allies; everyone else is an opponent.
     pub team: u8,
-}
-
-/// Speed boost applied while securing the lead (リード確保) and its expiration time.
-pub struct SecureLeadState {
-    pub modifier: f64,
-    pub expires_at: f64,
-}
-
-/// Speed boost applied while competing before spurt (位置取り調整) and its expiration
-/// time.
-pub struct CompeteState {
-    pub modifier: f64,
-    pub expires_at: f64,
 }
 
 /// Information about an overtake target ahead of this runner.
@@ -479,22 +468,13 @@ pub struct Runner {
     pub spot_struggle: SpotStruggle,
     /// State related to dueling (追い比べ).
     pub duel: Duel,
-    /// State related to secure lead mechanics. If `None`, the runner is not
-    /// securing the lead.
-    pub secure_lead: Option<SecureLeadState>,
-    /// Time of the next secure lead check in seconds.
-    pub next_secure_lead_check: f64,
-    /// State related to compete before spurt mechanics. If `None`, the runner is
-    /// not competing.
-    pub compete_before_spurt: Option<CompeteState>,
-    /// Time of the next compete before spurt (and Stamina Keep) check in seconds.
-    pub next_compete_check: f64,
-    /// Ratio of the HP required to finish the race that the runner tries to keep
-    /// (Stamina Keep, 持久力温存). Rolled before the race begins; zero before 2.5 Anniv.
-    pub stamina_keep_ratio: f64,
-    /// Whether the runner is in Stamina Keep mode. While in it, she won't compete
-    /// before spurt. Reset by recovery skills.
-    pub is_stamina_keep: bool,
+    /// State related to securing the lead (リード確保).
+    pub secure_lead: TimedBoost,
+    /// State related to competing before spurt (位置取り調整). Stamina Keep is
+    /// also checked on the same schedule.
+    pub compete_before_spurt: TimedBoost,
+    /// State related to Stamina Keep (持久力温存).
+    pub stamina_keep: StaminaKeep,
     /// Overtake targets being tracked. If `None`, no overtake mode active.
     pub overtake_state: Option<OvertakeState>,
     /// Time spent having at least one overtake target in seconds.
@@ -808,27 +788,16 @@ impl Runner {
             0.0
         };
 
-        let dueling_modifier = self.duel.speed_bonus();
-
-        let struggle_modifier = self.spot_struggle.speed_bonus(state.elapsed_time);
-
-        let secure_lead_modifier = self.secure_lead.as_ref().map_or(0.0, |s| s.modifier);
-
-        let compete_modifier = self
-            .compete_before_spurt
-            .as_ref()
-            .map_or(0.0, |c| c.modifier);
-
         self.target_speed = (target_speed
             + self.slope_speed_modifier.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
             + self.section_speed_modifier
-            + dueling_modifier
+            + self.duel.speed_bonus()
             + move_lane_modifier
             + force_in_modifier
-            + struggle_modifier
-            + secure_lead_modifier
-            + compete_modifier
+            + self.spot_struggle.speed_bonus(state.elapsed_time)
+            + self.secure_lead.speed_bonus()
+            + self.compete_before_spurt.speed_bonus()
             + self.stamina_limit_break
             + self.all_out_spurt.speed_bonus())
         .min(MAX_TARGET_SPEED)
@@ -1300,16 +1269,17 @@ impl Runner {
         if self.is_in_downhill_mode() {
             multiplier *= 0.4;
         }
-        self.hp.current -= calculate_hp_per_second(
-            self.speed,
-            &state.course,
-            state.params.track_condition,
-            self.phase,
-            self.adjusted.guts,
-            multiplier,
-        ) * delta_time;
+        self.hp.consume(
+            calculate_hp_per_second(
+                self.speed,
+                &state.course,
+                state.params.track_condition,
+                self.phase,
+                self.adjusted.guts,
+                multiplier,
+            ) * delta_time,
+        );
         if self.hp.is_empty() {
-            self.hp.has_emptied = true;
             // Running out of HP during the all-out spurt drops speed to minimum
             // immediately instead of decelerating (confirmed game bug).
             if self.all_out_spurt.is_active() {
@@ -1399,26 +1369,10 @@ impl Runner {
         self.penalize_charge_up(charge_up::STRUGGLE_PENALTY);
     }
 
-    /// End the secure lead (リード確保) speed boost once it expires.
-    pub fn expire_secure_lead(&mut self, elapsed_time: f64) {
-        if self
-            .secure_lead
-            .as_ref()
-            .is_some_and(|s| elapsed_time >= s.expires_at)
-        {
-            self.secure_lead = None;
-        }
-    }
-
     /// Check if the runner should check whether to secure the lead on this frame.
     pub fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
-        state.config.game_version >= GameVersion::TwoPointFiveAnniversary
-            && self.adjusted.style != Style::End
-            && !self.has_finished()
-            && !self.hp.is_empty()
-            && secure_lead::SECTIONS.contains(&self.section)
-            && self.secure_lead.is_none()
-            && state.elapsed_time >= self.next_secure_lead_check
+        self.adjusted.style != Style::End
+            && self.is_boost_check_due(&self.secure_lead, &secure_lead::SECTIONS, state)
     }
 
     /// Attempt to secure the lead (リード確保).
@@ -1430,48 +1384,53 @@ impl Runner {
     /// `is_alone` is whether no other runner with the same style is within 10m.
     pub fn try_secure_lead(&mut self, lead_insufficient: bool, is_alone: bool, state: &RaceState) {
         let elapsed_time = state.elapsed_time;
-        self.next_secure_lead_check = elapsed_time + secure_lead::CHECK_INTERVAL;
         if !lead_insufficient || !self.rng.borrow_mut().random_bool(secure_lead::CHANCE) {
+            self.secure_lead = TimedBoost::Idle {
+                next_check: elapsed_time + secure_lead::CHECK_INTERVAL,
+            };
             return;
         }
 
         let style = self.adjusted.style;
-        self.secure_lead = Some(SecureLeadState {
-            modifier: secure_lead::target_speed_bonus(
-                style,
-                self.adjusted.guts,
-                is_alone,
-                state.config.game_version,
-            ),
-            expires_at: elapsed_time + secure_lead::DURATION,
-        });
-        self.hp.current -= secure_lead::hp_cost(style, state.course.distance);
-        if self.hp.is_empty() {
-            self.hp.has_emptied = true;
-        }
-        self.next_secure_lead_check = elapsed_time + secure_lead::DURATION + secure_lead::COOLDOWN;
-    }
-
-    /// End the compete before spurt (位置取り調整) speed boost once it expires.
-    pub fn expire_compete_before_spurt(&mut self, elapsed_time: f64) {
-        if self
-            .compete_before_spurt
-            .as_ref()
-            .is_some_and(|c| elapsed_time >= c.expires_at)
-        {
-            self.compete_before_spurt = None;
-        }
+        let speed_bonus = secure_lead::target_speed_bonus(
+            style,
+            self.adjusted.guts,
+            is_alone,
+            state.config.game_version,
+        );
+        self.secure_lead = TimedBoost::start(
+            speed_bonus,
+            elapsed_time,
+            secure_lead::DURATION,
+            secure_lead::COOLDOWN,
+        );
+        self.hp
+            .consume(secure_lead::hp_cost(style, state.course.distance));
     }
 
     /// Returns true if `self` should check whether to compete before spurt (位置取り調整)
     /// on this frame.
     pub fn is_compete_check_due(&self, state: &RaceState) -> bool {
+        self.is_boost_check_due(
+            &self.compete_before_spurt,
+            &compete_before_spurt::SECTIONS,
+            state,
+        )
+    }
+
+    /// Check if a check for `boost`, which can only happen in `sections`, is due
+    /// on this frame (2.5 Anniv. onward).
+    fn is_boost_check_due(
+        &self,
+        boost: &TimedBoost,
+        sections: &RangeInclusive<u8>,
+        state: &RaceState,
+    ) -> bool {
         state.config.game_version >= GameVersion::TwoPointFiveAnniversary
             && !self.has_finished()
             && !self.hp.is_empty()
-            && compete_before_spurt::SECTIONS.contains(&self.section)
-            && self.compete_before_spurt.is_none()
-            && state.elapsed_time >= self.next_compete_check
+            && sections.contains(&self.section)
+            && boost.is_check_due(state.elapsed_time)
     }
 
     /// Attempt to compete before spurt (位置取り調整).
@@ -1490,39 +1449,41 @@ impl Runner {
         state: &RaceState,
     ) {
         let elapsed_time = state.elapsed_time;
-        self.next_compete_check = elapsed_time + compete_before_spurt::CHECK_INTERVAL;
-
-        if !self.is_stamina_keep
-            && self.hp.current < hp_required_to_finish(self, state) * self.stamina_keep_ratio
+        if !self.stamina_keep.is_active
+            && self.hp.current < hp_required_to_finish(self, state) * self.stamina_keep.ratio
             && self
                 .rng
                 .borrow_mut()
                 .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wit))
         {
-            self.is_stamina_keep = true;
+            self.stamina_keep.is_active = true;
         }
         // ? Chance formula is unknown; set to always trigger for now.
-        if self.is_stamina_keep || !(far_from_lead || self.nearby.count > 0) {
+        if self.stamina_keep.is_active || !(far_from_lead || self.nearby.count > 0) {
+            self.compete_before_spurt = TimedBoost::Idle {
+                next_check: elapsed_time + compete_before_spurt::CHECK_INTERVAL,
+            };
             return;
         }
 
         let style = self.adjusted.style;
-        self.compete_before_spurt = Some(CompeteState {
-            modifier: compete_before_spurt::target_speed_bonus(
-                style,
-                self.adjusted.power,
-                self.adjusted.guts,
-                is_alone,
-            ),
-            expires_at: elapsed_time + compete_before_spurt::DURATION,
-        });
-        self.hp.current -=
-            compete_before_spurt::hp_cost(style, state.course.distance, far_from_lead);
-        if self.hp.is_empty() {
-            self.hp.has_emptied = true;
-        }
-        self.next_compete_check =
-            elapsed_time + compete_before_spurt::DURATION + compete_before_spurt::COOLDOWN;
+        let speed_bonus = compete_before_spurt::target_speed_bonus(
+            style,
+            self.adjusted.power,
+            self.adjusted.guts,
+            is_alone,
+        );
+        self.compete_before_spurt = TimedBoost::start(
+            speed_bonus,
+            elapsed_time,
+            compete_before_spurt::DURATION,
+            compete_before_spurt::COOLDOWN,
+        );
+        self.hp.consume(compete_before_spurt::hp_cost(
+            style,
+            state.course.distance,
+            far_from_lead,
+        ));
     }
 
     /// Start dueling (追い比べ), unless the runner already is.
@@ -2802,7 +2763,7 @@ impl Runner {
                 self.trigger_scheduler.activation_counts.increment_heal();
 
                 // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
-                self.is_stamina_keep = false;
+                self.stamina_keep.is_active = false;
 
                 // Recalculate last spurt if in Late phase or later (1st Anniv. onward).
                 if state.config.game_version >= GameVersion::FirstAnniversary

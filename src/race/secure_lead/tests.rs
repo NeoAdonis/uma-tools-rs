@@ -2,6 +2,7 @@ use super::*;
 use crate::configuration::GameVersion;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
+use crate::race::timed_boost::TimedBoost;
 use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
 
@@ -142,40 +143,36 @@ fn test_secure_lead_activation_and_expiry() {
         let elapsed = t as f64 * CHECK_INTERVAL;
         state.elapsed_time = elapsed;
         runner.try_secure_lead(false, false, &state);
-        assert!(runner.secure_lead.is_none());
-        assert_close!(runner.next_secure_lead_check, elapsed + CHECK_INTERVAL);
+        let next_check = elapsed + CHECK_INTERVAL;
+        assert_eq!(runner.secure_lead, TimedBoost::Idle { next_check });
     }
 
     // Insufficient lead eventually triggers.
     let hp_before = runner.hp.current;
     let mut elapsed = 0.0;
-    while runner.secure_lead.is_none() {
+    while matches!(runner.secure_lead, TimedBoost::Idle { .. }) {
         elapsed += CHECK_INTERVAL;
         state.elapsed_time = elapsed;
         runner.try_secure_lead(true, false, &state);
         assert!(elapsed < 1000.0, "secure lead never triggered");
     }
 
-    let secure_lead = runner.secure_lead.as_ref().unwrap();
     let expected_modifier = target_speed_bonus(
         Style::Front,
         runner.adjusted.guts,
         false,
         GameVersion::LATEST,
     );
-    assert_close!(secure_lead.modifier, expected_modifier);
-    assert_close!(secure_lead.expires_at, elapsed + DURATION);
+    let expected_boost = TimedBoost::start(expected_modifier, elapsed, DURATION, COOLDOWN);
+    assert_eq!(runner.secure_lead, expected_boost);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
     assert_close!(runner.hp.current, expected_hp);
-    assert_close!(runner.next_secure_lead_check, elapsed + DURATION + COOLDOWN);
 
     // Boost is applied to target speed.
     runner.update_target_speed(&state);
     let boosted = runner.target_speed;
-    runner.expire_secure_lead(elapsed + DURATION - 0.01);
-    assert!(runner.secure_lead.is_some());
-    runner.expire_secure_lead(elapsed + DURATION);
-    assert!(runner.secure_lead.is_none());
+    runner.secure_lead.expire(elapsed + DURATION);
+    assert!(matches!(runner.secure_lead, TimedBoost::Idle { .. }));
     runner.update_target_speed(&state);
     assert_close!(boosted - runner.target_speed, expected_modifier);
 }

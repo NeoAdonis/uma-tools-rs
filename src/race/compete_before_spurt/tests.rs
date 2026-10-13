@@ -2,6 +2,7 @@ use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
+use crate::race::timed_boost::TimedBoost;
 use crate::skill::SkillType;
 use crate::test_utils::{assert_close, effect, ready_solver, seeded_config, uma};
 use crate::trigger::skill_activation::OvertakeExtension;
@@ -111,13 +112,13 @@ fn test_compete_check_window() {
     state.elapsed_time = 100.0;
     old_runner.section = 12;
     assert!(!old_runner.is_compete_check_due(&state));
-    assert_eq!(old_runner.stamina_keep_ratio, 0.0);
+    assert_eq!(old_runner.stamina_keep.ratio, 0.0);
 }
 
 #[test]
 fn test_stamina_keep_ratio_range() {
     let (runner, _) = ready_runner(Style::Pace, GameVersion::LATEST);
-    assert!(STAMINA_KEEP_RATIO.contains(&runner.stamina_keep_ratio));
+    assert!(STAMINA_KEEP_RATIO.contains(&runner.stamina_keep.ratio));
 }
 
 #[test]
@@ -125,38 +126,37 @@ fn test_compete_activation_and_expiry() {
     let (mut runner, mut state) = ready_runner(Style::Front, GameVersion::LATEST);
     runner.section = 12;
     // Never enter Stamina Keep.
-    runner.stamina_keep_ratio = 0.0;
+    runner.stamina_keep.ratio = 0.0;
 
     // Neither far from lead nor nearby runners.
     state.elapsed_time = 10.0;
     runner.try_compete_before_spurt(false, true, &state);
-    assert!(runner.compete_before_spurt.is_none());
-    assert_close!(runner.next_compete_check, 10.0 + CHECK_INTERVAL);
+    let next_check = 10.0 + CHECK_INTERVAL;
+    assert_eq!(runner.compete_before_spurt, TimedBoost::Idle { next_check });
 
     // Far from lead.
     let hp_before = runner.hp.current;
     state.elapsed_time = 12.0;
     runner.try_compete_before_spurt(true, true, &state);
-    let compete = runner.compete_before_spurt.as_ref().unwrap();
     let expected_modifier = target_speed_bonus(
         Style::Front,
         runner.adjusted.power,
         runner.adjusted.guts,
         true,
     );
-    assert_close!(compete.modifier, expected_modifier);
-    assert_close!(compete.expires_at, 12.0 + DURATION);
+    let expected_boost = TimedBoost::start(expected_modifier, 12.0, DURATION, COOLDOWN);
+    assert_eq!(runner.compete_before_spurt, expected_boost);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, true);
     assert_close!(runner.hp.current, expected_hp);
-    assert_close!(runner.next_compete_check, 12.0 + DURATION + COOLDOWN);
 
     // Boost is applied to target speed.
     runner.update_target_speed(&state);
     let boosted = runner.target_speed;
-    runner.expire_compete_before_spurt(12.0 + DURATION - 0.01);
-    assert!(runner.compete_before_spurt.is_some());
-    runner.expire_compete_before_spurt(12.0 + DURATION);
-    assert!(runner.compete_before_spurt.is_none());
+    runner.compete_before_spurt.expire(12.0 + DURATION);
+    assert!(matches!(
+        runner.compete_before_spurt,
+        TimedBoost::Idle { .. }
+    ));
     runner.update_target_speed(&state);
     assert_close!(boosted - runner.target_speed, expected_modifier);
 
@@ -165,7 +165,10 @@ fn test_compete_activation_and_expiry() {
     runner.nearby.count = 1;
     state.elapsed_time = 20.0;
     runner.try_compete_before_spurt(false, false, &state);
-    assert!(runner.compete_before_spurt.is_some());
+    assert!(matches!(
+        runner.compete_before_spurt,
+        TimedBoost::Active { .. }
+    ));
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, false);
     assert_close!(runner.hp.current, expected_hp);
 }
@@ -179,24 +182,34 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
 
     // Low HP is eventually noticed, and competing is blocked from then on.
     let mut elapsed = 0.0;
-    while !runner.is_stamina_keep {
+    let idle = TimedBoost::Idle { next_check: 0.0 };
+    while !runner.stamina_keep.is_active {
         elapsed += CHECK_INTERVAL;
         state.elapsed_time = elapsed;
-        runner.compete_before_spurt = None;
+        runner.compete_before_spurt = idle;
         runner.try_compete_before_spurt(true, true, &state);
         assert!(elapsed < 1000.0, "stamina keep never triggered");
     }
-    assert!(runner.compete_before_spurt.is_none());
+    assert!(matches!(
+        runner.compete_before_spurt,
+        TimedBoost::Idle { .. }
+    ));
     state.elapsed_time = elapsed + CHECK_INTERVAL;
     runner.try_compete_before_spurt(true, true, &state);
-    assert!(runner.compete_before_spurt.is_none());
+    assert!(matches!(
+        runner.compete_before_spurt,
+        TimedBoost::Idle { .. }
+    ));
 
     // Recovering enough HP resets Stamina Keep and allows competing again.
     let recovery = effect(SkillType::Recovery, 1.0);
     runner.apply_skill_effect(&recovery, 0.0, OvertakeExtension::default(), 0.0, &state);
-    assert!(!runner.is_stamina_keep);
+    assert!(!runner.stamina_keep.is_active);
     state.elapsed_time = elapsed + 2.0 * CHECK_INTERVAL;
     runner.try_compete_before_spurt(true, true, &state);
-    assert!(!runner.is_stamina_keep);
-    assert!(runner.compete_before_spurt.is_some());
+    assert!(!runner.stamina_keep.is_active);
+    assert!(matches!(
+        runner.compete_before_spurt,
+        TimedBoost::Active { .. }
+    ));
 }
