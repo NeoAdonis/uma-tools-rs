@@ -2630,64 +2630,64 @@ impl Runner {
         wit_bonus: f64,
         state: &RaceState,
     ) {
-        let effect_type = &effect.skill_type;
-
         // Pre-race effects (stat boosts, start delay...) never reach this point (see
         // `activate_skill`).
+        match effect.skill_type {
+            // Timed effects (tracked in active_timed_effects).
+            effect_type if effect_type.is_timed_effect() => {
+                // Apply wit limit break bonus to target and current speed effects.
+                let bonus = match effect_type {
+                    SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
+                        wit_bonus
+                    }
+                    _ => 0.0,
+                };
+                self.active_timed_effects.push(ActiveTimedEffect {
+                    effect: effect.clone(),
+                    value: effect.modifier * (1.0 + bonus),
+                    expires_at: state.elapsed_time + scaled_duration,
+                    overtake_extension,
+                    additional_triggers: 0,
+                });
+            }
+            // Recovery (HP restoration, or HP loss if negative), as a fraction of max
+            // HP.
+            SkillType::Recovery => {
+                self.hp.recover(self.hp.maximum * effect.modifier);
 
-        // Timed effects (tracked in active_timed_effects).
-        if effect_type.is_timed_effect() {
-            let expires_at = state.elapsed_time + scaled_duration;
-            // Apply wit limit break bonus to target and current speed effects.
-            let bonus = match effect_type {
-                SkillType::TargetSpeed | SkillType::CurrentSpeedWithNaturalDeceleration => {
-                    wit_bonus
-                }
-                _ => 0.0,
-            };
-            self.active_timed_effects.push(ActiveTimedEffect {
-                effect: effect.clone(),
-                value: effect.modifier * (1.0 + bonus),
-                expires_at,
-                overtake_extension,
-                additional_triggers: 0,
-            });
-        }
-        // Recovery (HP restoration, or HP loss if negative), as a fraction of max HP.
-        else if matches!(effect_type, SkillType::Recovery) {
-            self.hp.recover(self.hp.maximum * effect.modifier);
+                // HP loss (e.g., a skill's drawback) is not a heal.
+                if effect.modifier > 0.0 {
+                    // Increment heal skill count.
+                    self.trigger_scheduler.activation_counts.increment_heal();
 
-            // HP loss (e.g., a skill's drawback) is not a heal.
-            if effect.modifier > 0.0 {
-                // Increment heal skill count.
-                self.trigger_scheduler.activation_counts.increment_heal();
+                    // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
+                    self.stamina_keep.is_active = false;
 
-                // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
-                self.stamina_keep.is_active = false;
-
-                // Recalculate last spurt if in Late phase or later (1st Anniv. onward).
-                if state.config.game_version >= GameVersion::FirstAnniversary
-                    && self.phase >= Phase::Late
-                {
-                    self.last_spurt = Some(calculate_last_spurt(self, state));
+                    // Recalculate last spurt if in Late phase or later (1st Anniv.
+                    // onward).
+                    if state.config.game_version >= GameVersion::FirstAnniversary
+                        && self.phase >= Phase::Late
+                    {
+                        self.last_spurt = Some(calculate_last_spurt(self, state));
+                    }
                 }
             }
-        }
-        // Activate random gold skills (one per unit of modifier).
-        else if matches!(effect_type, SkillType::ActivateRandomGold) {
-            self.activate_random_gold_skills(effect.modifier as usize, state);
-        }
-        // Activate unique skills again (one per unit of modifier).
-        else if matches!(effect_type, SkillType::ActivateUnique) {
-            self.activate_unique_skills(effect.modifier as usize, state);
-        }
-        // Rush time extension.
-        else if matches!(effect_type, SkillType::RushTimeUp) {
-            // Extend only if the Uma is bound to rush at all.
+            // Activate random gold skills (one per unit of modifier).
+            SkillType::ActivateRandomGold => {
+                self.activate_random_gold_skills(effect.modifier as usize, state);
+            }
+            // Activate unique skills again (one per unit of modifier).
+            SkillType::ActivateUnique => {
+                self.activate_unique_skills(effect.modifier as usize, state);
+            }
+            // Rush time extension, only if the runner is bound to rush at all.
             // ? Assume it also applies if already rushing for now.
-            if let Some(rush_state) = &mut self.rush_state {
-                rush_state.max_duration += effect.modifier;
+            SkillType::RushTimeUp => {
+                if let Some(rush_state) = &mut self.rush_state {
+                    rush_state.max_duration += effect.modifier;
+                }
             }
+            _ => {}
         }
     }
 
@@ -2782,23 +2782,18 @@ impl Runner {
     pub fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
 
-        // Transfer expiring CurrentSpeedWithNaturalDeceleration modifiers into the
-        // runner's speed, so that it decelerates naturally instead of dropping
-        // instantly.
-        self.active_timed_effects.iter().for_each(|effect| {
-            if effect.expires_at <= elapsed_time
-                && matches!(
-                    effect.effect.skill_type,
-                    SkillType::CurrentSpeedWithNaturalDeceleration
-                )
+        // Remove expired effects. Expiring CurrentSpeedWithNaturalDeceleration
+        // modifiers are transferred into the runner's speed, so that it decelerates
+        // naturally instead of dropping instantly.
+        self.active_timed_effects.retain(|effect| {
+            let is_active = effect.expires_at > elapsed_time;
+            if !is_active
+                && effect.effect.skill_type == SkillType::CurrentSpeedWithNaturalDeceleration
             {
                 self.speed += effect.current_value();
             }
+            is_active
         });
-
-        // Remove expired effects.
-        self.active_timed_effects
-            .retain(|effect| effect.expires_at > elapsed_time);
 
         // Recalculate modifiers if any effects expired.
         if self.active_timed_effects.len() != before_count {
