@@ -65,6 +65,7 @@
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::Course;
+use crate::course::geometry::Segment;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::InitialState;
 use crate::race::runner::{Runner, StartType};
@@ -434,7 +435,8 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
     match var {
         // Which corner: 0=none, 1-4=corner number.
         Corner => runner
-            .current_corner()
+            .segments
+            .corner()
             .map_or(0, |idx| course.corner_number(idx) as i32),
 
         // Is on final corner or beyond.
@@ -478,8 +480,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
             } else {
                 // Last straight starts after final corner ends.
                 let last_corner = course.corners.last().unwrap();
-                let last_straight_start = last_corner.start + last_corner.length;
-                if runner.position >= last_straight_start {
+                if runner.position >= last_corner.end() {
                     1
                 } else {
                     0
@@ -499,7 +500,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
 
         // Slope: 0=flat, 1=uphill, 2=downhill.
         Slope => {
-            if let Some(idx) = runner.current_slope() {
+            if let Some(idx) = runner.segments.slope() {
                 course.slopes[idx].slope_type() as i32
             } else {
                 0
@@ -508,7 +509,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
 
         // Straight front type: 1=facing audience, 2=opposite from audience.
         StraightFrontType => {
-            if let Some(idx) = runner.current_straight() {
+            if let Some(idx) = runner.segments.straight() {
                 course.straights[idx].front_type as i32
             } else {
                 // Not in a straight.

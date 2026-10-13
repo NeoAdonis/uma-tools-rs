@@ -332,12 +332,10 @@ impl RaceSolver<Runner> {
             // Update everything derived from the new position, so that skills see a
             // consistent state.
             runner.update_phase(&mut self.state);
-            runner.check_corner_end(&self.state.course.corners);
-            runner.check_corner_start(&self.state.course.corners);
-            runner.check_straight_end(&self.state.course.straights);
-            runner.check_straight_start(&self.state.course.straights);
+            let transitions = runner.segments.update(runner.position, &self.state.course);
             runner.update_slope(
                 &self.state.course.slopes,
+                &transitions.slope,
                 delta_time,
                 &mut *self.state.rng.borrow_mut(),
             );
@@ -1000,7 +998,7 @@ impl RaceSolver<Runner> {
         let course = &self.state.course;
         let can_duel = |runner: &Runner| {
             !runner.has_finished()
-                && runner.is_on_final_straight(course)
+                && runner.segments.is_on_final_straight(course)
                 && runner.hp.percent() >= duel::MIN_START_HP_PERCENT
         };
         let (a, b) = (&self.runners[i], &self.runners[j]);

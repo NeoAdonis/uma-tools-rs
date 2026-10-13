@@ -3,6 +3,23 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::units::deserialize_ten_thousandths;
 
+/// Course segment (corner, slope or straight) spanning from `start()`
+/// (inclusive) to `end()` (exclusive), in meters.
+pub trait Segment {
+    fn start(&self) -> f64;
+    fn end(&self) -> f64;
+
+    /// Get the `(start, end)` range of the segment.
+    fn range(&self) -> (f64, f64) {
+        (self.start(), self.end())
+    }
+
+    /// Check if `position` is within the segment.
+    fn contains(&self, position: f64) -> bool {
+        position >= self.start() && position < self.end()
+    }
+}
+
 /// Represents a corner on the course.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Corner {
@@ -10,6 +27,16 @@ pub struct Corner {
     pub start: f64,
     /// Length of the corner in meters.
     pub length: f64,
+}
+
+impl Segment for Corner {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.start + self.length
+    }
 }
 
 /// Represents the slope type of a course segment.
@@ -34,6 +61,16 @@ pub struct Slope {
     /// deserializing.
     #[serde(deserialize_with = "deserialize_ten_thousandths")]
     pub slope: f64,
+}
+
+impl Segment for Slope {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.start + self.length
+    }
 }
 
 impl Slope {
@@ -92,9 +129,44 @@ pub struct Straight {
     pub front_type: FrontType,
 }
 
+impl Segment for Straight {
+    fn start(&self) -> f64 {
+        self.start
+    }
+
+    fn end(&self) -> f64 {
+        self.end
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_segment_bounds() {
+        let corner = Corner {
+            start: 100.0,
+            length: 50.0,
+        };
+        assert_eq!(corner.range(), (100.0, 150.0));
+
+        let slope = Slope::new(200.0, 30.0, 1.5);
+        assert_eq!(slope.range(), (200.0, 230.0));
+
+        let straight = Straight {
+            start: 300.0,
+            end: 400.0,
+            front_type: FrontType::Audience,
+        };
+        assert_eq!(straight.range(), (300.0, 400.0));
+
+        // Start is inclusive, end is exclusive.
+        assert!(corner.contains(100.0));
+        assert!(corner.contains(149.9));
+        assert!(!corner.contains(150.0));
+        assert!(!corner.contains(99.9));
+    }
 
     #[test]
     fn test_slope_type() {

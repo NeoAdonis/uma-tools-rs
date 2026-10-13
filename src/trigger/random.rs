@@ -4,6 +4,7 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::Course;
 use crate::course::Phase as CoursePhase;
+use crate::course::geometry::Segment;
 use rand::prelude::*;
 
 /// Results of the comparisons already rolled, so that they're rolled only once.
@@ -142,11 +143,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
             let corner_intervals: Vec<(f64, f64)> = course
                 .corners
                 .iter()
-                .filter_map(|corner| {
-                    let corner_start = corner.start;
-                    let corner_end = corner.start + corner.length;
-                    intersect_intervals(corner_start, corner_end, start, end)
-                })
+                .filter_map(|corner| intersect_intervals(corner.start, corner.end(), start, end))
                 .collect();
 
             // No corners in this phase fails the roll.
@@ -227,13 +224,10 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
             // "is_finalcorner_random==1".
             // Picks random segment on final corner.
             // No corners on course fails the roll.
-            course.corners.last().map(|last_corner| {
-                vec![random_segment(
-                    last_corner.start,
-                    last_corner.start + last_corner.length,
-                    rng,
-                )]
-            })
+            course
+                .corners
+                .last()
+                .map(|last_corner| vec![random_segment(last_corner.start, last_corner.end(), rng)])
         }
 
         RandomSpatial(RandomSpatialVar::CornerRandom) => {
@@ -245,11 +239,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .rev()
                 .find(|&idx| course.corner_number(idx) as i32 == comp.value)?;
             let corner = &course.corners[corner_idx];
-            Some(vec![random_segment(
-                corner.start,
-                corner.start + corner.length,
-                rng,
-            )])
+            Some(vec![random_segment(corner.start, corner.end(), rng)])
         }
 
         RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
@@ -288,7 +278,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
             // No uphills on course fails the roll.
             uphills
                 .choose(rng)
-                .map(|slope| vec![random_segment(slope.start, slope.start + slope.length, rng)])
+                .map(|slope| vec![random_segment(slope.start, slope.end(), rng)])
         }
 
         RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
@@ -301,12 +291,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .iter()
                 .filter(|s| s.is_uphill())
                 .filter_map(|s| {
-                    intersect_intervals(
-                        s.start,
-                        s.start + s.length,
-                        halfway,
-                        course.distance as f64,
-                    )
+                    intersect_intervals(s.start, s.end(), halfway, course.distance as f64)
                 })
                 .collect();
 
@@ -324,7 +309,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
             // No downhills on course fails the roll.
             downhills
                 .choose(rng)
-                .map(|slope| vec![random_segment(slope.start, slope.start + slope.length, rng)])
+                .map(|slope| vec![random_segment(slope.start, slope.end(), rng)])
         }
 
         RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom) => {
@@ -413,11 +398,7 @@ fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> 
 fn random_all_corner_segments(course: &Course, rng: &mut impl Rng) -> Vec<f64> {
     const MAX_SEGMENTS: usize = 4;
 
-    let mut candidates: Vec<(f64, f64)> = course
-        .corners
-        .iter()
-        .map(|corner| (corner.start, corner.start + corner.length))
-        .collect();
+    let mut candidates: Vec<(f64, f64)> = course.corners.iter().map(Segment::range).collect();
     let mut points = Vec::with_capacity(MAX_SEGMENTS);
 
     while points.len() < MAX_SEGMENTS && !candidates.is_empty() {

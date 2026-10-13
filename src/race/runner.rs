@@ -7,7 +7,7 @@ use rand::prelude::*;
 use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_comparison_list};
 use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
-use crate::course::geometry::{Corner, Slope, Straight};
+use crate::course::geometry::Slope;
 use crate::course::*;
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
@@ -489,12 +489,14 @@ pub struct Runner {
     pub positioning_strategy: PositioningStrategy,
     /// Next time to check positioning strategy conditions, in seconds.
     pub next_positioning_check: f64,
-    /// Current slope acceleration in m/s², if any.
-    pub slope_acceleration: Option<f64>,
-    /// Time spent going downhill in seconds.
+    /// Current slope target speed modifier in m/s, if any.
     ///
-    /// It's used to determine chance of downhill acceleration each second.
-    pub downhill_time: f64,
+    /// Positive in downhill mode, negative when going uphill.
+    pub slope_speed_modifier: Option<f64>,
+    /// Time since the last downhill mode check in seconds.
+    ///
+    /// Downhill mode is checked upon entering a downhill and then every second.
+    pub downhill_check_timer: f64,
     /// Number of uphills climbed to the end.
     pub uphills_climbed: u8,
     /// Current section index (0-23).
@@ -531,17 +533,8 @@ pub struct Runner {
     pub charge_up: Option<ChargeUp>,
     /// Reference to a `RaceSolver`'s RNG, shared with other runners.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
-    /// Structure used to determine corner entries and exits, along with skills
-    /// triggered by those events.
-    pub corner_manager: SegmentManager,
-    /// Structure used to determine slope entries and exits, along with their
-    /// acceleration/deceleration effects as well as skills triggered by slopes.
-    pub slope_manager: SegmentManager,
-    /// Structure used to determine straight entries and exits, along with skills
-    /// triggered by those events.
-    pub straight_manager: SegmentManager,
-    /// Straight entered since skills were last checked, if any.
-    pub entered_straight: Option<usize>,
+    /// Course segments (corners, straights and slopes) the runner is in.
+    pub segments: SegmentState,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
     pub trigger_scheduler: TriggerScheduler,
@@ -668,34 +661,36 @@ impl Runner {
         };
     }
 
-    /// Check if the runner is currently experiencing downhill acceleration.
-    pub fn is_accelerating_downhill(&self) -> bool {
-        self.slope_acceleration.is_some_and(|s| s < 0.0)
+    /// Check if the runner is in downhill mode (i.e. not only going downhill but
+    /// also experiencing a speed gain).
+    pub fn is_in_downhill_mode(&self) -> bool {
+        self.slope_speed_modifier.is_some_and(|s| s > 0.0)
     }
 
-    /// Check if the runner is going uphill, thus experiencing uphill deceleration.
+    /// Check if the runner is going uphill, thus experiencing a speed reduction.
     pub fn is_going_uphill(&self) -> bool {
-        self.slope_acceleration.is_some_and(|s| s > 0.0)
+        self.slope_speed_modifier.is_some_and(|s| s < 0.0)
     }
 
-    /// Start downhill acceleration based on slope percent.
-    /// N.B. Going downhill does not guarantee acceleration.
-    fn start_downhill_acceleration(&mut self, slope: f64) {
-        if slope > 0.0 {
-            panic!("Not a downhill slope");
-        }
-        self.slope_acceleration = Some(-slope / 10.0 + 0.3);
+    /// Start downhill mode and set a speed gain based on slope percent.
+    ///
+    /// Downhill mode is based on a wit check; just going downhill does not
+    /// guarantee a speed gain.
+    fn start_downhill_mode(&mut self, slope: f64) {
+        debug_assert!(slope < 0.0, "Not a downhill slope");
+        self.slope_speed_modifier = Some(-slope / 10.0 + 0.3);
     }
 
-    /// Start uphill deceleration based on slope percent.
+    /// Start uphill speed reduction based on slope percent.
+    ///
     /// This should always happen while on an uphill.
-    fn start_uphill_deceleration(&mut self, slope: f64) {
-        self.slope_acceleration = Some(-slope * 200.0 / self.adjusted.power as f64);
+    fn start_uphill_speed_reduction(&mut self, slope: f64) {
+        self.slope_speed_modifier = Some(-slope * 200.0 / self.adjusted.power as f64);
     }
 
-    /// Stop any slope-based acceleration or deceleration.
-    fn stop_slope_acceleration(&mut self) {
-        self.slope_acceleration = None;
+    /// Stop any slope-based speed modification.
+    fn clear_slope_speed_modifier(&mut self) {
+        self.slope_speed_modifier = None;
     }
 
     /// Get the effective speed including skill modifiers.
@@ -823,7 +818,7 @@ impl Runner {
             .map_or(0.0, |c| c.modifier);
 
         self.target_speed = (target_speed
-            + self.slope_acceleration.unwrap_or(0.0)
+            + self.slope_speed_modifier.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
             + self.section_speed_modifier
             + dueling_modifier
@@ -1300,7 +1295,7 @@ impl Runner {
         if self.is_pace_down() {
             multiplier *= 0.6;
         }
-        if self.is_accelerating_downhill() {
+        if self.is_in_downhill_mode() {
             multiplier *= 0.4;
         }
         self.hp.current -= calculate_hp_per_second(
@@ -1683,7 +1678,7 @@ impl Runner {
         }
 
         // On final straight AND extra move lane is on the outside.
-        if self.is_on_final_straight(course)
+        if self.segments.is_on_final_straight(course)
             && let Some(extra) = self.extra_move_lane
             && extra > self.lane.current
             && self.has_lane_space_to(extra, all_runners)
@@ -1955,15 +1950,6 @@ impl Runner {
             .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
 
-    /// Check if runner is currently on the final straight.
-    pub fn is_on_final_straight(&self, course: &Course) -> bool {
-        if course.straights.is_empty() {
-            return false;
-        }
-        self.current_straight()
-            .is_some_and(|idx| idx == course.straights.len() - 1)
-    }
-
     /// Find the closest uma on the inside (lower lane value).
     /// Returns (inside_uma_lane, distance_in_horse_lanes) if found.
     fn find_inside_runner(&self, all_runners: &[Runner]) -> Option<(f64, f64)> {
@@ -2011,93 +1997,58 @@ impl Runner {
         closest_inside
     }
 
-    /// Get the current corner index if in a corner.
-    pub fn current_corner(&self) -> Option<usize> {
-        self.corner_manager.current()
-    }
-
-    /// Check for corner entry and update state.
-    pub fn check_corner_start(&mut self, corners: &[Corner]) {
-        self.corner_manager.check_entry(self.position, corners);
-    }
-
-    /// Check for corner exit and update state.
-    pub fn check_corner_end(&mut self, corners: &[Corner]) {
-        self.corner_manager.check_exit(self.position, corners);
-    }
-
-    /// Get the current straight index if on a straight.
-    pub fn current_straight(&self) -> Option<usize> {
-        self.straight_manager.current()
-    }
-
-    /// Check for straight entry.
+    /// Apply slope effects after a segment update with `transition` (see
+    /// [`SegmentState::update`]).
     ///
-    /// Skills triggered by the entry are checked on the next skill check (see
-    /// [`Self::check_state_triggers`]).
-    pub fn check_straight_start(&mut self, straights: &[Straight]) {
-        if let Some(straight_idx) = self.straight_manager.check_entry(self.position, straights) {
-            self.entered_straight = Some(straight_idx);
-        }
-    }
-
-    /// Check for straight exit and update state.
-    pub fn check_straight_end(&mut self, straights: &[Straight]) {
-        // Only check; no triggers are fired by this event.
-        self.straight_manager.check_exit(self.position, straights);
-    }
-
-    /// Get the current slope index if on a slope.
-    pub fn current_slope(&self) -> Option<usize> {
-        self.slope_manager.current()
-    }
-
-    /// Update slope state and apply slope-based acceleration/deceleration.
-    pub fn update_slope(&mut self, slopes: &[Slope], delta_time: f64, rng: &mut impl Rng) {
-        // Exit first, so that a slope right after another one is entered in the same
-        // frame.
-        if let Some(slope_idx) = self.slope_manager.check_exit(self.position, slopes) {
-            // Exiting slope - stop any slope-based acceleration/deceleration.
-            self.stop_slope_acceleration();
-            if slopes[slope_idx].is_uphill() {
+    /// Uphills reduce the runner's target speed while on them. On downhills, the
+    /// runner may enter downhill mode (Wit * 0.04% chance) or exit it (20% chance)
+    /// upon entering them and then every second.
+    pub fn update_slope(
+        &mut self,
+        slopes: &[Slope],
+        transition: &Transition,
+        delta_time: f64,
+        rng: &mut impl Rng,
+    ) {
+        if let Some(idx) = transition.exited {
+            self.clear_slope_speed_modifier();
+            if slopes[idx].is_uphill() {
                 self.uphills_climbed += 1;
             }
         }
 
-        if let Some(slope_idx) = self.slope_manager.check_entry(self.position, slopes) {
-            // Entering slope - apply uphill deceleration if applicable.
-            if slopes[slope_idx].is_uphill() {
-                self.start_uphill_deceleration(slopes[slope_idx].slope);
-            } else {
-                // Downhill - reset downhill timer.
-                self.downhill_time = 0.0;
+        let Some(slope) = self.segments.slope().map(|idx| &slopes[idx]) else {
+            return;
+        };
+        if slope.is_uphill() {
+            if transition.entered.is_some() {
+                self.start_uphill_speed_reduction(slope.slope);
             }
-        } else if let Some(idx) = self.current_slope() {
-            // On slope - check for downhill acceleration.
-            if slopes[idx].is_downhill() {
-                self.downhill_time += delta_time;
-                let has_second_passed = if self.downhill_time > 0.0 {
-                    {
-                        self.downhill_time -= 1.0;
-                        true
-                    }
-                } else {
-                    false
-                };
-                if has_second_passed {
-                    if self.is_accelerating_downhill() {
-                        // 20% chance to stop each second.
-                        if rng.random_bool(0.2) {
-                            self.stop_slope_acceleration();
-                        }
-                    } else {
-                        // Wit * 0.04% chance to start each second.
-                        let chance = self.adjusted.wit as f64 * 0.0004;
-                        if rng.random_bool(chance) {
-                            self.start_downhill_acceleration(slopes[idx].slope);
-                        }
-                    }
-                }
+            return;
+        }
+        if !slope.is_downhill() {
+            return;
+        }
+
+        if transition.entered.is_some() {
+            self.downhill_check_timer = 0.0;
+        } else {
+            self.downhill_check_timer += delta_time;
+            // Accumulated frame times fall slightly short of whole seconds.
+            if self.downhill_check_timer < 1.0 - EPSILON {
+                return;
+            }
+            self.downhill_check_timer -= 1.0;
+        }
+
+        if self.is_in_downhill_mode() {
+            if rng.random_bool(0.2) {
+                self.clear_slope_speed_modifier();
+            }
+        } else {
+            let chance = (self.adjusted.wit as f64 * 0.0004).min(1.0);
+            if rng.random_bool(chance) {
+                self.start_downhill_mode(slope.slope);
             }
         }
     }
@@ -2117,7 +2068,7 @@ impl Runner {
             }
             if self.phase >= Phase::Late {
                 self.order.overtakes_since_late += overtakes;
-                if self.current_corner().is_some() {
+                if self.segments.corner().is_some() {
                     self.order.overtakes_in_late_corners += overtakes;
                 }
             }
@@ -2486,8 +2437,8 @@ impl Runner {
     /// are satisfied on the same frame, the first one wins.
     pub fn check_state_triggers(&mut self, state: &RaceState) {
         let entered_last_straight = self
-            .entered_straight
-            .take()
+            .segments
+            .take_entered_straight()
             .is_some_and(|straight_idx| straight_idx + 1 == state.course.straights.len());
 
         let scheduler = &mut self.trigger_scheduler;

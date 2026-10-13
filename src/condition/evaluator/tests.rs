@@ -7,7 +7,7 @@ use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
 use crate::race::parameters::*;
 use crate::race::runner::{Runner, RushState};
 use crate::race::solver::RaceSolver;
-use crate::race::transitions::SegmentManager;
+use crate::race::transitions::SegmentState;
 use crate::skill::{Skill, SkillType};
 use crate::test_utils::*;
 
@@ -548,14 +548,8 @@ fn location_course() -> Course {
 /// (if any).
 fn place(runner: &mut Runner, course: &Course, position: f64) {
     runner.position = position;
-    runner.corner_manager = SegmentManager::default();
-    runner.corner_manager.check_entry(position, &course.corners);
-    runner.straight_manager = SegmentManager::default();
-    runner
-        .straight_manager
-        .check_entry(position, &course.straights);
-    runner.slope_manager = SegmentManager::default();
-    runner.slope_manager.check_entry(position, &course.slopes);
+    runner.segments = SegmentState::default();
+    runner.segments.update(position, course);
 }
 
 #[test]

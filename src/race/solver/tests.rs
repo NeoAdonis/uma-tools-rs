@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::Roll;
-use crate::course::LaneType;
-use crate::course::geometry::Slope;
+use crate::course::geometry::{Segment, Slope};
+use crate::course::{CourseData, LaneType};
 use crate::race::runner::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
@@ -51,24 +51,18 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
                     "{context}"
                 );
                 assert_eq!(
-                    runner.current_corner(),
-                    feature_at(
-                        position,
-                        course.corners.iter().map(|c| (c.start, c.start + c.length))
-                    ),
+                    runner.segments.corner(),
+                    feature_at(position, course.corners.iter().map(Segment::range)),
                     "{context}"
                 );
                 assert_eq!(
-                    runner.current_straight(),
-                    feature_at(position, course.straights.iter().map(|s| (s.start, s.end))),
+                    runner.segments.straight(),
+                    feature_at(position, course.straights.iter().map(Segment::range)),
                     "{context}"
                 );
                 assert_eq!(
-                    runner.current_slope(),
-                    feature_at(
-                        position,
-                        course.slopes.iter().map(|s| (s.start, s.start + s.length))
-                    ),
+                    runner.segments.slope(),
+                    feature_at(position, course.slopes.iter().map(Segment::range)),
                     "{context}"
                 );
             }
@@ -968,7 +962,8 @@ fn duel_solver(runners: &[(f64, f64)], game_version: GameVersion) -> RaceSolver<
 fn place_on_straight(solver: &mut RaceSolver<Runner>, i: usize, position: f64, lane: f64) {
     place(solver, i, position, lane);
     let RaceSolver { runners, state, .. } = solver;
-    runners[i].check_straight_start(&state.course.straights);
+    let runner = &mut runners[i];
+    runner.segments.update(runner.position, &state.course);
 }
 
 /// Run `frames` duel updates at 15 FPS, with up-to-date order rates.
@@ -2787,8 +2782,7 @@ fn test_late_race_corner_overtakes_are_tracked() {
     let overtake = |runner: &mut Runner, position, phase, from, to| {
         runner.position = position;
         runner.phase = phase;
-        runner.check_corner_start(&course.corners);
-        runner.check_corner_end(&course.corners);
+        runner.segments.update(position, &course);
         runner.order.order = from;
         runner.update_order(to, &course);
     };
@@ -3121,18 +3115,15 @@ fn test_overtakes_extend_effects() {
 #[test]
 fn test_uphills_climbed_are_counted() {
     let mut solver = timed_skill_solver(vec![]);
-    let slopes = [
+    let course = course_with_slopes(vec![
         Slope::new(100.0, 100.0, 2.0),
         Slope::new(300.0, 100.0, -2.0),
         // Right after the previous one.
         Slope::new(400.0, 100.0, 1.5),
-    ];
-    let rng = Rc::clone(&solver.state.rng);
-    let runner = &mut solver.runners[0];
+    ]);
     let mut climbed_at = |position| {
-        runner.position = position;
-        runner.update_slope(&slopes, DELTA_TIME, &mut *rng.borrow_mut());
-        runner.uphills_climbed
+        move_on_slopes(&mut solver, &course, position);
+        solver.runners[0].uphills_climbed
     };
 
     // Only counted once the end of an uphill is reached.
@@ -3142,6 +3133,66 @@ fn test_uphills_climbed_are_counted() {
     assert_eq!(climbed_at(350.0), 1);
     assert_eq!(climbed_at(450.0), 1);
     assert_eq!(climbed_at(500.0), 2);
+}
+
+/// Synthetic course with the given slopes.
+fn course_with_slopes(slopes: Vec<Slope>) -> Course {
+    Course::new_test(
+        0,
+        CourseData {
+            slopes,
+            ..course_data()
+        },
+    )
+}
+
+/// Move the first runner to `position` on `course`, applying slope effects.
+fn move_on_slopes(solver: &mut RaceSolver<Runner>, course: &Course, position: f64) {
+    let RaceSolver { runners, state, .. } = solver;
+    let runner = &mut runners[0];
+    runner.position = position;
+    let transitions = runner.segments.update(position, course);
+    runner.update_slope(
+        &course.slopes,
+        &transitions.slope,
+        DELTA_TIME,
+        &mut *state.rng.borrow_mut(),
+    );
+}
+
+#[test]
+fn test_downhill_mode_checked_on_entry_then_every_second() {
+    let mut solver = timed_skill_solver(vec![]);
+    let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
+    // Uphills aren't mistaken for downhill mode.
+    let uphill = course_with_slopes(vec![Slope::new(50.0, 40.0, 2.0)]);
+    move_on_slopes(&mut solver, &uphill, 50.0);
+    assert!(solver.runners[0].is_going_uphill());
+    assert!(!solver.runners[0].is_in_downhill_mode());
+    move_on_slopes(&mut solver, &uphill, 90.0);
+
+    // Guaranteed to enter downhill mode on every check.
+    solver.runners[0].adjusted.wit = 2500;
+
+    move_on_slopes(&mut solver, &course, 99.0);
+    assert!(!solver.runners[0].is_in_downhill_mode());
+    move_on_slopes(&mut solver, &course, 100.0);
+    assert!(solver.runners[0].is_in_downhill_mode());
+    assert!(!solver.runners[0].is_going_uphill());
+
+    // After exiting downhill mode, the next check is a second (15 frames) after
+    // entry.
+    solver.runners[0].slope_speed_modifier = None;
+    for frame in 1..15 {
+        move_on_slopes(&mut solver, &course, 100.0 + frame as f64);
+        assert!(!solver.runners[0].is_in_downhill_mode(), "frame {frame}");
+    }
+    move_on_slopes(&mut solver, &course, 115.0);
+    assert!(solver.runners[0].is_in_downhill_mode());
+
+    // Exiting the downhill exits downhill mode.
+    move_on_slopes(&mut solver, &course, 300.0);
+    assert!(!solver.runners[0].is_in_downhill_mode());
 }
 
 #[test]

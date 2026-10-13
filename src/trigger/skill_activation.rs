@@ -38,6 +38,7 @@
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
+use crate::course::geometry::Segment;
 use crate::course::*;
 use crate::skill::{AdditionalActivation, SkillEffect};
 use crate::trigger::random::SEGMENT_LENGTH;
@@ -480,8 +481,6 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
 
     let distance = course.distance as f64;
     let last_corner = course.corners.last();
-    let corner_range =
-        |corner: &crate::course::geometry::Corner| (corner.start, corner.start + corner.length);
     let subdivision = |boundaries| subdivision_range(comp.value, course, boundaries);
 
     let range = match (&comp.var, comp.op, comp.value) {
@@ -524,13 +523,12 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
                 (corner.start + corner.length / 2.0, f64::INFINITY)
             }),
         // After the final corner (anywhere without corners).
-        (Spatial(SpatialVar::IsLastStraight), CompOp::Equal, 1) => last_corner
-            .map_or(FULL_RANGE, |corner| {
-                (corner.start + corner.length, f64::INFINITY)
-            }),
+        (Spatial(SpatialVar::IsLastStraight), CompOp::Equal, 1) => {
+            last_corner.map_or(FULL_RANGE, |corner| (corner.end(), f64::INFINITY))
+        }
 
         (Spatial(SpatialVar::Corner), CompOp::NotEqual, 0) => {
-            envelope(course.corners.iter().map(corner_range))
+            envelope(course.corners.iter().map(Segment::range))
         }
         // Every occurrence of the corner (multiple if more than one lap).
         (Spatial(SpatialVar::Corner), CompOp::Equal, n) if n > 0 => envelope(
@@ -539,14 +537,14 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
                 .iter()
                 .enumerate()
                 .filter(|(idx, _)| course.corner_number(*idx) as i32 == n)
-                .map(|(_, corner)| corner_range(corner)),
+                .map(|(_, corner)| corner.range()),
         ),
         (Spatial(SpatialVar::Slope), CompOp::Equal, slope_type) if slope_type != 0 => envelope(
             course
                 .slopes
                 .iter()
                 .filter(|slope| slope.slope_type() as i32 == slope_type)
-                .map(|slope| (slope.start, slope.start + slope.length)),
+                .map(Segment::range),
         ),
         (Spatial(SpatialVar::StraightFrontType), CompOp::Equal, front_type) if front_type != 0 => {
             envelope(
@@ -554,7 +552,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
                     .straights
                     .iter()
                     .filter(|straight| straight.front_type as i32 == front_type)
-                    .map(|straight| (straight.start, straight.end)),
+                    .map(Segment::range),
             )
         }
 
