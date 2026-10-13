@@ -73,6 +73,12 @@ impl Default for SkillModifiers {
 }
 
 impl SkillModifiers {
+    /// Check if skills are modifying target or current speed, in either
+    /// direction.
+    pub fn has_speed_effects(&self) -> bool {
+        self.current_speed.abs() >= 0.0001 || self.target_speed.abs() >= 0.0001
+    }
+
     /// Sum up the modifiers of the active timed `effects`.
     pub fn from_effects(effects: &[ActiveTimedEffect]) -> Self {
         use SkillType::*;
@@ -954,9 +960,7 @@ impl Runner {
                     return;
                 }
 
-                let chance = 0.2 * (self.adjusted.wit as f64 * 0.1).log10();
-                let pass_roll = self.rng.borrow_mut().random_bool(chance);
-                if !pass_roll {
+                if !self.roll_positioning_wit_check(0.2) {
                     return;
                 }
 
@@ -1024,17 +1028,13 @@ impl Runner {
 
                 if distance_behind > range.end {
                     // Catch up to a certain distance (if wit allows).
-                    let chance = 0.15 * (self.adjusted.wit as f64 * 0.1).log10();
-                    let pass_roll = self.rng.borrow_mut().random_bool(chance);
-                    if !pass_roll {
+                    if !self.roll_positioning_wit_check(0.15) {
                         return;
                     }
 
                     let threshold = self.rng.borrow_mut().random_range(range);
                     self.positioning_strategy = PositioningStrategy::PaceUp(threshold);
-                } else if distance_behind < range.start
-                    && self.skill_modifiers.current_speed.abs() < 0.0001
-                    && self.skill_modifiers.target_speed.abs() < 0.0001
+                } else if distance_behind < range.start && !self.skill_modifiers.has_speed_effects()
                 {
                     // Pace down to a certain distance (unless affected by speed-increasing skills).
                     // 1.5 anniv. patch: if in mid-race, the maximum distance is replaced with the
@@ -1057,18 +1057,13 @@ impl Runner {
             PositioningStrategy::PaceUp(threshold) => {
                 // Exit when caught up within threshold.
                 if distance_behind < threshold {
-                    self.positioning_strategy = PositioningStrategy::Normal;
-                    self.next_positioning_check = elapsed_time + 3.0;
+                    self.reset_positioning(elapsed_time + 3.0);
                 }
             }
             PositioningStrategy::PaceDown(threshold) => {
                 // Exit when fallen back beyond threshold or if speed is increased by skills.
-                if distance_behind > threshold
-                    || self.skill_modifiers.current_speed.abs() > 0.0001
-                    || self.skill_modifiers.target_speed.abs() > 0.0001
-                {
-                    self.positioning_strategy = PositioningStrategy::Normal;
-                    self.next_positioning_check = elapsed_time + 3.0;
+                if distance_behind > threshold || self.skill_modifiers.has_speed_effects() {
+                    self.reset_positioning(elapsed_time + 3.0);
                 }
             }
             _ => {
@@ -1078,6 +1073,20 @@ impl Runner {
                 )
             }
         }
+    }
+
+    /// Go back to the normal positioning strategy, checking it again at
+    /// `next_check` (s).
+    fn reset_positioning(&mut self, next_check: f64) {
+        self.positioning_strategy = PositioningStrategy::Normal;
+        self.next_positioning_check = next_check;
+    }
+
+    /// Roll a wit check to change positioning strategy, with a chance of
+    /// `coef * log10(wit * 0.1)`.
+    fn roll_positioning_wit_check(&self, coef: f64) -> bool {
+        let chance = coef * (self.adjusted.wit as f64 * 0.1).log10();
+        self.rng.borrow_mut().random_bool(chance)
     }
 
     /// Enter or exit [`PositioningStrategy::PaceUpEx`] (1.5 anniversary and later).
@@ -1095,8 +1104,7 @@ impl Runner {
     ) -> bool {
         if matches!(self.positioning_strategy, PositioningStrategy::PaceUpEx) {
             if !passive_ahead {
-                self.positioning_strategy = PositioningStrategy::Normal;
-                self.next_positioning_check = state.elapsed_time;
+                self.reset_positioning(state.elapsed_time);
                 return false;
             }
             return true;
@@ -1304,8 +1312,7 @@ impl Runner {
         } else {
             *count -= 1;
         }
-        self.positioning_strategy = PositioningStrategy::Normal;
-        self.next_positioning_check = state.elapsed_time;
+        self.reset_positioning(state.elapsed_time);
     }
 
     /// End rush once it reaches its maximum duration or the runner snaps out of it.
@@ -1601,7 +1608,7 @@ impl Runner {
 
         // Position keeping mode is pace-down.
         // Set lane target to fixed point.
-        if matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_)) {
+        if self.is_pace_down() {
             return f64::min(0.18, course.width);
         }
 
@@ -1689,14 +1696,20 @@ impl Runner {
         decision
     }
 
+    /// Runners in `all_runners` other than this one.
+    fn others<'a>(&self, all_runners: &'a [Runner]) -> impl Iterator<Item = &'a Runner> {
+        let gate_roll = self.gate_roll;
+        all_runners.iter().filter(move |r| r.gate_roll != gate_roll)
+    }
+
     /// Find the innermost and outermost uma in a target's crowd.
     /// Crowd members are within 3m distance and less than 2 horse lanes away.
     fn find_crowd_boundaries(&self, target: &Runner, all_runners: &[Runner]) -> (f64, f64) {
         let mut inner_lane = target.lane.current;
         let mut outer_lane = target.lane.current;
 
-        for other in all_runners {
-            if other.gate_roll == target.gate_roll || other.gate_roll == self.gate_roll {
+        for other in self.others(all_runners) {
+            if other.gate_roll == target.gate_roll {
                 continue;
             }
 
@@ -1788,25 +1801,16 @@ impl Runner {
         reference_distance: f64,
         all_runners: &[Runner],
     ) -> bool {
-        for other in all_runners {
-            if other.gate_roll == self.gate_roll {
-                continue;
-            }
-
-            // Check distance window: OwnerDistance <= Distance <= ReferenceDistance + 0.5.
-            // Check lane window: CandidateLane ± 0.8 HorseLane.
-            if proximity::is_near_by(
+        // Check distance window: OwnerDistance <= Distance <= ReferenceDistance + 0.5.
+        // Check lane window: CandidateLane ± 0.8 HorseLane.
+        !self.others(all_runners).any(|other| {
+            proximity::is_near_by(
                 other.position - self.position,
                 (other.lane.current - candidate_lane).abs(),
                 reference_distance + 0.5,
                 0.8,
-            ) {
-                // Someone is blocking this candidate.
-                return false;
-            }
-        }
-
-        true
+            )
+        })
     }
 
     /// Score candidates using phase-dependent coefficients.
@@ -1844,21 +1848,11 @@ impl Runner {
         let max_lane = self.lane.current.max(target_lane);
         let lane_range = min_lane..=max_lane;
 
-        for other in all_runners {
-            if other.gate_roll == self.gate_roll {
-                continue;
-            }
-
-            let distance = (other.position - self.position).abs();
-            let lane = other.lane.current;
-
-            // If runner is very close and in the lane change path, consider it blocking.
-            if distance < 1.05 && lane_range.contains(&lane) {
-                return false;
-            }
-        }
-
-        true
+        // Runners very close and in the lane change path block it.
+        !self.others(all_runners).any(|other| {
+            (other.position - self.position).abs() < 1.05
+                && lane_range.contains(&other.lane.current)
+        })
     }
 
     /// Next extra_move_lane based on furthest visible runner ahead.
@@ -1883,12 +1877,7 @@ impl Runner {
     fn find_inside_runner(&self, all_runners: &[Runner]) -> Option<(f64, f64)> {
         let mut closest_inside: Option<(f64, f64)> = None;
 
-        for other in all_runners {
-            // Skip self.
-            if other.gate_roll == self.gate_roll {
-                continue;
-            }
-
+        for other in self.others(all_runners) {
             // Only consider runners on the inside (lower lane value).
             if other.lane.current >= self.lane.current {
                 continue;
@@ -2176,30 +2165,28 @@ impl Runner {
 
     /// Update nearby time counters based on current nearby counts.
     pub fn update_near_time(&mut self, delta_time: f64) {
-        if self.nearby.ahead_same_lane_count > 0 {
-            self.nearby.ahead_same_lane_time += delta_time;
-        } else {
-            self.nearby.ahead_same_lane_time = 0.0;
-        }
-        if self.nearby.behind_same_lane_count > 0 {
-            self.nearby.behind_same_lane_time += delta_time;
-        } else {
-            self.nearby.behind_same_lane_time = 0.0;
-        }
-        if self.nearby.behind_set1_count > 0 {
-            self.nearby.behind_set1_time += delta_time;
-        } else {
-            self.nearby.behind_set1_time = 0.0;
-        }
+        let nearby = &mut self.nearby;
+        tick(
+            &mut nearby.ahead_same_lane_time,
+            nearby.ahead_same_lane_count > 0,
+            delta_time,
+        );
+        tick(
+            &mut nearby.behind_same_lane_time,
+            nearby.behind_same_lane_count > 0,
+            delta_time,
+        );
+        tick(
+            &mut nearby.behind_set1_time,
+            nearby.behind_set1_count > 0,
+            delta_time,
+        );
     }
 
     /// Update blocked time counters based on current blocking status.
     pub fn update_blocked_time(&mut self, delta_time: f64) {
-        if self.blocked.speed_limit.is_some() {
-            self.blocked.front_time += delta_time;
-        } else {
-            self.blocked.front_time = 0.0;
-        }
+        let is_front_blocked = self.is_front_blocked();
+        tick(&mut self.blocked.front_time, is_front_blocked, delta_time);
         if self.blocked.side() {
             self.blocked.side_time += delta_time;
             if self.phase == Phase::Mid {
@@ -2219,7 +2206,7 @@ impl Runner {
     ///
     /// This must be called at the start of each frame, before any other trigger, so
     /// that a skill can activate in the same frame its precondition is satisfied.
-    pub fn check_precondition_windows(&mut self, state: &RaceState) {
+    fn check_precondition_windows(&mut self, state: &RaceState) {
         let inside = self
             .trigger_scheduler
             .precondition_windows
@@ -2281,15 +2268,26 @@ impl Runner {
     /// state at that point. Nothing is updated in between, so every check sees the
     /// same values.
     pub fn check_skills(&mut self, state: &mut RaceState) {
-        self.reset_activation_flags();
-        self.check_race_start_triggers(state);
+        self.activation_flags = SkillActivationFlags::default();
+        // Out-of-gate skills activate on the first frame the runner moves; their
+        // pre-race effects were already applied before the race. Taken, so that
+        // they're only checked once.
+        let race_start = std::mem::take(&mut self.trigger_scheduler.race_start_triggers);
+        self.try_activate_all(race_start, state);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
         self.check_state_triggers(state);
-        // Depend on the activations above.
-        self.check_activation_dependent_triggers(state);
-        self.check_heal_dependent_triggers(state);
+        // Depend on the activations above. Heal-dependent triggers go last, as
+        // any-skill-dependent ones may activate heals.
+        if self.activation_flags.any_activated {
+            let any_activation = self.trigger_scheduler.any_activation_triggers.to_vec();
+            self.try_activate_all(any_activation, state);
+        }
+        if self.activation_flags.heal_activated {
+            let heal_activation = self.trigger_scheduler.heal_activation_triggers.to_vec();
+            self.try_activate_all(heal_activation, state);
+        }
     }
 
     /// Check if the runner can activate skills during a step ending at
@@ -2301,59 +2299,13 @@ impl Runner {
         self.start_delay <= step_end_time && !self.has_finished()
     }
 
-    /// Check race start triggers, on the first frame the runner moves.
-    ///
-    /// Out-of-gate skills activate here; their pre-race effects were already
-    /// applied before the race.
-    pub fn check_race_start_triggers(&mut self, state: &RaceState) {
-        // Taken, so that they're only checked once.
-        let race_start_indices = std::mem::take(&mut self.trigger_scheduler.race_start_triggers);
-        for trigger_index in race_start_indices {
-            self.try_activate_skill(trigger_index, state);
-        }
-    }
-
-    /// Reset activation flags before checking skills.
-    pub fn reset_activation_flags(&mut self) {
-        self.activation_flags = SkillActivationFlags::default();
-    }
-
-    /// Check activation-dependent triggers.
-    ///
-    /// This should be called after all other triggers have been checked.
-    pub fn check_activation_dependent_triggers(&mut self, state: &RaceState) {
-        // Pass 1: Check is_activate_any_skill triggers.
-        if self.activation_flags.any_activated {
-            let any_activation_indices = self.trigger_scheduler.any_activation_triggers.to_vec();
-            for trigger_index in any_activation_indices {
-                self.try_activate_skill(trigger_index, state);
-            }
-        }
-    }
-
-    /// Check heal activation-dependent triggers.
-    ///
-    /// This should be called after all other triggers (and any-skill
-    /// activation-dependent triggers) have been checked.
-    pub fn check_heal_dependent_triggers(&mut self, state: &RaceState) {
-        // Pass 2: Check is_activate_heal_skill triggers.
-        if self.activation_flags.heal_activated {
-            let heal_activation_indices = self.trigger_scheduler.heal_activation_triggers.to_vec();
-            for trigger_index in heal_activation_indices {
-                self.try_activate_skill(trigger_index, state);
-            }
-        }
-    }
-
     /// Check `is_other_character_activate_advantage_skill` triggers.
     ///
     /// Other runners' activations are only known once every runner has checked
     /// her skills, so this is called by the solver afterwards.
     pub fn check_advantage_triggers(&mut self, state: &RaceState) {
-        let buff_activation_indices = self.trigger_scheduler.buff_activation_triggers.to_vec();
-        for trigger_index in buff_activation_indices {
-            self.try_activate_skill(trigger_index, state);
-        }
+        let buff_activation = self.trigger_scheduler.buff_activation_triggers.to_vec();
+        self.try_activate_all(buff_activation, state);
     }
 
     /// Check the triggers that don't depend on this frame's activations.
@@ -2364,7 +2316,7 @@ impl Runner {
     /// These triggers are checked together in the order the logics were built (by
     /// skill, then by alternative), so that when several alternatives of a skill
     /// are satisfied on the same frame, the first one wins.
-    pub fn check_state_triggers(&mut self, state: &RaceState) {
+    fn check_state_triggers(&mut self, state: &RaceState) {
         let entered_last_straight = self
             .segments
             .take_entered_straight()
@@ -2391,7 +2343,13 @@ impl Runner {
 
         // Try activations in the order the logics were built.
         inside.sort_unstable();
-        for trigger_index in inside {
+        self.try_activate_all(inside, state);
+    }
+
+    /// Attempt to activate the skills associated with each trigger index, in
+    /// order.
+    fn try_activate_all(&mut self, trigger_indices: Vec<usize>, state: &RaceState) {
+        for trigger_index in trigger_indices {
             self.try_activate_skill(trigger_index, state);
         }
     }
@@ -2884,6 +2842,11 @@ impl Runner {
     fn recalculate_skill_modifiers(&mut self) {
         self.skill_modifiers = SkillModifiers::from_effects(&self.active_timed_effects);
     }
+}
+
+/// Add `delta_time` to `timer` while `active`, or reset it otherwise.
+fn tick(timer: &mut f64, active: bool, delta_time: f64) {
+    *timer = if active { *timer + delta_time } else { 0.0 };
 }
 
 #[cfg(test)]
