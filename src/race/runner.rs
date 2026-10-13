@@ -718,11 +718,18 @@ impl Runner {
         }
     }
 
+    /// Last spurt of the runner, if she has entered it (i.e. it has been
+    /// calculated and she has reached its target distance).
+    pub fn active_last_spurt(&self) -> Option<&LastSpurt> {
+        self.last_spurt
+            .as_ref()
+            .filter(|last_spurt| self.position >= last_spurt.target_distance)
+    }
+
     /// Check if the runner is in her last spurt and has reached its speed.
     fn has_reached_last_spurt_speed(&self) -> bool {
-        self.last_spurt.as_ref().is_some_and(|last_spurt| {
-            self.position >= last_spurt.target_distance && self.speed >= last_spurt.max_speed
-        })
+        self.active_last_spurt()
+            .is_some_and(|last_spurt| self.speed >= last_spurt.max_speed)
     }
 
     /// Update target speed based on various factors.
@@ -730,9 +737,7 @@ impl Runner {
         let game_version = state.config.game_version;
         let target_speed = if self.hp.is_empty() {
             self.min_speed
-        } else if let Some(last_spurt) = &self.last_spurt
-            && self.position >= last_spurt.target_distance
-        {
+        } else if let Some(last_spurt) = self.active_last_spurt() {
             last_spurt.max_speed
         } else {
             let position_multiplier = self
@@ -1179,11 +1184,7 @@ impl Runner {
     /// Called after the position update, so the acceleration bonus starts on the
     /// next frame.
     fn try_release_charge_up(&mut self, state: &RaceState) {
-        if !self
-            .last_spurt
-            .as_ref()
-            .is_some_and(|l| self.position >= l.target_distance)
-        {
+        if self.active_last_spurt().is_none() {
             return;
         }
 
