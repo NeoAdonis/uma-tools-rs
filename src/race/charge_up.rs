@@ -5,7 +5,7 @@
 //! the conserved power is released as a temporary acceleration boost.
 
 use crate::configuration::GameVersion;
-use crate::course::DistanceType;
+use crate::course::{Course, DistanceType};
 use crate::uma::Style;
 
 /// Charge power that must be exceeded to be eligible.
@@ -79,6 +79,60 @@ impl ChargeUp {
         })
     }
 
+    /// Conserve power at `rate` for `delta_time` seconds, unless `blocked` or
+    /// within the cooldown at `elapsed_time`. Being blocked restarts the
+    /// cooldown.
+    pub fn conserve(&mut self, rate: f64, blocked: bool, delta_time: f64, elapsed_time: f64) {
+        if blocked {
+            self.cooldown_until = elapsed_time + COOLDOWN;
+        } else if elapsed_time >= self.cooldown_until {
+            self.conserved += rate * delta_time;
+        }
+    }
+
+    /// Multiply the conserved power by `penalty` (e.g. [`RUSH_PENALTY`]).
+    pub fn penalize(&mut self, penalty: f64) {
+        self.conserved *= penalty;
+    }
+
+    /// Release the conserved power (Fully Charged, 脚色十分) at `elapsed_time`
+    /// and `position`, upon entering the last spurt. Nothing is released if not
+    /// enough power was conserved.
+    ///
+    /// It happens only once; nothing changes if the outcome is already known.
+    ///
+    /// `activity` is the [`activity_coefficient`] of the runner.
+    pub fn release(
+        &mut self,
+        style: Style,
+        course: &Course,
+        activity: f64,
+        elapsed_time: f64,
+        position: f64,
+    ) {
+        if self.outcome != ChargeUpOutcome::Pending {
+            return;
+        }
+        let duration = release_duration(self.conserved, course.distance, course.distance_type);
+        self.outcome = if duration < MIN_DURATION {
+            ChargeUpOutcome::Insufficient
+        } else {
+            ChargeUpOutcome::Released(ChargeUpRelease {
+                conserved: self.conserved,
+                acceleration: release_acceleration(
+                    self.power,
+                    style,
+                    course.distance_type,
+                    activity,
+                ),
+                duration,
+                start_time: elapsed_time,
+                start_position: position,
+                expires_at: elapsed_time + duration,
+            })
+        };
+    }
+
     /// Acceleration bonus at the given time in m/s² (zero if not active).
     pub fn acceleration(&self, elapsed_time: f64) -> f64 {
         match &self.outcome {
@@ -101,14 +155,20 @@ pub fn charge_power(base_power: u16, raw_power: u16, skill_bonus: i32) -> f64 {
     base_power as f64 + 0.5 * (raw_power as f64 - POWER_THRESHOLD).max(0.0) + skill_bonus as f64
 }
 
+/// Conservation rate per second, depending on whether the runner is in pace
+/// down mode and her style.
+pub fn conservation_rate(pace_down: bool, style: Style) -> f64 {
+    position_keep_coefficient(pace_down) * style_coefficient(style)
+}
+
 /// Position keep coefficient of the conservation rate.
-pub fn position_keep_coefficient(pace_down: bool) -> f64 {
+fn position_keep_coefficient(pace_down: bool) -> f64 {
     if pace_down { 6.7 } else { 4.2 }
 }
 
 /// Style coefficient of the conservation rate.
 // ? Unknown for Runaway; assumed to be the same as Front.
-pub fn style_coefficient(style: Style) -> f64 {
+fn style_coefficient(style: Style) -> f64 {
     match style.base_style() {
         Style::Pace => 0.75,
         Style::End => 0.7,

@@ -166,6 +166,29 @@ fn test_release_formulas() {
 }
 
 #[test]
+fn test_conserve_and_penalize() {
+    assert_close!(conservation_rate(false, Style::Late), 4.2);
+    assert_close!(conservation_rate(true, Style::Late), 6.7);
+    assert_close!(conservation_rate(false, Style::End), 4.2 * 0.7);
+
+    let mut charge_up = ChargeUp::new(1600.0, GameVersion::LATEST).unwrap();
+    charge_up.conserve(4.0, false, 0.5, 0.5);
+    assert_close!(charge_up.conserved, 2.0);
+
+    // Blocked: nothing conserved, and the cooldown restarts.
+    charge_up.conserve(4.0, true, 0.5, 1.0);
+    assert_close!(charge_up.conserved, 2.0);
+    assert_close!(charge_up.cooldown_until, 1.0 + COOLDOWN);
+    charge_up.conserve(4.0, false, 0.5, 1.0 + COOLDOWN - 0.01);
+    assert_close!(charge_up.conserved, 2.0);
+    charge_up.conserve(4.0, false, 0.5, 1.0 + COOLDOWN);
+    assert_close!(charge_up.conserved, 4.0);
+
+    charge_up.penalize(RUSH_PENALTY);
+    assert_close!(charge_up.conserved, 4.0 * RUSH_PENALTY);
+}
+
+#[test]
 fn test_conservation_rate() {
     let mut late_surger = eligible_solver();
     let runner = &mut late_surger.runners[0];
@@ -292,6 +315,37 @@ fn test_release() {
         runner.charge_up.as_ref().unwrap().outcome,
         before.unwrap().outcome
     );
+}
+
+#[test]
+fn test_release_state() {
+    // 2000m Medium course.
+    let course = load_course(10204);
+    let mut charge_up = ChargeUp::new(1600.0, GameVersion::LATEST).unwrap();
+    charge_up.conserved = 100.0;
+    charge_up.release(Style::Late, &course, 0.8, 60.0, 1500.0);
+
+    let duration = release_duration(100.0, 2000, DistanceType::Medium);
+    let expected = ChargeUpOutcome::Released(ChargeUpRelease {
+        conserved: 100.0,
+        acceleration: release_acceleration(1600.0, Style::Late, DistanceType::Medium, 0.8),
+        duration,
+        start_time: 60.0,
+        start_position: 1500.0,
+        expires_at: 60.0 + duration,
+    });
+    assert_eq!(charge_up.outcome, expected);
+
+    // Released only once.
+    charge_up.conserved = 500.0;
+    charge_up.release(Style::Late, &course, 1.0, 70.0, 1600.0);
+    assert_eq!(charge_up.outcome, expected);
+
+    // Not enough power conserved.
+    let mut charge_up = ChargeUp::new(1600.0, GameVersion::LATEST).unwrap();
+    charge_up.conserved = 3.0;
+    charge_up.release(Style::Late, &course, 1.0, 60.0, 1500.0);
+    assert_eq!(charge_up.outcome, ChargeUpOutcome::Insufficient);
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::configuration::GameVersion;
 use crate::course::geometry::Slope;
 use crate::course::*;
 use crate::race::all_out_spurt::{self, AllOutSpurt};
-use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome, ChargeUpRelease};
+use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt::{self, StaminaKeep};
 use crate::race::duel::Duel;
 use crate::race::hp::*;
@@ -1179,43 +1179,25 @@ impl Runner {
     /// Called after the position update, so the acceleration bonus starts on the
     /// next frame.
     fn try_release_charge_up(&mut self, state: &RaceState) {
-        let Some(charge_up) = &self.charge_up else {
-            return;
-        };
-        if charge_up.outcome != ChargeUpOutcome::Pending
-            || !self
-                .last_spurt
-                .as_ref()
-                .is_some_and(|l| self.position >= l.target_distance)
+        if !self
+            .last_spurt
+            .as_ref()
+            .is_some_and(|l| self.position >= l.target_distance)
         {
             return;
         }
 
-        let course = &state.course;
-        let duration =
-            charge_up::release_duration(charge_up.conserved, course.distance, course.distance_type);
-        let outcome = if duration < charge_up::MIN_DURATION {
-            ChargeUpOutcome::Insufficient
-        } else {
-            let activity = charge_up::activity_coefficient(
-                self.spot_struggle.has_struggled(),
-                self.has_rushed(),
+        let activity =
+            charge_up::activity_coefficient(self.spot_struggle.has_struggled(), self.has_rushed());
+        if let Some(charge_up) = &mut self.charge_up {
+            charge_up.release(
+                self.adjusted.style,
+                &state.course,
+                activity,
+                state.elapsed_time,
+                self.position,
             );
-            ChargeUpOutcome::Released(ChargeUpRelease {
-                conserved: charge_up.conserved,
-                acceleration: charge_up::release_acceleration(
-                    charge_up.power,
-                    self.adjusted.style,
-                    course.distance_type,
-                    activity,
-                ),
-                duration,
-                start_time: state.elapsed_time,
-                start_position: self.position,
-                expires_at: state.elapsed_time + duration,
-            })
-        };
-        self.charge_up.as_mut().unwrap().outcome = outcome;
+        }
     }
 
     /// Conserve power (足を貯める) during the first 10 sections.
@@ -1235,22 +1217,9 @@ impl Runner {
                     | PositioningStrategy::PaceUp(_)
                     | PositioningStrategy::PaceUpEx
             );
-        let rate = charge_up::position_keep_coefficient(self.is_pace_down())
-            * charge_up::style_coefficient(self.adjusted.style);
-        let Some(charge_up) = &mut self.charge_up else {
-            return;
-        };
-        if blocked {
-            charge_up.cooldown_until = elapsed_time + charge_up::COOLDOWN;
-        } else if elapsed_time >= charge_up.cooldown_until {
-            charge_up.conserved += rate * delta_time;
-        }
-    }
-
-    /// Multiply the conserved power (足を貯める), if any, by `penalty`.
-    fn penalize_charge_up(&mut self, penalty: f64) {
+        let rate = charge_up::conservation_rate(self.is_pace_down(), self.adjusted.style);
         if let Some(charge_up) = &mut self.charge_up {
-            charge_up.conserved *= penalty;
+            charge_up.conserve(rate, blocked, delta_time, elapsed_time);
         }
     }
 
@@ -1308,7 +1277,9 @@ impl Runner {
         {
             rush_state.start(state.elapsed_time);
             self.on_rush_change(state, true);
-            self.penalize_charge_up(charge_up::RUSH_PENALTY);
+            if let Some(charge) = &mut self.charge_up {
+                charge.penalize(charge_up::RUSH_PENALTY);
+            }
         }
     }
 
@@ -1366,7 +1337,9 @@ impl Runner {
             self.adjusted.style_aptitude,
             elapsed_time,
         );
-        self.penalize_charge_up(charge_up::STRUGGLE_PENALTY);
+        if let Some(charge) = &mut self.charge_up {
+            charge.penalize(charge_up::STRUGGLE_PENALTY);
+        }
     }
 
     /// Check if the runner should check whether to secure the lead on this frame.
