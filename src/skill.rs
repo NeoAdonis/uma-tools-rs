@@ -941,6 +941,12 @@ mod tests {
         let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
         assert!(!skills.is_empty());
 
+        // Activated alternatives are tracked as bits of a mask (see
+        // `Runner::activated_alternatives`).
+        for (id, skill) in &skills {
+            assert!(skill.alternatives.len() <= u8::BITS as usize, "{id}");
+        }
+
         // Pre-race effects are applied before the race, where values aren't
         // scaled.
         let effects = skills

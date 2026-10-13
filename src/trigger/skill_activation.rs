@@ -74,6 +74,10 @@ pub struct SkillActivationLogic {
     /// What happens when the trigger fires and the guards pass.
     pub action: LogicAction,
 
+    /// Whether the alternative is a continuation of another one (see
+    /// [`crate::skill::SkillAlternative::is_continuation`]).
+    pub is_continuation: bool,
+
     /// Race time (in seconds) until which the logic can't succeed again.
     ///
     /// Set when the skill alternative activates, and shared by all its OR
@@ -218,6 +222,7 @@ impl SkillActivationLogic {
         guards: ComparisonList,
         precondition: Option<usize>,
         action: LogicAction,
+        is_continuation: bool,
     ) -> Self {
         SkillActivationLogic {
             skill_index,
@@ -226,6 +231,7 @@ impl SkillActivationLogic {
             guards,
             precondition,
             action,
+            is_continuation,
             cooldown_until: 0.0,
         }
     }

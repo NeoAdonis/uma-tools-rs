@@ -1,5 +1,4 @@
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use rand::RngExt;
@@ -258,7 +257,13 @@ impl UnreadyRunner {
             // Other effects are applied when the skill activates.
         }
 
-        add_race_start_logic(skill_index, alt_index, &mut self.trigger_scheduler);
+        let is_continuation = skill.alternatives[alt_index].is_continuation();
+        add_race_start_logic(
+            skill_index,
+            alt_index,
+            is_continuation,
+            &mut self.trigger_scheduler,
+        );
     }
 
     /// Whether the skill at `skill_index` activates on the first frame the runner
@@ -443,11 +448,10 @@ impl UnreadyRunner {
             blocked: BlockedState::default(),
             surrounded: SurroundState::default(),
             start_delay: self.start_delay,
+            activated_alternatives: vec![0; self.skills.len()],
             available_skills: self.skills,
             failed_skills: self.failed_skills,
             activated_skills: Vec::new(),
-            activated_skill_ids: HashMap::new(),
-            activated_alternatives: HashSet::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),

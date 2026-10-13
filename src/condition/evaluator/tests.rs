@@ -17,14 +17,18 @@ fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
     ready_solver(10101, uma(Style::Late), skills, &seeded_config(12345))
 }
 
+/// Ready race with a single Late Surger holding a skill with the given ID,
+/// activated through the alternatives in `mask`.
+fn solver_with_activated_skill(skill_id: &str, mask: u8) -> RaceSolver<Runner> {
+    let skill = Skill::new(skill_id.to_string(), skill_data(vec![]));
+    let mut solver = create_test_race_solver(vec![skill]);
+    solver.runners[0].activated_alternatives[0] = mask;
+    solver
+}
+
 #[test]
 fn test_is_used_skill_id_with_activated_skill() {
-    let mut solver = create_test_race_solver(vec![]);
-
-    // Add skill ID "202051" to activated_skill_ids.
-    solver.runners[0]
-        .activated_skill_ids
-        .insert("202051".to_string(), 1);
+    let solver = solver_with_activated_skill("202051", 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -56,13 +60,8 @@ fn test_is_used_skill_id_without_activated_skill() {
 
 #[test]
 fn test_is_used_skill_id_with_different_skill() {
-    let mut solver = create_test_race_solver(vec![]);
-
-    // Add skill ID "203781" to activated_skill_ids (different from what we're
-    // checking).
-    solver.runners[0]
-        .activated_skill_ids
-        .insert("203781".to_string(), 1);
+    // Different from what we're checking.
+    let solver = solver_with_activated_skill("203781", 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -77,12 +76,7 @@ fn test_is_used_skill_id_with_different_skill() {
 
 #[test]
 fn test_is_used_skill_id_not_equal() {
-    let mut state = create_test_race_solver(vec![]);
-
-    // Add skill ID "202051" to activated_skill_ids.
-    state.runners[0]
-        .activated_skill_ids
-        .insert("202051".to_string(), 1);
+    let state = solver_with_activated_skill("202051", 1);
 
     // Create comparison: is_used_skill_id != 202051.
     let comp = Comparison {
@@ -141,11 +135,8 @@ fn test_is_used_skill_id_with_detail_one_not_activated() {
 
 #[test]
 fn test_is_used_skill_id_with_detail_one_not_equal() {
-    let mut solver = create_test_race_solver(vec![]);
     // Only the second alternative activated.
-    solver.runners[0]
-        .activated_skill_ids
-        .insert("204452".to_string(), 0b10);
+    let solver = solver_with_activated_skill("204452", 0b10);
 
     let comp = Comparison {
         var: VarType::Activation(ActivationVar::IsUsedSkillIdWithDetailOne),
@@ -932,8 +923,7 @@ fn test_activation_counts() {
 
 #[test]
 fn test_is_activate_other_skill_detail_without_logic() {
-    let mut solver = create_test_race_solver(vec![]);
-    solver.runners[0].activated_alternatives.insert((0, 1));
+    let solver = solver_with_activated_skill("test", 0b10);
 
     let var = ActivationVar::IsActivateOtherSkillDetail;
     let actual = get_activation_value(&var, &solver.state, &solver.runners[0], None);

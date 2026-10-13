@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
@@ -441,11 +441,9 @@ pub struct Runner {
     pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
-    /// Activated skill IDs, each with a mask of its activated alternatives (bit
+    /// Activated alternatives of each skill in `available_skills`, as a mask (bit
     /// `i` set when alternative `i` activated).
-    pub activated_skill_ids: HashMap<String, u32>,
-    /// Set of activated skill alternatives (skill_index, alternative_index).
-    pub activated_alternatives: HashSet<(usize, usize)>,
+    pub activated_alternatives: Vec<u8>,
     /// Modifiers from skills applied to this runner's stats.
     pub skill_modifiers: SkillModifiers,
     /// Effects from skills that are currently active for a limited duration.
@@ -2409,15 +2407,9 @@ impl Runner {
         self.recalculate_skill_modifiers();
 
         self.start_cooldown(skill_index, alternative_index, state);
-        self.disable_other_alternatives(skill_index, alternative_index);
 
         // Track skill activation.
-        *self
-            .activated_skill_ids
-            .entry(skill_id.clone())
-            .or_default() |= 1 << alternative_index;
-        self.activated_alternatives
-            .insert((skill_index, alternative_index));
+        self.activated_alternatives[skill_index] |= 1 << alternative_index;
         self.activated_skills.push(SkillActivationRecord {
             skill_id,
             distance: self.position,
@@ -2453,6 +2445,23 @@ impl Runner {
         }
 
         if state.elapsed_time < logic.cooldown_until {
+            return false;
+        }
+
+        // A skill activates through a single alternative. Continuations are the
+        // exception: they can only activate after another alternative did.
+        //
+        // When several alternatives are satisfied on the same frame, the first one
+        // checked wins. Triggers that don't depend on this frame's activations are
+        // checked by alternative (see [`Self::check_state_triggers`]), but
+        // activation-dependent ones (any skill, heal, other runners' buffs) are
+        // checked after them, as they depend on their activations.
+        //
+        // N.B.: A later alternative could then win over an activation-dependent
+        // earlier one. It's assumed that no skill will have such alternatives.
+        let others_activated =
+            self.activated_alternatives[logic.skill_index] & !(1 << logic.alternative_index);
+        if others_activated != 0 && !logic.is_continuation {
             return false;
         }
         let skill_index = logic.skill_index;
@@ -2492,33 +2501,6 @@ impl Runner {
                 && logic.action == LogicAction::Activate
             {
                 logic.cooldown_until = cooldown_until;
-            }
-        }
-    }
-
-    /// Disable the other alternatives of a skill once one of them activates, as a
-    /// skill activates through a single alternative.
-    ///
-    /// Continuations (see [`SkillAlternative::is_continuation`]) are the exception:
-    /// they can only activate after another alternative did.
-    ///
-    /// When several alternatives are satisfied on the same frame, the first one
-    /// checked wins. Triggers that don't depend on this frame's activations are
-    /// checked by alternative (see [`Self::check_state_triggers`]), but
-    /// activation-dependent ones (any skill, heal, other runners' buffs) are
-    /// checked after them, as they depend on their activations.
-    ///
-    /// N.B.: A later alternative could then win over an activation-dependent
-    /// earlier one. It's assumed that no skill will have such alternatives.
-    fn disable_other_alternatives(&mut self, skill_index: usize, alternative_index: usize) {
-        let alternatives = &self.available_skills[skill_index].alternatives;
-        for logic in &mut self.trigger_scheduler.skill_logics {
-            if logic.skill_index == skill_index
-                && logic.alternative_index != alternative_index
-                && !alternatives[logic.alternative_index].is_continuation()
-            {
-                // Never checked again.
-                logic.cooldown_until = f64::INFINITY;
             }
         }
     }
@@ -2582,9 +2564,8 @@ impl Runner {
                 let green_count = self
                     .available_skills
                     .iter()
-                    .filter(|skill| {
-                        skill.is_green() && self.activated_skill_ids.contains_key(&skill.id)
-                    })
+                    .zip(&self.activated_alternatives)
+                    .filter(|&(skill, &mask)| mask != 0 && skill.is_green())
                     .count();
                 modifier * skill_scaling::green_skill_count_multiplier(green_count)
             }
@@ -2701,12 +2682,7 @@ impl Runner {
             .golden_skill_indices
             .iter()
             .copied()
-            .filter(|&skill_index| {
-                !self
-                    .activated_alternatives
-                    .iter()
-                    .any(|&(activated, _)| activated == skill_index)
-            })
+            .filter(|&skill_index| self.activated_alternatives[skill_index] == 0)
             .collect();
         for _ in 0..count {
             if candidates.is_empty() {
@@ -2741,14 +2717,10 @@ impl Runner {
             .take(count)
             .collect();
         for skill_index in unique_indices {
-            let alternative_index = self
-                .activated_alternatives
-                .iter()
-                .filter(|&&(activated, _)| activated == skill_index)
-                .map(|&(_, alternative_index)| alternative_index)
-                // Lowest, as the set's order isn't deterministic.
-                .min()
-                .unwrap_or(0);
+            let alternative_index = match self.activated_alternatives[skill_index] {
+                0 => 0,
+                mask => mask.trailing_zeros() as usize,
+            };
             self.activate_skill(skill_index, alternative_index, state);
         }
     }
@@ -2764,6 +2736,15 @@ impl Runner {
             state,
         );
         self.recalculate_skill_modifiers();
+    }
+
+    /// Mask of the activated alternatives of the skill with the given ID (see
+    /// [`Self::activated_alternatives`]), or 0 if the runner doesn't have it.
+    pub fn activated_mask(&self, skill_id: &str) -> u8 {
+        self.available_skills
+            .iter()
+            .position(|skill| skill.id == skill_id)
+            .map_or(0, |skill_index| self.activated_alternatives[skill_index])
     }
 
     /// Check if a skill at the given index is a heal skill.

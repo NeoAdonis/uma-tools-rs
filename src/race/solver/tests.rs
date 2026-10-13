@@ -2173,7 +2173,7 @@ fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
                         .eq(ids.iter())
                 })
                 .unwrap();
-            runner.activated_skill_ids.contains_key(skill_id)
+            runner.activated_mask(skill_id) != 0
         })
         .collect()
 }
@@ -2247,13 +2247,10 @@ fn activated_alternatives(conditions: &[&str]) -> Vec<usize> {
     let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
     solver.run();
 
-    let mut activated: Vec<usize> = solver.runners[0]
-        .activated_alternatives
-        .iter()
-        .map(|&(_, alternative)| alternative)
-        .collect();
-    activated.sort();
-    activated
+    let mask = solver.runners[0].activated_alternatives[0];
+    (0..u8::BITS as usize)
+        .filter(|&alternative| mask & (1 << alternative) != 0)
+        .collect()
 }
 
 #[test]
@@ -2296,6 +2293,20 @@ fn test_continuation_activates_after_other_alternative() {
         ]),
         Vec::<usize>::new()
     );
+}
+
+#[test]
+fn test_forced_activation_disables_other_alternatives() {
+    let alternatives = vec![
+        alternative("accumulatetime>=999", SkillType::TargetSpeed, 0.15),
+        alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15),
+    ];
+    let skill = Skill::new("test".to_string(), skill_data(alternatives));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    // Bypassing conditions, like random gold activations.
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+    solver.run();
+    assert_eq!(solver.runners[0].activated_alternatives[0], 0b01);
 }
 
 /// Out-of-gate skill with the given effects on oneself, whose condition is
@@ -2920,7 +2931,13 @@ fn test_green_skill_count_scaling() {
     assert_close!(activate_last_skill(&mut solver), 0.0);
 
     // Green skills activate on the first frame the runner moves.
-    while solver.runners[0].activated_skill_ids.len() < 4 {
+    while solver.runners[0]
+        .activated_alternatives
+        .iter()
+        .filter(|&&mask| mask != 0)
+        .count()
+        < 4
+    {
         solver.step(DELTA_TIME);
     }
     assert_close!(activate_last_skill(&mut solver), 0.25);

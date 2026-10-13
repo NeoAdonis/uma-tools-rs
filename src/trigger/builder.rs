@@ -103,6 +103,7 @@ pub fn build_trigger_scheduler(
             }
 
             // Compile precondition (if any).
+            let is_continuation = alternative.is_continuation();
             let precondition = if let Some(parsed) = &alternative.precondition {
                 let branches = compile_condition(parsed, &[], course);
                 if branches.is_empty() {
@@ -113,6 +114,7 @@ pub fn build_trigger_scheduler(
                     branches,
                     skill_idx,
                     alt_idx,
+                    is_continuation,
                     &mut scheduler,
                 ))
             } else {
@@ -128,6 +130,7 @@ pub fn build_trigger_scheduler(
                         branch.guards,
                         precondition,
                         LogicAction::Activate,
+                        is_continuation,
                     ),
                     &mut scheduler,
                 );
@@ -142,7 +145,12 @@ pub fn build_trigger_scheduler(
 /// the runner moves.
 ///
 /// Its condition was already satisfied before the race, so it has no guards.
-pub fn add_race_start_logic(skill_idx: usize, alt_idx: usize, scheduler: &mut TriggerScheduler) {
+pub fn add_race_start_logic(
+    skill_idx: usize,
+    alt_idx: usize,
+    is_continuation: bool,
+    scheduler: &mut TriggerScheduler,
+) {
     add_logic(
         SkillActivationLogic::new(
             skill_idx,
@@ -151,6 +159,7 @@ pub fn add_race_start_logic(skill_idx: usize, alt_idx: usize, scheduler: &mut Tr
             Vec::new(),
             None,
             LogicAction::Activate,
+            is_continuation,
         ),
         scheduler,
     );
@@ -164,6 +173,7 @@ fn add_precondition(
     branches: Vec<CompiledBranch>,
     skill_idx: usize,
     alt_idx: usize,
+    is_continuation: bool,
     scheduler: &mut TriggerScheduler,
 ) -> usize {
     let precondition_id = scheduler.precondition_satisfied.len();
@@ -191,6 +201,7 @@ fn add_precondition(
             branch.guards,
             None,
             LogicAction::Unlock(precondition_id),
+            is_continuation,
         );
 
         if let TriggerCondition::Window {

@@ -182,10 +182,10 @@ impl CompEvaluator for EvaluatorFull {
             ) => {
                 // Check if skill with ID == `comp.value` has been activated (through
                 // its first alternative for `is_used_skill_id_with_detail_one`).
-                let mask = runner.activated_skill_ids.get(&comp.value.to_string());
+                let mask = runner.activated_mask(&comp.value.to_string());
                 let is_used = match var {
-                    ActivationVar::IsUsedSkillId => mask.is_some(),
-                    _ => mask.is_some_and(|mask| mask & 1 != 0),
+                    ActivationVar::IsUsedSkillId => mask != 0,
+                    _ => mask & 1 != 0,
                 };
 
                 match comp.op {
@@ -612,18 +612,10 @@ fn get_activation_value(
         IsActivateHealSkill => runner.activation_flags.heal_activated as i32,
         IsActivateOtherSkillDetail => {
             // Check if another alternative of the same skill has activated.
-            if let Some(logic) = logic_ctx {
-                let has_other_alternative =
-                    runner
-                        .activated_alternatives
-                        .iter()
-                        .any(|(skill_idx, alt_idx)| {
-                            *skill_idx == logic.skill_index && *alt_idx != logic.alternative_index
-                        });
-                has_other_alternative as i32
-            } else {
-                0
-            }
+            logic_ctx.is_some_and(|logic| {
+                runner.activated_alternatives[logic.skill_index] & !(1 << logic.alternative_index)
+                    != 0
+            }) as i32
         }
 
         // Times involved in a duel: 0 or 1; you can duel once at most.
