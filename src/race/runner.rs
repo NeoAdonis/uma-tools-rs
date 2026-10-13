@@ -131,6 +131,7 @@ pub struct InitialState {
 }
 
 /// Information about an overtake target ahead of this runner.
+#[derive(Default)]
 pub struct OvertakeTarget {
     /// Whether this target has been checked in the current update cycle.
     is_checked: bool,
@@ -141,6 +142,7 @@ pub struct OvertakeTarget {
 }
 
 /// Overtake mode state including persistence timer.
+#[derive(Default)]
 pub struct OvertakeState {
     /// Ordered map of overtake targets by gate_roll.
     ///
@@ -148,12 +150,6 @@ pub struct OvertakeState {
     targets: BTreeMap<u8, OvertakeTarget>,
     /// Time when overtake mode should expire (None if active with targets).
     expires_at: Option<f64>,
-}
-
-/// Temporary candidate lane during overtake mode lane selection.
-struct OvertakeLaneCandidate {
-    lane: f64,
-    score: f64,
 }
 
 /// Result of a lane target calculation to be written back to the runner.
@@ -1496,58 +1492,26 @@ impl Runner {
             return false;
         }
 
-        // Check if this is the closest blocker.
-        let is_closest_blocker = self.is_front_blocked()
-            && self
-                .blocked
-                .speed_limit
-                .is_some_and(|limit| (limit - target.speed).abs() < 0.01);
+        let is_closest_blocker = self
+            .blocked
+            .speed_limit
+            .is_some_and(|limit| (limit - target.speed).abs() < 0.01);
 
-        // Check if qualifies as overtake target.
-        let qualifies = is_closest_blocker || {
-            let speed_diff = self.speed - target.speed;
-            // Can catch up within 15 seconds.
-            // If speed_diff == 0, a divide by zero would occur.
-            // At 1m, any speed_diff < 1/15 m/s CANNOT catch up within 15s.
-            // Bigger distances require an even larger speed_diff.
-            // Thus, using 1/15 as epsilon to avoid divide by zero is safe.
-            let can_catch_up = if speed_diff >= (1.0 / 15.0) {
-                let time_to_catch = distance / speed_diff;
-                time_to_catch < 15.0
-            } else {
-                false
-            };
-
-            can_catch_up
-                && ((target.target_speed < self.target_speed)
-                    || (target.is_front_blocked() && target.speed < self.target_speed))
-        };
-
-        if !qualifies {
+        // Can catch up within 15 seconds. At 1m or more, a speed difference below
+        // 1/15 m/s can't, so it also avoids dividing by zero.
+        let speed_diff = self.speed - target.speed;
+        let can_catch_up = speed_diff >= 1.0 / 15.0 && distance / speed_diff < 15.0;
+        let is_slower = target.target_speed < self.target_speed
+            || (target.is_front_blocked() && target.speed < self.target_speed);
+        if !is_closest_blocker && !(can_catch_up && is_slower) {
             return false;
         }
 
-        // Get or create overtake state.
-        if self.overtake_state.is_none() {
-            self.overtake_state = Some(OvertakeState {
-                targets: BTreeMap::new(),
-                expires_at: None,
-            });
-        }
-
-        let state = self.overtake_state.as_mut().unwrap();
-        let target_entry = state
-            .targets
-            .entry(target.gate_roll)
-            .or_insert(OvertakeTarget {
-                is_checked: true,
-                engagement_time: 0.0,
-                is_closest_blocker: false,
-            });
-
-        target_entry.is_checked = true;
-        target_entry.is_closest_blocker = is_closest_blocker;
-        target_entry.engagement_time += delta_time;
+        let state = self.overtake_state.get_or_insert_default();
+        let entry = state.targets.entry(target.gate_roll).or_default();
+        entry.is_checked = true;
+        entry.is_closest_blocker = is_closest_blocker;
+        entry.engagement_time += delta_time;
 
         true
     }
@@ -1655,33 +1619,32 @@ impl Runner {
         };
 
         // Early exit if not in overtake mode or side-blocked.
-        if !self.is_in_overtake_mode() || self.blocked.side() {
+        let Some(state) = &self.overtake_state else {
+            return decision;
+        };
+        if self.blocked.side() {
             return decision;
         }
 
         decision.extra_move_lane = self.next_extra_move_lane(all_runners);
 
-        // Build candidate list from overtake targets and extra candidate.
-        let mut candidates = Vec::with_capacity(32);
-        if let Some(state) = &self.overtake_state {
-            for &gate_roll in state.targets.keys() {
-                self.add_target_candidates(&mut candidates, gate_roll, all_runners);
-            }
-        }
-        self.add_extra_candidate(&mut candidates, all_runners);
-
-        // Filter by lane space.
-        candidates.retain(|c| self.has_lane_space_to(c.lane, all_runners));
-
-        // Score candidates and select best (lowest score).
-        // Keep current lane if no candidates.
-        self.score_candidates(&mut candidates);
-        if let Some(best) = candidates
+        // Candidates from each target (in gate order), then the extra one.
+        // The best (lowest score, first on ties) with lane space is chosen.
+        // The current lane is kept if there's none.
+        let targets: Vec<&Runner> = state
+            .targets
+            .keys()
+            .filter_map(|&gate| all_runners.iter().find(|r| r.gate_roll == gate))
+            .collect();
+        let best_lane = targets
             .iter()
-            .min_by(|a, b| a.score.partial_cmp(&b.score).unwrap())
-        {
-            let mut target_lane = best.lane;
+            .flat_map(|target| self.target_lane_candidates(target, all_runners))
+            .chain(self.extra_lane_candidate(&targets, all_runners))
+            .filter(|&lane| self.has_lane_space_to(lane, all_runners))
+            .map(|lane| (lane, self.overtake_lane_score(lane)))
+            .min_by(|a, b| a.1.total_cmp(&b.1));
 
+        if let Some((mut target_lane, _)) = best_lane {
             // Check extra_move_lane override.
             if let Some(extra) = decision.extra_move_lane
                 && target_lane < extra
@@ -1705,93 +1668,62 @@ impl Runner {
     /// Find the innermost and outermost uma in a target's crowd.
     /// Crowd members are within 3m distance and less than 2 horse lanes away.
     fn find_crowd_boundaries(&self, target: &Runner, all_runners: &[Runner]) -> (f64, f64) {
-        let mut inner_lane = target.lane.current;
-        let mut outer_lane = target.lane.current;
-
-        for other in self.others(all_runners) {
-            if other.gate_roll == target.gate_roll {
-                continue;
-            }
-
-            let distance_gap = (other.position - target.position).abs();
-            let lane_gap = (other.lane.current - target.lane.current).abs();
-
-            if proximity::is_near_by(distance_gap, lane_gap, 3.0, 2.0) {
-                inner_lane = inner_lane.min(other.lane.current);
-                outer_lane = outer_lane.max(other.lane.current);
-            }
-        }
-
-        (inner_lane, outer_lane)
+        let lane = target.lane.current;
+        self.others(all_runners)
+            .filter(|other| {
+                other.gate_roll != target.gate_roll
+                    && proximity::is_near_by(
+                        (other.position - target.position).abs(),
+                        (other.lane.current - lane).abs(),
+                        3.0,
+                        2.0,
+                    )
+            })
+            .fold((lane, lane), |(inner, outer), other| {
+                (inner.min(other.lane.current), outer.max(other.lane.current))
+            })
     }
 
-    /// Add overtake candidates from one target's crowd boundaries.
-    fn add_target_candidates(
-        &self,
-        candidates: &mut Vec<OvertakeLaneCandidate>,
-        target_gate: u8,
-        all_runners: &[Runner],
-    ) {
-        let Some(target) = all_runners.iter().find(|r| r.gate_roll == target_gate) else {
-            return;
-        };
-
+    /// Candidate lanes to overtake `target`: 1 horse lane inside and outside
+    /// each boundary of her crowd, unless another runner is in the spot.
+    fn target_lane_candidates<'a>(
+        &'a self,
+        target: &Runner,
+        all_runners: &'a [Runner],
+    ) -> impl Iterator<Item = f64> + 'a {
         let (inner, outer) = self.find_crowd_boundaries(target, all_runners);
         let reference_distance = target.position - self.position;
-
-        // Try lane positions at ±1 horse lane from inner and outer boundaries.
-        for &offset in &[-1.0, 1.0] {
-            let offset = horse_lanes_to_course_widths(offset);
-
-            for &base_lane in &[inner, outer] {
-                let candidate_lane = base_lane + offset;
-
-                if self.is_lane_candidate_valid(candidate_lane, reference_distance, all_runners) {
-                    candidates.push(OvertakeLaneCandidate {
-                        lane: candidate_lane,
-                        score: 0.0,
-                    });
-                }
-            }
-        }
+        let offset = horse_lanes_to_course_widths(1.0);
+        [
+            inner - offset,
+            outer - offset,
+            inner + offset,
+            outer + offset,
+        ]
+        .into_iter()
+        .filter(move |&lane| self.is_lane_candidate_valid(lane, reference_distance, all_runners))
     }
 
-    /// Add the extra candidate (straight or inward) unrelated to overtake targets.
-    fn add_extra_candidate(
-        &self,
-        candidates: &mut Vec<OvertakeLaneCandidate>,
-        all_runners: &[Runner],
-    ) {
-        let furthest_target_distance = self
-            .overtake_state
-            .as_ref()
-            .and_then(|state| {
-                state
-                    .targets
-                    .keys()
-                    .filter_map(|&gate| all_runners.iter().find(|r| r.gate_roll == gate))
-                    .map(|r| r.position)
-                    .max_by(|a, b| a.partial_cmp(b).unwrap())
-            })
+    /// Candidate lane unrelated to the overtake `targets`: 1 horse lane inward
+    /// during the Early and Mid race, or straight otherwise, unless another
+    /// runner is in the spot.
+    fn extra_lane_candidate(&self, targets: &[&Runner], all_runners: &[Runner]) -> Option<f64> {
+        let furthest_target_distance = targets
+            .iter()
+            .map(|r| r.position)
+            .max_by(f64::total_cmp)
             .unwrap_or(self.position);
 
-        let candidate_lane =
-            if self.phase <= Phase::Mid && self.lane.current >= horse_lanes_to_course_widths(1.0) {
-                // Check 1 horse lane inward.
-                self.lane.current - horse_lanes_to_course_widths(1.0)
-            } else {
-                // Check going straight.
-                self.lane.current
-            };
+        let one_lane = horse_lanes_to_course_widths(1.0);
+        let lane = if self.phase <= Phase::Mid && self.lane.current >= one_lane {
+            self.lane.current - one_lane
+        } else {
+            self.lane.current
+        };
 
         let check_distance = furthest_target_distance + 3.0;
-
-        if self.is_lane_candidate_valid(candidate_lane, check_distance, all_runners) {
-            candidates.push(OvertakeLaneCandidate {
-                lane: candidate_lane,
-                score: 0.0,
-            });
-        }
+        self.is_lane_candidate_valid(lane, check_distance, all_runners)
+            .then_some(lane)
     }
 
     /// Check if a candidate lane is valid (no runner blocking the spot).
@@ -1813,32 +1745,20 @@ impl Runner {
         })
     }
 
-    /// Score candidates using phase-dependent coefficients.
-    fn score_candidates(&self, candidates: &mut [OvertakeLaneCandidate]) {
-        for candidate in candidates {
-            let lane_diff = (candidate.lane - self.lane.current).abs();
-            let is_inside = candidate.lane < self.lane.current;
-
-            let phase_coef = match self.phase {
-                Phase::Early => {
-                    if is_inside {
-                        1.0
-                    } else {
-                        100.0
-                    }
-                }
-                Phase::Mid => 1.0,
-                Phase::Late | Phase::Last => {
-                    if is_inside {
-                        1.0
-                    } else {
-                        1.15
-                    }
-                }
-            };
-
-            candidate.score = lane_diff * phase_coef;
-        }
+    /// Score of an overtake candidate `lane` (lower is better): the lane change,
+    /// with moving outward penalized, heavily in the Early race.
+    fn overtake_lane_score(&self, lane: f64) -> f64 {
+        let outward_coef = match self.phase {
+            Phase::Early => 100.0,
+            Phase::Mid => 1.0,
+            Phase::Late | Phase::Last => 1.15,
+        };
+        let coef = if lane < self.lane.current {
+            1.0
+        } else {
+            outward_coef
+        };
+        (lane - self.lane.current).abs() * coef
     }
 
     /// Check if runner has lane space to reach target lane.
@@ -1872,46 +1792,22 @@ impl Runner {
             .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
 
-    /// Find the closest uma on the inside (lower lane value).
-    /// Returns (inside_uma_lane, distance_in_horse_lanes) if found.
+    /// Find the closest uma on the inside (lower lane value), within 5m and 3
+    /// horse lanes. Returns (inside_uma_lane, distance_in_horse_lanes) if found.
     fn find_inside_runner(&self, all_runners: &[Runner]) -> Option<(f64, f64)> {
-        let mut closest_inside: Option<(f64, f64)> = None;
-
-        for other in self.others(all_runners) {
-            // Only consider runners on the inside (lower lane value).
-            if other.lane.current >= self.lane.current {
-                continue;
-            }
-
-            // Check if within reasonable distance.
-            let position_distance = (self.position - other.position).abs();
-            if position_distance > 5.0 {
-                continue;
-            }
-
-            // Calculate lane distance in horse lanes.
-            let lane_diff_in_horse_lanes =
-                course_widths_to_horse_lanes(self.lane.current - other.lane.current);
-
-            // Only consider if within 3 horse lanes.
-            if lane_diff_in_horse_lanes > 3.0 {
-                continue;
-            }
-
-            // Track closest (smallest lane difference).
-            match closest_inside {
-                None => {
-                    closest_inside = Some((other.lane.current, lane_diff_in_horse_lanes));
-                }
-                Some((_, current_diff)) => {
-                    if lane_diff_in_horse_lanes < current_diff {
-                        closest_inside = Some((other.lane.current, lane_diff_in_horse_lanes));
-                    }
-                }
-            }
-        }
-
-        closest_inside
+        self.others(all_runners)
+            .filter(|other| {
+                other.lane.current < self.lane.current
+                    && (self.position - other.position).abs() <= 5.0
+            })
+            .map(|other| {
+                let lane_diff =
+                    course_widths_to_horse_lanes(self.lane.current - other.lane.current);
+                (other.lane.current, lane_diff)
+            })
+            .filter(|&(_, lane_diff)| lane_diff <= 3.0)
+            // First on ties.
+            .min_by(|a, b| a.1.total_cmp(&b.1))
     }
 
     /// Apply slope effects after a segment update with `transition` (see
