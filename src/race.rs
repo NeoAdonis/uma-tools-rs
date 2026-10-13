@@ -10,6 +10,7 @@ pub mod parameters;
 pub mod popularity;
 pub mod proximity;
 pub mod runner;
+pub mod rush;
 pub mod secure_lead;
 pub mod skill_scaling;
 pub mod solver;

@@ -2,7 +2,7 @@ use super::*;
 use crate::configuration::Roll;
 use crate::course::geometry::{Segment, Slope};
 use crate::course::{CourseData, LaneType};
-use crate::race::runner::RushState;
+use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
 use crate::trigger::skill_activation::PendingEffect;

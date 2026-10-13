@@ -18,6 +18,7 @@ use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::popularity::JudgeScores;
 use crate::race::proximity;
+use crate::race::rush::{self, RushState};
 use crate::race::secure_lead;
 use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
@@ -95,16 +96,6 @@ pub struct InitialState {
     ///
     /// Runners on the same team are allies; everyone else is an opponent.
     pub team: u8,
-}
-
-/// State related to rushing (temptation, 掛かり).
-pub struct RushState {
-    pub section: u8,
-    pub start_time: f64,
-    pub end_time: f64,
-    pub max_duration: f64,
-    pub is_rushed: bool,
-    pub style: Style,
 }
 
 /// Speed boost applied while securing the lead (リード確保) and its expiration time.
@@ -243,7 +234,7 @@ pub struct PositionDiff {
     pub max_lead: f64,
 }
 
-/// Rush (temptation, 掛かり) counters.
+/// Rush counters.
 #[derive(Default)]
 pub struct RushCounter {
     /// Number of runners currently in rush state ahead.
@@ -428,12 +419,15 @@ pub struct Runner {
     /// List of indices of golden skills in `available_skills`.
     /// These skills can be activated by other skills.
     pub golden_skill_indices: Vec<usize>,
-    /// Chance of entering rush (temptation, 掛かり) state as a percentage.
+    /// Chance of rushing as a percentage (see [`rush::chance`]).
+    ///
     /// This is determined at the start of the race along with deciding whether the
     /// runner will rush or not.
     pub rush_chance: f64,
-    /// State related to rushing (temptation, 掛かり). `None` means that the runner
-    /// won't rush at all. Otherwise it tells when and how the rush will happen.
+    /// State related to rushing.
+    ///
+    /// `None` means that the runner won't rush at all. Otherwise it tells when and
+    /// how the rush will happen.
     pub rush_state: Option<RushState>,
     /// Flag indicating if the runner is currently in start dash mode.
     pub is_start_dash: bool,
@@ -1288,7 +1282,7 @@ impl Runner {
         let mut multiplier = if self.spot_struggle.is_active(state.elapsed_time) {
             spot_struggle::hp_multiplier(self.adjusted.style, self.is_rushed())
         } else if self.is_rushed() {
-            1.5
+            rush::HP_MULTIPLIER
         } else {
             1.0
         };
@@ -1326,60 +1320,51 @@ impl Runner {
         }
     }
 
-    /// Enter rush (temptation, 掛かり) state.
+    /// Start rushing, unless the runner is already rushed.
     ///
-    /// The runner will move ahead of the position dictated by their style, losing
-    /// HP at an increased rate.
+    /// The runner will move ahead of the position dictated by her style, losing HP
+    /// at an increased rate.
     fn start_rush(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && !rush_state.is_rushed
         {
-            rush_state.is_rushed = true;
-            rush_state.start_time = state.elapsed_time;
-            // Rushed for at least 3 seconds.
-            rush_state.end_time = state.elapsed_time + 3.0;
-            state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize] += 1;
-            // Force positioning strategy change immediately.
-            self.positioning_strategy = PositioningStrategy::Normal;
-            self.next_positioning_check = state.elapsed_time;
+            rush_state.start(state.elapsed_time);
+            self.on_rush_change(state, true);
             self.penalize_charge_up(charge_up::RUSH_PENALTY);
         }
     }
 
-    /// Exit rush (temptation, 掛かり) state.
+    /// Stop rushing, if the runner is rushed.
     fn end_rush(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
         {
-            rush_state.is_rushed = false;
-            // Ensure end time is current.
-            rush_state.end_time = state.elapsed_time;
-            state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize] -= 1;
-            // Force positioning strategy change immediately.
-            self.positioning_strategy = PositioningStrategy::Normal;
-            self.next_positioning_check = state.elapsed_time;
+            rush_state.end(state.elapsed_time);
+            self.on_rush_change(state, false);
         }
     }
 
-    /// Update rush state based on elapsed time and random chance.
+    /// Update the race's count of rushed runners after this runner started or
+    /// stopped rushing, and force a positioning strategy change immediately.
+    fn on_rush_change(&mut self, state: &mut RaceState, is_rushed: bool) {
+        let count =
+            &mut state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize];
+        if is_rushed {
+            *count += 1;
+        } else {
+            *count -= 1;
+        }
+        self.positioning_strategy = PositioningStrategy::Normal;
+        self.next_positioning_check = state.elapsed_time;
+    }
+
+    /// End rush once it reaches its maximum duration or the runner snaps out of it.
     pub fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
+            && rush_state.should_end(state.elapsed_time, &mut *self.rng.borrow_mut())
         {
-            if state.elapsed_time >= rush_state.start_time + rush_state.max_duration {
-                // End rush after max duration.
-                self.end_rush(state);
-                return;
-            }
-            if state.elapsed_time >= rush_state.end_time {
-                // 55% chance of snapping out.
-                if self.rng.borrow_mut().random_bool(0.55) {
-                    self.end_rush(state);
-                } else {
-                    // Extend rush by 3 seconds.
-                    rush_state.end_time = state.elapsed_time + 3.0;
-                }
-            }
+            self.end_rush(state);
         }
     }
 
@@ -1390,7 +1375,7 @@ impl Runner {
 
     /// Check if the runner has rushed at some point.
     pub fn has_rushed(&self) -> bool {
-        self.rush_state.as_ref().is_some_and(|s| s.start_time > 0.0)
+        self.rush_state.as_ref().is_some_and(RushState::has_rushed)
     }
 
     /// Start a spot struggle (位置取り争い), unless the runner already struggled.

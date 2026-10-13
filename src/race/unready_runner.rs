@@ -18,6 +18,7 @@ use crate::race::modifiers::{
 };
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::runner::*;
+use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::transitions::*;
 use crate::trigger::builder::*;
@@ -391,56 +392,14 @@ impl UnreadyRunner {
         let max_hp = calculate_max_hp(self.adjusted.style, self.adjusted.stamina, course);
 
         // Set starting speed (done in the constructor).
-        // Determine rush chance, as a percentage. The game rolls integer
-        // percentages, so it's rounded up. Very low wit and rush chance effects
-        // can push it out of range.
-        let rush_chance = ((6.5 / (0.1 * self.base.wit as f64 + 1.0).log10()).powf(2.0)
-            + self.rush_chance_modifier)
-            .ceil()
-            .clamp(0.0, 100.0);
+        // Determine whether and how the runner will rush.
+        let rush_chance = rush::chance(self.base.wit, self.rush_chance_modifier);
         let can_rush = state
             .config
             .rushing
             .resolve(&mut *self.rng.borrow_mut(), rush_chance / 100.0);
-        let rush_state = if can_rush {
-            let style = match self.adjusted.style {
-                // Front-like styles (Front and Runaway) keep their style when rushing.
-                Style::Front | Style::Runaway => self.adjusted.style,
-                // Pace runner always changes her strategy to Front.
-                Style::Pace => Style::Front,
-                // 75% chance of changing strategy to Front, 25% to Pace.
-                Style::Late => {
-                    if self.rng.borrow_mut().random_bool(0.75) {
-                        Style::Front
-                    } else {
-                        Style::Pace
-                    }
-                }
-                // 70% chance of changing strategy to Front, 20% to Pace, 10% to Late.
-                Style::End => {
-                    let roll: f64 = self.rng.borrow_mut().random();
-                    if roll < 0.7 {
-                        Style::Front
-                    } else if roll < 0.9 {
-                        Style::Pace
-                    } else {
-                        Style::Late
-                    }
-                }
-            };
-            // Uma will rush in a random section between 2 and 9 (1-indexed).
-            let section = self.rng.borrow_mut().random_range(1..=8);
-            Some(RushState {
-                section,
-                start_time: 0.0,
-                end_time: f64::MAX,
-                max_duration: 12.0,
-                is_rushed: false,
-                style,
-            })
-        } else {
-            None
-        };
+        let rush_state =
+            can_rush.then(|| RushState::roll(self.adjusted.style, &mut *self.rng.borrow_mut()));
 
         // Calculate section modifier for base speed adjustment.
         let section_speed_modifier = roll_section_speed_modifier(
