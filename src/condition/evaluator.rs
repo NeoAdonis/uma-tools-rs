@@ -212,6 +212,12 @@ impl CompEvaluator for EvaluatorFull {
                     .get(&value)
                     .is_some_and(|&count| count > own)
             }
+            // `order_rate OP X` is converted to `order OP round(runners * X%)`.
+            Order(OrderVar::OrderRate) => {
+                let order = &runner.order;
+                comp.op
+                    .apply(order.order as i32, order.order_at_rate(comp.value))
+            }
             Lineup(lineup_var) => {
                 // Extract the skill being evaluated from logic context.
                 let skill_id = logic_ctx
@@ -745,27 +751,34 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 /// Get rank-related values.
 fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     use OrderVar::*;
+    let order = &runner.order;
+    let at_rate = |rate: i32| order.order_at_rate(rate);
 
     match var {
         // Order.
-        Order => runner.order.order as i32,
-        OrderRate => runner.order.rate as i32,
+        Order => order.order as i32,
+        OrderRate => panic!("BUG: Order variable {var:?} should be handled in evaluate()"),
 
         // Order change checks.
-        ChangeOrderOnetime => runner.order.delta as i32,
-        ChangeOrderUpEndAfter => runner.order.overtakes_since_late as i32,
-        ChangeOrderUpFinalcornerAfter => runner.order.overtakes_since_last_corner as i32,
-        ChangeOrderUpMiddle => runner.order.overtakes_since_mid as i32,
+        ChangeOrderOnetime => order.delta as i32,
+        ChangeOrderUpEndAfter => order.overtakes_since_late as i32,
+        ChangeOrderUpFinalcornerAfter => order.overtakes_since_last_corner as i32,
+        ChangeOrderUpMiddle => order.overtakes_since_mid as i32,
 
-        // Order rate continue checks.
-        OrderRateIn20Continue => (runner.order.rate_min <= 20) as i32,
-        OrderRateIn40Continue => (runner.order.rate_min <= 40) as i32,
-        OrderRateIn50Continue => (runner.order.rate_min <= 50) as i32,
-        OrderRateIn80Continue => (runner.order.rate_min <= 80) as i32,
-        OrderRateOut20Continue => (runner.order.rate_max > 20) as i32,
-        OrderRateOut40Continue => (runner.order.rate_max > 40) as i32,
-        OrderRateOut50Continue => (runner.order.rate_max > 50) as i32,
-        OrderRateOut70Continue => (runner.order.rate_max > 70) as i32,
+        // Order rate continue checks: whether `order_rate<=X` (in) or
+        // `order_rate>=X` (out) held for the entire race, i.e., whether the worst
+        // order was always within the top X%, or the best order always at the
+        // rounded order or worse. The rounded order counts as both, e.g., always
+        // being 2nd in a 9-runner race (9 * 20% = 1.8 => 2) satisfies `in20` and
+        // `out20`.
+        OrderRateIn20Continue => (order.worst as i32 <= at_rate(20)) as i32,
+        OrderRateIn40Continue => (order.worst as i32 <= at_rate(40)) as i32,
+        OrderRateIn50Continue => (order.worst as i32 <= at_rate(50)) as i32,
+        OrderRateIn80Continue => (order.worst as i32 <= at_rate(80)) as i32,
+        OrderRateOut20Continue => (order.best as i32 >= at_rate(20)) as i32,
+        OrderRateOut40Continue => (order.best as i32 >= at_rate(40)) as i32,
+        OrderRateOut50Continue => (order.best as i32 >= at_rate(50)) as i32,
+        OrderRateOut70Continue => (order.best as i32 >= at_rate(70)) as i32,
     }
 }
 

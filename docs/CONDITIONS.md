@@ -717,7 +717,7 @@ Your current position in the race.
 
 Your current position in the race as a percentage.
 
-*Note:* Converted to the nearest integer first. For example, `order_rate > 50` in a 9-uma race would be x > round(9*50%) => x > round(4.5) => x > 5. So your position needs to be 6th or worse, not 5th or worse as you might expect.
+*Note:* The order rate condition is converted to an order condition, rounding to the nearest. For example, consider `order_rate>50` in a 9-uma race: 9×50% = 4.5, which rounds to 5. The condition is then converted to `order>5`, and can only trigger when you're 6th or worse, not 5th or worse as you might expect.
 
 *Example:* `order_rate>=50`
 
@@ -727,81 +727,81 @@ Your current position in the race as a percentage.
 
 Your position has been within the top 20% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate<=20` holding for the entire race.
 
 *Example:* `order_rate_in20_continue==1`
 
-*Meaning:* Your position in the race was never worse than top 20% after the first 5 seconds (for example, in a 10-uma race, you were never worse than 2nd).
+*Meaning:* Your position in the race was never worse than top 20% after the first 5 seconds. For example, in a Champions Meeting (9-uma race), you were never worse than 2nd; in a League of Heroes (12-uma race), you were never worse than 2nd.
 
 ## order_rate_in40_continue
 
 Your position has been within the top 40% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate<=40` holding for the entire race.
 
 *Example:* `order_rate_in40_continue==1`
 
-*Meaning:* Your position in the race was never worse than top 40% after the first 5 seconds (for example, in a 10-uma race, you were never worse than 4th).
+*Meaning:* Your position in the race was never worse than top 40% after the first 5 seconds. For example, in a Champions Meeting (9-uma race), you were never worse than 4th; in a League of Heroes (12-uma race), you were never worse than 5th.
 
 ## order_rate_in50_continue
 
 Your position has been within the top 50% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate<=50` holding for the entire race.
 
 *Example:* `order_rate_in50_continue==1`
 
-*Meaning:* Your position in the race was never worse than top 50% after the first 5 seconds (for example, in a 10-uma race, you were never worse than 5th).
+*Meaning:* Your position in the race was never worse than top 50% after the first 5 seconds. For example, in a Champions Meeting (9-uma race), you were never worse than 5th; in a League of Heroes (12-uma race), you were never worse than 6th.
 
 ## order_rate_in80_continue
 
 Your position has been within the top 80% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate<=80` holding for the entire race.
 
 *Example:* `order_rate_in80_continue==1`
 
-*Meaning:* Your position in the race was never worse than top 80% after the first 5 seconds (for example, in a 10-uma race, you were never worse than 8th).
+*Meaning:* Your position in the race was never worse than top 80% after the first 5 seconds. For example, in a Champions Meeting (9-uma race), you were never worse than 7th; in a League of Heroes (12-uma race), you were never worse than 10th.
 
 ## order_rate_out20_continue
 
 Your position has been worse than the top 20% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate>=20` holding for the entire race, so the rounded order itself counts as outside of the top 20%.
 
 *Example:* `order_rate_out20_continue==1`
 
-*Meaning:* Your position in the race was always outside of the top 20% (so within the last 80%). For example, in a 9-uma race, you were always 2nd or worse.
+*Meaning:* Your position in the race was always outside of the top 20% (so within the last 80%). For example, in a Champions Meeting (9-uma race), you were always 2nd or worse; in a League of Heroes (12-uma race), you were always 2nd or worse.
 
 ## order_rate_out40_continue
 
 Your position has been worse than the top 40% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate>=40` holding for the entire race, so the rounded order itself counts as outside of the top 40%.
 
 *Example:* `order_rate_out40_continue==1`
 
-*Meaning:* Your position in the race was always outside of the top 40% (so within the last 60%). For example, in a 9-uma race, you were always 4th or worse.
+*Meaning:* Your position in the race was always outside of the top 40% (so within the last 60%). For example, in a Champions Meeting (9-uma race), you were always 4th or worse; in a League of Heroes (12-uma race), you were always 5th or worse.
 
 ## order_rate_out50_continue
 
 Your position has been worse than the top 50% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate>=50` holding for the entire race, so the rounded order itself counts as outside of the top 50%.
 
 *Example:* `order_rate_out50_continue==1`
 
-*Meaning:* Your position in the race was always outside of the top 50% (so within the last 50%). For example, in a 9-uma race, you were always 5th or worse.
+*Meaning:* Your position in the race was always outside of the top 50% (so within the last 50%). For example, in a Champions Meeting (9-uma race), you were always 5th or worse; in a League of Heroes (12-uma race), you were always 6th or worse.
 
 ## order_rate_out70_continue
 
 Your position has been worse than the top 70% for the entire race until now.
 
-*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to the nearest integer first.
+*Note:* The first 5 seconds of the race don't count, so you have time to establish your position. Same as with normal `order_rate`, the percentage is converted to an order, rounding to the nearest. It's equivalent to `order_rate>=70` holding for the entire race, so the rounded order itself counts as outside of the top 70%.
 
 *Example:* `order_rate_out70_continue==1`
 
-*Meaning:* Your position in the race was always outside of the top 70% (so within the last 30%). For example, in a 9-uma race, you were always 7th or worse.
+*Meaning:* Your position in the race was always outside of the top 70% (so within the last 30%). For example, in a Champions Meeting (9-uma race), you were always 6th or worse; in a League of Heroes (12-uma race), you were always 8th or worse.
 
 ## overtake_target_no_order_up_time
 

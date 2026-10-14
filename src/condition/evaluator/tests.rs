@@ -659,7 +659,6 @@ fn test_rank_values() {
     let mut solver = create_test_race_solver(vec![]);
     let order = &mut solver.runners[0].order;
     order.order = 4;
-    order.rate = 33;
     order.delta = -2;
     order.overtakes_since_late = 5;
     order.overtakes_since_last_corner = 6;
@@ -668,30 +667,84 @@ fn test_rank_values() {
     let runner = &solver.runners[0];
     let actual = [
         OrderVar::Order,
-        OrderVar::OrderRate,
         OrderVar::ChangeOrderOnetime,
         OrderVar::ChangeOrderUpEndAfter,
         OrderVar::ChangeOrderUpFinalcornerAfter,
         OrderVar::ChangeOrderUpMiddle,
     ]
     .map(|var| get_rank_value(&var, runner));
-    assert_eq!(actual, [4, 33, -2, 5, 6, 7]);
+    assert_eq!(actual, [4, -2, 5, 6, 7]);
+}
+
+#[test]
+fn test_order_rate_converts_to_rounded_order() {
+    let mut solver = create_test_race_solver(vec![]);
+    let order_rate = |op, value| Comparison {
+        var: VarType::Order(OrderVar::OrderRate),
+        op,
+        value,
+    };
+
+    // 9 * 50% = 4.5 rounds to 5, so `order_rate>50` becomes `order>5`.
+    // 12 * 50% = 6 rounds to 6, so `order_rate>50` becomes `order>6`.
+    // (runners, order, [>50, >=50, <=50, <50]).
+    let cases = [
+        (9, 5, [false, true, true, false]),
+        (9, 6, [true, true, false, false]),
+        (12, 6, [false, true, true, false]),
+        (12, 7, [true, true, false, false]),
+    ];
+    for (runners, order, expected) in cases {
+        solver.runners[0].order.runner_count = runners;
+        solver.runners[0].order.order = order;
+        let actual = [
+            CompOp::Greater,
+            CompOp::GreaterEqual,
+            CompOp::LessEqual,
+            CompOp::Less,
+        ]
+        .map(|op| {
+            let comp = order_rate(op, 50);
+            EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+        });
+        assert_eq!(actual, expected, "runners {runners}, order {order}");
+    }
+}
+
+#[test]
+#[should_panic(expected = "should be handled in evaluate()")]
+fn test_order_rate_value_panics() {
+    let solver = create_test_race_solver(vec![]);
+    get_rank_value(&OrderVar::OrderRate, &solver.runners[0]);
 }
 
 #[test]
 fn test_order_rate_in_continue_boundaries() {
     let mut solver = create_test_race_solver(vec![]);
+    // The best order shouldn't matter.
+    solver.runners[0].order.best = 1;
 
-    // (minimum order rate, [in20, in40, in50, in80]).
+    // Top X% of 9 runners, rounded: 20% => 2, 40% => 4, 50% => 5, 80% => 7.
+    // Top X% of 12 runners, rounded: 20% => 2, 40% => 5, 50% => 6, 80% => 10.
+    // (runners, worst order, [in20, in40, in50, in80]).
     let cases = [
-        (20, [1, 1, 1, 1]),
-        (21, [0, 1, 1, 1]),
-        (41, [0, 0, 1, 1]),
-        (51, [0, 0, 0, 1]),
-        (81, [0, 0, 0, 0]),
+        (9, 2, [1, 1, 1, 1]),
+        (9, 3, [0, 1, 1, 1]),
+        (9, 5, [0, 0, 1, 1]),
+        (9, 6, [0, 0, 0, 1]),
+        (9, 7, [0, 0, 0, 1]),
+        (9, 8, [0, 0, 0, 0]),
+        (12, 2, [1, 1, 1, 1]),
+        (12, 3, [0, 1, 1, 1]),
+        (12, 5, [0, 1, 1, 1]),
+        (12, 6, [0, 0, 1, 1]),
+        (12, 7, [0, 0, 0, 1]),
+        (12, 10, [0, 0, 0, 1]),
+        (12, 11, [0, 0, 0, 0]),
     ];
-    for (rate_min, expected) in cases {
-        solver.runners[0].order.rate_min = rate_min;
+    for (runners, worst, expected) in cases {
+        solver.runners[0].order.runner_count = runners;
+        solver.runners[0].order.worst = worst;
         let actual = [
             OrderVar::OrderRateIn20Continue,
             OrderVar::OrderRateIn40Continue,
@@ -699,24 +752,38 @@ fn test_order_rate_in_continue_boundaries() {
             OrderVar::OrderRateIn80Continue,
         ]
         .map(|var| get_rank_value(&var, &solver.runners[0]));
-        assert_eq!(actual, expected, "rate_min {rate_min}");
+        assert_eq!(actual, expected, "runners {runners}, worst order {worst}");
     }
 }
 
 #[test]
 fn test_order_rate_out_continue_boundaries() {
     let mut solver = create_test_race_solver(vec![]);
+    // The worst order shouldn't matter.
+    solver.runners[0].order.worst = 12;
 
-    // (maximum order rate, [out20, out40, out50, out70]).
+    // Top X% of 9 runners, rounded: 20% => 2, 40% => 4, 50% => 5, 70% => 6.
+    // Top X% of 12 runners, rounded: 20% => 2, 40% => 5, 50% => 6, 70% => 8.
+    // The rounded order itself counts as outside.
+    // (runners, best order, [out20, out40, out50, out70]).
     let cases = [
-        (20, [0, 0, 0, 0]),
-        (21, [1, 0, 0, 0]),
-        (41, [1, 1, 0, 0]),
-        (51, [1, 1, 1, 0]),
-        (71, [1, 1, 1, 1]),
+        (9, 1, [0, 0, 0, 0]),
+        (9, 2, [1, 0, 0, 0]),
+        (9, 3, [1, 0, 0, 0]),
+        (9, 4, [1, 1, 0, 0]),
+        (9, 5, [1, 1, 1, 0]),
+        (9, 6, [1, 1, 1, 1]),
+        (12, 1, [0, 0, 0, 0]),
+        (12, 2, [1, 0, 0, 0]),
+        (12, 4, [1, 0, 0, 0]),
+        (12, 5, [1, 1, 0, 0]),
+        (12, 6, [1, 1, 1, 0]),
+        (12, 7, [1, 1, 1, 0]),
+        (12, 8, [1, 1, 1, 1]),
     ];
-    for (rate_max, expected) in cases {
-        solver.runners[0].order.rate_max = rate_max;
+    for (runners, best, expected) in cases {
+        solver.runners[0].order.runner_count = runners;
+        solver.runners[0].order.best = best;
         let actual = [
             OrderVar::OrderRateOut20Continue,
             OrderVar::OrderRateOut40Continue,
@@ -724,7 +791,7 @@ fn test_order_rate_out_continue_boundaries() {
             OrderVar::OrderRateOut70Continue,
         ]
         .map(|var| get_rank_value(&var, &solver.runners[0]));
-        assert_eq!(actual, expected, "rate_max {rate_max}");
+        assert_eq!(actual, expected, "runners {runners}, best order {best}");
     }
 }
 

@@ -86,14 +86,16 @@ pub struct InitialState {
 pub struct OrderState {
     /// Current order (rank), 1-based.
     pub order: u8,
-    /// Current order rate (percentile; "you are in the top X%").
+    /// Number of runners in the race, finished ones included.
+    pub runner_count: u8,
+    /// Current order rate (percentile; "you are in the top X%"), rounded up.
     pub rate: u8,
-    /// Maximum order rate achieved so far.
-    /// N.B. This value is calculated only after 5 seconds into the race.
-    pub rate_max: u8,
-    /// Minimum order rate achieved so far.
-    /// N.B. This value is calculated only after 5 seconds into the race.
-    pub rate_min: u8,
+    /// Best (lowest) order reached so far.
+    /// N.B. This value is tracked only after 5 seconds into the race.
+    pub best: u8,
+    /// Worst (highest) order reached so far.
+    /// N.B. This value is tracked only after 5 seconds into the race.
+    pub worst: u8,
     /// Change in order since last update.
     pub delta: i8,
     /// Number of overtakes since entering Mid phase.
@@ -110,15 +112,26 @@ impl Default for OrderState {
     fn default() -> Self {
         OrderState {
             order: 1,
+            runner_count: 1,
             rate: 0,
-            rate_max: 0,
-            rate_min: 100,
+            best: u8::MAX,
+            worst: 0,
             delta: 0,
             overtakes_since_mid: 0,
             overtakes_since_late: 0,
             overtakes_since_last_corner: 0,
             overtakes_in_late_corners: 0,
         }
+    }
+}
+
+impl OrderState {
+    /// Convert an order rate (top `rate`%) into an order, rounding to the
+    /// nearest (half up), as the game does for order rate conditions.
+    ///
+    /// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
+    pub fn order_at_rate(&self, rate: i32) -> i32 {
+        (self.runner_count as i32 * rate + 50) / 100
     }
 }
 
@@ -1000,13 +1013,14 @@ impl Runner {
 
     /// Update order rate (percentage rank) based on total runners.
     ///
-    /// If `should_update_range` is true, also update the min/max order rates.
+    /// If `should_update_range` is true, also update the best/worst orders.
     pub fn update_order_rate(&mut self, total_runners: u8, should_update_range: bool) {
-        let rate = ((self.order.order as f64 / total_runners as f64) * 100.0).ceil() as u8;
-        self.order.rate = rate;
+        let order = self.order.order;
+        self.order.runner_count = total_runners;
+        self.order.rate = ((order as f64 / total_runners as f64) * 100.0).ceil() as u8;
         if should_update_range {
-            self.order.rate_max = self.order.rate_max.max(rate);
-            self.order.rate_min = self.order.rate_min.min(rate);
+            self.order.best = self.order.best.min(order);
+            self.order.worst = self.order.worst.max(order);
         }
     }
 
