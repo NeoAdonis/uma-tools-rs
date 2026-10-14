@@ -19,7 +19,7 @@
 //! `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`, both
 //! branches get the same segment, and `random_lot==50` in two branches hits or
 //! misses for both at once.
-//! 
+//!
 //! Within a branch, rolling stops at the first failure; a comparison skipped
 //! that way is rolled when another branch first needs it.
 //!

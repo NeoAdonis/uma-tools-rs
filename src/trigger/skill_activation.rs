@@ -39,14 +39,15 @@
 //!      activating a buff with effect type N in the current frame. It stays as
 //!      a guard too.
 //! 2. **Window trigger** otherwise. The ranges of the branch's comparisons
-//!    are intersected per variable:
-//!    - **Position**: distance rate, remaining distance, furlongs, phase and
-//!      its subdivisions, corners, slopes, straights, final corner, last
-//!      straight.
-//!    - **Time**: `accumulatetime`.
-//!    - **HP**: `hp_per`.
-//!    The window uses the position range if the branch has one, else time, else
-//!    HP. A branch with no range at all gets a position window over the whole
+//!    are intersected per variable, and the window uses the first kind of
+//!    range that the branch has, in this order:
+//!    1. **Position**: distance rate, remaining distance, furlongs, phase and
+//!       its subdivisions, corners, slopes, straights, final corner, last
+//!       straight.
+//!    2. **Time**: `accumulatetime`.
+//!    3. **HP**: `hp_per`.
+//!
+//!    A branch with no range at all gets a position window over the whole
 //!    race.
 //!
 //! Ranges must contain every value where the comparison can be true, so:

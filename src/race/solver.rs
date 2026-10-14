@@ -308,7 +308,7 @@ impl RaceSolver<Runner> {
     /// `is_other_character_activate_advantage_skill` triggers of every runner
     /// are checked, so that the result doesn't depend on which runner checked
     /// first. Then, effects targeting other runners are applied.
-    /// 
+    ///
     /// After that, the **state is updated**: time advances, then each runner moves
     /// and updates everything derived from her position (phase, corners, straights,
     /// slopes), her lane and HP, and her active effects. Multi-runner values are
