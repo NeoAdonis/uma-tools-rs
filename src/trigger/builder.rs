@@ -8,16 +8,21 @@
 //!
 //! For each skill alternative:
 //!
-//! 1. **Parse condition** - Parse condition string into AST.
-//! 2. **Pre-roll random triggers** - Determine random activation segments,
+//! 1. **Pre-roll random triggers** - Determine random activation segments,
 //!    shared by every alternative of the skill.
-//! 3. **Compile condition** - Turn each OR branch into a trigger + guards using
+//! 2. **Compile condition** - Turn each OR branch into a trigger + guards using
 //!    [`compile_condition()`].
-//! 4. **Compile precondition** - Turn the precondition (if present) into logics
+//! 3. **Compile precondition** - Turn the precondition (if present) into logics
 //!    that unlock the skill, the same way.
-//! 5. **Create [`SkillActivationLogic`]** - Store trigger + guards +
+//! 4. **Create [`SkillActivationLogic`]** - Store trigger + guards +
 //!    precondition ID.
-//! 6. **Index triggers** - Add to appropriate scheduler queues/lists.
+//! 5. **Index triggers** - Add to appropriate scheduler queues/lists.
+//!
+//! Alternatives whose condition or precondition can never be satisfied on the
+//! course are skipped.
+//!
+//! The RNG is consumed in skill order while building, so changing what gets
+//! rolled (or in which order) changes race results for a given seed.
 //!
 //! ## Example
 //!
@@ -180,8 +185,9 @@ fn add_precondition(
     scheduler.precondition_satisfied.push(false);
 
     for branch in branches {
-        // Windows go to their own queue, checked before any other trigger. That queue
-        // tracks positions only: time and HP windows cover the whole race.
+        // Windows go to their own queue, checked before the triggers they unlock (see
+        // `Runner::check_skills`). That queue tracks positions only: time and HP
+        // windows cover the whole race.
         let trigger = match branch.trigger {
             TriggerCondition::Window {
                 variable: WindowVariable::Position,

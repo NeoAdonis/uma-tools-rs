@@ -1,3 +1,51 @@
+//! # Random Segments
+//!
+//! This module rolls the random variables of skill conditions when the
+//! scheduler is built.
+//!
+//! Random variables don't pick a single point: they pick a random **10m
+//! segment** ([`SEGMENT_LENGTH`]) inside the area they describe (a phase, a
+//! corner, the last straight...), and the skill can activate anywhere in it, as
+//! long as its guards hold. [`roll_condition`] returns the segment starts for
+//! each OR branch (usually one; up to 4 for `all_corner_random`), or `None` if
+//! the roll failed (a `random_lot` miss, or no matching feature on the course,
+//! e.g. `corner_random==4` without a 4th corner).
+//!
+//! ## Shared Rolls
+//!
+//! Each distinct random comparison (same variable, operator and value) is
+//! rolled **once per skill** ([`RandomRolls`]), and every branch containing it
+//! shares the result: the same segments, or the same failure. For example, in
+//! `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`, both
+//! branches get the same segment, and `random_lot==50` in two branches hits or
+//! misses for both at once.
+//! 
+//! Within a branch, rolling stops at the first failure; a comparison skipped
+//! that way is rolled when another branch first needs it.
+//!
+//! This includes the branches of every alternative of the skill. Alternatives
+//! often share a random variable, one of them adding requirements to the other
+//! (e.g. `phase_straight_random==1&track_id==10005` vs
+//! `phase_straight_random==1`). Rolled separately, the less specific one could
+//! come first and prevent the other from activating, since a skill activates
+//! through a single alternative; rolled once, the first one satisfied in order
+//! wins at the shared segment.
+//!
+//! ## From Segments to Triggers
+//!
+//! When compiling (see [`skill_activation`](crate::trigger::skill_activation)),
+//! each segment `[start, start + 10]` is intersected with the branch's position
+//! range, and the non-empty parts become its trigger. If none remain, the
+//! branch is dropped. Segments are position windows: the guards are tested
+//! every frame while the runner is inside one, until they pass.
+//!
+//! `run_at_full_speed_random` can't be rolled in advance: its logics wait until
+//! the all-out spurt starts, and then get a segment between the current
+//! position and the goal. Unlike other random variables, it's rolled once per
+//! branch; in practice, at most one branch per alternative is left by then,
+//! since branches sharing a random variable are split by static conditions,
+//! which are resolved when the runner is created.
+
 use std::vec;
 
 use crate::condition::parser::*;

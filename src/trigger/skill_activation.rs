@@ -19,8 +19,75 @@
 //!   - Windows: the range of positions (or time, or HP) where every comparison
 //!     of the branch can be true, checked every frame while inside it.
 //!
-//! **Preconditions** are compiled the same way into logics whose action is to
-//! unlock the skill instead of activating it (see [`LogicAction`]).
+//! ## Compiling a Branch
+//!
+//! The trigger of a branch is chosen as follows:
+//!
+//! 1. **Event trigger**, if the branch contains an event (at most one per
+//!    branch in the skill data):
+//!    - A random variable: its rolled segments
+//!      ([`TriggerCondition::Segments`]), trimmed to the position range of the
+//!      rest of the branch (see [`random`](crate::trigger::random)), or the
+//!      all-out spurt start ([`TriggerCondition::AllOutSpurtStart`]) for
+//!      `run_at_full_speed_random`. `random_lot` is only a roll: it adds no
+//!      trigger.
+//!    - `is_last_straight_onetime==1`: entering the last straight.
+//!    - `is_activate_any_skill==1` / `is_activate_heal_skill==1`: a (heal)
+//!      skill activating. These stay as guards too, since they can be
+//!      evaluated.
+//!    - `is_other_character_activate_advantage_skill==N`: another runner
+//!      activating a buff with effect type N in the current frame. It stays as
+//!      a guard too.
+//! 2. **Window trigger** otherwise. The ranges of the branch's comparisons
+//!    are intersected per variable:
+//!    - **Position**: distance rate, remaining distance, furlongs, phase and
+//!      its subdivisions, corners, slopes, straights, final corner, last
+//!      straight.
+//!    - **Time**: `accumulatetime`.
+//!    - **HP**: `hp_per`.
+//!    The window uses the position range if the branch has one, else time, else
+//!    HP. A branch with no range at all gets a position window over the whole
+//!    race.
+//!
+//! Ranges must contain every value where the comparison can be true, so:
+//!
+//! - Values the evaluator floors hold up to the next integer
+//!   (`distance_rate<=50` holds until 51%).
+//! - Features with gaps use the smallest range containing all of them
+//!   (`corner!=0` spans from the first corner's start to the last corner's
+//!   end); the guard handles the gaps.
+//! - A variable whose range isn't known simply doesn't narrow the window.
+//!
+//! If any range is empty (e.g. `slope==2` on a course without downhills, or
+//! `phase==0&distance_rate>=50`), the branch can never be true and is dropped.
+//!
+//! ## Preconditions
+//!
+//! A precondition must have been true **at some point** before the skill can
+//! activate; once satisfied, it stays satisfied for the rest of the race.
+//! Example: "after overtaking someone (`change_order_onetime<0`), activate on
+//! the last straight".
+//!
+//! A precondition is compiled into its own logics (one per OR branch) whose
+//! action is [`LogicAction::Unlock`] instead of [`LogicAction::Activate`].
+//! Their guards are the branch's comparisons; their trigger decides when those
+//! are checked. All condition branches of the alternative wait on the same
+//! precondition, and can succeed once any of its logics does. This reuses the
+//! trigger-guard machinery: evaluating a precondition is the same as evaluating
+//! guards.
+//!
+//! Preconditions are compiled like conditions, except that:
+//!
+//! - Their position windows go to a separate queue, checked before the
+//!   triggers they unlock (see [`Runner::check_skills`]). That queue only
+//!   tracks positions, so a precondition window based on time or HP covers the
+//!   whole race instead.
+//! - Unlock logics are added before the logics they unlock, so an event firing
+//!   both unlocks the skill first.
+//! - They aren't rolled: random variables aren't expected in them. Otherwise, a
+//!   branch with a variable rolled into segments is dropped, `random_lot` is
+//!   ignored, and `run_at_full_speed_random` becomes an all-out spurt start
+//!   trigger, rolled during the race like in conditions.
 //!
 //! ## Examples
 //!
@@ -35,6 +102,8 @@
 //!
 //! - **Trigger**: `Window { Position, 400, 1100 }` (Mid phase ∩ corners).
 //! - **Guards**: `[phase==1, corner!=0, order<=3]`.
+//!
+//! [`Runner::check_skills`]: crate::race::runner::Runner::check_skills
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;

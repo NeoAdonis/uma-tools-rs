@@ -1,3 +1,44 @@
+//! # Trigger Scheduler
+//!
+//! This module holds the data structures the scheduler indexes triggers in, so
+//! that only the triggers that can fire are looked at on each frame.
+//!
+//! ## Trigger Types
+//!
+//! Each trigger ([`TriggerCondition`]) is stored where it can be checked
+//! cheaply:
+//!
+//! - `Segments` (random variables): one window per segment in the position
+//!   [`WindowQueue`]. Fires every frame while inside a segment.
+//! - `Window` (position, time): a [`WindowQueue`]. Fires every frame while
+//!   inside the range.
+//! - `Window` (HP): a list. Fires every frame while inside the range.
+//! - `LastStraightEntry`: a list. Fires once, when entering the last straight.
+//! - `RaceStart` (out-of-gate skills): a list. Fires once, on the first frame
+//!   the runner moves.
+//! - `AllOutSpurtStart`: a list. Converted to a segment window when the spurt
+//!   starts.
+//! - `AnySkillActivation` / `HealSkillActivation`: lists. Fire on frames where
+//!   a (heal) skill activated.
+//! - `BuffSkillActivation`: a list. Fires on frames where any runner activated
+//!   a buff, after every runner checked her skills.
+//!
+//! **Window queues.** Position and time only increase, so their windows wait in
+//! a pending list sorted by start, are checked while active, and are dropped
+//! once the value passes their end. HP can recover, so HP windows are scanned
+//! every frame. Bounds are widened by a small epsilon, so a window is never
+//! skipped because of floating point error.
+//!
+//! **Checked once vs. retried.** The last straight entry and the race start
+//! happen once per race, so their logics are checked once: if the guards fail
+//! at that moment, the skill doesn't activate. Windows (random segments
+//! included) and skill-activation events retry every time they fire, until the
+//! logic succeeds; afterwards, an activated logic waits for its cooldown to
+//! end. A segment that is crossed in a single frame is still checked, as long
+//! as the runner lands inside it; one that is jumped over entirely is missed.
+//!
+//! [`TriggerCondition`]: crate::trigger::skill_activation::TriggerCondition
+
 use crate::course::Phase;
 use crate::trigger::skill_activation::SkillActivationLogic;
 
@@ -13,7 +54,7 @@ pub struct TriggerScheduler {
     // stored in `SkillActivationLogic::precondition`.
     pub precondition_satisfied: Vec<bool>,
     // Position windows of precondition logics. Kept apart from regular windows
-    // because preconditions are checked before any other trigger.
+    // because preconditions are checked before the triggers they unlock.
     pub precondition_windows: WindowQueue,
 
     // Window triggers - checked every frame while within bounds (including random

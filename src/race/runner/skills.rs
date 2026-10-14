@@ -1,4 +1,65 @@
 //! Skill trigger checks, activation and active effects.
+//!
+//! ## Checking Skills
+//!
+//! When a trigger fires, [`Runner::try_activate_skill`] checks its logic:
+//!
+//! 1. Stop if the logic waits for a precondition that isn't satisfied yet.
+//! 2. Stop if the logic is in cooldown.
+//! 3. Stop if another alternative of the skill already activated, unless the
+//!    logic belongs to a continuation (see below).
+//! 4. Evaluate the guards (all must be true).
+//! 5. On success, run the action:
+//!    - `Activate`: activate the skill (see below), which starts the cooldown
+//!      of the alternative. Once it ends, the logic can succeed again.
+//!    - `Unlock`: mark the precondition as satisfied. The logic is never
+//!      checked again.
+//!
+//! ## Activating a Skill
+//!
+//! Activating a skill ([`Runner::activate_skill`]):
+//!
+//! - Triggers the additional effects of the skills already active that apply
+//!   on any skill activation (see [`AdditionalActivation`]).
+//! - Applies each effect targeting the runner herself. **Timed effects**
+//!   (speed, acceleration...) are stored with an expiration time (base duration
+//!   scaled by the runner's situation, the course distance and active
+//!   duration-modifying effects; or the end of the race for effects lasting
+//!   until then) and folded into her skill modifiers; **instant effects**
+//!   (recovery...) apply immediately.
+//!   **Pre-race effects** (stats, start delay...) are skipped, as they were
+//!   applied before the race.
+//! - Queues each effect targeting other runners in `pending_effects`, with the
+//!   caster's scaled duration and wit limit break bonus. Once every runner has
+//!   checked her skills, the solver selects the targets ([`SkillTarget`]) and
+//!   applies the effects to them.
+//! - Starts the cooldown of the activated alternative (all its OR branches).
+//! - Records the alternative in the skill's mask of activated alternatives
+//!   ([`Runner::activated_alternatives`]), used for `is_used_skill_id`,
+//!   `is_activate_other_skill_detail`, forced activations and value scaling.
+//!   Once any other alternative is in the mask, an alternative can't activate
+//!   for the rest of the race: a skill activates through a single alternative.
+//!   The exception are continuations, alternatives using
+//!   `is_activate_other_skill_detail`, which can only activate after another
+//!   alternative did.
+//! - Records the activation (for activation counts and reporting).
+//! - Sets this frame's activation flags, which fire any-skill and heal
+//!   activation triggers.
+//!
+//! When several alternatives are satisfied on the same frame, the first one
+//! checked wins, which is the first one in order as long as they don't depend
+//! on this frame's activations (see [`Runner::check_skills`]).
+//!
+//! **Known gap:** activation-dependent triggers are checked after the others,
+//! so a later alternative could win over an activation-dependent earlier one.
+//! No current skill has such alternatives.
+//!
+//! ## Forced Activations
+//!
+//! Some effects activate other skills of the runner, bypassing their
+//! conditions: [`SkillType::ActivateRandomGold`] (e.g. "564 Escapades") and
+//! [`SkillType::ActivateUnique`]. See [`Runner::activate_random_gold_skills`]
+//! and [`Runner::activate_unique_skills`].
 
 use std::collections::HashSet;
 
@@ -105,6 +166,10 @@ impl Runner {
     ///
     /// Guards that are true are removed. Logics with a false guard can never
     /// succeed, so their triggers are removed.
+    ///
+    /// This can't be done when the scheduler is built, since some of these values
+    /// (popularity, running style changed by out-of-gate skills...) are only final
+    /// once the runner is created.
     pub(super) fn resolve_static_guards(&mut self, state: &RaceState) {
         let is_static = |comp: &Comparison| comp.var.is_static();
 
@@ -133,6 +198,23 @@ impl Runner {
     /// All skills are checked at once, at the start of each frame, against runner's
     /// state at that point. Nothing is updated in between, so every check sees the
     /// same values.
+    ///
+    /// The following order is used to check triggers:
+    ///
+    /// 1. Race start triggers, only on the first frame the runner moves. Their
+    ///    logics never wait for a precondition: they belong to out-of-gate skills,
+    ///    whose preconditions were evaluated before the race, along with their
+    ///    conditions.
+    /// 2. Precondition windows, so that a skill can activate in the same frame its
+    ///    precondition is satisfied.
+    /// 3. Triggers that don't depend on this frame's activations: windows and
+    ///    last straight entry, in the order the logics were built.
+    /// 4. Any-skill and heal activation triggers, which depend on the activations
+    ///    above.
+    ///
+    /// `is_other_character_activate_advantage_skill` triggers depend on the
+    /// activations of every runner, so they're checked afterwards (see
+    /// [`Self::check_advantage_triggers`]).
     pub fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
         // Out-of-gate skills activate on the first frame the runner moves; their
@@ -167,8 +249,9 @@ impl Runner {
 
     /// Check the preconditions whose window contains the current position.
     ///
-    /// This must be called at the start of each frame, before any other trigger, so
-    /// that a skill can activate in the same frame its precondition is satisfied.
+    /// This must be called before any trigger whose logic can wait for a
+    /// precondition, so that a skill can activate in the same frame its
+    /// precondition is satisfied.
     fn check_precondition_windows(&mut self, state: &RaceState) {
         let inside = self
             .trigger_scheduler

@@ -1,3 +1,55 @@
+//! Runners before the race: their stats, skills and out-of-gate skills.
+//!
+//! An [`UnreadyRunner`] holds everything known about a runner before the race
+//! starts. Once every runner of the race is known, out-of-gate skills are
+//! applied, and the [`Runner`] is built.
+//!
+//! ## Skill Setup
+//!
+//! When the runner is created:
+//!
+//! 1. **Wit check**: each skill is kept with a probability based on the
+//!    runner's wit (skills without a wit check are always kept). Skills that
+//!    fail it can't activate, but still count towards the runner's skills.
+//! 2. **Scheduler**: the [`TriggerScheduler`] is built for the kept skills (see
+//!    [`build_trigger_scheduler`]). Logics refer to skills by their index in
+//!    this list. Out-of-gate skills are skipped.
+//!
+//! ## Out-of-Gate Skills
+//!
+//! Out-of-gate skills apply before the race starts: they're the skills with any
+//! effect that modifies a parameter needed before the race
+//! ([`SkillType::is_pre_race_effect`]), i.e. stats, start delay, running style,
+//! rush chance, or "Sympathy" activation.
+//!
+//! Their conditions only use values known before the race, so they aren't
+//! compiled into triggers. Instead, [`UnreadyRunner::apply_out_of_gate_skills`]
+//! chooses the first alternative whose precondition (if any) and condition both
+//! hold, evaluated with [`EvaluatorOutOfGate`]; if none holds, the skill
+//! doesn't activate. Before the race, a precondition is just another
+//! requirement (e.g. `distance_type==3 @ distance_type==4` for a skill whose
+//! condition is `base_stamina>=1200`). Then:
+//!
+//! 1. Its pre-race effects are applied before the [`Runner`] is built.
+//! 2. A logic with a `RaceStart` trigger is added for it, so the skill
+//!    activates on the first frame the runner moves. The logic has no guards
+//!    nor precondition, since both were already satisfied. From there, it's
+//!    handled like any other skill: its other effects (e.g. acceleration) apply
+//!    with their usual duration and cooldown, and the activation is recorded
+//!    and counted.
+//!
+//! Lotteries (only used by out-of-gate skills) are evaluated here too:
+//! `random_lot==X` holds if a new draw (from 0 to 100) is below X, every time
+//! it's evaluated. `random_lot_shared==X` is the same, but with a single draw
+//! per skill, kept for every alternative, so that several alternatives don't
+//! improve its chances. In practice, both currently behave the same: skills
+//! using `random_lot` have a single alternative, or alternatives that exclude
+//! each other.
+//!
+//! "Sympathy" activated by another runner bypasses its condition: a race start
+//! logic is added for it, unless it already activates (see
+//! [`UnreadyRunner::activate_sympathy`]).
+
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 

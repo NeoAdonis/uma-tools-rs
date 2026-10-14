@@ -294,9 +294,31 @@ impl RaceSolver<Runner> {
 
     /// Perform a single simulation step.
     ///
-    /// Skills are checked first, against the state reached at the end of the
-    /// previous step (including multi-runner values such as order). Then, time
-    /// advances and every runner is updated.
+    /// Each step has two main stages: skill activation and state update.
+    ///
+    /// For **skills**, every runner that moves during this step (i.e. leaves the
+    /// gate by its end, so that her first frame of movement is checked too)
+    /// [checks her skills](Runner::check_skills) before time advances. Nothing is
+    /// updated in between, so every check sees the same state: the one reached at
+    /// the end of the previous step, including multi-runner values (order,
+    /// blocking...).
+    ///
+    /// Once every runner has checked her skills, the buff (advantage) skill
+    /// types activated this frame are counted, and the
+    /// `is_other_character_activate_advantage_skill` triggers of every runner
+    /// are checked, so that the result doesn't depend on which runner checked
+    /// first. Then, effects targeting other runners are applied.
+    /// 
+    /// After that, the **state is updated**: time advances, then each runner moves
+    /// and updates everything derived from her position (phase, corners, straights,
+    /// slopes), her lane and HP, and her active effects. Multi-runner values are
+    /// updated last.
+    ///
+    /// Events detected during the update (e.g. entering a straight) are stored
+    /// and handled by the next skill check. Update functions never check skills
+    /// themselves; at most, they schedule new windows (e.g.
+    /// `run_at_full_speed_random` segments, rolled when the all-out spurt starts
+    /// during the target speed update).
     fn step(&mut self, delta_time: f64) {
         self.update_team_activations();
         self.state.buffs_activated.clear();
