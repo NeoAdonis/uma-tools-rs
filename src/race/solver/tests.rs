@@ -1820,8 +1820,8 @@ fn test_team_activations_match_runners_each_frame() {
     assert_eq!(solver.state.team_activations, [6, 3, 0]);
 }
 
-/// Ready race with one runner per `(style, team)`, placed in that order from first
-/// to last, 10 meters apart.
+/// Ready race with one runner per `(style, team)`, placed in that order from
+/// first to last, 10 meters apart.
 fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     for _ in runners {

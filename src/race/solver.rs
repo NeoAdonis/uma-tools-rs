@@ -398,8 +398,8 @@ impl RaceSolver<Runner> {
         self.update_compete_before_spurt();
     }
 
-    /// Check `is_other_character_activate_advantage_skill` triggers of every runner,
-    /// now that this frame's activations are known.
+    /// Check `is_other_character_activate_advantage_skill` triggers of every
+    /// runner, now that this frame's activations are known.
     ///
     /// Skills activated here aren't counted as advantage skills for other runners.
     fn check_advantage_triggers(&mut self, delta_time: f64) {

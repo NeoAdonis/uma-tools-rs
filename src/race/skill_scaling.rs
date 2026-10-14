@@ -55,8 +55,8 @@ pub const DEVELOPMENT_MULTIPLIER: f64 = 1.2;
 ///
 /// Love is gained during the race from the start dash, position changes in the
 /// Mid race and skill activations, each gain scaling with the fan count during
-/// training. The multiplier ranges from 1.0x to 3.0x. The maximum is assumed for
-/// now.
+/// training. The multiplier ranges from 1.0x to 3.0x. The maximum is assumed
+/// for now.
 pub const FAN_LOVE_MULTIPLIER: f64 = 3.0;
 
 /// Multiplier from the number of skills the runner has, up to 1.2x at 20

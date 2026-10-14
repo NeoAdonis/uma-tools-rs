@@ -1,8 +1,8 @@
 //! Tests for precondition build-time and runtime behavior
 //!
-//! These tests complement the existing precondition tests in skill_activation.rs
-//! by focusing on precondition-trigger interaction, edge cases and unlocking skills
-//! during a race.
+//! These tests complement the existing precondition tests in
+//! skill_activation.rs by focusing on precondition-trigger interaction, edge
+//! cases and unlocking skills during a race.
 
 use crate::common::{
     activation_logics, alternative, alternative_with_precondition, load_course, ready_solver,

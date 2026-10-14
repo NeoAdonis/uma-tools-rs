@@ -1,5 +1,5 @@
-//! Runtime tests for distance-based triggers (random points, remaining distance,
-//! and ranges made of monotonic comparisons).
+//! Runtime tests for distance-based triggers (random points, remaining
+//! distance, and ranges made of monotonic comparisons).
 
 use crate::common::{load_course, negligible_skill, ready_solver, seeded_config, uma};
 use uma_tools::course::Phase;
@@ -11,7 +11,7 @@ use uma_tools::uma::*;
 /// Length of the test course (10104) in meters.
 const COURSE_DISTANCE: f64 = 2000.0;
 
-/// Run a single-runner race with the given skill condition and return the runner.
+/// Run a single-runner race with the given skill condition; return the runner.
 fn run_race(condition: &str, rng_seed: u64) -> Runner {
     let uma = Uma {
         stamina: 1200,
@@ -157,9 +157,9 @@ fn test_remain_distance_pair_window_range() {
 
 #[test]
 fn test_all_corner_random_activates_at_later_segment() {
-    // Up to 4 segments are picked on corners, but the skill can only activate on the
-    // fourth corner (1475-1734m). Earlier segments fail the guard, so it activates
-    // at the first segment on the fourth corner, if there's any.
+    // Up to 4 segments are picked on corners, but the skill can only activate on
+    // the fourth corner (1475-1734m). Earlier segments fail the guard, so it
+    // activates at the first segment on the fourth corner, if there's any.
     let condition = "all_corner_random==1&corner==4";
     let mut activated = 0;
     for seed in 0..20 {

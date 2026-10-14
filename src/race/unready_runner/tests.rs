@@ -588,7 +588,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
 
 #[test]
 fn test_random_lot_is_rolled_by_each_alternative() {
-    // The second alternative can activate after the lottery of the first one failed.
+    // The 2nd alternative can activate after the lottery of the first one failed.
     assert_eq!(lottery_speed_gains("random_lot"), [0, 40, 100].into());
 }
 

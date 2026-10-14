@@ -149,7 +149,7 @@ fn test_activation_dependent_or_branches() {
     // Total: 3 skill logics
     assert_eq!(scheduler.skill_logics.len(), 3);
 
-    // Alt 2, Branch 1 and Branch 2 (indices 1 and 2) both have activation dependency
+    // Alt 2, Branch 1 and Branch 2 both have activation dependency.
     for idx in 1..=2 {
         let logic = &scheduler.skill_logics[idx];
         assert_eq!(1, 1, "Each OR branch should have 1 branch");
@@ -342,8 +342,8 @@ fn test_activation_dependency_variable_detection() {
         );
     }
 
-    // Test 3: is_other_character_activate_advantage_skill (checked when other runners
-    // activate advantage skills)
+    // Test 3: is_other_character_activate_advantage_skill (checked when other
+    // runners activate advantage skills)
     {
         let skill = skill(
             "test_dep3",
@@ -372,7 +372,7 @@ fn test_activation_dependency_variable_detection() {
 #[test]
 fn test_activation_dependency_with_precondition() {
     // Test: Skill with both precondition and activation dependency in condition
-    // Tests: Layered dependency checking (precondition → trigger → guard with activation)
+    // Tests: Layered dependency checks (precond → trigger → guard with activation)
 
     let alternatives = vec![alternative_with_precondition(
         "phase>=2",

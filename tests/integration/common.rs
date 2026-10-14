@@ -155,7 +155,7 @@ pub fn negligible_skill(condition: &str) -> Skill {
     skill("999999", condition, SkillType::TargetSpeed, 0.0001)
 }
 
-/// Logics that activate skills, i.e. excluding the ones that unlock preconditions.
+/// Logics that activate skills (excluding the ones that unlock preconditions).
 pub fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
     scheduler
         .skill_logics

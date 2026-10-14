@@ -1,6 +1,6 @@
-//! Runtime tests for skill cooldowns: once a skill alternative activates, none of
-//! its OR branches can activate again until the cooldown, scaled by the course
-//! distance, is over.
+//! Runtime tests for skill cooldowns: once a skill alternative activates, none
+//! of its OR branches can activate again until the cooldown, scaled by the
+//! course distance, is over.
 
 use crate::common::{alternative, load_course, ready_solver, seeded_config, skill_data, uma};
 use uma_tools::race::runner::Runner;

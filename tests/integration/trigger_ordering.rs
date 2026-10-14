@@ -32,8 +32,8 @@ fn window(logic: &SkillActivationLogic) -> (WindowVariable, f64, f64) {
     }
 }
 
-// Course 10104: 2000m, sections of 83.33m (Mid phase at 333-1333m, Late phase at
-// 1333-1667m), no slopes
+// Course 10104: 2000m, sections of 83.33m (Mid phase at 333-1333m, Late phase
+// at 1333-1667m), no slopes
 const SECTION: f64 = 2000.0 / 24.0;
 
 // ============================================================================
@@ -112,7 +112,8 @@ fn test_six_conditions_intersect() {
 
 #[test]
 fn test_distance_rate_and_remain_distance_intersect() {
-    // Skill 101191: distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500
+    // Skill 101191:
+    // distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500
     // 66-68% (floored, so until 69%) is 1320-1380m, well before 500m remain
     let scheduler = scheduler(
         skill(

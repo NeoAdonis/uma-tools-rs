@@ -158,7 +158,10 @@ pub struct Uma {
     /// Number of fans. Used by some skill conditions and effects.
     ///
     /// If `None`, the configured default is used (see
-    /// [`Configuration::default_fan_count`](crate::configuration::Configuration::default_fan_count)).
+    /// [`Configuration::default_fan_count`]).
+    ///
+    /// [`Configuration::default_fan_count`]:
+    ///     crate::configuration::Configuration::default_fan_count
     pub fan_count: Option<u32>,
 }
 

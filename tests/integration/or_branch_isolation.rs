@@ -36,8 +36,8 @@ fn test_position_based_or_mutual_exclusion() {
     assert_eq!(branches[0].guards.len(), 4, "Branch 1 should have guards");
     assert_eq!(branches[1].guards.len(), 4, "Branch 2 should have guards");
 
-    // The key property: bashin_diff_infront and bashin_diff_behind are mutually exclusive
-    // This is enforced at runtime by the guard evaluation logic
+    // bashin_diff_infront and bashin_diff_behind are mutually exclusive.
+    // This is enforced at runtime by the guard evaluation logic.
 }
 
 #[test]
@@ -186,9 +186,10 @@ fn test_or_branches_independent_activation_tracking() {
     // Should create 2 skill logics
     assert_eq!(scheduler.skill_logics.len(), 2);
 
-    // Each logic has its own cooldown_until field
-    // This test verifies they are separate entries in skill_logics
-    // They share the same skill_index and alternative_index, but are distinct array entries
+    // Each logic has its own cooldown_until field.
+    // This test verifies they are separate entries in skill_logics.
+    // They share the same skill_index and alternative_index, but are distinct
+    // array entries.
     assert_eq!(
         scheduler.skill_logics[0].skill_index,
         scheduler.skill_logics[1].skill_index
@@ -252,8 +253,10 @@ fn test_three_branch_or_mutual_exclusion() {
 fn test_four_branch_evaluation_priority() {
     // Skill 101171: Four branches with change_order counters
     // Branch 1: is_last_straight_onetime==1&change_order_up_end_after>=3
-    // Branch 2: is_last_straight_onetime==1&change_order_up_end_after>=2&change_order_up_middle>=1
-    // Branch 3: is_last_straight_onetime==1&change_order_up_end_after>=1&change_order_up_middle>=2
+    // Branch 2: is_last_straight_onetime==1&change_order_up_end_after>=2
+    //           &change_order_up_middle>=1
+    // Branch 3: is_last_straight_onetime==1&change_order_up_end_after>=1
+    //           &change_order_up_middle>=2
     // Branch 4: is_last_straight_onetime==1&change_order_up_middle>=3
     // Tests: Multiple branches with overlapping ranges (first match wins)
 

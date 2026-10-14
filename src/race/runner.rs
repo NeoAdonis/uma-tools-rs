@@ -535,7 +535,7 @@ impl Runner {
                 * stamina_limit_break_random_factor(&mut *self.rng.borrow_mut());
         }
 
-        // The all-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
+        // All-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
         if self.all_out_spurt == AllOutSpurt::Pending
             && self.all_out_spurt_base > 0.0
             && !self.hp.is_empty()

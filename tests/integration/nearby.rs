@@ -13,7 +13,8 @@ fn ready_runners(count: usize) -> Vec<Runner> {
     solver.ready_runners().runners
 }
 
-/// Simulate one blocking update cycle between a runner ahead and a runner behind.
+/// Simulate one blocking update cycle between a runner ahead and a runner
+/// behind.
 fn update_cycle(ahead: &mut Runner, behind: &mut Runner, is_near: bool) {
     ahead.reset_blocking_status();
     behind.reset_blocking_status();

@@ -246,8 +246,8 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
     }
 }
 
-/// Represents how the value of a skill effect scales with the runner's situation
-/// when the skill activates (see [`crate::race::skill_scaling`]).
+/// Represents how the value of a skill effect scales with the runner's
+/// situation when the skill activates (see [`crate::race::skill_scaling`]).
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
