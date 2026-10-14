@@ -88,14 +88,15 @@ impl Runner {
                 <= horse_lanes_to_course_widths((distance / visible_distance) * 11.5 + 2.0) / 2.0
     }
 
-    /// Update front-blocked state for this runner based on another runner.
+    /// Mark this runner as blocked from the front by `ahead`, limiting her speed
+    /// based on the distance to `ahead` and her speed.
     ///
     /// Runners ahead must be checked from the furthest to the closest, so that
     /// the closest one prevails.
-    pub fn update_front_blocked_by(&mut self, other: &Self) {
-        let distance = (other.position - self.position).abs();
-        self.blocked.speed_limit = Some((0.988 + 0.012 * distance) * other.speed);
-        self.blocked.front_blocker = Some(other.gate_roll);
+    pub fn update_front_blocked_by(&mut self, ahead: &Self) {
+        let distance = (ahead.position - self.position).abs();
+        self.blocked.speed_limit = Some((0.988 + 0.012 * distance) * ahead.speed);
+        self.blocked.front_blocker = Some(ahead.gate_roll);
     }
 
     /// Update side-blocked state for this runner and another.
@@ -113,27 +114,28 @@ impl Runner {
         }
     }
 
-    /// Update front-surrounded state for this runner and another.
-    pub fn update_front_surrounded_by(&mut self, other_front: &mut Self) {
+    /// Mark this runner as surrounded from the front by `ahead`, and `ahead` as
+    /// surrounded from the back by this runner.
+    pub fn update_front_surrounded_by(&mut self, ahead: &mut Self) {
         self.surrounded.front = true;
-        other_front.surrounded.back = true;
+        ahead.surrounded.back = true;
     }
 
-    /// Update back-surrounded state for this runner and another.
+    /// Mark this runner and `other` as surrounding each other from the side.
     pub fn update_side_surrounded_by(&mut self, other: &mut Self) {
         self.surrounded.side = true;
         other.surrounded.side = true;
     }
 
-    /// Update nearby state for this runner and another in the same lane ahead.
-    pub fn update_near_same_lane_behind(&mut self, other: &mut Self) {
+    /// Count `ahead` as a nearby runner in the same lane ahead of this runner,
+    /// and this runner as one behind her.
+    pub fn update_near_same_lane_by(&mut self, ahead: &mut Self) {
         self.nearby.ahead_same_lane_count += 1;
-        other.nearby.behind_same_lane_count += 1;
+        ahead.nearby.behind_same_lane_count += 1;
     }
 
-    /// Update nearby state for this runner and another ahead.
-    pub fn update_near_behind(&mut self, other: &mut Self) {
-        // Both runners are near each other.
+    /// Count this runner and `other` as nearby runners of each other.
+    pub fn update_near_by(&mut self, other: &mut Self) {
         self.nearby.count += 1;
         other.nearby.count += 1;
     }

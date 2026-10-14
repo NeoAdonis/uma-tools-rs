@@ -18,7 +18,7 @@ fn update_cycle(ahead: &mut Runner, behind: &mut Runner, is_near: bool) {
     ahead.reset_blocking_status();
     behind.reset_blocking_status();
     if is_near {
-        behind.update_near_same_lane_behind(ahead);
+        behind.update_near_same_lane_by(ahead);
         ahead.nearby.behind_set1_count += 1;
     }
     ahead.update_near_time(DELTA_TIME);

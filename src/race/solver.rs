@@ -589,10 +589,10 @@ impl RaceSolver<Runner> {
                     runner_j.update_side_surrounded_by(runner_i);
                 }
                 if proximity::is_near(distance, lane_diff, game_version) {
-                    runner_j.update_near_behind(runner_i);
+                    runner_j.update_near_by(runner_i);
                 }
                 if proximity::is_near_same_lane(distance, lane_diff) {
-                    runner_j.update_near_same_lane_behind(runner_i);
+                    runner_j.update_near_same_lane_by(runner_i);
                 }
                 if proximity::is_near_behind_set1(distance, lane_diff) {
                     runner_i.nearby.behind_set1_count += 1;
