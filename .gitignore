@@ -1,1 +1,13 @@
+# Cargo build artifacts.
 /target
+
+# Game's master database, used to generate data files.
+# Each developer should supply their own copy.
+*.mdb
+
+# Local code coverage reports and raw profiling data.
+lcov.info
+cobertura.xml
+codecov.json
+*.profraw
+*.profdata
