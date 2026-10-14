@@ -18,7 +18,7 @@ Follow the style conventions in [`STYLE.md`](./STYLE.md), especially for code co
 - The project uses the default Rust style, so `cargo fmt` (with the appropriate flags, e.g. `--check`) can both fix and verify formatting.
 - Use `cargo clippy` to check for common mistakes and non-idiomatic code.
 - Prefer line comments (`//`, `///`, `//!`).
-- Limit comment lines to 80 characters (sigils included, indentation excluded) without exceeding the global line limit.
+- Comment lines are at most 80 characters long (sigils included, indentation excluded), without exceeding the global line limit. Run `scripts/check_comment_width.pl` to verify it.
 
 ## Commits
 
@@ -70,3 +70,4 @@ Scripts, relative to `scripts/`:
 
 - `make_skill_data.pl`: generates `skill_data.json` from the game's master database (`master.mdb`).
 - `make_skillnames.pl`: updates `skillnames.json` from the game's master database (`master.mdb`).
+- `check_comment_width.pl`: reports comment lines longer than 80 characters in Rust files (`src/` and `tests/` by default), as `file:line`.

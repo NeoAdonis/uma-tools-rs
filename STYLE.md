@@ -21,7 +21,7 @@ Comments should also follow the guide recommendations. Many formatters, includin
 - A single space must be placed after the opening and before the closing sigils.
 - Prefer to put a comment on its own line. If put after code, it must be separated by a single space.
 - Comments should be complete sentences; they should start with a capital letter and end with a period.
-- Limit comment lines to 80 characters (sigils included, indentation excluded), and never beyond the 100-character line limit.
+- Comment lines are at most 80 characters long (sigils included, indentation excluded), and never go beyond the 100-character line limit.
 
 Additionally, the following conventions should be followed for doc comments:
 
