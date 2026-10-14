@@ -199,7 +199,7 @@ pub struct Runner {
     pub available_skills: Vec<Skill>,
     /// List of skills that failed the wit check, so they can't activate.
     pub failed_skills: Vec<Skill>,
-    // Elapsed time when the runner finished the race, in seconds.
+    /// Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
     /// Distance in meters behind the runner that placed immediately ahead.
     /// `None` for first place or until the race is over.
