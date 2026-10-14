@@ -1,3 +1,33 @@
+//! # Condition Parser
+//!
+//! This module parses skill condition strings, such as
+//! `distance_type==1&ground_type==1@distance_type==2&ground_type==1`.
+//!
+//! ## Syntax
+//!
+//! A condition is made of comparisons, each one being a variable, an operator
+//! ([`CompOp`]) and an integer value. For example, `accumulatetime>=5` is true
+//! when the race has been ongoing for at least 5 seconds, and
+//! `accumulatetime==5` only when it has been ongoing for exactly 5 seconds.
+//! The meaning of each variable is described in the
+//! [variable reference](crate::condition::reference).
+//!
+//! Comparisons are linked by `&` (AND) and `@` (OR), with no parentheses. A
+//! condition is therefore an OR of AND chains, and it's stored as such in
+//! [`Condition::branches`]. The condition above is read as follows (spaces and
+//! line breaks added for readability):
+//!
+//! ```text
+//! distance_type==1 & ground_type==1   // Sprint on turf...
+//!                  @                  // ...or...
+//! distance_type==2 & ground_type==1   // ...mile on turf.
+//! ```
+//!
+//! A few variables use the value as a parameter instead of comparing against
+//! it (e.g. `is_used_skill_id==202051` checks whether skill 202051 has been
+//! activated). They only support some operators or values; any other
+//! comparison is rejected with [`ParseError::UnsupportedComparison`].
+
 use crate::condition::variables::{ActivationVar, LineupVar, RandomSpatialVar, VarType};
 use crate::skill::SkillType;
 use std::fmt;

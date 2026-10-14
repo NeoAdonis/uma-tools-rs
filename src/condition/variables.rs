@@ -1,6 +1,43 @@
+//! # Condition Variables
+//!
+//! This module defines the variables used in skill conditions, such as
+//! `hp_per` or `phase_random`, and classifies them.
+//!
+//! ## Categories
+//!
+//! Every variable is a [`VarType`], grouped by category: most categories are a
+//! variant holding their own enum (e.g. [`VarType::Status`] holds a
+//! [`StatusVar`]). Categories gather variables that are evaluated from the
+//! same data (course, runner status, lineup...), or that are handled in the
+//! same way, such as random variables, which are rolled instead of being read
+//! from the race state.
+//!
+//! The meaning of each variable is described in the
+//! [variable reference](crate::condition::reference).
+//!
+//! ## Names
+//!
+//! Enum variants mirror the variable names in condition strings, keeping their
+//! original spelling (e.g. `RunningStyleTemptationCountNige` for
+//! `running_style_temptation_count_nige`). [`VarType::parse`] turns a name into
+//! a variable, and [`Display`](fmt::Display) turns a variable back into its
+//! name.
+//!
+//! ## Classification
+//!
+//! Some properties of a variable are known without evaluating it:
+//!
+//! - [`VarType::is_static`]: whether its value never changes during a race, so
+//!   that comparisons on it can be evaluated once before the race starts.
+//! - [`VarType::is_popularity_guard`]: whether an unmet comparison on it
+//!   prevents a skill from adding popularity points.
+
 use std::fmt;
 
 /// Variable types used in conditions.
+///
+/// Variables are grouped by category. The meaning of each one is described in
+/// the [variable reference](crate::condition::reference).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VarType {
     /// Variable representing accumulated (elapsed) time.
