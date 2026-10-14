@@ -1,3 +1,15 @@
+//! Race setup and frame-by-frame simulation.
+//!
+//! A [`RaceSolver`] holds the shared [`RaceState`] and every runner of the
+//! race. Runners are added while unready, then made ready all at once, after
+//! which [`RaceSolver::run`] advances the race by [`DELTA_TIME`] per frame
+//! until every runner finishes.
+//!
+//! Besides updating each runner, the solver handles everything that involves
+//! several runners: order, blocking and overlaps, positioning strategy, skill
+//! effects that target other runners, and mechanics such as spot struggle,
+//! dueling, secure lead and compete before spurt.
+
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;

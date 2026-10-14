@@ -1,3 +1,9 @@
+//! Course segments: corners, straights and slopes.
+//!
+//! Each kind of segment is deserialized from the course data and implements
+//! [`Segment`], which gives a common way to check the range it spans along the
+//! course.
+
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 

@@ -1,3 +1,9 @@
+//! Stat and speed modifiers shared by several race mechanics.
+//!
+//! Multipliers and offsets that depend on the runner's aptitudes and style, the
+//! race phase, the track and its condition, the course's stat bonuses, slopes
+//! and limit break buffs, along with the adjusted stats derived from them.
+
 use rand::{Rng, RngExt};
 
 use crate::configuration::GameVersion;

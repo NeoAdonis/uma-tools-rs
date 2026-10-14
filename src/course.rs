@@ -3,9 +3,7 @@
 //! This module includes data structures for representing race courses and
 //! their attributes. It also provides functions for calculating various
 //! properties of the course, such as section lengths, phase boundaries
-//! and lane widths. Additionally, it includes logic for determining the
-//! proximity of runners on the course and handling special cases for certain
-//! tracks.
+//! and lane widths. Additionally, it handles special cases for certain tracks.
 
 include!("course/track_names.rs");
 

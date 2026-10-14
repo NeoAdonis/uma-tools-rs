@@ -10,7 +10,7 @@
 //! when the race has been ongoing for at least 5 seconds, and
 //! `accumulatetime==5` only when it has been ongoing for exactly 5 seconds.
 //! The meaning of each variable is described in the
-//! [variable reference](crate::condition::reference).
+//! [variable reference](crate::condition::variable_reference).
 //!
 //! Comparisons are linked by `&` (AND) and `@` (OR), with no parentheses. A
 //! condition is therefore an OR of AND chains, and it's stored as such in

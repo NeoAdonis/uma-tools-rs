@@ -1,6 +1,12 @@
+//! Finish margins between runners, as displayed after a race.
+//!
+//! The solver records each runner's margin in meters (see
+//! [`Runner::finish_margin`](crate::race::runner::Runner::finish_margin));
+//! [`Margin`] converts it to the category shown in the race results.
+
 use crate::units::meters_to_bashin;
 
-/// Finish margin (着差) between a runner and the one that placed immediately
+/// Finish margin between a runner and the one that placed immediately
 /// ahead, as displayed after a race.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Margin {

@@ -13,7 +13,7 @@
 //! from the race state.
 //!
 //! The meaning of each variable is described in the
-//! [variable reference](crate::condition::reference).
+//! [variable reference](crate::condition::variable_reference).
 //!
 //! ## Names
 //!
@@ -37,7 +37,7 @@ use std::fmt;
 /// Variable types used in conditions.
 ///
 /// Variables are grouped by category. The meaning of each one is described in
-/// the [variable reference](crate::condition::reference).
+/// the [variable reference](crate::condition::variable_reference).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VarType {
     /// Variable representing accumulated (elapsed) time.

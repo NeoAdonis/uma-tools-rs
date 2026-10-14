@@ -33,7 +33,7 @@
 //! [`get_variable_value()`] function.
 //!
 //! [`get_variable_value()`] maps ~150+ condition variables (see the
-//! [variable reference](crate::condition::reference)) to their current
+//! [variable reference](crate::condition::variable_reference)) to their current
 //! runtime values from [`RaceState`] or [`Runner`]. Variables are grouped by
 //! categories, each with their own set of parameters required for evaluation.
 //! To mention a few:
