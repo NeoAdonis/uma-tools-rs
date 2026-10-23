@@ -1,6 +1,6 @@
 # Style guide
 
-The following style guide is intended to be a reference for contributors to this code base. It is not meant to be a strict set of rules, but rather a set of guidelines to help maintain consistency and readability in the code.
+The following style guide is intended to be a reference for contributors to this code base. Contributions are expected to follow these guidelines, which help maintain consistency and readability in the code and content. Deviations are accepted when there's a good reason for them, and minor ones don't block a contribution on their own; they may be pointed out during review and fixed later.
 
 ## Formatting
 
@@ -59,7 +59,7 @@ Messages follow the 50/72 rule: the subject line is at most 50 characters long, 
 - `build`: changes to build systems, dependencies or packaging.
 - `chore`: other maintenance tasks, such as configuration or example files.
 
-Commits that mix several types use the type of their main change.
+Mixing several types in a single commit should be avoided whenever possible, so that commits stay focused. When it can't be avoided, the type of the main change is used.
 
 ### Scopes
 
