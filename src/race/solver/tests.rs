@@ -2282,6 +2282,24 @@ fn test_most_popular_runner_skill_triggers_skill() {
 }
 
 #[test]
+fn test_same_skill_horse_count_counts_runners_with_the_skill() {
+    // Resolved when the runner is created, for the skill of the logic.
+    let pair = || {
+        skill(
+            37,
+            "same_skill_horse_count==2",
+            SkillType::TargetSpeed,
+            0.15,
+        )
+    };
+    assert_eq!(
+        activates(vec![vec![pair()], vec![pair()]], 37),
+        [true, true]
+    );
+    assert_eq!(activates(vec![vec![pair()], vec![]], 37), [false, false]);
+}
+
+#[test]
 fn test_ignored_popularity_satisfies_popularity_conditions() {
     let ignore = || skill(23, "always==1", SkillType::IgnorePopularity, 1.0);
     // During the race and out of the gate.

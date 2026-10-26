@@ -185,6 +185,7 @@ fn test_position_window_ranges() {
         // Nothing position-based: window covers the whole race.
         ("order<=3", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
+        ("distance_rate!=50", (0.0, f64::INFINITY)),
     ];
 
     for (condition, (min, max)) in cases {

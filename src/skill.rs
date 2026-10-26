@@ -985,6 +985,20 @@ mod tests {
     }
 
     #[test]
+    fn test_skill_ids_must_be_numeric() {
+        let path = std::env::temp_dir().join(format!("skills-{}.json", std::process::id()));
+        let load = |id: &str| {
+            let json = format!(r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0}}}}"#);
+            std::fs::write(&path, json).unwrap();
+            let result = Skill::load_skills_from_file(path.to_str().unwrap());
+            std::fs::remove_file(&path).unwrap();
+            result
+        };
+        assert_eq!(load("200012").unwrap()[&200012].id, 200012);
+        assert!(load("speed").is_err());
+    }
+
+    #[test]
     fn test_skill_data_loads() {
         // Every condition in the skill data must parse.
         let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
