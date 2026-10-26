@@ -81,7 +81,7 @@ while ( my $row = $select->fetchrow_hashref ) {
       grep { $row->{"popularity_add_param_$_"} != 0 } 1 .. 2;
     $skills{ $row->{id} } = {
         rarity       => $row->{rarity},
-        witCheck  => $row->{activate_lot},
+        witCheck     => $row->{activate_lot},
         alternatives => \@triggers,
         popularity   => \@popularity
     };
@@ -89,4 +89,10 @@ while ( my $row = $select->fetchrow_hashref ) {
 
 my $json = JSON::PP->new;
 $json->canonical(1);
-say $json->encode( \%skills );
+
+# One skill per line, so that diffs show which skills changed.
+say "{\n",
+  join( ",\n",
+    map  { $json->encode("$_") . ':' . $json->encode( $skills{$_} ) }
+    sort { $a <=> $b } keys %skills ),
+  "\n}";

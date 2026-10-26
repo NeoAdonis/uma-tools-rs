@@ -87,4 +87,9 @@ for my $pair ( values $names->%* ) {
     $_ //= '' for $pair->@[ 0, 1 ];
 }
 
-say $json->encode($names);
+# One skill per line, so that diffs show which names changed.
+say "{\n",
+  join( ",\n",
+    map  { $json->encode("$_") . ':' . $json->encode( $names->{$_} ) }
+    sort { $a <=> $b } keys $names->%* ),
+  "\n}";
