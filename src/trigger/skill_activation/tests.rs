@@ -141,7 +141,8 @@ fn test_activation_events_stay_as_guards() {
 fn test_position_window_ranges() {
     // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
     // 1200-1380, uphill at 800-900, straights at 0-100 and 1500-2000 (both facing
-    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1.
+    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1,
+    // and `>N` from N + 1.
     let section = 2000.0 / 24.0;
     let furlong = crate::units::FURLONG_TO_METERS;
     let cases = [
@@ -149,8 +150,12 @@ fn test_position_window_ranges() {
         ("distance_rate<=50", (0.0, 1020.0)),
         ("distance_rate==50", (1000.0, 1020.0)),
         ("distance_rate>=50&distance_rate<=51", (1000.0, 1040.0)),
+        ("distance_rate>50", (1020.0, f64::INFINITY)),
+        ("distance_rate<50", (0.0, 1000.0)),
         ("remain_distance<=600", (1399.0, f64::INFINITY)),
         ("remain_distance>=600", (0.0, 1400.0)),
+        ("remain_distance<600", (1400.0, f64::INFINITY)),
+        ("remain_distance>600", (0.0, 1399.0)),
         (
             "remain_distance<=305&remain_distance>=300",
             (1694.0, 1700.0),

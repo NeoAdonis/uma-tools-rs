@@ -537,12 +537,15 @@ fn envelope(ranges: impl Iterator<Item = Range>) -> Range {
 }
 
 /// Range of values of a variable, floored when evaluated, where a comparison is
-/// true. As values are floored, `variable<=N` holds until `N + 1`.
+/// true. As values are floored, `variable<=N` holds until `N + 1`, and
+/// `variable>N` from `N + 1`.
 fn floored_range(op: CompOp, value: i32) -> Range {
     let value = value as f64;
     match op {
-        CompOp::Greater | CompOp::GreaterEqual => (value, f64::INFINITY),
-        CompOp::Less | CompOp::LessEqual => (f64::NEG_INFINITY, value + 1.0),
+        CompOp::Greater => (value + 1.0, f64::INFINITY),
+        CompOp::GreaterEqual => (value, f64::INFINITY),
+        CompOp::Less => (f64::NEG_INFINITY, value),
+        CompOp::LessEqual => (f64::NEG_INFINITY, value + 1.0),
         CompOp::Equal => (value, value + 1.0),
         CompOp::NotEqual => (f64::NEG_INFINITY, f64::INFINITY),
     }
