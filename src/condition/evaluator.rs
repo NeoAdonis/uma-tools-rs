@@ -19,12 +19,35 @@
 //! [`EvaluatorOutOfGate`] uses only data available before the race starts to
 //! evaluate out-of-gate conditions.
 //!
+//! Comparisons must have been rewritten for the runner first (see
+//! [Rewriting](#rewriting)).
+//!
 //! Each [`Comparison`] is evaluated separately, allowing an evaluator to
 //! either fetch real-time values, simulate expected values, or even override
 //! certain comparison results for hypothetical scenarios. The latter two might
 //! be required if, for some reason, all variables needed for a condition are
 //! not known at evaluation time; case in point: single runner simulations where
 //! opponent data is not available.
+//!
+//! ## Rewriting
+//!
+//! Some comparisons can't be evaluated by reading a variable and comparing it
+//! against a value, but they can be turned into comparisons that can, once
+//! facts fixed before the race are known: how many gates the race has, or
+//! whether a runner ignores popularity requirements. [`rewrite_comparison`]
+//! rewrites them for a given runner, which keeps these special cases out of
+//! the evaluators:
+//!
+//! - `order_rate OP X` becomes `order OP round(gates * X%)` (see
+//!   [`order_at_rate`]).
+//! - Comparisons on `popularity` are always true, so dropped, if the runner
+//!   ignores popularity requirements (see
+//!   [`InitialState::ignores_popularity`]).
+//!
+//! In-race guards are rewritten once, when the runner is created. Out-of-gate
+//! conditions are rewritten right before they're evaluated instead, since a
+//! runner may start ignoring popularity requirements in the middle of its
+//! out-of-gate skills.
 //!
 //! ## Variable Access
 //!
@@ -68,7 +91,7 @@ use crate::condition::variables::*;
 use crate::course::Course;
 use crate::course::geometry::Segment;
 use crate::race::parameters::RaceParameters;
-use crate::race::runner::InitialState;
+use crate::race::runner::{InitialState, order_at_rate};
 use crate::race::runner::{Runner, SkillActivationFlags, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
@@ -122,6 +145,27 @@ where
     comparisons
         .iter()
         .all(|comp| evaluator.evaluate(comp, logic_ctx, state, context))
+}
+
+/// Rewrite a comparison for a runner (see [Rewriting](self#rewriting)).
+///
+/// Returns `None` if the comparison is always true for the runner.
+pub fn rewrite_comparison(
+    comp: &Comparison,
+    state: &RaceState,
+    entry: &InitialState,
+) -> Option<Comparison> {
+    use VarType::*;
+
+    match &comp.var {
+        Entry(EntryVar::Popularity) if entry.ignores_popularity => None,
+        Order(OrderVar::OrderRate) => Some(Comparison {
+            var: Order(OrderVar::Order),
+            op: comp.op,
+            value: order_at_rate(state.params.gates, comp.value),
+        }),
+        _ => Some(comp.clone()),
+    }
 }
 
 /// Trait for evaluating a single comparison.
@@ -180,14 +224,6 @@ impl CompEvaluator for EvaluatorFull {
         match &comp.var {
             ActivationQuery(var) => evaluate_activation_query(var, comp, state, runner),
             Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
-            // Popularity requirements may be satisfied regardless of the actual value.
-            Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
-            // `order_rate OP X` is converted to `order OP round(runners * X%)`.
-            Order(OrderVar::OrderRate) => {
-                let order = &runner.order;
-                comp.op
-                    .apply(order.order as i32, order.order_at_rate(comp.value))
-            }
             _ => {
                 // Normal case: get variable value and compare.
                 let current_value = get_variable_value(&comp.var, state, runner, logic_ctx);
@@ -218,8 +254,6 @@ impl CompEvaluator for EvaluatorOutOfGate {
         match &comp.var {
             // Special case: skill queries require different logic.
             Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
-            // Popularity requirements may be satisfied regardless of the actual value.
-            Entry(EntryVar::Popularity) if context.initial_state.ignores_popularity => true,
             // "random_lot==X" means X% chance, rolled every time it's evaluated.
             // N.B. It currently behaves like `random_lot_shared`: skills using it have
             // a single alternative, or alternatives that exclude each other (e.g.
@@ -786,7 +820,7 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     match var {
         // Order.
         Order => order.order as i32,
-        OrderRate => panic!("BUG: Order variable {var:?} should be handled in evaluate()"),
+        OrderRate => panic!("BUG: {var} should have been rewritten"),
 
         // Order change checks.
         ChangeOrderOnetime => order.delta as i32,

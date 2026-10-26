@@ -1070,19 +1070,20 @@ fn test_duel_needs_both_runners_with_enough_hp() {
 
 #[test]
 fn test_duel_needs_one_runner_in_top_half() {
+    // Order rates count every gate: make it 4, one per runner.
+    let duel_solver = |runners| {
+        let mut solver = duel_solver(runners, GameVersion::LATEST);
+        solver.state.params.gates = 4;
+        solver
+    };
+
     // 2nd and 3rd out of 4: top 50% and top 75%.
-    let mut solver = duel_solver(
-        &[(1100.0, 0.1), (1050.0, 0.1), (1048.0, 0.1), (1000.0, 0.1)],
-        GameVersion::LATEST,
-    );
+    let mut solver = duel_solver(&[(1100.0, 0.1), (1050.0, 0.1), (1048.0, 0.1), (1000.0, 0.1)]);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [false, true, true, false]);
 
     // 3rd and 4th out of 4: top 75% and top 100%.
-    let mut solver = duel_solver(
-        &[(1100.0, 0.1), (1050.0, 0.1), (1000.0, 0.1), (998.0, 0.1)],
-        GameVersion::LATEST,
-    );
+    let mut solver = duel_solver(&[(1100.0, 0.1), (1050.0, 0.1), (1000.0, 0.1), (998.0, 0.1)]);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [false, false, false, false]);
 }
@@ -2303,6 +2304,24 @@ fn test_ignored_popularity_satisfies_popularity_conditions() {
         [true]
     );
     assert_eq!(activates(vec![vec![ignore(), green()]], "green"), [true]);
+    // Whatever the order of the skills.
+    assert_eq!(activates(vec![vec![green(), ignore()]], "green"), [true]);
+}
+
+#[test]
+fn test_guards_are_rewritten_for_the_runner() {
+    let rate = skill(
+        "rate",
+        "order_rate<=50&hp_per>=20",
+        SkillType::TargetSpeed,
+        0.15,
+    );
+    let solver = ready_solver(10101, uma(Style::Late), vec![rate], &seeded_config(0));
+
+    let guards = &solver.runners[0].trigger_scheduler.skill_logics[0].guards;
+    let guards: Vec<String> = guards.iter().map(ToString::to_string).collect();
+    // Every gate counts: 9 * 50% = 4.5 rounds to 5th place.
+    assert_eq!(guards, ["order <= 5", "hp_per >= 20"]);
 }
 
 #[test]

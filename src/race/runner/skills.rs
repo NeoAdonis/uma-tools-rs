@@ -65,7 +65,9 @@ use std::collections::HashSet;
 
 use rand::prelude::*;
 
-use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_comparison_list};
+use crate::condition::evaluator::{
+    CompEvaluator, EvaluatorFull, evaluate_comparison_list, rewrite_comparison,
+};
 use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::*;
@@ -162,8 +164,10 @@ pub struct SkillActivationFlags {
 }
 
 impl Runner {
-    /// Resolve the guards that can't change during the race (e.g.
-    /// `distance_type==3`), so that they aren't checked every frame.
+    /// Prepare guards for the race: rewrite them for the runner (see
+    /// [`rewrite_comparison`]), then resolve the ones that can't change during
+    /// the race (e.g. `distance_type==3`), so that they aren't checked every
+    /// frame.
     ///
     /// Guards that are true are removed. Logics with a false guard can never
     /// succeed, so their triggers are removed.
@@ -171,7 +175,7 @@ impl Runner {
     /// This can't be done when the scheduler is built, since some of these values
     /// (popularity, running style changed by out-of-gate skills...) are only final
     /// once the runner is created.
-    pub(super) fn resolve_static_guards(&mut self, state: &RaceState) {
+    pub(super) fn prepare_guards(&mut self, state: &RaceState) {
         let is_static = |comp: &Comparison| comp.var.is_static();
 
         let mut unsatisfiable = Vec::new();
@@ -180,10 +184,10 @@ impl Runner {
             let guards: ComparisonList = logic
                 .guards
                 .iter()
+                .filter_map(|comp| rewrite_comparison(comp, state, &self.initial_state))
                 .filter(|comp| {
                     !is_static(comp) || !EvaluatorFull.evaluate(comp, Some(logic), state, self)
                 })
-                .cloned()
                 .collect();
             if guards.iter().any(is_static) {
                 unsatisfiable.push(logic_idx);

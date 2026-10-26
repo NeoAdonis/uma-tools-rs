@@ -537,7 +537,8 @@ impl RaceSolver<Runner> {
         // Debug: check sorting.
         self.assert_runners_sorted();
 
-        let total_runners = self.runners.len() as u8;
+        // Every gate counts, even if fewer runners are simulated.
+        let total_runners = self.state.params.gates;
         let should_update_range = self.state.elapsed_time > 5.0;
         let position_first = self.runners.first().unwrap().position;
         let position_last = self.runners.last().unwrap().position;

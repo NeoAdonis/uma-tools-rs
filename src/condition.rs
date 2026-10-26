@@ -2,7 +2,8 @@
 //!
 //! - [`parser`]: parses condition strings into OR branches of comparisons.
 //! - [`variables`]: defines and classifies the variables used in conditions.
-//! - [`evaluator`]: evaluates guard comparisons against the race state.
+//! - [`evaluator`]: rewrites guard comparisons for a runner, and evaluates them
+//!   against the race state.
 //! - [`variable_reference`]: describes every condition variable.
 //!
 //! See the [`trigger`](crate::trigger) module for an overview of how

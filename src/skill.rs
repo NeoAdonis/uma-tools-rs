@@ -665,6 +665,15 @@ impl Skill {
             .any(|effect| effect.skill_type.is_pre_race_effect())
     }
 
+    /// Check if any alternative of this skill satisfies every popularity
+    /// requirement (see [`SkillType::IgnorePopularity`]).
+    pub fn ignores_popularity(&self) -> bool {
+        self.alternatives
+            .iter()
+            .flat_map(|alternative| &alternative.effects)
+            .any(|effect| matches!(effect.skill_type, SkillType::IgnorePopularity))
+    }
+
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
     pub fn load_skills_from_file(
         json_path: &str,

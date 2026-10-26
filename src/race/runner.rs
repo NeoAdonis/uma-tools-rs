@@ -89,7 +89,7 @@ pub struct InitialState {
 pub struct OrderState {
     /// Current order (rank), 1-based.
     pub order: u8,
-    /// Number of runners in the race, finished ones included.
+    /// Number of runners in the race, i.e. its gates, finished ones included.
     pub runner_count: u8,
     /// Current order rate (percentile; "you are in the top X%"), rounded up.
     pub rate: u8,
@@ -129,13 +129,20 @@ impl Default for OrderState {
 }
 
 impl OrderState {
-    /// Convert an order rate (top `rate`%) into an order, rounding to the
-    /// nearest (half up), as the game does for order rate conditions.
-    ///
-    /// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
+    /// Convert an order rate (top `rate`%) into an order (see
+    /// [`order_at_rate`]).
     pub fn order_at_rate(&self, rate: i32) -> i32 {
-        (self.runner_count as i32 * rate + 50) / 100
+        order_at_rate(self.runner_count, rate)
     }
+}
+
+/// Convert an order rate (top `rate`%) in a race with `runner_count` runners
+/// into an order, rounding to the nearest (half up), as the game does for order
+/// rate conditions.
+///
+/// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
+pub fn order_at_rate(runner_count: u8, rate: i32) -> i32 {
+    (runner_count as i32 * rate + 50) / 100
 }
 
 /// Distance differences from other runners.
@@ -367,7 +374,7 @@ impl Runner {
     /// already been applied, and RaceState.
     pub(crate) fn new(builder: UnreadyRunner, state: &RaceState) -> Self {
         let mut runner = builder.build(state);
-        runner.resolve_static_guards(state);
+        runner.prepare_guards(state);
         runner
     }
 
