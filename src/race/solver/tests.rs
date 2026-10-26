@@ -2296,19 +2296,15 @@ fn test_ignored_popularity_satisfies_popularity_conditions() {
 }
 
 #[test]
-fn test_guards_are_rewritten_for_the_runner() {
-    let rate = skill(
-        28,
-        "order_rate<=50&hp_per>=20",
-        SkillType::TargetSpeed,
-        0.15,
-    );
-    let solver = ready_solver(10101, uma(Style::Late), vec![rate], &seeded_config(0));
+fn test_order_rates_count_every_gate() {
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+    solver.step(DELTA_TIME);
 
-    let guards = &solver.runners[0].trigger_scheduler.skill_logics[0].guards;
-    let guards: Vec<String> = guards.iter().map(ToString::to_string).collect();
-    // Every gate counts: 9 * 50% = 4.5 rounds to 5th place.
-    assert_eq!(guards, ["order <= 5", "hp_per >= 20"]);
+    // A single runner, but every gate counts: 9 * 50% = 4.5 rounds to 5th place.
+    let order = &solver.runners[0].order;
+    assert_eq!(solver.state.params.gates, 9);
+    assert_eq!(order.runner_count, 9);
+    assert_eq!(order.order_at_rate(50), 5);
 }
 
 #[test]

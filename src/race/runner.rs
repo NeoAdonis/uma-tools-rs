@@ -129,20 +129,13 @@ impl Default for OrderState {
 }
 
 impl OrderState {
-    /// Convert an order rate (top `rate`%) into an order (see
-    /// [`order_at_rate`]).
+    /// Convert an order rate (top `rate`%) into an order, rounding to the
+    /// nearest (half up), as the game does for order rate conditions.
+    ///
+    /// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
     pub fn order_at_rate(&self, rate: i32) -> i32 {
-        order_at_rate(self.runner_count, rate)
+        (self.runner_count as i32 * rate + 50) / 100
     }
-}
-
-/// Convert an order rate (top `rate`%) in a race with `runner_count` runners
-/// into an order, rounding to the nearest (half up), as the game does for order
-/// rate conditions.
-///
-/// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
-pub fn order_at_rate(runner_count: u8, rate: i32) -> i32 {
-    (runner_count as i32 * rate + 50) / 100
 }
 
 /// Distance differences from other runners.
@@ -374,7 +367,7 @@ impl Runner {
     /// already been applied, and RaceState.
     pub(crate) fn new(builder: UnreadyRunner, state: &RaceState) -> Self {
         let mut runner = builder.build(state);
-        runner.prepare_guards(state);
+        runner.resolve_static_guards(state);
         runner
     }
 

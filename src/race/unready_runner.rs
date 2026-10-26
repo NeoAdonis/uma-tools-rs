@@ -25,13 +25,12 @@
 //! Their conditions only use values known before the race, so they aren't
 //! compiled into triggers. Instead, [`UnreadyRunner::apply_out_of_gate_skills`]
 //! chooses the first alternative whose precondition (if any) and condition both
-//! hold, rewritten for the runner (see [`rewrite_comparison`]) and evaluated
-//! with [`EvaluatorOutOfGate`]; if none holds, the skill doesn't activate.
-//! Before the race, a precondition is just another requirement (e.g.
-//! `distance_type==3 @ distance_type==4` for a skill whose condition is
-//! `base_stamina>=1200`). Skills that ignore popularity requirements
-//! ([`Skill::ignores_popularity`]) are applied first, so that every other skill
-//! sees it. Then:
+//! hold, evaluated with [`EvaluatorOutOfGate`]; if none holds, the skill
+//! doesn't activate. Before the race, a precondition is just another
+//! requirement (e.g. `distance_type==3 @ distance_type==4` for a skill whose
+//! condition is `base_stamina>=1200`). Skills that ignore popularity
+//! requirements ([`Skill::ignores_popularity`]) are applied first, so that
+//! every other skill sees it. Then:
 //!
 //! 1. Its pre-race effects are applied before the [`Runner`] is built.
 //! 2. A logic with a `RaceStart` trigger is added for it, so the skill
@@ -60,7 +59,7 @@ use rand::RngExt;
 
 use crate::condition::parser::Condition;
 use crate::configuration::GameVersion;
-use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate, rewrite_comparison};
+use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt::StaminaKeep;
@@ -402,15 +401,12 @@ impl UnreadyRunner {
             self.evaluated_skill_id = skill.id;
             self.evaluated_skill_lot_draw.set(None);
 
-            // Satisfied if all comparisons of any OR branch are true, once rewritten
-            // for the runner (popularity requirements may be ignored since an earlier
-            // out-of-gate skill).
+            // Satisfied if all comparisons of any OR branch are true.
             let holds = |condition: &Condition| {
                 condition.branches.iter().any(|branch| {
                     branch
                         .iter()
-                        .filter_map(|comp| rewrite_comparison(comp, state, &self.initial_state))
-                        .all(|comp| EvaluatorOutOfGate.evaluate(&comp, None, state, self))
+                        .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
                 })
             };
             // Activate the first alternative whose precondition (if any) and condition

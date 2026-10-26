@@ -685,59 +685,66 @@ fn test_rank_values() {
 }
 
 #[test]
-fn test_order_rate_is_rewritten_to_rounded_order() {
+fn test_order_rate_converts_to_rounded_order() {
     let mut solver = create_test_race_solver(vec![]);
+    let order_rate = |op, value| Comparison {
+        var: VarType::Order(OrderVar::OrderRate),
+        op,
+        value,
+    };
 
-    // 9 * 50% = 4.5 rounds to 5; 12 * 50% = 6 rounds to 6.
-    for (gates, order) in [(9, 5), (12, 6)] {
-        solver.state.params.gates = gates;
-        let entry = &solver.runners[0].initial_state;
-        for op in [CompOp::Greater, CompOp::LessEqual] {
-            let comp = Comparison {
-                var: VarType::Order(OrderVar::OrderRate),
-                op,
-                value: 50,
-            };
-            let expected = Comparison {
-                var: VarType::Order(OrderVar::Order),
-                op,
-                value: order,
-            };
-            let actual = rewrite_comparison(&comp, &solver.state, entry);
-            assert_eq!(actual, Some(expected), "gates {gates}, {op}");
-        }
+    // 9 * 50% = 4.5 rounds to 5, so `order_rate>50` becomes `order>5`.
+    // 12 * 50% = 6 rounds to 6, so `order_rate>50` becomes `order>6`.
+    // (runners, order, [>50, >=50, <=50, <50]).
+    let cases = [
+        (9, 5, [false, true, true, false]),
+        (9, 6, [true, true, false, false]),
+        (12, 6, [false, true, true, false]),
+        (12, 7, [true, true, false, false]),
+    ];
+    for (runners, order, expected) in cases {
+        solver.runners[0].order.runner_count = runners;
+        solver.runners[0].order.order = order;
+        let actual = [
+            CompOp::Greater,
+            CompOp::GreaterEqual,
+            CompOp::LessEqual,
+            CompOp::Less,
+        ]
+        .map(|op| {
+            let comp = order_rate(op, 50);
+            EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+        });
+        assert_eq!(actual, expected, "runners {runners}, order {order}");
     }
 }
 
 #[test]
-#[should_panic(expected = "should have been rewritten")]
+#[should_panic(expected = "should be handled in evaluate()")]
 fn test_order_rate_value_panics() {
     let solver = create_test_race_solver(vec![]);
     get_rank_value(&OrderVar::OrderRate, &solver.runners[0]);
 }
 
 #[test]
-fn test_ignored_popularity_is_rewritten_away() {
+fn test_ignored_popularity_is_always_satisfied() {
     let mut solver = create_test_race_solver(vec![]);
     let comp = comp("popularity>=10");
-
-    let actual = rewrite_comparison(&comp, &solver.state, &solver.runners[0].initial_state);
-    assert_eq!(actual, Some(comp.clone()));
+    let evaluate = |solver: &RaceSolver<Runner>| {
+        EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+    };
+    assert!(!evaluate(&solver));
     solver.runners[0].initial_state.ignores_popularity = true;
-    let actual = rewrite_comparison(&comp, &solver.state, &solver.runners[0].initial_state);
-    assert_eq!(actual, None);
+    assert!(evaluate(&solver));
 }
 
 #[test]
-fn test_other_comparisons_are_not_rewritten() {
-    let mut solver = create_test_race_solver(vec![]);
-    solver.runners[0].initial_state.ignores_popularity = true;
-
-    for condition in ["order<=5", "hp_per>=20", "running_style==3"] {
-        let comp = comp(condition);
-        let actual = rewrite_comparison(&comp, &solver.state, &solver.runners[0].initial_state);
-        assert_eq!(actual, Some(comp), "{condition}");
-    }
+fn test_ignored_popularity_is_always_satisfied_out_of_gate() {
+    let (state, mut runner) = create_out_of_gate_runner();
+    let comp = comp("popularity>=10");
+    assert!(!EvaluatorOutOfGate.evaluate(&comp, None, &state, &runner));
+    runner.initial_state.ignores_popularity = true;
+    assert!(EvaluatorOutOfGate.evaluate(&comp, None, &state, &runner));
 }
 
 #[test]
