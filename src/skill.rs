@@ -681,15 +681,13 @@ impl Skill {
         use std::fs;
 
         let json_content = fs::read_to_string(json_path)?;
-        let skills_data: HashMap<String, SkillData> = serde_json::from_str(&json_content)?;
+        // JSON keys are strings, but serde parses them as integers.
+        let skills_data: HashMap<i32, SkillData> = serde_json::from_str(&json_content)?;
 
-        let mut skills_map = HashMap::new();
-        for (id, data) in skills_data {
-            let id: i32 = id.parse()?;
-            skills_map.insert(id, Skill::new(id, data));
-        }
-
-        Ok(skills_map)
+        Ok(skills_data
+            .into_iter()
+            .map(|(id, data)| (id, Skill::new(id, data)))
+            .collect())
     }
 }
 
