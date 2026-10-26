@@ -200,7 +200,14 @@ impl Comparison {
     /// `Comparison::is_supported`).
     pub fn holds(&self, value: Value) -> bool {
         match value {
-            Value::Int(value) => self.op.apply(value, self.value),
+            Value::Int(value) => match self.op {
+                CompOp::Equal => value == self.value,
+                CompOp::NotEqual => value != self.value,
+                CompOp::Greater => value > self.value,
+                CompOp::GreaterEqual => value >= self.value,
+                CompOp::Less => value < self.value,
+                CompOp::LessEqual => value <= self.value,
+            },
             Value::Set(set) => match self.op {
                 CompOp::Equal => set.contains(self.value),
                 CompOp::NotEqual => !set.contains(self.value),

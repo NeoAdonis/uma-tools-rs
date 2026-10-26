@@ -753,6 +753,28 @@ fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
 }
 
 #[test]
+fn test_int_values_hold_if_the_comparison_does() {
+    // Results for values below, equal to and above 5.
+    let cases = [
+        (CompOp::Equal, [false, true, false]),
+        (CompOp::NotEqual, [true, false, true]),
+        (CompOp::Greater, [false, false, true]),
+        (CompOp::GreaterEqual, [false, true, true]),
+        (CompOp::Less, [true, false, false]),
+        (CompOp::LessEqual, [true, true, false]),
+    ];
+    for (op, expected) in cases {
+        let comp = Comparison {
+            var: VarType::Always,
+            op,
+            value: 5,
+        };
+        let actual = [4, 5, 6].map(|value| comp.holds(Value::Int(value)));
+        assert_eq!(actual, expected, "{op}");
+    }
+}
+
+#[test]
 fn test_range_values_hold_if_any_value_does() {
     let comp = |op| Comparison {
         var: VarType::OrderRate(OrderRateVar::OrderRate),

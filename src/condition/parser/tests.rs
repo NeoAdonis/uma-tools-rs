@@ -249,23 +249,6 @@ fn test_error_display() {
 }
 
 #[test]
-fn test_comp_op_apply() {
-    // Results for values below, equal to and above 5.
-    let cases = [
-        (CompOp::Equal, [false, true, false]),
-        (CompOp::NotEqual, [true, false, true]),
-        (CompOp::Greater, [false, false, true]),
-        (CompOp::GreaterEqual, [false, true, true]),
-        (CompOp::Less, [true, false, false]),
-        (CompOp::LessEqual, [true, true, false]),
-    ];
-    for (op, expected) in cases {
-        let actual = [4, 5, 6].map(|lhs| op.apply(lhs, 5));
-        assert_eq!(actual, expected, "{op}");
-    }
-}
-
-#[test]
 fn test_known_variables() {
     let var = |input: &str| parse_condition(input).unwrap().branches[0][0].var.clone();
     assert!(matches!(var("always==1"), VarType::Always));

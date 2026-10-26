@@ -108,6 +108,7 @@
 //!
 //! [`Runner::check_skills`]: crate::race::runner::Runner::check_skills
 
+use crate::condition::evaluator::Value;
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::geometry::Segment;
@@ -578,10 +579,10 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
         }
 
         // Union of the phases that satisfy the comparison.
-        (Phase(PhaseVar::Phase), op, value) => envelope(
+        (Phase(PhaseVar::Phase), _, _) => envelope(
             PHASES
                 .iter()
-                .filter(|phase| op.apply(**phase as i32, value))
+                .filter(|phase| comp.holds(Value::Int(**phase as i32)))
                 .map(|phase| phase.boundaries(course)),
         ),
         (Phase(PhaseVar::PhaseFirstquarter), CompOp::Equal, _) => {

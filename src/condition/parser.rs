@@ -55,18 +55,6 @@ impl CompOp {
         CompOp::Less,
     ];
 
-    /// Returns the result of `lhs <op> rhs`.
-    pub fn apply(self, lhs: i32, rhs: i32) -> bool {
-        match self {
-            CompOp::Equal => lhs == rhs,
-            CompOp::NotEqual => lhs != rhs,
-            CompOp::Greater => lhs > rhs,
-            CompOp::GreaterEqual => lhs >= rhs,
-            CompOp::Less => lhs < rhs,
-            CompOp::LessEqual => lhs <= rhs,
-        }
-    }
-
     /// Symbol of the operator in condition strings.
     pub fn symbol(self) -> &'static str {
         match self {
