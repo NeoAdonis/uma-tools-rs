@@ -227,6 +227,8 @@ impl CompEvaluator for EvaluatorFull {
                     _ => activated(&state.popularity_top_activations),
                 }
             }
+            // Popularity requirements may be satisfied regardless of the actual value.
+            Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
             // `order_rate OP X` is converted to `order OP round(runners * X%)`.
             Order(OrderVar::OrderRate) => {
                 let order = &runner.order;
@@ -273,6 +275,8 @@ impl CompEvaluator for EvaluatorOutOfGate {
             Lineup(lineup_var) => {
                 evaluate_lineup(lineup_var, comp, state, &context.evaluated_skill_id)
             }
+            // Popularity requirements may be satisfied regardless of the actual value.
+            Entry(EntryVar::Popularity) if context.initial_state.ignores_popularity => true,
             // "random_lot==X" means X% chance, rolled every time it's evaluated.
             // N.B. It currently behaves like `random_lot_shared`: skills using it have
             // a single alternative, or alternatives that exclude each other (e.g.

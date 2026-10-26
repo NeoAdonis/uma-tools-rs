@@ -1881,6 +1881,24 @@ fn test_allies_count_towards_max_targets_but_are_not_debuffed() {
 }
 
 #[test]
+fn test_random_team_member_targets_one_ally_or_oneself() {
+    // Runners 1 and 3 are allies of runner 2.
+    let solver = targeting_solver(&[
+        (Style::Late, 0),
+        (Style::Late, 1),
+        (Style::Late, 1),
+        (Style::Late, 1),
+    ]);
+    let mut seen = [false; 4];
+    for _ in 0..100 {
+        let selected = targets(&solver, 2, SkillTarget::RandomAlly);
+        assert_eq!(selected.len(), 1);
+        seen[selected[0]] = true;
+    }
+    assert_eq!(seen, [false, true, true, true]);
+}
+
+#[test]
 fn test_targets_opponents_with_style() {
     let solver = targeting_solver(&[
         (Style::Front, 0),
@@ -2267,6 +2285,24 @@ fn test_most_popular_runner_skill_triggers_skill() {
         activates_with_most_popular(vec![vec![heal(), react(9)]], Some(0), "react"),
         [true]
     );
+}
+
+#[test]
+fn test_ignored_popularity_satisfies_popularity_conditions() {
+    let ignore = || skill("ignore", "always==1", SkillType::IgnorePopularity, 1.0);
+    // During the race and out of the gate.
+    let popular = || skill("popular", "popularity>=10", SkillType::TargetSpeed, 0.15);
+    let green = || skill("green", "popularity>=10", SkillType::SpeedUp, 40.0);
+    assert_eq!(
+        activates(vec![vec![popular(), green()]], "popular"),
+        [false]
+    );
+    assert_eq!(activates(vec![vec![popular(), green()]], "green"), [false]);
+    assert_eq!(
+        activates(vec![vec![ignore(), popular()]], "popular"),
+        [true]
+    );
+    assert_eq!(activates(vec![vec![ignore(), green()]], "green"), [true]);
 }
 
 #[test]

@@ -68,6 +68,9 @@ pub enum SkillType {
     AccelerationAllOutSpurt = 48,
     /// (Re-)activate a unique skill.
     ActivateUnique = 49,
+    /// Satisfy every popularity requirement: comparisons on `popularity` are
+    /// always true. The modifier is ignored.
+    IgnorePopularity = 50,
 }
 
 impl SkillType {
@@ -109,7 +112,10 @@ impl SkillType {
             || self.is_start_delay_modification()
             || self.style_change().is_some()
             || self.is_rush_chance_effect()
-            || matches!(self, SkillType::ActivateSympathy)
+            || matches!(
+                self,
+                SkillType::ActivateSympathy | SkillType::IgnorePopularity
+            )
     }
 
     /// Check if this effect type is a timed effect.
@@ -188,19 +194,24 @@ pub enum SkillTarget {
     ///
     /// The meaning of `value` is unknown (always 1).
     UsedRecovery { value: i32 },
+    /// Skill affects a random team ally, oneself included.
+    RandomAlly,
 }
 
 impl SkillTarget {
     /// Check if this target can only select opponents (i.e. allies are excluded
     /// after selection).
     ///
-    /// Every target other than oneself, all runners and team allies is a debuff
+    /// Every target other than oneself, all runners and team members is a debuff
     /// target. Note that a debuff isn't always a negative modifier (e.g. rush time
     /// extension).
     pub fn is_opponent_only(self) -> bool {
         !matches!(
             self,
-            SkillTarget::Oneself | SkillTarget::All | SkillTarget::AllAllies
+            SkillTarget::Oneself
+                | SkillTarget::All
+                | SkillTarget::AllAllies
+                | SkillTarget::RandomAlly
         )
     }
 }
@@ -241,6 +252,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
             21 => SkillTarget::RushedStrategy { style: style()? },
             22 => SkillTarget::UmaId { value },
             23 => SkillTarget::UsedRecovery { value },
+            24 => SkillTarget::RandomAlly,
             _ => return Err(format!("unknown target type {target_type}")),
         })
     }
@@ -810,6 +822,7 @@ mod tests {
         );
         assert_eq!(target(2, 0).unwrap(), SkillTarget::All);
         assert_eq!(target(11, 0).unwrap(), SkillTarget::AllAllies);
+        assert_eq!(target(24, 0).unwrap(), SkillTarget::RandomAlly);
         assert_eq!(target(19, 2).unwrap(), SkillTarget::RushedAhead { max: 2 });
         assert_eq!(
             target(22, 1001).unwrap(),
@@ -1011,6 +1024,7 @@ mod tests {
         assert!(skill(SkillType::ChangeStyleRunaway).should_activate_out_of_gate());
         assert!(skill(SkillType::RushChanceUp).should_activate_out_of_gate());
         assert!(skill(SkillType::ActivateSympathy).should_activate_out_of_gate());
+        assert!(skill(SkillType::IgnorePopularity).should_activate_out_of_gate());
         // The condition doesn't matter, only the effects.
         assert!(!skill(SkillType::TargetSpeed).should_activate_out_of_gate());
         assert!(!skill(SkillType::Acceleration).should_activate_out_of_gate());

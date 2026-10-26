@@ -505,6 +505,13 @@ impl RaceSolver<Runner> {
                 .collect(),
             // Not used by any skill.
             SkillTarget::UmaId { .. } => Vec::new(),
+            SkillTarget::RandomAlly => {
+                let team: Vec<usize> = (0..runners.len())
+                    .filter(|&i| is_running(&i) && !source.is_opponent(&runners[i]))
+                    .collect();
+                let pick = self.state.rng.borrow_mut().random_range(0..team.len());
+                vec![team[pick]]
+            }
         };
 
         selected

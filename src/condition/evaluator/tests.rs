@@ -1291,6 +1291,22 @@ fn test_succession_skill_count() {
 }
 
 #[test]
+fn test_ignored_popularity_is_always_satisfied() {
+    let mut solver = create_test_race_solver(vec![]);
+    let comp = Comparison {
+        var: VarType::Entry(EntryVar::Popularity),
+        op: CompOp::GreaterEqual,
+        value: 10,
+    };
+    let evaluate = |solver: &RaceSolver<Runner>| {
+        EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+    };
+    assert!(!evaluate(&solver));
+    solver.runners[0].initial_state.ignores_popularity = true;
+    assert!(evaluate(&solver));
+}
+
+#[test]
 #[should_panic(expected = "should be handled in evaluate()")]
 fn test_is_other_character_activate_advantage_skill_value_panics() {
     let solver = create_test_race_solver(vec![]);

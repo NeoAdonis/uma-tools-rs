@@ -20,7 +20,7 @@
 //! Out-of-gate skills apply before the race starts: they're the skills with any
 //! effect that modifies a parameter needed before the race
 //! ([`SkillType::is_pre_race_effect`]), i.e. stats, start delay, running style,
-//! rush chance, or "Sympathy" activation.
+//! rush chance, popularity requirements, or "Sympathy" activation.
 //!
 //! Their conditions only use values known before the race, so they aren't
 //! compiled into triggers. Instead, [`UnreadyRunner::apply_out_of_gate_skills`]
@@ -246,6 +246,7 @@ impl UnreadyRunner {
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
                 fan_count: uma.fan_count.unwrap_or(state.config.default_fan_count),
+                ignores_popularity: false,
                 // Assigned by the solver when the runner joins the race.
                 team: 0,
             },
@@ -305,6 +306,11 @@ impl UnreadyRunner {
             // "Sympathy" activation affects every runner, so it's left to the solver.
             else if matches!(effect_type, SkillType::ActivateSympathy) {
                 self.casts_sympathy = true;
+            }
+            // Popularity requirements are satisfied for the out-of-gate skills
+            // evaluated afterwards and every skill during the race.
+            else if matches!(effect_type, SkillType::IgnorePopularity) {
+                self.initial_state.ignores_popularity = true;
             }
             // Other effects are applied when the skill activates.
         }
