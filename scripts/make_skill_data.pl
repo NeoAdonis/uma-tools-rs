@@ -34,10 +34,10 @@ my %skills;
 # $i is the trigger (1-2), $j is the effect within that trigger (1-3)
 sub make_effect( $row, $i, $j ) {
     my $effect = {
-        type       => $row->{"ability_type_${i}_${j}"},
-        modifier   => $row->{"float_ability_value_${i}_${j}"},
-        valueUsage => $row->{"ability_value_usage_${i}_${j}"},
-        target     => {
+        type         => $row->{"ability_type_${i}_${j}"},
+        modifier     => $row->{"float_ability_value_${i}_${j}"},
+        valueScaling => $row->{"ability_value_usage_${i}_${j}"},
+        target       => {
             type  => $row->{"target_type_${i}_${j}"},
             value => $row->{"target_value_${i}_${j}"}
         }
@@ -52,12 +52,12 @@ sub make_trigger( $row, $i ) {
       map { make_effect( $row, $i, $_ ) }
       grep { $_ == 1 || $row->{"ability_type_${i}_$_"} != 0 } 1 .. 3;
     return {
-        precondition => $row->{"precondition_$i"},
-        condition    => $row->{"condition_$i"},
-        baseDuration => $row->{"float_ability_time_$i"},
-        timeUsage    => $row->{"ability_time_usage_$i"},
-        baseCooldown => $row->{"float_cooldown_time_$i"},
-        effects      => \@effects
+        precondition    => $row->{"precondition_$i"},
+        condition       => $row->{"condition_$i"},
+        baseDuration    => $row->{"float_ability_time_$i"},
+        durationScaling => $row->{"ability_time_usage_$i"},
+        baseCooldown    => $row->{"float_cooldown_time_$i"},
+        effects         => \@effects
     };
 }
 

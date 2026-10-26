@@ -247,11 +247,11 @@ impl ActiveTimedEffect {
 }
 
 /// Extension of a timed effect each time the runner overtakes while it's active
-/// (see [`TimeUsage::IncrementOrderUp`]).
+/// (see [`DurationScaling::IncrementOrderUp`][increment]).
 ///
 /// The default doesn't extend the effect.
 ///
-/// [`TimeUsage::IncrementOrderUp`]: crate::skill::TimeUsage::IncrementOrderUp
+/// [increment]: crate::skill::DurationScaling::IncrementOrderUp
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OvertakeExtension {
     /// Duration in seconds added for each overtake, already scaled.

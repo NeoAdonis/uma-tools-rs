@@ -435,14 +435,15 @@ impl Runner {
             state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling;
         let scaled_duration = self.situational_base_duration(&alternative) * duration_factor;
         // Extensions from overtaking scale like the base duration.
-        let overtake_extension = if alternative.time_usage == TimeUsage::IncrementOrderUp {
-            OvertakeExtension {
-                duration: skill_scaling::OVERTAKE_EXTENSION * duration_factor,
-                remaining: skill_scaling::MAX_OVERTAKE_EXTENSIONS,
-            }
-        } else {
-            OvertakeExtension::default()
-        };
+        let overtake_extension =
+            if alternative.duration_scaling == DurationScaling::IncrementOrderUp {
+                OvertakeExtension {
+                    duration: skill_scaling::OVERTAKE_EXTENSION * duration_factor,
+                    remaining: skill_scaling::MAX_OVERTAKE_EXTENSIONS,
+                }
+            } else {
+                OvertakeExtension::default()
+            };
 
         // Wit limit break bonus, fixed at activation time (5th Anniv. onward).
         let wit_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
@@ -558,11 +559,11 @@ impl Runner {
     }
 
     /// Base duration of a skill alternative scaled with the runner's situation
-    /// (see [`TimeUsage`]), before distance scaling.
+    /// (see [`DurationScaling`]), before distance scaling.
     fn situational_base_duration(&self, alternative: &SkillAlternative) -> f64 {
-        use TimeUsage::*;
+        use DurationScaling::*;
         let base = alternative.base_duration;
-        match alternative.time_usage {
+        match alternative.duration_scaling {
             // Overtakes extend the effects later instead.
             Direct | IncrementOrderUp => base,
             MultiplyDistanceDiffTop => {
@@ -586,11 +587,11 @@ impl Runner {
     }
 
     /// Value of an effect's modifier scaled with the runner's situation (see
-    /// [`ValueUsage`]).
+    /// [`ValueScaling`]).
     fn scaled_modifier(&self, effect: &SkillEffect, state: &RaceState) -> f64 {
-        use ValueUsage::*;
+        use ValueScaling::*;
         let modifier = effect.modifier;
-        match effect.value_usage {
+        match effect.value_scaling {
             Direct => modifier,
             MultiplySkillNum => {
                 modifier * skill_scaling::skill_count_multiplier(self.skill_count())

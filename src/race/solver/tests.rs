@@ -2833,14 +2833,14 @@ fn test_activate_unique_skips_other_and_out_of_gate_skills() {
 }
 
 /// Skill with a target speed effect on oneself whose value scales as
-/// `value_usage`. It never activates on its own.
-fn scaled_skill(id: i32, value_usage: ValueUsage, modifier: f64) -> Skill {
+/// `value_scaling`. It never activates on its own.
+fn scaled_skill(id: i32, value_scaling: ValueScaling, modifier: f64) -> Skill {
     let mut alternative = alternative(
         "is_activate_heal_skill==1",
         SkillType::TargetSpeed,
         modifier,
     );
-    alternative.effects[0].value_usage = value_usage;
+    alternative.effects[0].value_scaling = value_scaling;
     Skill::new(id, skill_data(vec![alternative]))
 }
 
@@ -2848,10 +2848,10 @@ fn scaled_skill(id: i32, value_usage: ValueUsage, modifier: f64) -> Skill {
 fn scaled_skill_solver(
     uma: Uma,
     mut skills: Vec<Skill>,
-    value_usage: ValueUsage,
+    value_scaling: ValueScaling,
     config: &Configuration,
 ) -> RaceSolver<Runner> {
-    skills.push(scaled_skill(30, value_usage, 0.25));
+    skills.push(scaled_skill(30, value_scaling, 0.25));
     ready_solver(10101, uma, skills, config)
 }
 
@@ -2869,7 +2869,7 @@ fn test_direct_values_are_not_scaled() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::Direct,
+        ValueScaling::Direct,
         &seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25);
@@ -2884,7 +2884,7 @@ fn test_skill_count_scaling() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         others,
-        ValueUsage::MultiplySkillNum,
+        ValueScaling::MultiplySkillNum,
         &seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
@@ -2909,27 +2909,27 @@ fn test_skill_count_includes_failed_wit_checks() {
 #[test]
 fn test_scenario_values_assume_the_maximum() {
     let cases = [
-        (ValueUsage::UnityCupSpeed, 1.2),
-        (ValueUsage::UnityCupWit, 1.2),
-        (ValueUsage::Climax, 1.2),
-        (ValueUsage::MultiplyArcGlobalPotentialLevel, 1.2),
-        (ValueUsage::UafWinCount, 1.2),
-        (ValueUsage::CookingPoints, 1.2),
-        (ValueUsage::ResearchLevel, 1.2),
-        (ValueUsage::DevelopmentPoints, 1.2),
-        (ValueUsage::OnsenLegendaryInn, 1.2),
-        (ValueUsage::TeamRank, 1.2),
+        (ValueScaling::UnityCupSpeed, 1.2),
+        (ValueScaling::UnityCupWit, 1.2),
+        (ValueScaling::Climax, 1.2),
+        (ValueScaling::MultiplyArcGlobalPotentialLevel, 1.2),
+        (ValueScaling::UafWinCount, 1.2),
+        (ValueScaling::CookingPoints, 1.2),
+        (ValueScaling::ResearchLevel, 1.2),
+        (ValueScaling::DevelopmentPoints, 1.2),
+        (ValueScaling::OnsenLegendaryInn, 1.2),
+        (ValueScaling::TeamRank, 1.2),
         // TODO: Update once the Excitement Points multipliers are known.
-        (ValueUsage::ExcitementPoints, 1.0),
-        (ValueUsage::FanLove, 3.0),
+        (ValueScaling::ExcitementPoints, 1.0),
+        (ValueScaling::FanLove, 3.0),
     ];
-    for (value_usage, multiplier) in cases {
+    for (value_scaling, multiplier) in cases {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
         assert_close!(
             activate_last_skill(&mut solver),
             0.25 * multiplier,
-            "{value_usage:?}"
+            "{value_scaling:?}"
         );
     }
 }
@@ -2939,7 +2939,7 @@ fn test_fan_count_scaling() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::FanCount,
+        ValueScaling::FanCount,
         &seeded_config(0),
     );
     // No fans by default.
@@ -2953,7 +2953,7 @@ fn test_late_race_corner_overtakes_are_tracked() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::CornerOvertakeCount,
+        ValueScaling::CornerOvertakeCount,
         &seeded_config(0),
     );
     // On the 1200m course, the Late race starts at 800m, in the second corner
@@ -2988,9 +2988,9 @@ fn test_late_race_corner_overtakes_are_tracked() {
 
 #[test]
 fn test_random_scaling_distribution() {
-    for value_usage in [ValueUsage::MultiplyRandom1, ValueUsage::MultiplyRandom2] {
+    for value_scaling in [ValueScaling::MultiplyRandom1, ValueScaling::MultiplyRandom2] {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
         let mut counts = [0; 3];
         let rolls = 10000;
         for _ in 0..rolls {
@@ -3017,7 +3017,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
     let mut solver = scaled_skill_solver(
         uma,
         vec![],
-        ValueUsage::MultiplyMaximumRawStatus,
+        ValueScaling::MultiplyMaximumRawStatus,
         &seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.2);
@@ -3033,7 +3033,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
     let mut solver = scaled_skill_solver(
         uma,
         vec![],
-        ValueUsage::MultiplyMaximumRawStatus,
+        ValueScaling::MultiplyMaximumRawStatus,
         &seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 0.9);
@@ -3042,15 +3042,15 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
 #[test]
 fn test_speed_scaling_uses_adjusted_speed() {
     let cases = [
-        (ValueUsage::MultiplySpeed1, 1850, 2.0),
-        (ValueUsage::MultiplySpeed2, 1500, 2.0),
+        (ValueScaling::MultiplySpeed1, 1850, 2.0),
+        (ValueScaling::MultiplySpeed2, 1500, 2.0),
     ];
-    for (value_usage, speed, multiplier) in cases {
+    for (value_scaling, speed, multiplier) in cases {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_usage, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
         solver.runners[0].adjusted.speed = speed;
         let gained = activate_last_skill(&mut solver);
-        assert_close!(gained, 0.25 * multiplier, "{value_usage:?}");
+        assert_close!(gained, 0.25 * multiplier, "{value_scaling:?}");
     }
 }
 
@@ -3059,7 +3059,7 @@ fn test_buffs_scaled_to_zero_still_count() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::MultiplySpeed1,
+        ValueScaling::MultiplySpeed1,
         &seeded_config(0),
     );
     // Too slow for any bonus.
@@ -3082,7 +3082,7 @@ fn test_green_skill_count_scaling() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         skills,
-        ValueUsage::MultiplyActivateSpecificTagSkillCount,
+        ValueScaling::MultiplyActivateSpecificTagSkillCount,
         &seeded_config(0),
     );
     // Before the race starts, no green skill has activated yet.
@@ -3109,7 +3109,7 @@ fn test_distance_from_first_adds_to_value() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::AddDistanceDiffTop,
+        ValueScaling::AddDistanceDiffTop,
         &seeded_config(0),
     );
     solver.runners[0].position_diff.from_first = 19.0;
@@ -3123,7 +3123,7 @@ fn test_bashin_from_first_adds_to_value() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::AddBashinDiffTop,
+        ValueScaling::AddBashinDiffTop,
         &seeded_config(0),
     );
     // 8 bashin are 20 meters.
@@ -3135,7 +3135,7 @@ fn test_bashin_from_first_adds_to_value() {
 
 #[test]
 fn test_medium_distance_adds_to_value() {
-    let skills = || vec![scaled_skill(30, ValueUsage::AddDistanceTypeMedium, 0.25)];
+    let skills = || vec![scaled_skill(30, ValueScaling::AddDistanceTypeMedium, 0.25)];
     // 1200m (Short).
     let mut solver = ready_solver(10101, uma(Style::Late), skills(), &seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.25);
@@ -3149,7 +3149,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
-        ValueUsage::MultiplyBlockedSideMaxTimeMidRace,
+        ValueScaling::MultiplyBlockedSideMaxTimeMidRace,
         &seeded_config(0),
     );
     let runner = &mut solver.runners[0];
@@ -3184,7 +3184,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
 #[test]
 fn test_largest_lead_before_late_race_is_tracked() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
-    let skills = vec![scaled_skill(30, ValueUsage::MultiplyTopLeadAmount, 0.25)];
+    let skills = vec![scaled_skill(30, ValueScaling::MultiplyTopLeadAmount, 0.25)];
     solver.add_runner(uma(Style::Front), Mood::Normal, skills);
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
     let mut solver = solver.ready_runners();
@@ -3214,10 +3214,10 @@ fn test_largest_lead_before_late_race_is_tracked() {
 }
 
 /// Skill with a 3-second target speed effect whose duration scales as
-/// `time_usage`. It never activates on its own.
-fn timed_skill(id: i32, time_usage: TimeUsage) -> Skill {
+/// `duration_scaling`. It never activates on its own.
+fn timed_skill(id: i32, duration_scaling: DurationScaling) -> Skill {
     let alternative = SkillAlternative {
-        time_usage,
+        duration_scaling,
         ..alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25)
     };
     Skill::new(id, skill_data(vec![alternative]))
@@ -3243,51 +3243,52 @@ fn test_duration_scaling_by_runner_situation() {
     let base = 3.0 * 1.2;
     /// Changes the runner's situation before activating the skill.
     type Setup = fn(&mut Runner);
-    let cases: [(TimeUsage, Setup, f64); 6] = [
-        (TimeUsage::Direct, |_| {}, 1.0),
+    let cases: [(DurationScaling, Setup, f64); 6] = [
+        (DurationScaling::Direct, |_| {}, 1.0),
         (
-            TimeUsage::MultiplyDistanceDiffTop,
+            DurationScaling::MultiplyDistanceDiffTop,
             |runner| runner.position_diff.from_first = 25.0,
             1.2,
         ),
         (
-            TimeUsage::MultiplyRemainHp1,
+            DurationScaling::MultiplyRemainHp1,
             |runner| runner.hp.current = 2500.0,
             2.0,
         ),
         (
-            TimeUsage::MultiplyRemainHp2,
+            DurationScaling::MultiplyRemainHp2,
             |runner| runner.hp.current = 2500.0,
             3.0,
         ),
         (
-            TimeUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+            DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
             |runner| runner.blocked.max_mid_side_time = 4.5,
             3.0,
         ),
         // Only extended later, by overtaking.
-        (TimeUsage::IncrementOrderUp, |_| {}, 1.0),
+        (DurationScaling::IncrementOrderUp, |_| {}, 1.0),
     ];
-    for (time_usage, setup, multiplier) in cases {
-        let mut solver = timed_skill_solver(vec![timed_skill(33, time_usage)]);
+    for (duration_scaling, setup, multiplier) in cases {
+        let mut solver = timed_skill_solver(vec![timed_skill(33, duration_scaling)]);
         setup(&mut solver.runners[0]);
         solver.runners[0].activate_skill(0, 0, &solver.state);
         let durations = remaining_durations(&solver);
-        assert_eq!(durations.len(), 1, "{time_usage:?}");
-        assert_close!(durations[0], base * multiplier, "{time_usage:?}");
+        assert_eq!(durations.len(), 1, "{duration_scaling:?}");
+        assert_close!(durations[0], base * multiplier, "{duration_scaling:?}");
     }
 }
 
 #[test]
 fn test_overtakes_extend_effects() {
     // Two effects extended by overtaking, and another skill's effect that isn't.
-    let mut alternative = timed_skill(12, TimeUsage::IncrementOrderUp).alternatives[0].clone();
+    let mut alternative =
+        timed_skill(12, DurationScaling::IncrementOrderUp).alternatives[0].clone();
     alternative.effects.push(effect(
         SkillType::Acceleration,
         alternative.effects[0].modifier,
     ));
     let extended = Skill::new(12, skill_data(vec![alternative]));
-    let direct = timed_skill(9, TimeUsage::Direct);
+    let direct = timed_skill(9, DurationScaling::Direct);
     let mut solver = timed_skill_solver(vec![extended, direct]);
     let course = solver.state.course.clone();
     solver.runners[0].activate_skill(0, 0, &solver.state);
@@ -3406,7 +3407,8 @@ fn test_uphills_climbed_extend_duration() {
     // Base duration of 3 seconds plus 0.5 seconds per uphill (up to 4), scaled to
     // the 1200m course.
     for (uphills, base_duration) in [(0, 3.0), (2, 4.0), (4, 5.0), (6, 5.0)] {
-        let mut solver = timed_skill_solver(vec![timed_skill(33, TimeUsage::IncrementUphillCount)]);
+        let mut solver =
+            timed_skill_solver(vec![timed_skill(33, DurationScaling::IncrementUphillCount)]);
         solver.runners[0].uphills_climbed = uphills;
         solver.runners[0].activate_skill(0, 0, &solver.state);
         let durations = remaining_durations(&solver);

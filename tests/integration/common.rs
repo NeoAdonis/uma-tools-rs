@@ -97,7 +97,7 @@ pub fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
         skill_type,
         target: SkillTarget::Oneself,
         modifier,
-        value_usage: ValueUsage::Direct,
+        value_scaling: ValueScaling::Direct,
         additional: AdditionalActivation::Regular,
     }
 }
@@ -111,7 +111,7 @@ pub fn alternative(condition: &str, skill_type: SkillType, modifier: f64) -> Ski
         condition: condition.parse().unwrap(),
         precondition: None,
         effects: vec![effect(skill_type, modifier)],
-        time_usage: TimeUsage::Direct,
+        duration_scaling: DurationScaling::Direct,
     }
 }
 

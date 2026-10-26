@@ -264,7 +264,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
 #[repr(u8)]
-pub enum ValueUsage {
+pub enum ValueScaling {
     /// No scaling.
     Direct = 1,
     /// Scales with the number of skills the runner has.
@@ -285,7 +285,7 @@ pub enum ValueUsage {
     /// IDs in the skill data, so they're kept apart in case an update changes
     /// either of them.
     MultiplyRandom1 = 8,
-    /// Random multiplier, second variant. See [`ValueUsage::MultiplyRandom1`].
+    /// Random multiplier, second variant. See [`ValueScaling::MultiplyRandom1`].
     MultiplyRandom2 = 9,
     /// Climax skills; scales with the number of races won during training.
     Climax = 10,
@@ -390,7 +390,7 @@ pub struct SkillEffect {
     #[serde(deserialize_with = "deserialize_ten_thousandths")]
     pub modifier: f64,
     /// How the modifier scales when the skill activates.
-    pub value_usage: ValueUsage,
+    pub value_scaling: ValueScaling,
     /// When the effect applies. Regular (on activation) if missing.
     #[serde(default)]
     pub additional: AdditionalActivation,
@@ -427,7 +427,7 @@ fn default_cooldown() -> f64 {
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
 #[repr(u8)]
-pub enum TimeUsage {
+pub enum DurationScaling {
     /// No scaling.
     Direct = 1,
     /// Scales with the distance behind the first place.
@@ -468,7 +468,7 @@ pub struct SkillAlternative {
     #[serde(deserialize_with = "deserialize_base_duration")]
     pub base_duration: f64,
     /// How the duration scales when the skill activates.
-    pub time_usage: TimeUsage,
+    pub duration_scaling: DurationScaling,
     /// Condition that determines when this alternative can be triggered.
     #[serde(deserialize_with = "deserialize_condition")]
     pub condition: Condition,
@@ -757,8 +757,8 @@ mod tests {
         let json = format!(
             r#"{{"baseDuration": 30000, "condition": "{condition}",
                 "effects": [{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 3500,
-                    "valueUsage": 1}}],
-                "precondition": "{precondition}", "timeUsage": 1}}"#
+                    "valueScaling": 1}}],
+                "precondition": "{precondition}", "durationScaling": 1}}"#
         );
         serde_json::from_str(&json)
     }
@@ -772,7 +772,7 @@ mod tests {
         assert_eq!(parsed.base_cooldown, DEFAULT_COOLDOWN);
 
         let json = r#"{"baseCooldown": 300000, "baseDuration": -1, "condition": "always==1",
-            "effects": [], "precondition": "", "timeUsage": 1}"#;
+            "effects": [], "precondition": "", "durationScaling": 1}"#;
         let parsed: SkillAlternative = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.base_cooldown, 30.0);
         // Until the end of the race.
@@ -900,64 +900,70 @@ mod tests {
         }
     }
 
-    /// Deserialize a value usage from its ID.
-    fn value_usage(id: u8) -> serde_json::Result<ValueUsage> {
+    /// Deserialize a value scaling from its ID.
+    fn value_scaling(id: u8) -> serde_json::Result<ValueScaling> {
         serde_json::from_str(&id.to_string())
     }
 
     #[test]
-    fn test_value_usage_ids() {
-        assert_eq!(value_usage(1).unwrap(), ValueUsage::Direct);
-        assert_eq!(value_usage(2).unwrap(), ValueUsage::MultiplySkillNum);
-        assert_eq!(value_usage(3).unwrap(), ValueUsage::UnityCupSpeed);
-        assert_eq!(value_usage(7).unwrap(), ValueUsage::UnityCupWit);
-        assert_eq!(value_usage(8).unwrap(), ValueUsage::MultiplyRandom1);
-        assert_eq!(value_usage(9).unwrap(), ValueUsage::MultiplyRandom2);
-        assert_eq!(value_usage(22).unwrap(), ValueUsage::MultiplySpeed1);
-        assert_eq!(value_usage(23).unwrap(), ValueUsage::MultiplySpeed2);
-        assert_eq!(value_usage(25).unwrap(), ValueUsage::MultiplyTopLeadAmount);
-        // IDs are preserved.
-        assert_eq!(ValueUsage::MultiplyRandom1 as u8, 8);
+    fn test_value_scaling_ids() {
+        assert_eq!(value_scaling(1).unwrap(), ValueScaling::Direct);
+        assert_eq!(value_scaling(2).unwrap(), ValueScaling::MultiplySkillNum);
+        assert_eq!(value_scaling(3).unwrap(), ValueScaling::UnityCupSpeed);
+        assert_eq!(value_scaling(7).unwrap(), ValueScaling::UnityCupWit);
+        assert_eq!(value_scaling(8).unwrap(), ValueScaling::MultiplyRandom1);
+        assert_eq!(value_scaling(9).unwrap(), ValueScaling::MultiplyRandom2);
+        assert_eq!(value_scaling(22).unwrap(), ValueScaling::MultiplySpeed1);
+        assert_eq!(value_scaling(23).unwrap(), ValueScaling::MultiplySpeed2);
         assert_eq!(
-            ValueUsage::try_from(31).unwrap(),
-            ValueUsage::DevelopmentPoints
+            value_scaling(25).unwrap(),
+            ValueScaling::MultiplyTopLeadAmount
         );
-        assert_eq!(value_usage(32).unwrap(), ValueUsage::OnsenLegendaryInn);
-        assert_eq!(value_usage(35).unwrap(), ValueUsage::CinderellaGray);
-        assert_eq!(value_usage(36).unwrap(), ValueUsage::AddDistanceTypeMedium);
-        assert_eq!(value_usage(37).unwrap(), ValueUsage::TeamRank);
-        assert_eq!(value_usage(40).unwrap(), ValueUsage::ExcitementPoints);
+        // IDs are preserved.
+        assert_eq!(ValueScaling::MultiplyRandom1 as u8, 8);
+        assert_eq!(
+            ValueScaling::try_from(31).unwrap(),
+            ValueScaling::DevelopmentPoints
+        );
+        assert_eq!(value_scaling(32).unwrap(), ValueScaling::OnsenLegendaryInn);
+        assert_eq!(value_scaling(35).unwrap(), ValueScaling::CinderellaGray);
+        assert_eq!(
+            value_scaling(36).unwrap(),
+            ValueScaling::AddDistanceTypeMedium
+        );
+        assert_eq!(value_scaling(37).unwrap(), ValueScaling::TeamRank);
+        assert_eq!(value_scaling(40).unwrap(), ValueScaling::ExcitementPoints);
         // Unknown IDs.
         for id in [0, 15, 21, 29, 33, 38, 41] {
-            assert!(value_usage(id).is_err(), "ID {id}");
+            assert!(value_scaling(id).is_err(), "ID {id}");
         }
     }
 
-    /// Deserialize a time usage from its ID.
-    fn time_usage(id: u8) -> serde_json::Result<TimeUsage> {
+    /// Deserialize a duration scaling from its ID.
+    fn duration_scaling(id: u8) -> serde_json::Result<DurationScaling> {
         serde_json::from_str(&id.to_string())
     }
 
     #[test]
-    fn test_time_usage_ids() {
+    fn test_duration_scaling_ids() {
         let cases = [
-            (1, TimeUsage::Direct),
-            (2, TimeUsage::MultiplyDistanceDiffTop),
-            (3, TimeUsage::MultiplyRemainHp1),
-            (4, TimeUsage::IncrementOrderUp),
+            (1, DurationScaling::Direct),
+            (2, DurationScaling::MultiplyDistanceDiffTop),
+            (3, DurationScaling::MultiplyRemainHp1),
+            (4, DurationScaling::IncrementOrderUp),
             (
                 5,
-                TimeUsage::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
+                DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
             ),
-            (7, TimeUsage::MultiplyRemainHp2),
-            (8, TimeUsage::IncrementUphillCount),
+            (7, DurationScaling::MultiplyRemainHp2),
+            (8, DurationScaling::IncrementUphillCount),
         ];
         for (id, expected) in cases {
-            assert_eq!(time_usage(id).unwrap(), expected, "ID {id}");
+            assert_eq!(duration_scaling(id).unwrap(), expected, "ID {id}");
         }
         // Unknown IDs.
         for id in [0, 6, 9] {
-            assert!(time_usage(id).is_err(), "ID {id}");
+            assert!(duration_scaling(id).is_err(), "ID {id}");
         }
     }
 
@@ -966,7 +972,7 @@ mod tests {
         let effect = |additional: &str| {
             let json = format!(
                 r#"{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 500,
-                    "valueUsage": 1{additional}}}"#
+                    "valueScaling": 1{additional}}}"#
             );
             serde_json::from_str::<SkillEffect>(&json).map(|effect| effect.additional)
         };
@@ -1053,7 +1059,7 @@ mod tests {
             .flat_map(|alternative| &alternative.effects);
         for effect in effects {
             if effect.skill_type.is_pre_race_effect() {
-                assert_eq!(effect.value_usage, ValueUsage::Direct, "{effect:?}");
+                assert_eq!(effect.value_scaling, ValueScaling::Direct, "{effect:?}");
             }
             // Additional effects stack their values while the skill's timed effects
             // are active, so only additive timed effects on oneself are supported.

@@ -113,7 +113,7 @@ pub(crate) fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
         skill_type,
         target: SkillTarget::Oneself,
         modifier,
-        value_usage: ValueUsage::Direct,
+        value_scaling: ValueScaling::Direct,
         additional: AdditionalActivation::Regular,
     }
 }
@@ -131,7 +131,7 @@ pub(crate) fn alternative(
         condition: condition.parse().unwrap(),
         precondition: None,
         effects: vec![effect(skill_type, modifier)],
-        time_usage: TimeUsage::Direct,
+        duration_scaling: DurationScaling::Direct,
     }
 }
 

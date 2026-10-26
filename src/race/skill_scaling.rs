@@ -1,15 +1,17 @@
 //! Formulas that scale a skill effect's value or a skill's duration with the
-//! runner's situation (see [`ValueUsage`](crate::skill::ValueUsage) and
-//! [`TimeUsage`](crate::skill::TimeUsage)).
+//! runner's situation (see [`ValueScaling`](crate::skill::ValueScaling) and
+//! [`DurationScaling`](crate::skill::DurationScaling)).
 
 use crate::course::DistanceType;
 
 /// Multiplier for Unity Cup (アオハル杯) skills.
 ///
 /// It depends on the team's total of the stat the skill is tied to (e.g. Speed
-/// for [`ValueUsage::UnityCupSpeed`](crate::skill::ValueUsage::UnityCupSpeed)):
-/// 0.8x below 1200, 0.9x below 1800, 1.0x below 2600, 1.1x below 3600, and 1.2x
-/// from 3600. The maximum is assumed for now.
+/// for [`ValueScaling::UnityCupSpeed`][speed]): 0.8x below 1200, 0.9x below
+/// 1800, 1.0x below 2600, 1.1x below 3600, and 1.2x from 3600. The maximum is
+/// assumed for now.
+///
+/// [speed]: crate::skill::ValueScaling::UnityCupSpeed
 pub const UNITY_CUP_MULTIPLIER: f64 = 1.2;
 
 /// Multiplier for Climax skills.
@@ -87,7 +89,9 @@ pub fn skill_count_multiplier(skill_count: usize) -> f64 {
 /// or 0.04x (10%).
 ///
 /// Shared by both random variants for now (see
-/// [`ValueUsage::MultiplyRandom1`](crate::skill::ValueUsage::MultiplyRandom1)).
+/// [`ValueScaling::MultiplyRandom1`][random]).
+///
+/// [random]: crate::skill::ValueScaling::MultiplyRandom1
 pub fn random_multiplier(roll: f64) -> f64 {
     if roll < 0.6 {
         0.0
