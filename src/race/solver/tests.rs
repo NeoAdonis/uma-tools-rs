@@ -2808,6 +2808,10 @@ fn test_scenario_values_assume_the_maximum() {
         (ValueUsage::CookingPoints, 1.2),
         (ValueUsage::ResearchLevel, 1.2),
         (ValueUsage::DevelopmentPoints, 1.2),
+        (ValueUsage::OnsenLegendaryInn, 1.2),
+        (ValueUsage::TeamRank, 1.2),
+        // TODO: Update once the Excitement Points multipliers are known.
+        (ValueUsage::ExcitementPoints, 1.0),
         (ValueUsage::FanLove, 3.0),
     ];
     for (value_usage, multiplier) in cases {
@@ -3008,6 +3012,38 @@ fn test_distance_from_first_adds_to_value() {
     assert_close!(activate_last_skill(&mut solver), 0.25);
     solver.runners[0].position_diff.from_first = 20.0;
     assert_close!(activate_last_skill(&mut solver), 0.35);
+}
+
+#[test]
+fn test_bashin_from_first_adds_to_value() {
+    let mut solver = scaled_skill_solver(
+        uma(Style::Late),
+        vec![],
+        ValueUsage::AddBashinDiffTop,
+        &seeded_config(0),
+    );
+    // 8 bashin are 20 meters.
+    solver.runners[0].position_diff.from_first = 19.9;
+    assert_close!(activate_last_skill(&mut solver), 0.25);
+    solver.runners[0].position_diff.from_first = 20.0;
+    assert_close!(activate_last_skill(&mut solver), 0.45);
+}
+
+#[test]
+fn test_medium_distance_adds_to_value() {
+    let skills = || {
+        vec![scaled_skill(
+            "scaled",
+            ValueUsage::AddDistanceTypeMedium,
+            0.25,
+        )]
+    };
+    // 1200m (Short).
+    let mut solver = ready_solver(10101, uma(Style::Late), skills(), &seeded_config(0));
+    assert_close!(activate_last_skill(&mut solver), 0.25);
+    // 2400m (Medium).
+    let mut solver = ready_solver(10606, uma(Style::Late), skills(), &seeded_config(0));
+    assert_close!(activate_last_skill(&mut solver), 0.45);
 }
 
 #[test]

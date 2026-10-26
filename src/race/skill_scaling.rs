@@ -2,6 +2,8 @@
 //! runner's situation (see [`ValueUsage`](crate::skill::ValueUsage) and
 //! [`TimeUsage`](crate::skill::TimeUsage)).
 
+use crate::course::DistanceType;
+
 /// Multiplier for Unity Cup (アオハル杯) skills.
 ///
 /// It depends on the team's total of the stat the skill is tied to (e.g. Speed
@@ -50,6 +52,22 @@ pub const RESEARCH_MULTIPLIER: f64 = 1.2;
 /// 1.0x below 2500 points, 1.1x below 3500, and 1.2x from 3500. The maximum is
 /// assumed for now.
 pub const DEVELOPMENT_MULTIPLIER: f64 = 1.2;
+
+/// Multiplier for skills scaling with whether the Legendary Inn status was
+/// achieved in the Yukoma Onsen (ごくらく♪ゆこま温泉郷) scenario.
+///
+/// 1.2x if achieved, 1.0x otherwise. The maximum is assumed for now.
+pub const ONSEN_LEGENDARY_INN_MULTIPLIER: f64 = 1.2;
+
+/// Multiplier for skills scaling with the team rank.
+///
+/// 1.2x from rank S, 1.0x below. The maximum is assumed for now.
+pub const TEAM_RANK_MULTIPLIER: f64 = 1.2;
+
+/// Multiplier for skills scaling with the Excitement Points earned in the
+/// Tracen-ken (らっしゃい！トレセン軒！) scenario.
+// TODO: Revisit once the multipliers are known; no scaling for now.
+pub const EXCITEMENT_MULTIPLIER: f64 = 1.0;
 
 /// Multiplier for skills scaling with the love received from fans.
 ///
@@ -105,6 +123,36 @@ pub fn green_skill_count_multiplier(count: usize) -> f64 {
 /// place.
 pub fn distance_from_first_bonus(distance: f64) -> f64 {
     if distance >= 20.0 { 0.1 } else { 0.0 }
+}
+
+/// Bonus added to the value in Medium races.
+pub fn medium_distance_bonus(distance_type: DistanceType) -> f64 {
+    if distance_type == DistanceType::Medium {
+        0.2
+    } else {
+        0.0
+    }
+}
+
+/// ID of the Arima Kinen course (Nakayama, turf, 2500m, inner).
+pub const ARIMA_KINEN_COURSE_ID: u16 = 10506;
+
+/// Bonus added to the value of "Cinderella Gray" Oguri Cap's unique skill: 0.1
+/// in Mile races, and 0.2 on the Arima Kinen course with at least 146738 fans.
+pub fn cinderella_gray_bonus(course_id: u16, distance_type: DistanceType, fans: u32) -> f64 {
+    if distance_type == DistanceType::Mile {
+        0.1
+    } else if course_id == ARIMA_KINEN_COURSE_ID && fans >= 146738 {
+        0.2
+    } else {
+        0.0
+    }
+}
+
+/// Bonus added to the value when the runner is at least 8 bashin behind the
+/// first place.
+pub fn bashin_from_first_bonus(bashin: f64) -> f64 {
+    if bashin >= 8.0 { 0.2 } else { 0.0 }
 }
 
 /// Multiplier from the longest time (in seconds) the runner was side-blocked

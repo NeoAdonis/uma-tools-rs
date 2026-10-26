@@ -79,6 +79,7 @@ use crate::trigger::skill_activation::{
     ActiveTimedEffect, LogicAction, OvertakeExtension, PendingEffect, SkillActivationRecord,
 };
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
+use crate::units::meters_to_bashin;
 
 use super::{EPSILON, Runner};
 
@@ -448,7 +449,7 @@ impl Runner {
             if !effect.skill_type.is_pre_race_effect() {
                 // Scale the value with the runner's situation.
                 let scaled = SkillEffect {
-                    modifier: self.scaled_modifier(effect),
+                    modifier: self.scaled_modifier(effect, state),
                     ..effect.clone()
                 };
                 if scaled.target == SkillTarget::Oneself {
@@ -555,7 +556,7 @@ impl Runner {
 
     /// Value of an effect's modifier scaled with the runner's situation (see
     /// [`ValueUsage`]).
-    fn scaled_modifier(&self, effect: &SkillEffect) -> f64 {
+    fn scaled_modifier(&self, effect: &SkillEffect, state: &RaceState) -> f64 {
         use ValueUsage::*;
         let modifier = effect.modifier;
         match effect.value_usage {
@@ -587,6 +588,19 @@ impl Runner {
             AddDistanceDiffTop => {
                 modifier + skill_scaling::distance_from_first_bonus(self.position_diff.from_first)
             }
+            AddDistanceTypeMedium => {
+                modifier + skill_scaling::medium_distance_bonus(state.course.distance_type)
+            }
+            CinderellaGray => {
+                let course = &state.course;
+                let fans = self.initial_state.fan_count;
+                modifier
+                    + skill_scaling::cinderella_gray_bonus(course.id, course.distance_type, fans)
+            }
+            AddBashinDiffTop => {
+                let bashin = meters_to_bashin(self.position_diff.from_first);
+                modifier + skill_scaling::bashin_from_first_bonus(bashin)
+            }
             MultiplyBlockedSideMaxTimeMidRace => {
                 let time = self.blocked.max_mid_side_time;
                 modifier * skill_scaling::mid_side_blocked_time_multiplier(time)
@@ -609,6 +623,9 @@ impl Runner {
             ResearchLevel => modifier * skill_scaling::RESEARCH_MULTIPLIER,
             FanLove => modifier * skill_scaling::FAN_LOVE_MULTIPLIER,
             DevelopmentPoints => modifier * skill_scaling::DEVELOPMENT_MULTIPLIER,
+            OnsenLegendaryInn => modifier * skill_scaling::ONSEN_LEGENDARY_INN_MULTIPLIER,
+            TeamRank => modifier * skill_scaling::TEAM_RANK_MULTIPLIER,
+            ExcitementPoints => modifier * skill_scaling::EXCITEMENT_MULTIPLIER,
         }
     }
 

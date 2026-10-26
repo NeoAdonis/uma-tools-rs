@@ -311,6 +311,20 @@ pub enum ValueUsage {
     /// Scales with the total development points earned in the Design Your Island
     /// scenario.
     DevelopmentPoints = 31,
+    /// Scales with whether the Legendary Inn status was achieved in the Yukoma
+    /// Onsen scenario.
+    OnsenLegendaryInn = 32,
+    /// Adds a flat amount when far enough (in bashin) from the first place.
+    AddBashinDiffTop = 34,
+    /// "Cinderella Gray" Oguri Cap's unique skill; adds a flat amount in Mile
+    /// races, or on the Arima Kinen course with enough fans.
+    CinderellaGray = 35,
+    /// Adds a flat amount in Medium races.
+    AddDistanceTypeMedium = 36,
+    /// Scales with the team rank.
+    TeamRank = 37,
+    /// Scales with the Excitement Points earned in the Tracen-ken scenario.
+    ExcitementPoints = 40,
 }
 
 /// Represents when a skill effect applies: on activation, or later, each time
@@ -872,8 +886,13 @@ mod tests {
             ValueUsage::try_from(31).unwrap(),
             ValueUsage::DevelopmentPoints
         );
+        assert_eq!(value_usage(32).unwrap(), ValueUsage::OnsenLegendaryInn);
+        assert_eq!(value_usage(35).unwrap(), ValueUsage::CinderellaGray);
+        assert_eq!(value_usage(36).unwrap(), ValueUsage::AddDistanceTypeMedium);
+        assert_eq!(value_usage(37).unwrap(), ValueUsage::TeamRank);
+        assert_eq!(value_usage(40).unwrap(), ValueUsage::ExcitementPoints);
         // Unknown IDs.
-        for id in [0, 15, 21, 29, 32] {
+        for id in [0, 15, 21, 29, 33, 38, 41] {
             assert!(value_usage(id).is_err(), "ID {id}");
         }
     }
