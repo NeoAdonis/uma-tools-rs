@@ -93,8 +93,7 @@ pub struct OrderState {
     pub runner_count: u8,
     /// Current order rate (percentile; "you are in the top X%"), rounded up.
     pub rate: u8,
-    /// Order rates (top X%) that round to the current order, as order rate
-    /// conditions do (see [`Self::order_at_rate`]).
+    /// Order rates that round to the current order (see [`rates_at_order`]).
     pub rates: RangeInclusive<i32>,
     /// Best (lowest) order reached so far.
     /// N.B. This value is tracked only after 5 seconds into the race.
@@ -102,6 +101,10 @@ pub struct OrderState {
     /// Worst (highest) order reached so far.
     /// N.B. This value is tracked only after 5 seconds into the race.
     pub worst: u8,
+    /// Order rates that round to the best order (see [`rates_at_order`]).
+    pub best_rates: RangeInclusive<i32>,
+    /// Order rates that round to the worst order (see [`rates_at_order`]).
+    pub worst_rates: RangeInclusive<i32>,
     /// Change in order since last update.
     pub delta: i8,
     /// Number of overtakes since entering Mid phase.
@@ -123,6 +126,8 @@ impl Default for OrderState {
             rates: rates_at_order(1, 1),
             best: u8::MAX,
             worst: 0,
+            best_rates: rates_at_order(u8::MAX, 1),
+            worst_rates: rates_at_order(0, 1),
             delta: 0,
             overtakes_since_mid: 0,
             overtakes_since_late: 0,
@@ -132,25 +137,18 @@ impl Default for OrderState {
     }
 }
 
-impl OrderState {
-    /// Convert an order rate (top `rate`%) into an order, rounding to the
-    /// nearest (half up), as the game does for order rate conditions.
-    ///
-    /// For example, 50% in a 9-runner race is 4.5, rounded to 5th place.
-    pub fn order_at_rate(&self, rate: i32) -> i32 {
-        (self.runner_count as i32 * rate + 50) / 100
-    }
-}
-
 /// Order rates (top X%) that round to `order` in a race with `runner_count`
-/// runners (see [`OrderState::order_at_rate`]).
+/// runners.
 ///
-/// For example, 50% to 61% round to 5th place in a 9-runner race.
-fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
+/// Order rate conditions convert their rate into an order, rounding to the
+/// nearest (half up): e.g. 50% in a 9-runner race is 4.5, rounded to 5th
+/// place, and so are 50% to 61%.
+pub fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
     let (order, runner_count) = (order as i32, runner_count as i32);
     // `(runner_count * rate + 50) / 100 == order` holds for
     // `100 * order - 50 <= runner_count * rate < 100 * order + 50`.
-    let ceil_div = |value: i32| (value + runner_count - 1) / runner_count;
+    // Rounded up below zero too (order 0, before orders are tracked).
+    let ceil_div = |value: i32| -(-value).div_euclid(runner_count);
     ceil_div(100 * order - 50)..=ceil_div(100 * order + 50) - 1
 }
 
@@ -1042,6 +1040,8 @@ impl Runner {
             self.order.best = self.order.best.min(order);
             self.order.worst = self.order.worst.max(order);
         }
+        self.order.best_rates = rates_at_order(self.order.best, total_runners);
+        self.order.worst_rates = rates_at_order(self.order.worst, total_runners);
     }
 
     /// Update position differences from other runners ahead.

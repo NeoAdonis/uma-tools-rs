@@ -15,14 +15,18 @@ fn test_start_type_from_delay() {
 }
 
 #[test]
-fn test_order_at_rate_rounds_to_nearest() {
-    let order = OrderState {
-        runner_count: 9,
-        ..Default::default()
-    };
-    // 9 runners: 20% => 1.8, 40% => 3.6, 50% => 4.5, 70% => 6.3, 80% => 7.2.
-    let actual = [0, 20, 40, 50, 70, 80, 100].map(|rate| order.order_at_rate(rate));
-    assert_eq!(actual, [0, 2, 4, 5, 6, 7, 9]);
+fn test_rates_at_order_round_to_nearest() {
+    // 9 runners: 5% => 0.45, 6% => 0.54, 16% => 1.44, 17% => 1.53, 50% => 4.5,
+    // 61% => 5.49, 100% => 9.
+    let cases = [(0, -5..=5), (1, 6..=16), (5, 50..=61), (9, 95..=105)];
+    for (order, expected) in cases {
+        assert_eq!(rates_at_order(order, 9), expected, "order {order}");
+    }
+    // Every rate rounds to a single order.
+    for order in 0..9 {
+        let (current, next) = (rates_at_order(order, 9), rates_at_order(order + 1, 9));
+        assert_eq!(current.end() + 1, *next.start(), "order {order}");
+    }
 }
 
 #[test]
@@ -45,5 +49,8 @@ fn test_update_order_rate_tracks_best_and_worst_orders() {
         let o = &runner.order;
         assert_eq!(o.runner_count, 9);
         assert_eq!([o.rate, o.best, o.worst], expected, "order {order}");
+        assert_eq!(o.rates, rates_at_order(order, 9), "order {order}");
+        assert_eq!(o.best_rates, rates_at_order(o.best, 9), "order {order}");
+        assert_eq!(o.worst_rates, rates_at_order(o.worst, 9), "order {order}");
     }
 }

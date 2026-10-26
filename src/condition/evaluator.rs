@@ -86,7 +86,7 @@ use crate::course::Course;
 use crate::course::geometry::Segment;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::InitialState;
-use crate::race::runner::{Runner, SkillActivationFlags, StartType};
+use crate::race::runner::{OrderState, Runner, SkillActivationFlags, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::SkillType;
@@ -322,9 +322,8 @@ pub fn get_variable_value<'a>(
     match var {
         BaseStat(stat_var) => Int(get_base_stat(stat_var, &runner.base)),
         Entry(entry_var) => Int(get_entry_value(entry_var, &runner.initial_state)),
-        // Rates that round to the runner's order (see `OrderState::rates`).
-        Order(OrderVar::OrderRate) => Value::Range(runner.order.rates.clone()),
         Order(pos_var) => Int(get_rank_value(pos_var, runner)),
+        OrderRate(rate_var) => get_order_rate_value(rate_var, &runner.order),
         Distance(dist_var) => Int(get_distance_value(dist_var, runner)),
         Phase(phase_var) => Int(get_phase_value(phase_var, &state.course, runner)),
         Course(course_var) => Int(get_course_value(course_var, &state.course)),
@@ -821,33 +820,42 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     use OrderVar::*;
     let order = &runner.order;
-    let at_rate = |rate: i32| order.order_at_rate(rate);
 
     match var {
         // Order.
         Order => order.order as i32,
-        OrderRate => panic!("BUG: {var} should be read as a range"),
 
         // Order change checks.
         ChangeOrderOnetime => order.delta as i32,
         ChangeOrderUpEndAfter => order.overtakes_since_late as i32,
         ChangeOrderUpFinalcornerAfter => order.overtakes_since_last_corner as i32,
         ChangeOrderUpMiddle => order.overtakes_since_mid as i32,
+    }
+}
 
-        // Order rate continue checks: whether `order_rate<=X` (in) or
-        // `order_rate>=X` (out) held for the entire race, i.e., whether the worst
-        // order was always within the top X%, or the best order always at the
-        // rounded order or worse. The rounded order counts as both, e.g., always
-        // being 2nd in a 9-runner race (9 * 20% = 1.8 => 2) satisfies `in20` and
-        // `out20`.
-        OrderRateIn20Continue => (order.worst as i32 <= at_rate(20)) as i32,
-        OrderRateIn40Continue => (order.worst as i32 <= at_rate(40)) as i32,
-        OrderRateIn50Continue => (order.worst as i32 <= at_rate(50)) as i32,
-        OrderRateIn80Continue => (order.worst as i32 <= at_rate(80)) as i32,
-        OrderRateOut20Continue => (order.best as i32 >= at_rate(20)) as i32,
-        OrderRateOut40Continue => (order.best as i32 >= at_rate(40)) as i32,
-        OrderRateOut50Continue => (order.best as i32 >= at_rate(50)) as i32,
-        OrderRateOut70Continue => (order.best as i32 >= at_rate(70)) as i32,
+/// Get order rate values.
+fn get_order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
+    use OrderRateVar::*;
+
+    // Order rate continue checks: whether `order_rate<=X` (in) or
+    // `order_rate>=X` (out) held for the entire race, i.e., at the worst or best
+    // order. The rounded order counts as both, e.g., always being 2nd in a
+    // 9-runner race (9 * 20% = 1.8 => 2) satisfies `in20` and `out20`.
+    let held_in = |rate| Value::Int((*order.worst_rates.start() <= rate) as i32);
+    let held_out = |rate| Value::Int((*order.best_rates.end() >= rate) as i32);
+
+    match var {
+        // Rates that round to the runner's order (see `OrderState::rates`).
+        OrderRate => Value::Range(order.rates.clone()),
+
+        OrderRateIn20Continue => held_in(20),
+        OrderRateIn40Continue => held_in(40),
+        OrderRateIn50Continue => held_in(50),
+        OrderRateIn80Continue => held_in(80),
+        OrderRateOut20Continue => held_out(20),
+        OrderRateOut40Continue => held_out(40),
+        OrderRateOut50Continue => held_out(50),
+        OrderRateOut70Continue => held_out(70),
     }
 }
 

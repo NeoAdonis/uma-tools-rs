@@ -48,6 +48,9 @@ pub enum VarType {
     Entry(EntryVar),
     /// Variables related to order/rank.
     Order(OrderVar),
+    /// Variables related to order rates (order relative to the runner count,
+    /// i.e. "you are in the top X%").
+    OrderRate(OrderRateVar),
     /// Variables related to distance between runners.
     Distance(DistanceVar),
     /// Variables related to phases.
@@ -107,6 +110,10 @@ pub enum OrderVar {
     ChangeOrderUpFinalcornerAfter,
     ChangeOrderUpMiddle,
     Order,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrderRateVar {
     OrderRate,
     OrderRateIn20Continue,
     OrderRateIn40Continue,
@@ -308,6 +315,7 @@ impl fmt::Display for VarType {
             BaseStat(s) => write!(f, "{}", s),
             Entry(e) => write!(f, "{}", e),
             Order(o) => write!(f, "{}", o),
+            OrderRate(o) => write!(f, "{}", o),
             Distance(d) => write!(f, "{}", d),
             Phase(p) => write!(f, "{}", p),
             Spatial(l) => write!(f, "{}", l),
@@ -351,6 +359,7 @@ macro_rules! impl_display_snake_case {
 impl_display_snake_case!(BaseStatVar);
 impl_display_snake_case!(EntryVar);
 impl_display_snake_case!(OrderVar);
+impl_display_snake_case!(OrderRateVar);
 impl_display_snake_case!(DistanceVar);
 impl_display_snake_case!(PhaseVar);
 impl_display_snake_case!(RandomPhaseVar);
@@ -393,15 +402,17 @@ impl VarType {
             "change_order_up_finalcorner_after" => Order(OrderVar::ChangeOrderUpFinalcornerAfter),
             "change_order_up_middle" => Order(OrderVar::ChangeOrderUpMiddle),
             "order" => Order(OrderVar::Order),
-            "order_rate" => Order(OrderVar::OrderRate),
-            "order_rate_in20_continue" => Order(OrderVar::OrderRateIn20Continue),
-            "order_rate_in40_continue" => Order(OrderVar::OrderRateIn40Continue),
-            "order_rate_in50_continue" => Order(OrderVar::OrderRateIn50Continue),
-            "order_rate_in80_continue" => Order(OrderVar::OrderRateIn80Continue),
-            "order_rate_out20_continue" => Order(OrderVar::OrderRateOut20Continue),
-            "order_rate_out40_continue" => Order(OrderVar::OrderRateOut40Continue),
-            "order_rate_out50_continue" => Order(OrderVar::OrderRateOut50Continue),
-            "order_rate_out70_continue" => Order(OrderVar::OrderRateOut70Continue),
+
+            // Order rates.
+            "order_rate" => OrderRate(OrderRateVar::OrderRate),
+            "order_rate_in20_continue" => OrderRate(OrderRateVar::OrderRateIn20Continue),
+            "order_rate_in40_continue" => OrderRate(OrderRateVar::OrderRateIn40Continue),
+            "order_rate_in50_continue" => OrderRate(OrderRateVar::OrderRateIn50Continue),
+            "order_rate_in80_continue" => OrderRate(OrderRateVar::OrderRateIn80Continue),
+            "order_rate_out20_continue" => OrderRate(OrderRateVar::OrderRateOut20Continue),
+            "order_rate_out40_continue" => OrderRate(OrderRateVar::OrderRateOut40Continue),
+            "order_rate_out50_continue" => OrderRate(OrderRateVar::OrderRateOut50Continue),
+            "order_rate_out70_continue" => OrderRate(OrderRateVar::OrderRateOut70Continue),
 
             // Distance to other runners.
             "bashin_diff_behind" => Distance(DistanceVar::BashinDiffBehind),

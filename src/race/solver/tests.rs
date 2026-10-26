@@ -2300,11 +2300,11 @@ fn test_order_rates_count_every_gate() {
     let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
     solver.step(DELTA_TIME);
 
-    // A single runner, but every gate counts: 9 * 50% = 4.5 rounds to 5th place.
+    // A single runner, but every gate counts: 6% to 16% of 9 round to 1st place.
     let order = &solver.runners[0].order;
     assert_eq!(solver.state.params.gates, 9);
     assert_eq!(order.runner_count, 9);
-    assert_eq!(order.order_at_rate(50), 5);
+    assert_eq!(order.rates, 6..=16);
 }
 
 #[test]

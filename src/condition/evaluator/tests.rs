@@ -688,7 +688,7 @@ fn test_rank_values() {
 fn test_order_rate_converts_to_rounded_order() {
     let mut solver = create_test_race_solver(vec![]);
     let order_rate = |op, value| Comparison {
-        var: VarType::Order(OrderVar::OrderRate),
+        var: VarType::OrderRate(OrderRateVar::OrderRate),
         op,
         value,
     };
@@ -722,7 +722,7 @@ fn test_order_rate_converts_to_rounded_order() {
 #[test]
 fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
     let mut solver = create_test_race_solver(vec![]);
-    let var = VarType::Order(OrderVar::OrderRate);
+    let var = VarType::OrderRate(OrderRateVar::OrderRate);
     // (runners, order, rates).
     let cases = [
         (9, 1, 6..=16),
@@ -746,7 +746,7 @@ fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
             *actual.end(),
             *actual.end() + 1,
         ] {
-            let rounded = runner.order.order_at_rate(rate) == order as i32;
+            let rounded = (runners as i32 * rate + 50) / 100 == order as i32;
             assert_eq!(rounded, actual.contains(&rate), "rate {rate}");
         }
     }
@@ -755,7 +755,7 @@ fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
 #[test]
 fn test_range_values_hold_if_any_value_does() {
     let comp = |op| Comparison {
-        var: VarType::Order(OrderVar::OrderRate),
+        var: VarType::OrderRate(OrderRateVar::OrderRate),
         op,
         value: 50,
     };
@@ -778,13 +778,6 @@ fn test_range_values_hold_if_any_value_does() {
         let actual = ops.map(|op| comp(op).holds(Value::Range(range.clone())));
         assert_eq!(actual, expected, "{range:?}");
     }
-}
-
-#[test]
-#[should_panic(expected = "should be read as a range")]
-fn test_order_rate_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    get_rank_value(&OrderVar::OrderRate, &solver.runners[0]);
 }
 
 #[test]
@@ -833,15 +826,15 @@ fn test_order_rate_in_continue_boundaries() {
         (12, 11, [0, 0, 0, 0]),
     ];
     for (runners, worst, expected) in cases {
-        solver.runners[0].order.runner_count = runners;
         solver.runners[0].order.worst = worst;
+        solver.runners[0].update_order_rate(runners, false);
         let actual = [
-            OrderVar::OrderRateIn20Continue,
-            OrderVar::OrderRateIn40Continue,
-            OrderVar::OrderRateIn50Continue,
-            OrderVar::OrderRateIn80Continue,
+            OrderRateVar::OrderRateIn20Continue,
+            OrderRateVar::OrderRateIn40Continue,
+            OrderRateVar::OrderRateIn50Continue,
+            OrderRateVar::OrderRateIn80Continue,
         ]
-        .map(|var| get_rank_value(&var, &solver.runners[0]));
+        .map(|var| int(get_order_rate_value(&var, &solver.runners[0].order)));
         assert_eq!(actual, expected, "runners {runners}, worst order {worst}");
     }
 }
@@ -872,16 +865,30 @@ fn test_order_rate_out_continue_boundaries() {
         (12, 8, [1, 1, 1, 1]),
     ];
     for (runners, best, expected) in cases {
-        solver.runners[0].order.runner_count = runners;
         solver.runners[0].order.best = best;
+        solver.runners[0].update_order_rate(runners, false);
         let actual = [
-            OrderVar::OrderRateOut20Continue,
-            OrderVar::OrderRateOut40Continue,
-            OrderVar::OrderRateOut50Continue,
-            OrderVar::OrderRateOut70Continue,
+            OrderRateVar::OrderRateOut20Continue,
+            OrderRateVar::OrderRateOut40Continue,
+            OrderRateVar::OrderRateOut50Continue,
+            OrderRateVar::OrderRateOut70Continue,
         ]
-        .map(|var| get_rank_value(&var, &solver.runners[0]));
+        .map(|var| int(get_order_rate_value(&var, &solver.runners[0].order)));
         assert_eq!(actual, expected, "runners {runners}, best order {best}");
+    }
+}
+
+#[test]
+fn test_order_rate_continue_holds_until_orders_are_tracked() {
+    let solver = create_test_race_solver(vec![]);
+    let order = &solver.runners[0].order;
+    // No best nor worst order yet.
+    assert_eq!((order.best, order.worst), (u8::MAX, 0));
+    for var in [
+        OrderRateVar::OrderRateIn20Continue,
+        OrderRateVar::OrderRateOut70Continue,
+    ] {
+        assert_eq!(int(get_order_rate_value(&var, order)), 1, "{var}");
     }
 }
 
