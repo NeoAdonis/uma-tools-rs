@@ -28,7 +28,7 @@
 //! activated). They only support some operators or values; any other
 //! comparison is rejected with [`ParseError::UnsupportedComparison`].
 
-use crate::condition::variables::{ActivationVar, LineupVar, RandomSpatialVar, VarType};
+use crate::condition::variables::{ActivationQueryVar, LineupVar, RandomSpatialVar, VarType};
 use crate::skill::SkillType;
 use std::fmt;
 use std::str::FromStr;
@@ -204,18 +204,18 @@ impl Comparison {
         use VarType::*;
         let is_equal = self.op == CompOp::Equal;
         match self.var {
-            Activation(
-                ActivationVar::IsUsedSkillId | ActivationVar::IsUsedSkillIdWithDetailOne,
+            ActivationQuery(
+                ActivationQueryVar::IsUsedSkillId | ActivationQueryVar::IsUsedSkillIdWithDetailOne,
             )
             | Lineup(LineupVar::IsExistSkillId | LineupVar::IsExistCharaId) => {
                 is_equal || self.op == CompOp::NotEqual
             }
             // The value is the type of the activated buff.
-            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
+            ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill) => {
                 is_equal && skill_type(self.value).is_some()
             }
             // Same, or -1 for any skill.
-            Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill) => {
+            ActivationQuery(ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill) => {
                 is_equal && (self.value == -1 || skill_type(self.value).is_some())
             }
             // The value is the chance of success, as a percentage.

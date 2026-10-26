@@ -412,7 +412,7 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
 
             // Skill activations: only true on frames where a skill activated.
             // Unlike the events above, these can be evaluated, so they stay as guards.
-            Activation(_) => {
+            Activation(_) | ActivationQuery(_) => {
                 if let Some(activation_event) = activation_event(comp) {
                     event = Some(activation_event);
                 }
@@ -482,7 +482,7 @@ fn is_event(comp: &Comparison) -> bool {
 
     match comp.var {
         RandomSpatial(_) | RandomPhase(_) | Spatial(SpatialVar::IsLastStraightOnetime) => true,
-        Activation(_) => activation_event(comp).is_some(),
+        Activation(_) | ActivationQuery(_) => activation_event(comp).is_some(),
         _ => false,
     }
 }
@@ -498,9 +498,9 @@ fn activation_event(comp: &Comparison) -> Option<TriggerCondition> {
         }
         // The value is the effect type of the advantage skill.
         (
-            VarType::Activation(
-                ActivationVar::IsOtherCharacterActivateAdvantageSkill
-                | ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill,
+            VarType::ActivationQuery(
+                ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill
+                | ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill,
             ),
             CompOp::Equal,
             _,

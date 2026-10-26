@@ -62,6 +62,9 @@ pub enum VarType {
     RandomSpatial(RandomSpatialVar),
     /// Variables related to skill activation tracking.
     Activation(ActivationVar),
+    /// Variables related to skill activation tracking that use the comparison
+    /// value as parameter (a skill ID or type) instead of comparing against it.
+    ActivationQuery(ActivationQueryVar),
     /// Variables related to race parameters.
     RaceParam(RaceParamVar),
     /// Variables related to the lineup (every runner entered in the race).
@@ -203,6 +206,10 @@ pub enum ActivationVar {
     IsActivateAnySkill,
     IsActivateHealSkill,
     IsActivateOtherSkillDetail,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivationQueryVar {
     IsOtherCharacterActivateAdvantageSkill,
     IsPopularityTopCharacterActivateAdvantageSkill,
     IsUsedSkillId,
@@ -306,6 +313,7 @@ impl fmt::Display for VarType {
             Spatial(l) => write!(f, "{}", l),
             Course(c) => write!(f, "{}", c),
             Activation(a) => write!(f, "{}", a),
+            ActivationQuery(a) => write!(f, "{}", a),
             RaceParam(r) => write!(f, "{}", r),
             Lineup(l) => write!(f, "{}", l),
             RunningStyle(r) => write!(f, "{}", r),
@@ -350,6 +358,7 @@ impl_display_snake_case!(SpatialVar);
 impl_display_snake_case!(RandomSpatialVar);
 impl_display_snake_case!(CourseVar);
 impl_display_snake_case!(ActivationVar);
+impl_display_snake_case!(ActivationQueryVar);
 impl_display_snake_case!(RaceParamVar);
 impl_display_snake_case!(LineupVar);
 impl_display_snake_case!(RunningStyleVar);
@@ -479,15 +488,17 @@ impl VarType {
             "is_activate_other_skill_detail" => {
                 Activation(ActivationVar::IsActivateOtherSkillDetail)
             }
+
+            // Activation queries.
             "is_other_character_activate_advantage_skill" => {
-                Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
+                ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill)
             }
             "is_popularity_top_character_activate_advantage_skill" => {
-                Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill)
+                ActivationQuery(ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill)
             }
-            "is_used_skill_id" => Activation(ActivationVar::IsUsedSkillId),
+            "is_used_skill_id" => ActivationQuery(ActivationQueryVar::IsUsedSkillId),
             "is_used_skill_id_with_detail_one" => {
-                Activation(ActivationVar::IsUsedSkillIdWithDetailOne)
+                ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne)
             }
 
             // Race parameters.

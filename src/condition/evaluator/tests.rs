@@ -32,7 +32,7 @@ fn test_is_used_skill_id_with_activated_skill() {
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsUsedSkillId),
+        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
     };
@@ -49,7 +49,7 @@ fn test_is_used_skill_id_without_activated_skill() {
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsUsedSkillId),
+        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
     };
@@ -65,7 +65,7 @@ fn test_is_used_skill_id_with_different_skill() {
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsUsedSkillId),
+        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
         op: CompOp::Equal,
         value: 202051,
     };
@@ -80,7 +80,7 @@ fn test_is_used_skill_id_not_equal() {
 
     // Create comparison: is_used_skill_id != 202051.
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsUsedSkillId),
+        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
         op: CompOp::NotEqual,
         value: 202051,
     };
@@ -105,15 +105,15 @@ fn is_used_skill_id_with_alternative(activated: Option<usize>) -> (bool, bool) {
 
     let evaluate = |var| {
         let comp = Comparison {
-            var: VarType::Activation(var),
+            var: VarType::ActivationQuery(var),
             op: CompOp::Equal,
             value: 204452,
         };
         EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
     };
     (
-        evaluate(ActivationVar::IsUsedSkillId),
-        evaluate(ActivationVar::IsUsedSkillIdWithDetailOne),
+        evaluate(ActivationQueryVar::IsUsedSkillId),
+        evaluate(ActivationQueryVar::IsUsedSkillIdWithDetailOne),
     )
 }
 
@@ -139,7 +139,7 @@ fn test_is_used_skill_id_with_detail_one_not_equal() {
     let solver = solver_with_activated_skill("204452", 0b10);
 
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsUsedSkillIdWithDetailOne),
+        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne),
         op: CompOp::NotEqual,
         value: 204452,
     };
@@ -1230,22 +1230,24 @@ fn test_is_last_straight_onetime_value_panics() {
 #[should_panic(expected = "should be handled in evaluate()")]
 fn test_is_used_skill_id_value_panics() {
     let solver = create_test_race_solver(vec![]);
-    let var = ActivationVar::IsUsedSkillId;
-    get_activation_value(&var, &solver.state, &solver.runners[0], None);
+    let var = VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
 }
 
 #[test]
 #[should_panic(expected = "should be handled in evaluate()")]
 fn test_is_used_skill_id_with_detail_one_value_panics() {
     let solver = create_test_race_solver(vec![]);
-    let var = ActivationVar::IsUsedSkillIdWithDetailOne;
-    get_activation_value(&var, &solver.state, &solver.runners[0], None);
+    let var = VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
 }
 
 /// Evaluate `is_popularity_top_character_activate_advantage_skill==value`.
 fn popularity_top_activated(solver: &RaceSolver<Runner>, value: i32) -> bool {
     let comp = Comparison {
-        var: VarType::Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill),
+        var: VarType::ActivationQuery(
+            ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill,
+        ),
         op: CompOp::Equal,
         value,
     };
@@ -1310,6 +1312,6 @@ fn test_ignored_popularity_is_always_satisfied() {
 #[should_panic(expected = "should be handled in evaluate()")]
 fn test_is_other_character_activate_advantage_skill_value_panics() {
     let solver = create_test_race_solver(vec![]);
-    let var = ActivationVar::IsOtherCharacterActivateAdvantageSkill;
-    get_activation_value(&var, &solver.state, &solver.runners[0], None);
+    let var = VarType::ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill);
+    get_variable_value(&var, &solver.state, &solver.runners[0], None);
 }

@@ -176,57 +176,10 @@ impl CompEvaluator for EvaluatorFull {
     ) -> bool {
         use VarType::*;
         let runner = context;
-        // Special cases: skill ID checks require different logic.
+        // Special cases: activation queries and lineup variables require
+        // different logic.
         match &comp.var {
-            Activation(
-                var @ (ActivationVar::IsUsedSkillId | ActivationVar::IsUsedSkillIdWithDetailOne),
-            ) => {
-                // Check if skill with ID == `comp.value` has been activated (through
-                // its first alternative for `is_used_skill_id_with_detail_one`).
-                let mask = runner.activated_mask(&comp.value.to_string());
-                let is_used = match var {
-                    ActivationVar::IsUsedSkillId => mask != 0,
-                    _ => mask & 1 != 0,
-                };
-
-                match comp.op {
-                    CompOp::Equal => is_used,
-                    CompOp::NotEqual => !is_used,
-                    // Rejected by the parser.
-                    op => unreachable!("{var} doesn't support operator {op:?}"),
-                }
-            }
-            Activation(
-                var @ (ActivationVar::IsOtherCharacterActivateAdvantageSkill
-                | ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill),
-            ) => {
-                // Check if a buff whose type is `comp.value` (or any skill for -1) has
-                // been activated this frame by any other runner, or by the most popular
-                // one (the runner herself included).
-                // Unimplemented skill types are rejected by the parser.
-                let value = (comp.value != -1).then(|| {
-                    skill_type(comp.value).unwrap_or_else(|| {
-                        unreachable!("{var}: unimplemented skill type {}", comp.value)
-                    })
-                });
-                let activated = |flags: &SkillActivationFlags| match value {
-                    Some(value) => flags.buff_activated.contains(&value),
-                    None => flags.any_activated,
-                };
-                match var {
-                    ActivationVar::IsOtherCharacterActivateAdvantageSkill => {
-                        // -1 is rejected by the parser.
-                        let value = value.unwrap_or_else(|| unreachable!("{var}: any skill"));
-                        // Discount the runner's own activation.
-                        let own = activated(&runner.activation_flags) as u8;
-                        state
-                            .buffs_activated
-                            .get(&value)
-                            .is_some_and(|&count| count > own)
-                    }
-                    _ => activated(&state.popularity_top_activations),
-                }
-            }
+            ActivationQuery(var) => evaluate_activation_query(var, comp, state, runner),
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
             // `order_rate OP X` is converted to `order OP round(runners * X%)`.
@@ -320,10 +273,7 @@ pub fn get_variable_value(
         AccumulateTime => state.elapsed_time.floor() as i32,
         // Always returns 1 (true).
         Always => 1,
-        Lineup(_) => panic!(
-            "BUG: Lineup variable {:?} should be handled in evaluate()",
-            var
-        ),
+        Lineup(_) | ActivationQuery(_) => panic!("BUG: {var} should be handled in evaluate()"),
         // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
             runner.all_out_spurt.is_active() as i32
@@ -616,6 +566,64 @@ fn evaluate_lineup(var: &LineupVar, comp: &Comparison, state: &RaceState, skill_
     }
 }
 
+/// Evaluate a comparison on skill activations that uses the comparison value
+/// as parameter (a skill ID or type) instead of comparing against it.
+fn evaluate_activation_query(
+    var: &ActivationQueryVar,
+    comp: &Comparison,
+    state: &RaceState,
+    runner: &Runner,
+) -> bool {
+    use ActivationQueryVar::*;
+
+    match var {
+        IsUsedSkillId | IsUsedSkillIdWithDetailOne => {
+            // Check if skill with ID == `comp.value` has been activated (through
+            // its first alternative for `is_used_skill_id_with_detail_one`).
+            let mask = runner.activated_mask(&comp.value.to_string());
+            let is_used = match var {
+                IsUsedSkillId => mask != 0,
+                _ => mask & 1 != 0,
+            };
+
+            match comp.op {
+                CompOp::Equal => is_used,
+                CompOp::NotEqual => !is_used,
+                // Rejected by the parser.
+                op => unreachable!("{var} doesn't support operator {op:?}"),
+            }
+        }
+        IsOtherCharacterActivateAdvantageSkill | IsPopularityTopCharacterActivateAdvantageSkill => {
+            // Check if a buff whose type is `comp.value` (or any skill for -1) has
+            // been activated this frame by any other runner, or by the most popular
+            // one (the runner herself included).
+            // Unimplemented skill types are rejected by the parser.
+            let value = (comp.value != -1).then(|| {
+                skill_type(comp.value).unwrap_or_else(|| {
+                    unreachable!("{var}: unimplemented skill type {}", comp.value)
+                })
+            });
+            let activated = |flags: &SkillActivationFlags| match value {
+                Some(value) => flags.buff_activated.contains(&value),
+                None => flags.any_activated,
+            };
+            match var {
+                IsOtherCharacterActivateAdvantageSkill => {
+                    // -1 is rejected by the parser.
+                    let value = value.unwrap_or_else(|| unreachable!("{var}: any skill"));
+                    // Discount the runner's own activation.
+                    let own = activated(&runner.activation_flags) as u8;
+                    state
+                        .buffs_activated
+                        .get(&value)
+                        .is_some_and(|&count| count > own)
+                }
+                _ => activated(&state.popularity_top_activations),
+            }
+        }
+    }
+}
+
 /// Get activation counter values.
 fn get_activation_value(
     var: &ActivationVar,
@@ -647,15 +655,6 @@ fn get_activation_value(
 
         // Times involved in a duel: 0 or 1; you can duel once at most.
         CompeteFightCount => runner.duel.has_dueled() as i32,
-
-        // Special cases: these variables use the comparison value as parameter instead
-        // of comparing against it.
-        IsOtherCharacterActivateAdvantageSkill
-        | IsPopularityTopCharacterActivateAdvantageSkill
-        | IsUsedSkillId
-        | IsUsedSkillIdWithDetailOne => {
-            panic!("{var}: should be handled in evaluate()")
-        }
 
         // Skill activations by the runner's team (including the runner).
         ActivateCountAllTeam => state.team_activations[runner.initial_state.team as usize] as i32,
