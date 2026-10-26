@@ -17,6 +17,14 @@ fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
     ready_solver(10101, uma(Style::Late), skills, &seeded_config(12345))
 }
 
+/// Integer of an integer value.
+fn int(value: Value) -> i32 {
+    match value {
+        Value::Int(value) => value,
+        Value::Set(_) => panic!("not an integer"),
+    }
+}
+
 /// Ready race with a single Late Surger holding a skill with the given ID,
 /// activated through the alternatives in `mask`.
 fn solver_with_activated_skill(skill_id: i32, mask: u8) -> RaceSolver<Runner> {
@@ -1136,7 +1144,7 @@ fn test_variable_value_dispatch() {
         (VarType::Always, 1),
     ];
     for (var, expected) in cases {
-        let actual = get_variable_value(&var, state, runner, None);
+        let actual = int(get_variable_value(&var, state, runner, None));
         assert_eq!(actual, expected, "{var}");
     }
 }
@@ -1153,7 +1161,12 @@ fn test_run_at_full_speed_random_follows_all_out_spurt() {
     ];
     for (all_out_spurt, expected) in cases {
         solver.runners[0].all_out_spurt = all_out_spurt;
-        let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
+        let actual = int(get_variable_value(
+            &var,
+            &solver.state,
+            &solver.runners[0],
+            None,
+        ));
         assert_eq!(actual, expected, "{all_out_spurt:?}");
     }
 }
@@ -1201,25 +1214,22 @@ fn test_out_of_gate_in_race_variables_are_zero() {
 }
 
 #[test]
-#[should_panic(expected = "should be handled in evaluate()")]
-fn test_is_exist_skill_id_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    let var = VarType::Lineup(LineupVar::IsExistSkillId);
-    get_variable_value(&var, &solver.state, &solver.runners[0], None);
-}
-
-#[test]
 fn test_same_skill_horse_count_value() {
     let skill = Skill::new(200331, skill_data(vec![]));
     let mut solver = create_test_race_solver(vec![skill]);
     solver.state.existing_skills.insert(200331, 3);
 
     let var = LineupVar::SameSkillHorseCount;
-    assert_eq!(get_lineup_value(&var, &solver.state, 200331), 3);
+    assert_eq!(int(get_lineup_value(&var, &solver.state, 200331)), 3);
     // Skills nobody has, or no skill being evaluated.
-    assert_eq!(get_lineup_value(&var, &solver.state, 200332), 0);
+    assert_eq!(int(get_lineup_value(&var, &solver.state, 200332)), 0);
     let var = VarType::Lineup(var);
-    let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
+    let actual = int(get_variable_value(
+        &var,
+        &solver.state,
+        &solver.runners[0],
+        None,
+    ));
     assert_eq!(actual, 0);
 }
 
@@ -1269,22 +1279,6 @@ fn test_is_last_straight_onetime_value_panics() {
     let solver = create_test_race_solver(vec![]);
     let var = SpatialVar::IsLastStraightOnetime;
     get_location_value(&var, &solver.state.course, &solver.runners[0]);
-}
-
-#[test]
-#[should_panic(expected = "should be handled in evaluate()")]
-fn test_is_used_skill_id_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    let var = VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId);
-    get_variable_value(&var, &solver.state, &solver.runners[0], None);
-}
-
-#[test]
-#[should_panic(expected = "should be handled in evaluate()")]
-fn test_is_used_skill_id_with_detail_one_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    let var = VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne);
-    get_variable_value(&var, &solver.state, &solver.runners[0], None);
 }
 
 /// Evaluate `is_popularity_top_character_activate_advantage_skill==value`.
@@ -1338,9 +1332,26 @@ fn test_succession_skill_count() {
 }
 
 #[test]
-#[should_panic(expected = "should be handled in evaluate()")]
-fn test_is_other_character_activate_advantage_skill_value_panics() {
+fn test_set_values_test_membership() {
+    let mut solver = create_test_race_solver(vec![]);
+    solver.state.existing_skills.insert(203061, 1);
+    let var = VarType::Lineup(LineupVar::IsExistSkillId);
+    let Value::Set(set) = get_variable_value(&var, &solver.state, &solver.runners[0], None) else {
+        panic!("{var} isn't a set");
+    };
+    assert!(set.contains(203061));
+    assert!(!set.contains(203062));
+}
+
+#[test]
+#[should_panic(expected = "is_exist_skill_id doesn't support operator")]
+fn test_set_values_reject_order_operators() {
     let solver = create_test_race_solver(vec![]);
-    let var = VarType::ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill);
-    get_variable_value(&var, &solver.state, &solver.runners[0], None);
+    // Built directly, as the parser rejects it.
+    let comp = Comparison {
+        var: VarType::Lineup(LineupVar::IsExistSkillId),
+        op: CompOp::Greater,
+        value: 203061,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
 }

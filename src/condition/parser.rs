@@ -23,9 +23,9 @@
 //! distance_type==2 & ground_type==1   // ...mile on turf.
 //! ```
 //!
-//! A few variables use the value as a parameter instead of comparing against
-//! it (e.g. `is_used_skill_id==202051` checks whether skill 202051 has been
-//! activated). They only support some operators or values; any other
+//! A few variables are sets of values, whose comparisons test membership (e.g.
+//! `is_used_skill_id==202051` checks whether skill 202051 has been activated),
+//! and some are flags. They only support some operators or values; any other
 //! comparison is rejected with [`ParseError::UnsupportedComparison`].
 
 use crate::condition::variables::{ActivationQueryVar, LineupVar, RandomSpatialVar, VarType};

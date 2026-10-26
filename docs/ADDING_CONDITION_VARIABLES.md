@@ -23,17 +23,17 @@ Whatever the kind, also:
    of category enums is derived from the variant name in snake case, so the
    variant must mirror the condition name exactly (e.g. `Visiblehorse` for
    `visiblehorse`).
-2. If the comparison value is a parameter rather than something to compare
-   against (e.g. a skill ID), or the variable is a flag, restrict the operators
-   and values it supports in `Comparison::is_supported`
-   (`src/condition/parser.rs`), so that anything else is rejected when parsing.
+2. If its value is a set whose comparisons test membership (e.g. of a skill
+   ID), or the variable is a flag, restrict the operators and values it
+   supports in `Comparison::is_supported` (`src/condition/parser.rs`), so that
+   anything else is rejected when parsing.
 3. If it can't change during a race, add it to `VarType::is_static`, so its
    guards are resolved when the runner is created.
 4. If it's known before the race and an unmet comparison on it should prevent a
    skill from adding popularity points, add it to `VarType::is_popularity_guard`.
 5. Return its value in `src/condition/evaluator.rs`:
-   - In `get_variable_value`, or in `EvaluatorFull::evaluate` if the value is a
-     parameter.
+   - In `get_variable_value`, as a `Value::Set` if comparisons test whether
+     their value is in a set (e.g. a skill ID among the activated ones).
    - In `get_variable_value_out_of_gate` too, if it's known before the race.
    - If it's out of scope, make the evaluator panic on it, and list it under
      "Unimplemented Variables" in the module docs.

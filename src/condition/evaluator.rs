@@ -57,9 +57,10 @@
 //!
 //! [`get_variable_value()`] maps ~150+ condition variables (see the
 //! [variable reference](crate::condition::variable_reference)) to their current
-//! runtime values from [`RaceState`] or [`Runner`]. Variables are grouped by
-//! categories, each with their own set of parameters required for evaluation.
-//! To mention a few:
+//! runtime values from [`RaceState`] or [`Runner`], which
+//! [`Comparison::holds`] then compares against the comparison value. Variables
+//! are grouped by categories, each with their own set of parameters required
+//! for evaluation. To mention a few:
 //!
 //! - **Race-level**: elapsed time, course properties, race parameters.
 //! - **Runner-level**: position, HP, phase, speed, skill activation state.
@@ -70,6 +71,14 @@
 //! A similar function, [`get_variable_value_out_of_gate()`], is provided for
 //! out-of-gate evaluations, which only uses data available before a race
 //! starts.
+//!
+//! ## Set Values
+//!
+//! Most variables have an integer value ([`Value::Int`]), but some of them are
+//! sets ([`Value::Set`]) whose comparisons test membership instead: e.g.
+//! `is_used_skill_id==202051` is true if 202051 is among the IDs of the skills
+//! the runner used, and `!=` if it isn't. The parser rejects other operators.
+//! Sets are views of the race state, so reading them doesn't allocate.
 //!
 //! ## Float Handling
 //!
@@ -95,9 +104,11 @@ use crate::race::runner::{InitialState, order_at_rate};
 use crate::race::runner::{Runner, SkillActivationFlags, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::skill::SkillType;
 use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
+use std::collections::HashMap;
 
 /// Returns `true` if ALL comparisons from a list evaluate to `true`, or list
 /// is empty.
@@ -168,6 +179,70 @@ pub fn rewrite_comparison(
     }
 }
 
+/// Value of a variable (see [Set Values](self#set-values)).
+pub enum Value<'a> {
+    /// Integer value, compared with any operator.
+    Int(i32),
+    /// Set of values, whose membership `==` and `!=` test.
+    Set(ValueSet<'a>),
+}
+
+/// Set of values, as a view of the race state.
+pub enum ValueSet<'a> {
+    /// Keys of a map, e.g. skill IDs counted by how many runners have them.
+    Keys(&'a HashMap<i32, u8>),
+    /// IDs of the runner's skills activated through any alternative in `mask`
+    /// (see [`Runner::activated_mask`]).
+    UsedSkills { runner: &'a Runner, mask: u8 },
+    /// Effect types of the buff skills activated by a runner, plus -1 if she
+    /// activated any skill.
+    Activations(&'a SkillActivationFlags),
+    /// Effect types of the buff skills activated by any runner but one, given
+    /// how many runners activated each type, and that runner's activations.
+    OtherBuffs {
+        counts: &'a HashMap<SkillType, u8>,
+        own: &'a SkillActivationFlags,
+    },
+}
+
+impl ValueSet<'_> {
+    /// Check if `value` is in the set.
+    pub fn contains(&self, value: i32) -> bool {
+        // Effect types are only valid if implemented.
+        let buff = |flags: &SkillActivationFlags| {
+            skill_type(value).is_some_and(|value| flags.buff_activated.contains(&value))
+        };
+        match *self {
+            ValueSet::Keys(map) => map.contains_key(&value),
+            ValueSet::UsedSkills { runner, mask } => runner.activated_mask(value) & mask != 0,
+            ValueSet::Activations(flags) => (value == -1 && flags.any_activated) || buff(flags),
+            ValueSet::OtherBuffs { counts, own } => skill_type(value).is_some_and(|value| {
+                // Discount the runner's own activation.
+                let own = own.buff_activated.contains(&value) as u8;
+                counts.get(&value).is_some_and(|&count| count > own)
+            }),
+        }
+    }
+}
+
+impl Comparison {
+    /// Check if the comparison holds for `value`, the value of its variable.
+    ///
+    /// Sets only support the operators that the parser allows for them (see
+    /// `Comparison::is_supported`).
+    pub fn holds(&self, value: Value) -> bool {
+        match value {
+            Value::Int(value) => self.op.apply(value, self.value),
+            Value::Set(set) => match self.op {
+                CompOp::Equal => set.contains(self.value),
+                CompOp::NotEqual => !set.contains(self.value),
+                // Rejected by the parser.
+                op => unreachable!("{} doesn't support operator {op:?}", self.var),
+            },
+        }
+    }
+}
+
 /// Trait for evaluating a single comparison.
 ///
 /// Implement this trait for different evaluation contexts.
@@ -218,20 +293,7 @@ impl CompEvaluator for EvaluatorFull {
         state: &Self::State,
         context: &Self::Context,
     ) -> bool {
-        use VarType::*;
-        let runner = context;
-        // Special cases: skill queries require different logic.
-        match &comp.var {
-            ActivationQuery(var) => evaluate_activation_query(var, comp, state, runner),
-            Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
-            _ => {
-                // Normal case: get variable value and compare.
-                let current_value = get_variable_value(&comp.var, state, runner, logic_ctx);
-                let threshold = comp.value;
-
-                comp.op.apply(current_value, threshold)
-            }
-        }
+        comp.holds(get_variable_value(&comp.var, state, context, logic_ctx))
     }
 }
 
@@ -252,8 +314,6 @@ impl CompEvaluator for EvaluatorOutOfGate {
     ) -> bool {
         use VarType::*;
         match &comp.var {
-            // Special case: skill queries require different logic.
-            Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
             // "random_lot==X" means X% chance, rolled every time it's evaluated.
             // N.B. It currently behaves like `random_lot_shared`: skills using it have
             // a single alternative, or alternatives that exclude each other (e.g.
@@ -261,39 +321,38 @@ impl CompEvaluator for EvaluatorOutOfGate {
             Random(RandomVar::RandomLot) => context.roll_lot() < comp.value as f64,
             // Like `random_lot`, but rolled once per skill.
             Random(RandomVar::RandomLotShared) => context.evaluated_skill_lot() < comp.value as f64,
-            _ => {
-                // Normal case: get variable value and compare.
-                let current_value = get_variable_value_out_of_gate(&comp.var, state, context);
-                let threshold = comp.value;
-
-                comp.op.apply(current_value, threshold)
-            }
+            _ => comp.holds(get_variable_value_out_of_gate(&comp.var, state, context)),
         }
     }
 }
 
-/// Get current integer value for any variable type.
-pub fn get_variable_value(
+/// Get current value for any variable type.
+pub fn get_variable_value<'a>(
     var: &VarType,
-    state: &RaceState,
-    runner: &Runner,
+    state: &'a RaceState,
+    runner: &'a Runner,
     logic_ctx: Option<&SkillActivationLogic>,
-) -> i32 {
+) -> Value<'a> {
+    use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => get_base_stat(stat_var, &runner.base),
-        Entry(entry_var) => get_entry_value(entry_var, &runner.initial_state),
-        Order(pos_var) => get_rank_value(pos_var, runner),
-        Distance(dist_var) => get_distance_value(dist_var, runner),
-        Phase(phase_var) => get_phase_value(phase_var, &state.course, runner),
-        Course(course_var) => get_course_value(course_var, &state.course),
-        Spatial(location_var) => get_location_value(location_var, &state.course, runner),
-        Activation(act_var) => get_activation_value(act_var, state, runner, logic_ctx),
-        RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        RunningStyle(style_var) => get_running_style_value(style_var, state, runner.adjusted.style),
-        Status(status_var) => get_status_value(status_var, runner),
-        Blocking(blocking_var) => get_blocking_value(blocking_var, runner),
-        Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
+        BaseStat(stat_var) => Int(get_base_stat(stat_var, &runner.base)),
+        Entry(entry_var) => Int(get_entry_value(entry_var, &runner.initial_state)),
+        Order(pos_var) => Int(get_rank_value(pos_var, runner)),
+        Distance(dist_var) => Int(get_distance_value(dist_var, runner)),
+        Phase(phase_var) => Int(get_phase_value(phase_var, &state.course, runner)),
+        Course(course_var) => Int(get_course_value(course_var, &state.course)),
+        Spatial(location_var) => Int(get_location_value(location_var, &state.course, runner)),
+        Activation(act_var) => Int(get_activation_value(act_var, state, runner, logic_ctx)),
+        RaceParam(param_var) => Int(get_race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => Int(get_running_style_value(
+            style_var,
+            state,
+            runner.adjusted.style,
+        )),
+        Status(status_var) => Int(get_status_value(status_var, runner)),
+        Blocking(blocking_var) => Int(get_blocking_value(blocking_var, runner)),
+        Temptation(tempt_var) => Int(get_temptation_value(tempt_var, state, runner)),
         Lineup(lineup_var) => {
             // Extract the skill being evaluated from logic context.
             let skill_id = logic_ctx
@@ -301,13 +360,13 @@ pub fn get_variable_value(
                 .map_or(0, |skill| skill.id);
             get_lineup_value(lineup_var, state, skill_id)
         }
-        AccumulateTime => state.elapsed_time.floor() as i32,
+        AccumulateTime => Int(state.elapsed_time.floor() as i32),
         // Always returns 1 (true).
-        Always => 1,
-        ActivationQuery(_) => panic!("BUG: {var} should be handled in evaluate()"),
+        Always => Int(1),
+        ActivationQuery(query_var) => get_activation_query_value(query_var, state, runner),
         // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-            runner.all_out_spurt.is_active() as i32
+            Int(runner.all_out_spurt.is_active() as i32)
         }
         Random(_) | RandomSpatial(_) | RandomPhase(_) => {
             panic!(
@@ -318,24 +377,29 @@ pub fn get_variable_value(
     }
 }
 
-/// Get current integer value for any variable type in out-of-gate context.
-pub fn get_variable_value_out_of_gate(
+/// Get current value for any variable type in out-of-gate context.
+pub fn get_variable_value_out_of_gate<'a>(
     var: &VarType,
-    state: &RaceState,
+    state: &'a RaceState,
     builder: &UnreadyRunner,
-) -> i32 {
+) -> Value<'a> {
+    use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => get_base_stat(stat_var, &builder.base),
-        Entry(entry_var) => get_entry_value(entry_var, &builder.initial_state),
-        Course(course_var) => get_course_value(course_var, &state.course),
-        RaceParam(param_var) => get_race_param_value(param_var, &state.params),
-        RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
+        BaseStat(stat_var) => Int(get_base_stat(stat_var, &builder.base)),
+        Entry(entry_var) => Int(get_entry_value(entry_var, &builder.initial_state)),
+        Course(course_var) => Int(get_course_value(course_var, &state.course)),
+        RaceParam(param_var) => Int(get_race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => Int(get_running_style_value(
+            style_var,
+            state,
+            builder.base.style,
+        )),
         Lineup(lineup_var) => get_lineup_value(lineup_var, state, builder.evaluated_skill_id),
         // Always returns 1 (true).
-        Always => 1,
+        Always => Int(1),
         // Not applicable in out-of-gate contexts.
-        _ => 0,
+        _ => Int(0),
     }
 }
 
@@ -570,91 +634,47 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 /// Get lineup values (from every runner entered in the race).
 ///
 /// `skill_id` is the ID of the skill whose condition is being evaluated.
-fn get_lineup_value(var: &LineupVar, state: &RaceState, skill_id: i32) -> i32 {
+fn get_lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Value<'a> {
     use LineupVar::*;
 
     match var {
         // Number of runners with the skill being evaluated.
-        SameSkillHorseCount => state.existing_skills.get(&skill_id).copied().unwrap_or(0) as i32,
+        SameSkillHorseCount => {
+            Value::Int(state.existing_skills.get(&skill_id).copied().unwrap_or(0) as i32)
+        }
 
-        IsExistSkillId => panic!("BUG: {var} should be handled in evaluate()"),
+        // IDs of the skills of every runner.
+        IsExistSkillId => Value::Set(ValueSet::Keys(&state.existing_skills)),
 
         // Existence checks - out of scope.
         IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
     }
 }
 
-/// Evaluate `is_exist_skill_id`: whether any runner has the skill with ID ==
-/// `comp.value`.
-///
-/// Unlike most variables, it uses the comparison value as parameter instead of
-/// comparing against it.
-fn evaluate_is_exist_skill_id(comp: &Comparison, state: &RaceState) -> bool {
-    let exists = state.existing_skills.contains_key(&comp.value);
-    match comp.op {
-        CompOp::Equal => exists,
-        CompOp::NotEqual => !exists,
-        // Rejected by the parser.
-        op => unreachable!("is_exist_skill_id doesn't support operator {op:?}"),
-    }
-}
-
-/// Evaluate a comparison on skill activations that uses the comparison value
-/// as parameter (a skill ID or type) instead of comparing against it.
-fn evaluate_activation_query(
+/// Get sets of skill activations, by skill ID or type.
+fn get_activation_query_value<'a>(
     var: &ActivationQueryVar,
-    comp: &Comparison,
-    state: &RaceState,
-    runner: &Runner,
-) -> bool {
+    state: &'a RaceState,
+    runner: &'a Runner,
+) -> Value<'a> {
     use ActivationQueryVar::*;
 
-    match var {
-        IsUsedSkillId | IsUsedSkillIdWithDetailOne => {
-            // Check if skill with ID == `comp.value` has been activated (through
-            // its first alternative for `is_used_skill_id_with_detail_one`).
-            let mask = runner.activated_mask(comp.value);
-            let is_used = match var {
-                IsUsedSkillId => mask != 0,
-                _ => mask & 1 != 0,
-            };
-
-            match comp.op {
-                CompOp::Equal => is_used,
-                CompOp::NotEqual => !is_used,
-                // Rejected by the parser.
-                op => unreachable!("{var} doesn't support operator {op:?}"),
-            }
+    Value::Set(match var {
+        // IDs of the skills the runner activated (through their first alternative
+        // for `is_used_skill_id_with_detail_one`).
+        IsUsedSkillId => ValueSet::UsedSkills { runner, mask: !0 },
+        IsUsedSkillIdWithDetailOne => ValueSet::UsedSkills { runner, mask: 1 },
+        // Buff types activated this frame by any other runner, or by the most
+        // popular one (the runner herself included), plus -1 if she activated any
+        // skill.
+        IsOtherCharacterActivateAdvantageSkill => ValueSet::OtherBuffs {
+            counts: &state.buffs_activated,
+            own: &runner.activation_flags,
+        },
+        IsPopularityTopCharacterActivateAdvantageSkill => {
+            ValueSet::Activations(&state.popularity_top_activations)
         }
-        IsOtherCharacterActivateAdvantageSkill | IsPopularityTopCharacterActivateAdvantageSkill => {
-            // Check if a buff whose type is `comp.value` (or any skill for -1) has
-            // been activated this frame by any other runner, or by the most popular
-            // one (the runner herself included).
-            // Unimplemented skill types are rejected by the parser.
-            let value = (comp.value != -1).then(|| {
-                skill_type(comp.value).unwrap_or_else(|| {
-                    unreachable!("{var}: unimplemented skill type {}", comp.value)
-                })
-            });
-            let activated = |flags: &SkillActivationFlags| match value {
-                Some(value) => flags.buff_activated.contains(&value),
-                None => flags.any_activated,
-            };
-            match var {
-                IsOtherCharacterActivateAdvantageSkill => {
-                    // -1 is rejected by the parser.
-                    let value = value.unwrap_or_else(|| unreachable!("{var}: any skill"));
-                    // Discount the runner's own activation.
-                    let own = activated(&runner.activation_flags) as u8;
-                    state
-                        .buffs_activated
-                        .get(&value)
-                        .is_some_and(|&count| count > own)
-                }
-                _ => activated(&state.popularity_top_activations),
-            }
-        }
-    }
+    })
 }
 
 /// Get activation counter values.

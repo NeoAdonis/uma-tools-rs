@@ -62,8 +62,8 @@ pub enum VarType {
     RandomSpatial(RandomSpatialVar),
     /// Variables related to skill activation tracking.
     Activation(ActivationVar),
-    /// Variables related to skill activation tracking that use the comparison
-    /// value as parameter (a skill ID or type) instead of comparing against it.
+    /// Variables related to skill activation tracking, whose values are sets of
+    /// skill IDs or types (see [`Value::Set`](crate::condition::evaluator::Value)).
     ActivationQuery(ActivationQueryVar),
     /// Variables related to race parameters.
     RaceParam(RaceParamVar),
