@@ -581,12 +581,7 @@ impl Runner {
                 modifier * skill_scaling::max_raw_stat_multiplier(max_stat)
             }
             MultiplyActivateSpecificTagSkillCount => {
-                let green_count = self
-                    .available_skills
-                    .iter()
-                    .zip(&self.activated_alternatives)
-                    .filter(|&(skill, &mask)| mask != 0 && skill.is_green())
-                    .count();
+                let green_count = self.trigger_scheduler.activation_counts.green;
                 modifier * skill_scaling::green_skill_count_multiplier(green_count)
             }
             AddDistanceDiffTop => {
