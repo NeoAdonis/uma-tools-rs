@@ -80,9 +80,10 @@ use rand::Rng;
 /// 4. Index triggers into scheduler queues.
 ///
 /// Alternatives whose condition or precondition can never be satisfied on this
-/// course are skipped. So are out-of-gate skills: their condition is evaluated
-/// before the race, then they're activated by a race start logic (see
-/// [`add_race_start_logic`]).
+/// course are skipped. So are out-of-gate alternatives: their condition is
+/// evaluated before the race, then they're activated by a race start logic (see
+/// [`add_race_start_logic`]). Other alternatives of their skills (e.g.
+/// continuations) are compiled as usual.
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -91,13 +92,13 @@ pub fn build_trigger_scheduler(
     let mut scheduler = TriggerScheduler::default();
 
     for (skill_idx, skill) in skills.iter().enumerate() {
-        if skill.should_activate_out_of_gate() {
-            continue;
-        }
-
         // Random variables are rolled per skill, so that its alternatives share them.
         let mut rolls = RandomRolls::default();
         for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
+            if alternative.is_out_of_gate() {
+                continue;
+            }
+
             // One logic per OR branch, except the ones whose random roll failed.
             let condition = &alternative.condition;
             let rolled = roll_condition(condition, course, &mut rolls, rng);

@@ -2401,6 +2401,31 @@ fn test_continuation_activates_after_other_alternative() {
     );
 }
 
+/// Mask of activated alternatives of a skill whose first alternative is a stat
+/// boost (out of gate) with the given condition, continued during the race by
+/// a target speed alternative (like "Gambit").
+fn out_of_gate_continuation_mask(condition: &str) -> u8 {
+    let alternatives = vec![
+        alternative(condition, SkillType::SpeedUp, 40.0),
+        alternative(
+            "is_activate_other_skill_detail==1&accumulatetime>=10",
+            SkillType::TargetSpeed,
+            0.15,
+        ),
+    ];
+    let skill = Skill::new(0, skill_data(alternatives));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    solver.run();
+    solver.runners[0].activated_alternatives[0]
+}
+
+#[test]
+fn test_continuation_of_out_of_gate_alternative_activates_during_race() {
+    assert_eq!(out_of_gate_continuation_mask("always==1"), 0b11);
+    // Never without the out-of-gate alternative.
+    assert_eq!(out_of_gate_continuation_mask("course_distance==9999"), 0);
+}
+
 #[test]
 fn test_forced_activation_disables_other_alternatives() {
     let alternatives = vec![

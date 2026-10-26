@@ -495,6 +495,17 @@ impl SkillAlternative {
         };
         requires_other(&self.condition) || self.precondition.as_ref().is_some_and(requires_other)
     }
+
+    /// Check if this alternative activates out of gate (before the race begins).
+    ///
+    /// That is, if any of its effects modifies a parameter that is needed before
+    /// the race starts (see [`SkillType::is_pre_race_effect`]). Other alternatives
+    /// of the same skill (e.g. continuations) activate during the race.
+    pub fn is_out_of_gate(&self) -> bool {
+        self.effects
+            .iter()
+            .any(|effect| effect.skill_type.is_pre_race_effect())
+    }
 }
 
 /// Parse a condition string while deserializing.
@@ -656,13 +667,12 @@ impl Skill {
 
     /// Check if this skill should activate out of gate (before race begins).
     ///
-    /// That is, if any of its effects modifies a parameter that is needed before
-    /// the race starts (see [`SkillType::is_pre_race_effect`]).
+    /// That is, if any of its alternatives does (see
+    /// [`SkillAlternative::is_out_of_gate`]).
     pub fn should_activate_out_of_gate(&self) -> bool {
         self.alternatives
             .iter()
-            .flat_map(|alternative| &alternative.effects)
-            .any(|effect| effect.skill_type.is_pre_race_effect())
+            .any(SkillAlternative::is_out_of_gate)
     }
 
     /// Check if any alternative of this skill satisfies every popularity

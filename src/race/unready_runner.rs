@@ -13,24 +13,25 @@
 //!    fail it can't activate, but still count towards the runner's skills.
 //! 2. **Scheduler**: the [`TriggerScheduler`] is built for the kept skills (see
 //!    [`build_trigger_scheduler`]). Logics refer to skills by their index in
-//!    this list. Out-of-gate skills are skipped.
+//!    this list. Out-of-gate alternatives are skipped.
 //!
 //! ## Out-of-Gate Skills
 //!
 //! Out-of-gate skills apply before the race starts: they're the skills with any
-//! effect that modifies a parameter needed before the race
+//! alternative that has an effect modifying a parameter needed before the race
 //! ([`SkillType::is_pre_race_effect`]), i.e. stats, start delay, running style,
 //! rush chance, popularity requirements, or "Sympathy" activation.
 //!
-//! Their conditions only use values known before the race, so they aren't
-//! compiled into triggers. Instead, [`UnreadyRunner::apply_out_of_gate_skills`]
-//! chooses the first alternative whose precondition (if any) and condition both
-//! hold, evaluated with [`EvaluatorOutOfGate`]; if none holds, the skill
-//! doesn't activate. Before the race, a precondition is just another
-//! requirement (e.g. `distance_type==3 @ distance_type==4` for a skill whose
-//! condition is `base_stamina>=1200`). Skills that ignore popularity
-//! requirements ([`Skill::ignores_popularity`]) are applied first, so that
-//! every other skill sees it. Then:
+//! The conditions of those alternatives only use values known before the race,
+//! so they aren't compiled into triggers. Instead,
+//! [`UnreadyRunner::apply_out_of_gate_skills`] chooses the first of them whose
+//! precondition (if any) and condition both hold, evaluated with
+//! [`EvaluatorOutOfGate`]; if none holds, the skill doesn't activate before the
+//! race. Before the race, a precondition is just another requirement (e.g.
+//! `distance_type==3 @ distance_type==4` for a skill whose condition is
+//! `base_stamina>=1200`). Skills that ignore popularity requirements
+//! ([`Skill::ignores_popularity`]) are applied first, so that every other skill
+//! sees it. Then:
 //!
 //! 1. Its pre-race effects are applied before the [`Runner`] is built.
 //! 2. A logic with a `RaceStart` trigger is added for it, so the skill
@@ -39,6 +40,11 @@
 //!    handled like any other skill: its other effects (e.g. acceleration) apply
 //!    with their usual duration and cooldown, and the activation is recorded
 //!    and counted.
+//!
+//! The skill's other alternatives, if any, are compiled into triggers like any
+//! other skill's. They're usually continuations (e.g. a speed boost late in the
+//! race after a stat boost), which can only activate once the out-of-gate
+//! alternative did.
 //!
 //! Lotteries (only used by out-of-gate skills) are evaluated here too:
 //! `random_lot==X` holds if a new draw (from 0 to 100) is below X, every time
@@ -409,11 +415,13 @@ impl UnreadyRunner {
                         .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
                 })
             };
-            // Activate the first alternative whose precondition (if any) and condition
-            // are satisfied, if any. Before the race, a precondition is just another
-            // requirement.
+            // Activate the first out-of-gate alternative whose precondition (if any)
+            // and condition are satisfied, if any. Before the race, a precondition is
+            // just another requirement.
             let alt_index = skill.alternatives.iter().position(|alternative| {
-                alternative.precondition.as_ref().is_none_or(holds) && holds(&alternative.condition)
+                alternative.is_out_of_gate()
+                    && alternative.precondition.as_ref().is_none_or(holds)
+                    && holds(&alternative.condition)
             });
             if let Some(alt_index) = alt_index {
                 self.activate_out_of_gate_skill(skill_index, alt_index);

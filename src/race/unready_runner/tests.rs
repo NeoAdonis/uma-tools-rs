@@ -647,3 +647,22 @@ fn test_unsatisfied_precondition_falls_through_to_next_alternative() {
     ]);
     assert_eq!(gain, 40);
 }
+
+#[test]
+fn test_in_race_alternatives_are_not_activated_before_the_race() {
+    // The in-race alternative holds, but it's compiled into triggers instead.
+    let alternatives = vec![
+        alternative("course_distance==9999", SkillType::SpeedUp, 80.0),
+        alternative("always==1", SkillType::TargetSpeed, 0.15),
+    ];
+    let (mut runner, state) = unready_runner(vec![Skill::new(8, skill_data(alternatives))]);
+    let speed = runner.adjusted.speed;
+
+    runner.apply_out_of_gate_skills(&state);
+
+    assert!(activated_ids(&runner).is_empty());
+    assert_eq!(runner.adjusted.speed, speed);
+    let logics = &runner.trigger_scheduler.skill_logics;
+    assert_eq!(logics.len(), 1);
+    assert_eq!(logics[0].alternative_index, 1);
+}
