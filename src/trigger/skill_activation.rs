@@ -122,7 +122,7 @@ use crate::units::furlongs_to_meters;
 /// precondition (unlock gate) in a single structure.
 #[derive(Clone, Debug)]
 pub struct SkillActivationLogic {
-    /// Index into runner.available_skills.
+    /// Index into runner.skills.
     pub skill_index: usize,
 
     /// Which alternative of this skill (skills can have multiple condition sets).
@@ -149,13 +149,6 @@ pub struct SkillActivationLogic {
     /// Whether the alternative is a continuation of another one (see
     /// [`crate::skill::SkillAlternative::is_continuation`]).
     pub is_continuation: bool,
-
-    /// Race time (in seconds) until which the logic can't succeed again.
-    ///
-    /// Set when the skill alternative activates, and shared by all its OR
-    /// branches. Infinite for a satisfied precondition, which is never checked
-    /// again.
-    pub cooldown_until: f64,
 }
 
 /// What a [`SkillActivationLogic`] does when it succeeds.
@@ -235,6 +228,9 @@ pub struct ActiveTimedEffect {
     /// Number of times an additional effect has been triggered (see
     /// [`AdditionalActivation`]). Unused for regular effects.
     pub additional_triggers: u8,
+    /// Index of the runner's own skill that applied the effect, or `None` if it
+    /// was cast by another runner.
+    pub source: Option<usize>,
 }
 
 impl ActiveTimedEffect {
@@ -305,7 +301,6 @@ impl SkillActivationLogic {
             precondition,
             action,
             is_continuation,
-            cooldown_until: 0.0,
         }
     }
 }

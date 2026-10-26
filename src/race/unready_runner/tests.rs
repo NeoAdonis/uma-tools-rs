@@ -310,9 +310,9 @@ fn config(wit_checks: Roll, rushing: Roll) -> Configuration {
 fn test_wit_checks_can_be_forced() {
     // With 100 wit, each skill has a 20% chance to pass the check.
     let runner = checked_runner(config(Roll::Always, Roll::Random), 20);
-    assert_eq!(runner.available_skills.len(), 20);
+    assert_eq!(runner.available_skills().len(), 20);
     let runner = checked_runner(config(Roll::Never, Roll::Random), 20);
-    assert!(runner.available_skills.is_empty());
+    assert!(runner.available_skills().is_empty());
 }
 
 #[test]
@@ -418,7 +418,7 @@ fn sympathy_activations(runners: &[Runner]) -> Vec<usize> {
     runners
         .iter()
         .map(|runner| {
-            race_start_ids(&runner.available_skills, &runner.trigger_scheduler)
+            race_start_ids(runner.available_skills(), &runner.trigger_scheduler)
                 .iter()
                 .filter(|&&id| id == SYMPATHY_ID)
                 .count()
@@ -525,7 +525,7 @@ fn test_gambler_activation_rate() {
             let gambler = skills[&GAMBLER_ID].clone();
             solver.add_runner(uma(Style::Pace), Mood::Normal, vec![gambler]);
             let runner = &solver.ready_runners().runners[0];
-            !race_start_ids(&runner.available_skills, &runner.trigger_scheduler).is_empty()
+            !race_start_ids(runner.available_skills(), &runner.trigger_scheduler).is_empty()
         })
         .count();
 

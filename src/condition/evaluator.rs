@@ -334,7 +334,7 @@ pub fn get_variable_value<'a>(
         Lineup(lineup_var) => {
             // Extract the skill being evaluated from logic context.
             let skill_id = logic_ctx
-                .and_then(|logic| runner.available_skills.get(logic.skill_index))
+                .and_then(|logic| runner.skills.get(logic.skill_index))
                 .map_or(0, |skill| skill.id);
             get_lineup_value(lineup_var, state, skill_id)
         }
@@ -808,9 +808,8 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Inherited skills, including those that failed the wit check.
         SuccessionSkillCount => runner
-            .available_skills
+            .skills
             .iter()
-            .chain(&runner.failed_skills)
             .filter(|skill| skill.is_inherited_unique())
             .count() as i32,
 

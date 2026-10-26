@@ -162,9 +162,9 @@ fn main() {
                 skill.skill_id, skill.distance
             );
         }
-        if !runner.failed_skills.is_empty() {
+        if !runner.failed_skills().is_empty() {
             println!("Failed wit check:");
-            for skill in &runner.failed_skills {
+            for skill in runner.failed_skills() {
                 println!("  Skill ID: {}", skill.id);
             }
         }

@@ -5,7 +5,7 @@ use crate::course::{CourseData, Phase};
 use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
-use crate::trigger::skill_activation::PendingEffect;
+use crate::trigger::skill_activation::{OvertakeExtension, PendingEffect};
 use crate::units::horse_lanes_to_course_widths;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -2056,7 +2056,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     let mut solver = solver.ready_runners();
     // The caster is ahead.
     for runner in &mut solver.runners {
-        runner.position = if runner.available_skills.is_empty() {
+        runner.position = if runner.available_skills().is_empty() {
             90.0
         } else {
             100.0
@@ -2190,7 +2190,7 @@ fn activates_with_most_popular(
     // Runners are built in gate order, so find each one by her skills.
     let has_skills = |runner: &Runner, ids: &[i32]| {
         runner
-            .available_skills
+            .available_skills()
             .iter()
             .map(|skill| &skill.id)
             .eq(ids.iter())
@@ -2627,9 +2627,10 @@ fn test_activate_random_gold_bypasses_conditions() {
 }
 
 #[test]
-fn test_activate_random_gold_skips_activated_and_out_of_gate_skills() {
+fn test_activate_random_gold_skips_skills_in_cooldown_and_out_of_gate_skills() {
     let skills = vec![
-        // Activates on its own before the adventure skill (3).
+        // Activates on its own before the adventure skill (3), and is still in
+        // cooldown then.
         gold_skill(10, "distance_rate>=10", SkillType::TargetSpeed, 0.15),
         // Activates before the race.
         gold_skill(18, "always==1", SkillType::SpeedUp, 40.0),
@@ -2645,6 +2646,74 @@ fn test_activate_random_gold_skips_activated_and_out_of_gate_skills() {
     // Only the forced skill (15) can be picked, although two skills should be.
     let ids = random_gold_activations(2.0, skills);
     assert_eq!(ids, vec![3, 10, 15, 18]);
+}
+
+/// Gold skill activating on its own once, early in the race, with a cooldown
+/// ending before the second half of the race.
+fn early_gold_skill(id: i32, base_duration: f64) -> Skill {
+    let alternative = SkillAlternative {
+        base_duration,
+        base_cooldown: 10.0,
+        ..alternative(
+            "distance_rate>=10&distance_rate<=12",
+            SkillType::TargetSpeed,
+            0.15,
+        )
+    };
+    let data = SkillData {
+        rarity: SkillRarity::Gold,
+        ..skill_data(vec![alternative])
+    };
+    Skill::new(id, data)
+}
+
+#[test]
+fn test_activate_random_gold_picks_activated_skills_again_after_cooldown() {
+    let ids = random_gold_activations(1.0, vec![early_gold_skill(10, 3.0)]);
+    assert_eq!(ids, vec![3, 10, 10]);
+}
+
+#[test]
+fn test_activate_random_gold_skips_active_skills() {
+    // Its cooldown ends before the adventure skill (3), but not its effect.
+    let ids = random_gold_activations(1.0, vec![early_gold_skill(10, f64::INFINITY)]);
+    assert_eq!(ids, vec![3, 10]);
+}
+
+#[test]
+fn test_activate_random_gold_picks_skills_that_failed_the_wit_check() {
+    let config = Configuration {
+        wit_checks: Roll::Never,
+        ..seeded_config(0)
+    };
+    let mut solver = ready_solver(
+        10101,
+        uma(Style::Pace),
+        vec![forced_gold_skill(15)],
+        &config,
+    );
+    let runner = &mut solver.runners[0];
+    assert_eq!(runner.failed_skills().len(), 1);
+    let activate_random_gold = |runner: &mut Runner, state: &RaceState| {
+        runner.apply_skill_effect(
+            &effect(SkillType::ActivateRandomGold, 1.0),
+            0.0,
+            OvertakeExtension::default(),
+            0.0,
+            None,
+            state,
+        );
+    };
+
+    activate_random_gold(runner, &solver.state);
+    let ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
+    assert_eq!(ids, vec![15]);
+
+    // The skill has no logics, but its cooldown still applies.
+    let runner = &mut solver.runners[0];
+    assert!(runner.cooldown_until[0][0] > solver.state.elapsed_time);
+    activate_random_gold(runner, &solver.state);
+    assert_eq!(activations(&solver).len(), 1);
 }
 
 /// Unique skill with the given alternatives.
@@ -2790,7 +2859,7 @@ fn scaled_skill_solver(
 fn activate_last_skill(solver: &mut RaceSolver<Runner>) -> f64 {
     let runner = &mut solver.runners[0];
     let before = runner.skill_modifiers.target_speed;
-    let skill_index = runner.available_skills.len() - 1;
+    let skill_index = runner.available_skills().len() - 1;
     runner.activate_skill(skill_index, 0, &solver.state);
     runner.skill_modifiers.target_speed - before
 }
@@ -2832,8 +2901,8 @@ fn test_skill_count_includes_failed_wit_checks() {
         .collect();
     let solver = ready_solver(10101, uma(Style::Late), skills, &config);
     let runner = &solver.runners[0];
-    assert!(runner.available_skills.is_empty());
-    assert_eq!(runner.failed_skills.len(), 3);
+    assert!(runner.available_skills().is_empty());
+    assert_eq!(runner.failed_skills().len(), 3);
     assert_eq!(runner.skill_count(), 3);
 }
 

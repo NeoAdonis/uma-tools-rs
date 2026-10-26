@@ -225,10 +225,12 @@ pub struct Runner {
     pub lane: LaneState,
     /// Speed modifier for the current section in m/s.
     pub section_speed_modifier: f64,
-    /// List of skills available for activation.
-    pub available_skills: Vec<Skill>,
-    /// List of skills that failed the wit check, so they can't activate.
-    pub failed_skills: Vec<Skill>,
+    /// List of skills of the runner: those that passed the wit check first, then
+    /// those that failed it (see [`Self::available_skills`] and
+    /// [`Self::failed_skills`]).
+    pub skills: Vec<Skill>,
+    /// Number of skills that passed the wit check, at the start of `skills`.
+    pub available_skill_count: usize,
     /// Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
     /// Distance in meters behind the runner that placed immediately ahead.
@@ -236,9 +238,12 @@ pub struct Runner {
     pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
-    /// Activated alternatives of each skill in `available_skills`, as a mask (bit
-    /// `i` set when alternative `i` activated).
+    /// Activated alternatives of each skill in `skills`, as a mask (bit `i` set
+    /// when alternative `i` activated).
     pub activated_alternatives: Vec<u8>,
+    /// Race time (in seconds) until which each alternative of each skill in
+    /// `skills` can't activate again, shared by all its OR branches.
+    pub cooldown_until: Vec<Vec<f64>>,
     /// Modifiers from skills applied to this runner's stats.
     pub skill_modifiers: SkillModifiers,
     /// Effects from skills that are currently active for a limited duration.
@@ -246,9 +251,6 @@ pub struct Runner {
     /// Effects from this runner's skills that target other runners, applied by the
     /// solver once every runner has checked its skills.
     pub pending_effects: Vec<PendingEffect>,
-    /// List of indices of golden skills in `available_skills`.
-    /// These skills can be activated by other skills.
-    pub golden_skill_indices: Vec<usize>,
     /// Chance of rushing as a percentage (see [`rush::chance`]).
     ///
     /// This is determined at the start of the race along with deciding whether the
@@ -392,7 +394,18 @@ impl Runner {
 
     /// Number of skills the runner has, including those that failed the wit check.
     pub fn skill_count(&self) -> usize {
-        self.available_skills.len() + self.failed_skills.len()
+        self.skills.len()
+    }
+
+    /// Skills that passed the wit check, so they can activate on their own.
+    pub fn available_skills(&self) -> &[Skill] {
+        &self.skills[..self.available_skill_count]
+    }
+
+    /// Skills that failed the wit check, so they can only be activated by other
+    /// skills (see [`SkillType::ActivateRandomGold`]).
+    pub fn failed_skills(&self) -> &[Skill] {
+        &self.skills[self.available_skill_count..]
     }
 
     /// Determine the lane type based on the current lane position.

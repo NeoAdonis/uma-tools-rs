@@ -628,6 +628,11 @@ impl Skill {
         )
     }
 
+    /// Check if `self` is a gold skill, including evolved ones.
+    pub fn is_gold(&self) -> bool {
+        matches!(self.rarity, SkillRarity::Gold | SkillRarity::Evolution)
+    }
+
     /// Check if `self` is the inherited version of a unique skill (継承), whose ID
     /// is the unique's ID with its first digit replaced by 9 (e.g. 900011 for
     /// 100011).
@@ -990,6 +995,28 @@ mod tests {
         assert!(skill(SkillType::AllStatsUp).is_green());
         assert!(!skill(SkillType::TargetSpeed).is_green());
         assert!(!skill(SkillType::MultiplyStartDelay).is_green());
+    }
+
+    #[test]
+    fn test_is_gold() {
+        let skill = |rarity| {
+            let alternatives = vec![test_utils::alternative(
+                "always==1",
+                SkillType::TargetSpeed,
+                0.15,
+            )];
+            Skill::new(
+                0,
+                SkillData {
+                    rarity,
+                    ..skill_data(alternatives)
+                },
+            )
+        };
+        assert!(skill(SkillRarity::Gold).is_gold());
+        assert!(skill(SkillRarity::Evolution).is_gold());
+        assert!(!skill(SkillRarity::White).is_gold());
+        assert!(!skill(SkillRarity::UniqueNatural).is_gold());
     }
 
     #[test]

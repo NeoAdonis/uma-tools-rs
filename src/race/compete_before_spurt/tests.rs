@@ -203,7 +203,14 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
 
     // Recovering enough HP resets Stamina Keep and allows competing again.
     let recovery = effect(SkillType::Recovery, 1.0);
-    runner.apply_skill_effect(&recovery, 0.0, OvertakeExtension::default(), 0.0, &state);
+    runner.apply_skill_effect(
+        &recovery,
+        0.0,
+        OvertakeExtension::default(),
+        0.0,
+        None,
+        &state,
+    );
     assert!(!runner.stamina_keep.is_active);
     state.elapsed_time = elapsed + 2.0 * CHECK_INTERVAL;
     runner.try_compete_before_spurt(true, true, &state);

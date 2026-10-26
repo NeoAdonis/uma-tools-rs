@@ -5,7 +5,10 @@
 //! When a trigger fires, [`Runner::try_activate_skill`] checks its logic:
 //!
 //! 1. Stop if the logic waits for a precondition that isn't satisfied yet.
-//! 2. Stop if the logic is in cooldown.
+//! 2. Stop if the logic unlocks a precondition that is already satisfied, or
+//!    activates an alternative that is in cooldown. Cooldowns are kept by the
+//!    runner ([`Runner::cooldown_until`]), so that skills activated without
+//!    logics (see below) have one too.
 //! 3. Stop if another alternative of the skill already activated, unless the
 //!    logic belongs to a continuation (see below).
 //! 4. Evaluate the guards (all must be true).
@@ -34,6 +37,8 @@
 //!   checked her skills, the solver selects the targets ([`SkillTarget`]) and
 //!   applies the effects to them.
 //! - Starts the cooldown of the activated alternative (all its OR branches).
+//!   Timed effects record the skill that applied them, so that its effects
+//!   being active can be checked as well.
 //! - Records the alternative in the skill's mask of activated alternatives
 //!   ([`Runner::activated_alternatives`]), used for `is_used_skill_id`,
 //!   `is_activate_other_skill_detail`, forced activations and value scaling.
@@ -60,6 +65,10 @@
 //! conditions: [`SkillType::ActivateRandomGold`] (e.g. "564 Escapades") and
 //! [`SkillType::ActivateUnique`]. See [`Runner::activate_random_gold_skills`]
 //! and [`Runner::activate_unique_skills`].
+//!
+//! Random gold skills can be picked among those that failed the wit check,
+//! which have no logics and only activate this way, and among those that
+//! already activated, once their cooldown and effects are over.
 
 use std::collections::HashSet;
 
@@ -352,8 +361,18 @@ impl Runner {
             return false;
         }
 
-        if state.elapsed_time < logic.cooldown_until {
-            return false;
+        // Satisfied preconditions are never checked again, and activations wait for
+        // the cooldown of their alternative.
+        match logic.action {
+            LogicAction::Unlock(id) if self.trigger_scheduler.precondition_satisfied[id] => {
+                return false;
+            }
+            LogicAction::Activate
+                if self.is_in_cooldown(logic.skill_index, logic.alternative_index, state) =>
+            {
+                return false;
+            }
+            _ => {}
         }
 
         // A skill activates through a single alternative. Continuations are the
@@ -382,12 +401,7 @@ impl Runner {
             match action {
                 // Starts the cooldown.
                 LogicAction::Activate => self.activate_skill(skill_index, alternative_index, state),
-                LogicAction::Unlock(id) => {
-                    self.trigger_scheduler.precondition_satisfied[id] = true;
-                    // Never checked again.
-                    self.trigger_scheduler.skill_logics[trigger_index].cooldown_until =
-                        f64::INFINITY;
-                }
+                LogicAction::Unlock(id) => self.trigger_scheduler.precondition_satisfied[id] = true,
             }
         }
         should_activate
@@ -411,9 +425,8 @@ impl Runner {
         );
 
         // Clone the skill data we need to avoid borrow checker issues.
-        let skill_id = self.available_skills[skill_index].id;
-        let alternative =
-            self.available_skills[skill_index].alternatives[alternative_index].clone();
+        let skill_id = self.skills[skill_index].id;
+        let alternative = self.skills[skill_index].alternatives[alternative_index].clone();
 
         // Scale with the runner's situation, distance and effects. Effects lasting
         // until the end of the race have an infinite base duration, which stays
@@ -433,7 +446,7 @@ impl Runner {
 
         // Wit limit break bonus, fixed at activation time (5th Anniv. onward).
         let wit_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
-            && self.available_skills[skill_index].is_wit_limit_break_eligible()
+            && self.skills[skill_index].is_wit_limit_break_eligible()
         {
             wit_limit_break_phase_coefficient(self.adjusted.style, self.phase)
                 * wit_limit_break_multiplier(self.adjusted.wit)
@@ -458,6 +471,7 @@ impl Runner {
                         scaled_duration,
                         overtake_extension,
                         wit_bonus,
+                        Some(skill_index),
                         state,
                     );
                 } else {
@@ -495,7 +509,7 @@ impl Runner {
             self.position,
             section_length,
         );
-        if self.available_skills[skill_index].is_green() {
+        if self.skills[skill_index].is_green() {
             self.trigger_scheduler.activation_counts.green += 1;
         }
 
@@ -511,18 +525,35 @@ impl Runner {
     /// The base cooldown scales with the course distance by a factor of *course
     /// distance / 1000*.
     fn start_cooldown(&mut self, skill_index: usize, alternative_index: usize, state: &RaceState) {
-        let base_cooldown =
-            self.available_skills[skill_index].alternatives[alternative_index].base_cooldown;
+        let base_cooldown = self.skills[skill_index].alternatives[alternative_index].base_cooldown;
         let cooldown = base_cooldown * state.course.distance as f64 / 1000.0;
-        let cooldown_until = state.elapsed_time + cooldown;
+        self.cooldown_until[skill_index][alternative_index] = state.elapsed_time + cooldown;
+    }
 
-        for logic in &mut self.trigger_scheduler.skill_logics {
-            if logic.skill_index == skill_index
-                && logic.alternative_index == alternative_index
-                && logic.action == LogicAction::Activate
-            {
-                logic.cooldown_until = cooldown_until;
-            }
+    /// Check if a skill alternative is waiting for its cooldown to end.
+    fn is_in_cooldown(
+        &self,
+        skill_index: usize,
+        alternative_index: usize,
+        state: &RaceState,
+    ) -> bool {
+        state.elapsed_time < self.cooldown_until[skill_index][alternative_index]
+    }
+
+    /// Check if any timed effect applied by a skill is still active.
+    fn is_skill_active(&self, skill_index: usize) -> bool {
+        self.active_timed_effects
+            .iter()
+            .any(|timed| timed.source == Some(skill_index))
+    }
+
+    /// Alternative used to activate a skill bypassing its conditions: the (first)
+    /// one that activated before, or the first one if the skill hasn't activated
+    /// yet.
+    fn forced_alternative(&self, skill_index: usize) -> usize {
+        match self.activated_alternatives[skill_index] {
+            0 => 0,
+            mask => mask.trailing_zeros() as usize,
         }
     }
 
@@ -635,12 +666,16 @@ impl Runner {
     /// - Timed effects (speed, acceleration...): modify a stat for a certain
     ///   duration that is constantly tracked.
     /// - Recovery: instant effect that recovers HP.
+    ///
+    /// `source` is the index of the runner's own skill that applies the effect, or
+    /// `None` if it was cast by another runner.
     pub fn apply_skill_effect(
         &mut self,
         effect: &SkillEffect,
         scaled_duration: f64,
         overtake_extension: OvertakeExtension,
         wit_bonus: f64,
+        source: Option<usize>,
         state: &RaceState,
     ) {
         // Pre-race effects (stat boosts, start delay...) never reach this point (see
@@ -661,6 +696,7 @@ impl Runner {
                     expires_at: state.elapsed_time + scaled_duration,
                     overtake_extension,
                     additional_triggers: 0,
+                    source,
                 });
             }
             // Recovery (HP restoration, or HP loss if negative), as a fraction of max
@@ -704,17 +740,25 @@ impl Runner {
         }
     }
 
-    /// Activate up to `count` random gold skills that haven't activated yet,
+    /// Activate up to `count` distinct random gold skills (see [`Skill::is_gold`]),
     /// bypassing their conditions.
     ///
-    /// The first alternative of each skill is activated, so that later ones that
-    /// continue it (see [`SkillAlternative::is_continuation`]) can still activate.
+    /// Skills that failed the wit check can be picked too, but out-of-gate skills
+    /// can't, as their effects are only applied before the race. Skills still in
+    /// cooldown or with active effects are skipped, so a skill that already
+    /// activated can be picked again once both are over.
+    ///
+    /// The alternative that activated before is used, or the first one if the
+    /// skill hasn't activated yet, so that later ones that continue it (see
+    /// [`SkillAlternative::is_continuation`]) can still activate.
     fn activate_random_gold_skills(&mut self, count: usize, state: &RaceState) {
-        let mut candidates: Vec<usize> = self
-            .golden_skill_indices
-            .iter()
-            .copied()
-            .filter(|&skill_index| self.activated_alternatives[skill_index] == 0)
+        let mut candidates: Vec<usize> = (0..self.skills.len())
+            .filter(|&skill_index| {
+                let skill = &self.skills[skill_index];
+                skill.is_gold()
+                    && !skill.should_activate_out_of_gate()
+                    && self.can_force_gold_skill(skill_index, state)
+            })
             .collect();
         for _ in 0..count {
             if candidates.is_empty() {
@@ -722,10 +766,24 @@ impl Runner {
             }
             let idx = self.rng.borrow_mut().random_range(0..candidates.len());
             let skill_index = candidates.swap_remove(idx);
-            // ? Assume the first alternative is activated, even when the others are
-            // variants for other courses or running styles (e.g. "Piercing Azure").
-            self.activate_skill(skill_index, 0, state);
+            // ? Assume the first alternative is activated if none did, even when the
+            // others are variants for other courses or running styles (e.g. "Piercing
+            // Azure").
+            let alternative_index = self.forced_alternative(skill_index);
+            self.activate_skill(skill_index, alternative_index, state);
+            // Activations may affect other candidates (e.g. through effects that
+            // activate skills), so they're checked again after each pick.
+            candidates.retain(|&skill_index| self.can_force_gold_skill(skill_index, state));
         }
+    }
+
+    /// Check if a gold skill can be activated by
+    /// [`Self::activate_random_gold_skills`]: it isn't in cooldown, and none of its
+    /// effects are active.
+    fn can_force_gold_skill(&self, skill_index: usize, state: &RaceState) -> bool {
+        let alternative_index = self.forced_alternative(skill_index);
+        !self.is_in_cooldown(skill_index, alternative_index, state)
+            && !self.is_skill_active(skill_index)
     }
 
     /// Activate up to `count` unique skills, bypassing their conditions and
@@ -733,15 +791,14 @@ impl Runner {
     ///
     /// Each activation is a new instance of the skill: its values (duration, wit
     /// limit break bonus...) are calculated anew, and its effects stack with any
-    /// still active from a previous activation. The (first) alternative that
-    /// activated before is used, or the first one if the skill hasn't activated
-    /// yet.
+    /// still active from a previous activation. The alternative is chosen like for
+    /// [`Self::activate_random_gold_skills`].
     ///
     /// N.B. Out-of-gate skills are skipped, as their effects are only applied
     /// before the race.
     fn activate_unique_skills(&mut self, count: usize, state: &RaceState) {
         let unique_indices: Vec<usize> = self
-            .available_skills
+            .available_skills()
             .iter()
             .enumerate()
             .filter(|(_, skill)| skill.is_unique() && !skill.should_activate_out_of_gate())
@@ -749,10 +806,7 @@ impl Runner {
             .take(count)
             .collect();
         for skill_index in unique_indices {
-            let alternative_index = match self.activated_alternatives[skill_index] {
-                0 => 0,
-                mask => mask.trailing_zeros() as usize,
-            };
+            let alternative_index = self.forced_alternative(skill_index);
             self.activate_skill(skill_index, alternative_index, state);
         }
     }
@@ -765,6 +819,7 @@ impl Runner {
             pending.duration,
             OvertakeExtension::default(),
             pending.wit_bonus,
+            None,
             state,
         );
         self.recalculate_skill_modifiers();
@@ -773,7 +828,7 @@ impl Runner {
     /// Mask of the activated alternatives of the skill with the given ID (see
     /// [`Self::activated_alternatives`]), or 0 if the runner doesn't have it.
     pub fn activated_mask(&self, skill_id: i32) -> u8 {
-        self.available_skills
+        self.skills
             .iter()
             .position(|skill| skill.id == skill_id)
             .map_or(0, |skill_index| self.activated_alternatives[skill_index])
@@ -783,7 +838,7 @@ impl Runner {
     ///
     /// A heal skill has an alternative that contains a positive Recovery effect.
     fn is_heal_skill_by_index(&self, skill_index: usize) -> bool {
-        let skill = &self.available_skills[skill_index];
+        let skill = &self.skills[skill_index];
         skill.alternatives.iter().any(|alt| {
             alt.effects
                 .iter()

@@ -170,16 +170,14 @@ pub struct UnreadyRunner {
     /// Skills that passed the wit check. Out-of-gate skills among them are
     /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
     pub skills: Vec<Skill>,
-    /// Skills that failed the wit check. They can't activate, but they still
-    /// count towards the runner's skills (e.g. for popularity or skill count
-    /// scaling).
+    /// Skills that failed the wit check. They can't activate on their own, but
+    /// they still count towards the runner's skills (e.g. for popularity or skill
+    /// count scaling), and gold skills among them can be activated by other
+    /// skills (see [`SkillType::ActivateRandomGold`]).
     pub failed_skills: Vec<Skill>,
     /// Popularity points added to stats by all skills, including those that
     /// failed the wit check.
     pub(crate) popularity_bonus: SkillPopularity,
-    /// Indices of golden skills in `skills` for activation by skills that activate
-    /// golden skills.
-    golden_skill_indices: Vec<usize>,
     /// Temporary: ID of the out-of-gate skill currently being evaluated. Used for
     /// conditions like `same_skill_horse_count` that need to know which skill
     /// they're checking.
@@ -231,18 +229,6 @@ impl UnreadyRunner {
         // Determine start delay (0.0 to 0.1 seconds).
         let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
 
-        // Build golden skill indices for random activation.
-        // N.B. Out-of-gate skills can't be activated this way.
-        let golden_skill_indices = skills
-            .iter()
-            .enumerate()
-            .filter(|(_, skill)| {
-                (skill.rarity == SkillRarity::Gold || skill.rarity == SkillRarity::Evolution)
-                    && !skill.should_activate_out_of_gate()
-            })
-            .map(|(i, _)| i)
-            .collect::<Vec<usize>>();
-
         let mut runner = UnreadyRunner {
             base: base_uma,
             raw: uma,
@@ -261,7 +247,6 @@ impl UnreadyRunner {
             start_delay,
             rng,
             trigger_scheduler,
-            golden_skill_indices,
             skills,
             failed_skills,
             popularity_bonus: SkillPopularity::default(),
@@ -501,6 +486,16 @@ impl UnreadyRunner {
 
         let stamina_keep = StaminaKeep::roll(game_version, &mut *self.rng.borrow_mut());
 
+        // Skills that failed the wit check go last, so that the indices of those
+        // that passed (used by the trigger logics) stay the same.
+        let available_skill_count = self.skills.len();
+        let mut skills = self.skills;
+        skills.extend(self.failed_skills);
+        let cooldown_until = skills
+            .iter()
+            .map(|skill| vec![0.0; skill.alternatives.len()])
+            .collect();
+
         // Initialize race state.
         Runner {
             gate_roll: self.gate_roll,
@@ -521,14 +516,14 @@ impl UnreadyRunner {
             blocked: BlockedState::default(),
             surrounded: SurroundState::default(),
             start_delay: self.start_delay,
-            activated_alternatives: vec![0; self.skills.len()],
-            available_skills: self.skills,
-            failed_skills: self.failed_skills,
+            activated_alternatives: vec![0; skills.len()],
+            cooldown_until,
+            skills,
+            available_skill_count,
             activated_skills: Vec::new(),
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),
-            golden_skill_indices: self.golden_skill_indices,
             section: 0,
             phase: Phase::Early,
             section_speed_modifier,

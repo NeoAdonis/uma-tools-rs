@@ -8,6 +8,7 @@ fn timed(skill_type: SkillType, value: f64) -> ActiveTimedEffect {
         expires_at: 10.0,
         overtake_extension: OvertakeExtension::default(),
         additional_triggers: 0,
+        source: None,
     }
 }
 

@@ -184,6 +184,7 @@ fn test_recovery_recalculates_only_from_late_phase() {
         0.0,
         OvertakeExtension::default(),
         0.0,
+        None,
         &solver.state,
     );
     assert!(runner.last_spurt.is_none());
@@ -196,6 +197,7 @@ fn test_recovery_recalculates_only_from_late_phase() {
         0.0,
         OvertakeExtension::default(),
         0.0,
+        None,
         &solver.state,
     );
     assert!(runner.last_spurt.as_ref().unwrap().max_speed > 0.0);
@@ -212,6 +214,7 @@ fn test_recovery_does_not_recalculate_before_first_anniversary() {
         0.0,
         OvertakeExtension::default(),
         0.0,
+        None,
         &solver.state,
     );
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
@@ -232,6 +235,7 @@ fn test_hp_loss_is_not_a_heal() {
         0.0,
         OvertakeExtension::default(),
         0.0,
+        None,
         &solver.state,
     );
     assert_close!(runner.hp.current, hp_before - runner.hp.maximum * 0.02);
