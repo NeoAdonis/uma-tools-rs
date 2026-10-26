@@ -77,7 +77,7 @@ pub struct InitialState {
     /// Number of fans.
     pub fan_count: u32,
     /// Whether every popularity requirement is satisfied (see
-    /// [`SkillType::IgnorePopularity`](crate::skill::SkillType::IgnorePopularity)).
+    /// [`SkillType::IgnorePopularity`]).
     pub ignores_popularity: bool,
     /// Team index (0-based). In individual races, each runner has its own team.
     ///
