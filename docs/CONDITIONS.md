@@ -62,6 +62,14 @@ The number of skills you have activated in the Mid-race.
 
 *Meaning:* You've activated at least 3 skills during the Mid-race.
 
+## activate_count_param_skill
+
+The number of green (passive, stat-increasing) skills you have activated in the race.
+
+*Example:* `activate_count_param_skill>=7`
+
+*Meaning:* You've activated at least 7 green skills.
+
 ## activate_count_start
 
 The number of skills you have activated in the Early-race.
@@ -530,6 +538,16 @@ Picks a random point on the final corner. The skill will activate there if all o
 
 *Meaning:* A random point on the final corner.
 
+## is_goodstart
+
+Checks if you've had a good start to the current race.
+
+*Note:* "Good start" refers to starting gate reaction time of under 0.02 seconds. This definition is under investigation.
+
+*Example:* `is_goodstart==1`
+
+*Meaning:* You've had a good start to the current race.
+
 ## is_hp_empty_onetime
 
 Checks if your HP (stamina) had been depleted at some point in the race.
@@ -591,6 +609,14 @@ Checks if you have any overtake targets.
 *Example:* `is_overtake==1`
 
 *Meaning:* You have at least one overtake target.
+
+## is_popularity_top_character_activate_advantage_skill
+
+The most popular character (possibly you) has activated an advantageous (i.e. non-debuff) skill of a specific type, or any skill if the value is -1.
+
+*Example:* `is_popularity_top_character_activate_advantage_skill==-1`
+
+*Meaning:* The most popular uma has just activated a skill.
 
 ## is_surrounded
 
@@ -1210,6 +1236,14 @@ Picks a random point on any straight.
 *Example:* `straight_random==1`
 
 *Meaning:* A random point on any straight is selected.
+
+## succession_skill_count
+
+The number of inherited unique skills you have.
+
+*Example:* `succession_skill_count>=3`
+
+*Meaning:* You have at least 3 inherited unique skills.
 
 ## temptation_count
 

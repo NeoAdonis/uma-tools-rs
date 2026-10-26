@@ -214,6 +214,10 @@ impl Comparison {
             Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
                 is_equal && skill_type(self.value).is_some()
             }
+            // Same, or -1 for any skill.
+            Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill) => {
+                is_equal && (self.value == -1 || skill_type(self.value).is_some())
+            }
             // The value is the chance of success, as a percentage.
             Random(_) => is_equal && (0..=100).contains(&self.value),
             // Flags; any other comparison is potentially a typo.

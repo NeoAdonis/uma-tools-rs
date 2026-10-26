@@ -69,7 +69,7 @@ use crate::course::Course;
 use crate::course::geometry::Segment;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::InitialState;
-use crate::race::runner::{Runner, StartType};
+use crate::race::runner::{Runner, SkillActivationFlags, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::trigger::skill_activation::SkillActivationLogic;
@@ -196,21 +196,36 @@ impl CompEvaluator for EvaluatorFull {
                     op => unreachable!("{var} doesn't support operator {op:?}"),
                 }
             }
-            Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill) => {
-                // Check if any other runner has activated a buff whose type is `comp.value`
-                // this frame, discounting the runner's own activation.
+            Activation(
+                var @ (ActivationVar::IsOtherCharacterActivateAdvantageSkill
+                | ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill),
+            ) => {
+                // Check if a buff whose type is `comp.value` (or any skill for -1) has
+                // been activated this frame by any other runner, or by the most popular
+                // one (the runner herself included).
                 // Unimplemented skill types are rejected by the parser.
-                let value = skill_type(comp.value).unwrap_or_else(|| {
-                    unreachable!(
-                        "is_other_character_activate_advantage_skill: unimplemented skill type {}",
-                        comp.value
-                    )
+                let value = (comp.value != -1).then(|| {
+                    skill_type(comp.value).unwrap_or_else(|| {
+                        unreachable!("{var}: unimplemented skill type {}", comp.value)
+                    })
                 });
-                let own = runner.activation_flags.buff_activated.contains(&value) as u8;
-                state
-                    .buffs_activated
-                    .get(&value)
-                    .is_some_and(|&count| count > own)
+                let activated = |flags: &SkillActivationFlags| match value {
+                    Some(value) => flags.buff_activated.contains(&value),
+                    None => flags.any_activated,
+                };
+                match var {
+                    ActivationVar::IsOtherCharacterActivateAdvantageSkill => {
+                        // -1 is rejected by the parser.
+                        let value = value.unwrap_or_else(|| unreachable!("{var}: any skill"));
+                        // Discount the runner's own activation.
+                        let own = activated(&runner.activation_flags) as u8;
+                        state
+                            .buffs_activated
+                            .get(&value)
+                            .is_some_and(|&count| count > own)
+                    }
+                    _ => activated(&state.popularity_top_activations),
+                }
             }
             // `order_rate OP X` is converted to `order OP round(runners * X%)`.
             Order(OrderVar::OrderRate) => {
@@ -612,6 +627,7 @@ fn get_activation_value(
         ActivateCountHeal => runner.trigger_scheduler.activation_counts.heal as i32,
         ActivateCountLaterHalf => runner.trigger_scheduler.activation_counts.later_half as i32,
         ActivateCountMiddle => runner.trigger_scheduler.activation_counts.middle as i32,
+        ActivateCountParamSkill => runner.trigger_scheduler.activation_counts.green as i32,
         ActivateCountStart => runner.trigger_scheduler.activation_counts.start as i32,
 
         // Skill activations in the current frame.
@@ -630,10 +646,10 @@ fn get_activation_value(
 
         // Special cases: these variables use the comparison value as parameter instead
         // of comparing against it.
-        IsOtherCharacterActivateAdvantageSkill => {
-            panic!("is_other_character_activate_advantage_skill: should be handled in evaluate()")
-        }
-        IsUsedSkillId | IsUsedSkillIdWithDetailOne => {
+        IsOtherCharacterActivateAdvantageSkill
+        | IsPopularityTopCharacterActivateAdvantageSkill
+        | IsUsedSkillId
+        | IsUsedSkillIdWithDetailOne => {
             panic!("{var}: should be handled in evaluate()")
         }
 
@@ -726,6 +742,9 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Start is too late.
         IsBadstart => matches!(runner.start_type(), StartType::Late) as i32,
+        // Start is good.
+        // ? Assumed to be a Good Start; under investigation.
+        IsGoodstart => matches!(runner.start_type(), StartType::Good) as i32,
 
         // Lane movement.
         IsMoveLane => {
@@ -740,6 +759,14 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 
         // Overtake mode.
         IsOvertake => runner.is_in_overtake_mode() as i32,
+
+        // Inherited skills, including those that failed the wit check.
+        SuccessionSkillCount => runner
+            .available_skills
+            .iter()
+            .chain(&runner.failed_skills)
+            .filter(|skill| skill.is_inherited_unique())
+            .count() as i32,
 
         // Temptation/rush check.
         IsTemptation => runner.is_rushed() as i32,

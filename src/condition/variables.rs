@@ -197,12 +197,14 @@ pub enum ActivationVar {
     ActivateCountHeal,
     ActivateCountLaterHalf,
     ActivateCountMiddle,
+    ActivateCountParamSkill,
     ActivateCountStart,
     CompeteFightCount,
     IsActivateAnySkill,
     IsActivateHealSkill,
     IsActivateOtherSkillDetail,
     IsOtherCharacterActivateAdvantageSkill,
+    IsPopularityTopCharacterActivateAdvantageSkill,
     IsUsedSkillId,
     IsUsedSkillIdWithDetailOne,
 }
@@ -239,12 +241,14 @@ pub enum RunningStyleVar {
 pub enum StatusVar {
     HpPer,
     IsBadstart,
+    IsGoodstart,
     IsHpEmptyOnetime,
     IsLastspurt,
     IsMoveLane,
     IsOvertake,
     IsTemptation,
     Lastspurt,
+    SuccessionSkillCount,
     TemptationCount,
 }
 
@@ -467,6 +471,7 @@ impl VarType {
             "activate_count_heal" => Activation(ActivationVar::ActivateCountHeal),
             "activate_count_later_half" => Activation(ActivationVar::ActivateCountLaterHalf),
             "activate_count_middle" => Activation(ActivationVar::ActivateCountMiddle),
+            "activate_count_param_skill" => Activation(ActivationVar::ActivateCountParamSkill),
             "activate_count_start" => Activation(ActivationVar::ActivateCountStart),
             "compete_fight_count" => Activation(ActivationVar::CompeteFightCount),
             "is_activate_any_skill" => Activation(ActivationVar::IsActivateAnySkill),
@@ -476,6 +481,9 @@ impl VarType {
             }
             "is_other_character_activate_advantage_skill" => {
                 Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill)
+            }
+            "is_popularity_top_character_activate_advantage_skill" => {
+                Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill)
             }
             "is_used_skill_id" => Activation(ActivationVar::IsUsedSkillId),
             "is_used_skill_id_with_detail_one" => {
@@ -519,12 +527,14 @@ impl VarType {
             // Status.
             "hp_per" => Status(StatusVar::HpPer),
             "is_badstart" => Status(StatusVar::IsBadstart),
+            "is_goodstart" => Status(StatusVar::IsGoodstart),
             "is_hp_empty_onetime" => Status(StatusVar::IsHpEmptyOnetime),
             "is_lastspurt" => Status(StatusVar::IsLastspurt),
             "is_move_lane" => Status(StatusVar::IsMoveLane),
             "is_overtake" => Status(StatusVar::IsOvertake),
             "is_temptation" => Status(StatusVar::IsTemptation),
             "lastspurt" => Status(StatusVar::Lastspurt),
+            "succession_skill_count" => Status(StatusVar::SuccessionSkillCount),
             "temptation_count" => Status(StatusVar::TemptationCount),
 
             // Randoms.
@@ -602,7 +612,9 @@ impl VarType {
 
         match self {
             RaceParam(_) | Lineup(_) | Course(_) | BaseStat(_) | Entry(_) => true,
-            Status(StatusVar::IsBadstart) => true,
+            Status(
+                StatusVar::IsBadstart | StatusVar::IsGoodstart | StatusVar::SuccessionSkillCount,
+            ) => true,
             // N.B. While running style can technically change, it can only do so from Front
             // Runner to Runaway. Since both styles are considered the same for skill
             // purposes, we can treat this type as static.
@@ -692,6 +704,8 @@ mod tests {
             "motivation",
             "popularity",
             "is_badstart",
+            "is_goodstart",
+            "succession_skill_count",
             "running_style",
             "running_style_count_same",
             "always",

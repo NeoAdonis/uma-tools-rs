@@ -177,6 +177,18 @@ fn test_error_cases() {
             UnsupportedComparison("is_other_character_activate_advantage_skill==283".into()),
         ),
         (
+            "is_popularity_top_character_activate_advantage_skill!=-1",
+            UnsupportedComparison(
+                "is_popularity_top_character_activate_advantage_skill!=-1".into(),
+            ),
+        ),
+        (
+            "is_popularity_top_character_activate_advantage_skill==-2",
+            UnsupportedComparison(
+                "is_popularity_top_character_activate_advantage_skill==-2".into(),
+            ),
+        ),
+        (
             "is_exist_chara_id<=1001",
             UnsupportedComparison("is_exist_chara_id<=1001".into()),
         ),

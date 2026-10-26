@@ -919,6 +919,17 @@ fn test_is_badstart_by_start_delay() {
 }
 
 #[test]
+fn test_is_goodstart_by_start_delay() {
+    let mut solver = create_test_race_solver(vec![]);
+
+    for (start_delay, expected) in [(0.0, 1), (0.019, 1), (0.02, 0), (0.1, 0)] {
+        solver.runners[0].start_delay = start_delay;
+        let actual = get_status_value(&StatusVar::IsGoodstart, &solver.runners[0]);
+        assert_eq!(actual, expected, "start delay {start_delay}");
+    }
+}
+
+#[test]
 fn test_is_move_lane_by_lane_speed() {
     let mut solver = create_test_race_solver(vec![]);
 
@@ -974,6 +985,7 @@ fn test_activation_counts() {
     counts.later_half = 3;
     counts.end_after = 4;
     counts.heal = 5;
+    counts.green = 3;
 
     let (state, runner) = (&solver.state, &solver.runners[0]);
     let actual = [
@@ -983,9 +995,10 @@ fn test_activation_counts() {
         ActivationVar::ActivateCountLaterHalf,
         ActivationVar::ActivateCountEndAfter,
         ActivationVar::ActivateCountHeal,
+        ActivationVar::ActivateCountParamSkill,
     ]
     .map(|var| get_activation_value(&var, state, runner, None));
-    assert_eq!(actual, [6, 1, 2, 3, 4, 5]);
+    assert_eq!(actual, [6, 1, 2, 3, 4, 5, 3]);
 }
 
 #[test]
@@ -1227,6 +1240,54 @@ fn test_is_used_skill_id_with_detail_one_value_panics() {
     let solver = create_test_race_solver(vec![]);
     let var = ActivationVar::IsUsedSkillIdWithDetailOne;
     get_activation_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+/// Evaluate `is_popularity_top_character_activate_advantage_skill==value`.
+fn popularity_top_activated(solver: &RaceSolver<Runner>, value: i32) -> bool {
+    let comp = Comparison {
+        var: VarType::Activation(ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill),
+        op: CompOp::Equal,
+        value,
+    };
+    EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
+}
+
+#[test]
+fn test_is_popularity_top_character_activate_advantage_skill() {
+    let mut solver = create_test_race_solver(vec![]);
+    solver.runners[0].initial_state.popularity_rank = 2;
+    // Nothing activated.
+    assert!(!popularity_top_activated(&solver, 9));
+    assert!(!popularity_top_activated(&solver, -1));
+
+    // A debuff (or any other non-buff skill) only counts for -1.
+    let top = &mut solver.state.popularity_top_activations;
+    top.any_activated = true;
+    assert!(!popularity_top_activated(&solver, 9));
+    assert!(popularity_top_activated(&solver, -1));
+
+    // A heal.
+    let top = &mut solver.state.popularity_top_activations;
+    top.buff_activated.insert(SkillType::Recovery);
+    assert!(popularity_top_activated(&solver, 9));
+    assert!(!popularity_top_activated(&solver, 27));
+    assert!(popularity_top_activated(&solver, -1));
+
+    // The runner's own activations count too if she's the most popular one.
+    solver.runners[0].initial_state.popularity_rank = 1;
+    solver.runners[0].activation_flags = solver.state.popularity_top_activations.clone();
+    assert!(popularity_top_activated(&solver, 9));
+    assert!(popularity_top_activated(&solver, -1));
+}
+
+#[test]
+fn test_succession_skill_count() {
+    let skill = |id: &str| Skill::new(id.to_string(), skill_data(vec![]));
+    // Inherited uniques, a unique and a white skill.
+    let skills = ["900011", "900021", "100011", "200012"].map(skill).to_vec();
+    let solver = create_test_race_solver(skills);
+    let actual = get_status_value(&StatusVar::SuccessionSkillCount, &solver.runners[0]);
+    assert_eq!(actual, 2);
 }
 
 #[test]

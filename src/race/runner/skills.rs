@@ -149,7 +149,7 @@ impl SkillModifiers {
 }
 
 /// Skill activation flags for the current update cycle.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SkillActivationFlags {
     /// Indicates if a skill was activated in the current update cycle.
     pub any_activated: bool,
@@ -212,8 +212,9 @@ impl Runner {
     /// 4. Any-skill and heal activation triggers, which depend on the activations
     ///    above.
     ///
-    /// `is_other_character_activate_advantage_skill` triggers depend on the
-    /// activations of every runner, so they're checked afterwards (see
+    /// `is_other_character_activate_advantage_skill` (and
+    /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
+    /// the activations of every runner, so they're checked afterwards (see
     /// [`Self::check_advantage_triggers`]).
     pub fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
@@ -318,7 +319,8 @@ impl Runner {
         self.try_activate_all(inside, state);
     }
 
-    /// Check `is_other_character_activate_advantage_skill` triggers.
+    /// Check `is_other_character_activate_advantage_skill` and
+    /// `is_popularity_top_character_activate_advantage_skill` triggers.
     ///
     /// Other runners' activations are only known once every runner has checked
     /// her skills, so this is called by the solver afterwards.
@@ -492,6 +494,9 @@ impl Runner {
             self.position,
             section_length,
         );
+        if self.available_skills[skill_index].is_green() {
+            self.trigger_scheduler.activation_counts.green += 1;
+        }
 
         // Set activation flags for activation-dependent triggers.
         self.activation_flags.any_activated = true;

@@ -591,6 +591,13 @@ impl Skill {
         )
     }
 
+    /// Check if `self` is the inherited version of a unique skill (継承), whose ID
+    /// is the unique's ID with its first digit replaced by 9 (e.g. 900011 for
+    /// 100011).
+    pub fn is_inherited_unique(&self) -> bool {
+        self.id.len() == 6 && self.id.starts_with('9')
+    }
+
     /// Check if `self` is a green skill, i.e. one that boosts stats.
     pub fn is_green(&self) -> bool {
         // TODO: The game defines green skills by tags (601-615), which aren't in the

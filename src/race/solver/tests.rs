@@ -2148,6 +2148,16 @@ fn test_rush_time_up_extends_rush_of_runners_bound_to_rush() {
 /// Run a race with one runner per skill list and return, for each list, whether
 /// the runner activated `skill_id`.
 fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
+    activates_with_most_popular(skills, None, skill_id)
+}
+
+/// Same as [`activates`], making the runner of the list at index `most_popular`
+/// (if any) the most popular one. Skill lists must be distinct.
+fn activates_with_most_popular(
+    skills: Vec<Vec<Skill>>,
+    most_popular: Option<usize>,
+    skill_id: &str,
+) -> Vec<bool> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     let ids: Vec<Vec<String>> = skills
         .iter()
@@ -2157,21 +2167,29 @@ fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
         solver.add_runner(uma(Style::Late), Mood::Normal, skills);
     }
     let mut solver = solver.ready_runners();
-    solver.run();
 
     // Runners are built in gate order, so find each one by her skills.
+    let has_skills = |runner: &Runner, ids: &[String]| {
+        runner
+            .available_skills
+            .iter()
+            .map(|skill| &skill.id)
+            .eq(ids.iter())
+    };
+    if let Some(most_popular) = most_popular {
+        for runner in &mut solver.runners {
+            let is_most_popular = has_skills(runner, &ids[most_popular]);
+            runner.initial_state.popularity_rank = if is_most_popular { 1 } else { 2 };
+        }
+    }
+    solver.run();
+
     ids.iter()
         .map(|ids| {
             let runner = solver
                 .runners
                 .iter()
-                .find(|runner| {
-                    runner
-                        .available_skills
-                        .iter()
-                        .map(|skill| &skill.id)
-                        .eq(ids.iter())
-                })
+                .find(|runner| has_skills(runner, ids))
                 .unwrap();
             runner.activated_mask(skill_id) != 0
         })
@@ -2216,6 +2234,38 @@ fn test_other_runner_advantage_skill_is_only_seen_on_its_frame() {
     assert_eq!(
         activates(vec![vec![heal()], vec![react]], "react"),
         [false, false]
+    );
+}
+
+#[test]
+fn test_most_popular_runner_skill_triggers_skill() {
+    let react = |value| {
+        skill(
+            "react",
+            &format!("is_popularity_top_character_activate_advantage_skill=={value}"),
+            SkillType::TargetSpeed,
+            0.35,
+        )
+    };
+    // Debuffs only count as any skill.
+    let debuff = || skill("debuff", "accumulatetime>=5", SkillType::TargetSpeed, -0.1);
+    let react_to = |top: Skill, value, most_popular| {
+        activates_with_most_popular(
+            vec![vec![top], vec![react(value)]],
+            Some(most_popular),
+            "react",
+        )
+    };
+    assert_eq!(react_to(heal(), 9, 0), [false, true]);
+    assert_eq!(react_to(heal(), -1, 0), [false, true]);
+    assert_eq!(react_to(debuff(), 9, 0), [false, false]);
+    assert_eq!(react_to(debuff(), -1, 0), [false, true]);
+    // Only the most popular runner counts...
+    assert_eq!(react_to(heal(), 9, 1), [false, false]);
+    // ...even if she's the runner herself.
+    assert_eq!(
+        activates_with_most_popular(vec![vec![heal(), react(9)]], Some(0), "react"),
+        [true]
     );
 }
 
@@ -2940,6 +2990,9 @@ fn test_green_skill_count_scaling() {
     {
         solver.step(DELTA_TIME);
     }
+    // Also counted for `activate_count_param_skill`.
+    let counts = &solver.runners[0].trigger_scheduler.activation_counts;
+    assert_eq!(counts.green, 3);
     assert_close!(activate_last_skill(&mut solver), 0.25);
 }
 

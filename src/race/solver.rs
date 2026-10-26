@@ -24,7 +24,9 @@ use crate::race::compete_before_spurt;
 use crate::race::duel;
 use crate::race::parameters::RaceParameters;
 use crate::race::proximity;
-use crate::race::runner::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
+use crate::race::runner::{
+    POSITIONING_END_SECTION, PositioningStrategy, Runner, SkillActivationFlags,
+};
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
@@ -76,6 +78,8 @@ pub struct RaceState {
     /// Number of runners that activated a buff (advantage) skill in the current
     /// frame, by effect type.
     pub buffs_activated: HashMap<SkillType, u8>,
+    /// Skill activations of the most popular runner in the current frame.
+    pub popularity_top_activations: SkillActivationFlags,
 }
 
 /// Race solver that manages the race simulation.
@@ -123,6 +127,7 @@ impl RaceSolver<UnreadyRunner> {
             team_activations: Vec::new(),
             existing_skills: HashMap::new(),
             buffs_activated: HashMap::new(),
+            popularity_top_activations: SkillActivationFlags::default(),
         };
 
         RaceSolver {
@@ -316,10 +321,11 @@ impl RaceSolver<Runner> {
     /// blocking...).
     ///
     /// Once every runner has checked her skills, the buff (advantage) skill
-    /// types activated this frame are counted, and the
-    /// `is_other_character_activate_advantage_skill` triggers of every runner
-    /// are checked, so that the result doesn't depend on which runner checked
-    /// first. Then, effects targeting other runners are applied.
+    /// types activated this frame are counted, along with the activations of the
+    /// most popular runner, and the `is_other_character_activate_advantage_skill`
+    /// (and `is_popularity_top_character_activate_advantage_skill`) triggers of
+    /// every runner are checked, so that the result doesn't depend on which
+    /// runner checked first. Then, effects targeting other runners are applied.
     ///
     /// After that, the **state is updated**: time advances, then each runner moves
     /// and updates everything derived from her position (phase, corners, straights,
@@ -334,6 +340,7 @@ impl RaceSolver<Runner> {
     fn step(&mut self, delta_time: f64) {
         self.update_team_activations();
         self.state.buffs_activated.clear();
+        self.state.popularity_top_activations = SkillActivationFlags::default();
         for runner in &mut self.runners {
             // Runners that stay in the gate during this step haven't reached any state
             // worth checking, and skills can't activate after the goal.
@@ -343,6 +350,9 @@ impl RaceSolver<Runner> {
             runner.check_skills(&mut self.state);
             for &skill_type in &runner.activation_flags.buff_activated {
                 *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
+            }
+            if runner.initial_state.popularity_rank == 1 {
+                self.state.popularity_top_activations = runner.activation_flags.clone();
             }
         }
         self.check_advantage_triggers(delta_time);
@@ -398,13 +408,18 @@ impl RaceSolver<Runner> {
         self.update_compete_before_spurt();
     }
 
-    /// Check `is_other_character_activate_advantage_skill` triggers of every
+    /// Check `is_other_character_activate_advantage_skill` and
+    /// `is_popularity_top_character_activate_advantage_skill` triggers of every
     /// runner, now that this frame's activations are known.
     ///
     /// Skills activated here aren't counted as advantage skills for other runners.
     fn check_advantage_triggers(&mut self, delta_time: f64) {
         // ? Assume activations don't chain within a frame.
-        if self.state.buffs_activated.is_empty() {
+        // Any activation of the most popular runner counts (see
+        // `is_popularity_top_character_activate_advantage_skill==-1`).
+        if self.state.buffs_activated.is_empty()
+            && !self.state.popularity_top_activations.any_activated
+        {
             return;
         }
         for runner in &mut self.runners {

@@ -21,7 +21,8 @@
 //! - `AnySkillActivation` / `HealSkillActivation`: lists. Fire on frames where
 //!   a (heal) skill activated.
 //! - `BuffSkillActivation`: a list. Fires on frames where any runner activated
-//!   a buff, after every runner checked her skills.
+//!   a buff, or the most popular runner activated any skill, after every runner
+//!   checked her skills.
 //!
 //! **Window queues.** Position and time only increase, so their windows wait in
 //! a pending list sorted by start, are checked while active, and are dropped
@@ -199,6 +200,8 @@ pub struct ActivationCounts {
     // Phase::Late + Phase::Last (sections 16-24).
     pub end_after: usize,
     pub heal: usize,
+    // Green (stat boost) skills.
+    pub green: usize,
 }
 
 impl ActivationCounts {

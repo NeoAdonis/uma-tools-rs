@@ -37,7 +37,9 @@
 //!      evaluated.
 //!    - `is_other_character_activate_advantage_skill==N`: another runner
 //!      activating a buff with effect type N in the current frame. It stays as
-//!      a guard too.
+//!      a guard too. Likewise for
+//!      `is_popularity_top_character_activate_advantage_skill==N`, but only for
+//!      the most popular runner, and N can be -1 for any skill.
 //! 2. **Window trigger** otherwise. The ranges of the branch's comparisons
 //!    are intersected per variable, and the window uses the first kind of
 //!    range that the branch has, in this order:
@@ -208,8 +210,9 @@ pub enum TriggerCondition {
     AnySkillActivation,
 
     /// Checked once every runner has checked her skills, when any runner activated
-    /// an advantage (buff) skill.
-    /// Used for `is_other_character_activate_advantage_skill` conditions.
+    /// an advantage (buff) skill, or the most popular runner activated any skill.
+    /// Used for `is_other_character_activate_advantage_skill` and
+    /// `is_popularity_top_character_activate_advantage_skill` conditions.
     BuffSkillActivation,
 
     /// Checked when a heal skill activates.
@@ -495,7 +498,10 @@ fn activation_event(comp: &Comparison) -> Option<TriggerCondition> {
         }
         // The value is the effect type of the advantage skill.
         (
-            VarType::Activation(ActivationVar::IsOtherCharacterActivateAdvantageSkill),
+            VarType::Activation(
+                ActivationVar::IsOtherCharacterActivateAdvantageSkill
+                | ActivationVar::IsPopularityTopCharacterActivateAdvantageSkill,
+            ),
             CompOp::Equal,
             _,
         ) => Some(TriggerCondition::BuffSkillActivation),
