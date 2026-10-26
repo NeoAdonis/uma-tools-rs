@@ -93,6 +93,9 @@ pub struct OrderState {
     pub runner_count: u8,
     /// Current order rate (percentile; "you are in the top X%"), rounded up.
     pub rate: u8,
+    /// Order rates (top X%) that round to the current order, as order rate
+    /// conditions do (see [`Self::order_at_rate`]).
+    pub rates: RangeInclusive<i32>,
     /// Best (lowest) order reached so far.
     /// N.B. This value is tracked only after 5 seconds into the race.
     pub best: u8,
@@ -117,6 +120,7 @@ impl Default for OrderState {
             order: 1,
             runner_count: 1,
             rate: 0,
+            rates: rates_at_order(1, 1),
             best: u8::MAX,
             worst: 0,
             delta: 0,
@@ -136,6 +140,18 @@ impl OrderState {
     pub fn order_at_rate(&self, rate: i32) -> i32 {
         (self.runner_count as i32 * rate + 50) / 100
     }
+}
+
+/// Order rates (top X%) that round to `order` in a race with `runner_count`
+/// runners (see [`OrderState::order_at_rate`]).
+///
+/// For example, 50% to 61% round to 5th place in a 9-runner race.
+fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
+    let (order, runner_count) = (order as i32, runner_count as i32);
+    // `(runner_count * rate + 50) / 100 == order` holds for
+    // `100 * order - 50 <= runner_count * rate < 100 * order + 50`.
+    let ceil_div = |value: i32| (value + runner_count - 1) / runner_count;
+    ceil_div(100 * order - 50)..=ceil_div(100 * order + 50) - 1
 }
 
 /// Distance differences from other runners.
@@ -1021,6 +1037,7 @@ impl Runner {
         let order = self.order.order;
         self.order.runner_count = total_runners;
         self.order.rate = ((order as f64 / total_runners as f64) * 100.0).ceil() as u8;
+        self.order.rates = rates_at_order(order, total_runners);
         if should_update_range {
             self.order.best = self.order.best.min(order);
             self.order.worst = self.order.worst.max(order);

@@ -49,13 +49,21 @@
 //! out-of-gate evaluations, which only uses data available before a race
 //! starts.
 //!
-//! ## Set Values
+//! ## Value Kinds
 //!
-//! Most variables have an integer value ([`Value::Int`]), but some of them are
-//! sets ([`Value::Set`]) whose comparisons test membership instead: e.g.
-//! `is_used_skill_id==202051` is true if 202051 is among the IDs of the skills
-//! the runner used, and `!=` if it isn't. The parser rejects other operators.
-//! Sets are views of the race state, so reading them doesn't allocate.
+//! Most variables have an integer value ([`Value::Int`]), but some of them
+//! don't:
+//!
+//! - Sets ([`Value::Set`]), whose comparisons test membership: e.g.
+//!   `is_used_skill_id==202051` is true if 202051 is among the IDs of the
+//!   skills the runner used, and `!=` if it isn't. The parser rejects other
+//!   operators. Sets are views of the race state, so reading them doesn't
+//!   allocate.
+//! - Ranges ([`Value::Range`]), for values only known up to rounding: e.g.
+//!   `order_rate<=50` holds if the runner's order is at most 9 * 50% = 4.5,
+//!   rounded to 5, in a 9-runner race. Any order rate from 50% to 61% rounds
+//!   to 5th place, so that's the value of `order_rate` for that order, and
+//!   `<=50` holds since some rate in the range is at most 50.
 //!
 //! ## Float Handling
 //!
@@ -86,6 +94,7 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 use crate::uma::*;
 use crate::units::*;
 use std::collections::HashMap;
+use std::ops::RangeInclusive;
 
 /// Returns `true` if ALL comparisons from a list evaluate to `true`, or list
 /// is empty.
@@ -135,12 +144,15 @@ where
         .all(|comp| evaluator.evaluate(comp, logic_ctx, state, context))
 }
 
-/// Value of a variable (see [Set Values](self#set-values)).
+/// Value of a variable (see [Value Kinds](self#value-kinds)).
 pub enum Value<'a> {
     /// Integer value, compared with any operator.
     Int(i32),
     /// Set of values, whose membership `==` and `!=` test.
     Set(ValueSet<'a>),
+    /// Range of values, all equivalent: `==`, `<=` and `>=` hold if any value
+    /// in the range does, and `!=`, `>` and `<` are their negations.
+    Range(RangeInclusive<i32>),
 }
 
 /// Set of values, as a view of the race state.
@@ -194,6 +206,14 @@ impl Comparison {
                 CompOp::NotEqual => !set.contains(self.value),
                 // Rejected by the parser.
                 op => unreachable!("{} doesn't support operator {op:?}", self.var),
+            },
+            Value::Range(range) => match self.op {
+                CompOp::Equal => range.contains(&self.value),
+                CompOp::NotEqual => !range.contains(&self.value),
+                CompOp::LessEqual => *range.start() <= self.value,
+                CompOp::Greater => *range.start() > self.value,
+                CompOp::GreaterEqual => *range.end() >= self.value,
+                CompOp::Less => *range.end() < self.value,
             },
         }
     }
@@ -254,12 +274,6 @@ impl CompEvaluator for EvaluatorFull {
         match &comp.var {
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
-            // `order_rate OP X` is converted to `order OP round(gates * X%)`.
-            Order(OrderVar::OrderRate) => {
-                let order = &runner.order;
-                comp.op
-                    .apply(order.order as i32, order.order_at_rate(comp.value))
-            }
             _ => comp.holds(get_variable_value(&comp.var, state, runner, logic_ctx)),
         }
     }
@@ -308,6 +322,8 @@ pub fn get_variable_value<'a>(
     match var {
         BaseStat(stat_var) => Int(get_base_stat(stat_var, &runner.base)),
         Entry(entry_var) => Int(get_entry_value(entry_var, &runner.initial_state)),
+        // Rates that round to the runner's order (see `OrderState::rates`).
+        Order(OrderVar::OrderRate) => Value::Range(runner.order.rates.clone()),
         Order(pos_var) => Int(get_rank_value(pos_var, runner)),
         Distance(dist_var) => Int(get_distance_value(dist_var, runner)),
         Phase(phase_var) => Int(get_phase_value(phase_var, &state.course, runner)),
@@ -810,7 +826,7 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     match var {
         // Order.
         Order => order.order as i32,
-        OrderRate => panic!("BUG: {var} should be handled in evaluate()"),
+        OrderRate => panic!("BUG: {var} should be read as a range"),
 
         // Order change checks.
         ChangeOrderOnetime => order.delta as i32,

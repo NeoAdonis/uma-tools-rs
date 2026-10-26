@@ -33,7 +33,9 @@ Whatever the kind, also:
    skill from adding popularity points, add it to `VarType::is_popularity_guard`.
 5. Return its value in `src/condition/evaluator.rs`:
    - In `get_variable_value`, as a `Value::Set` if comparisons test whether
-     their value is in a set (e.g. a skill ID among the activated ones).
+     their value is in a set (e.g. a skill ID among the activated ones), or a
+     `Value::Range` if it's only known up to rounding (e.g. the order rates
+     that round to the runner's order).
    - In `get_variable_value_out_of_gate` too, if it's known before the race.
    - If it's out of scope, make the evaluator panic on it, and list it under
      "Unimplemented Variables" in the module docs.

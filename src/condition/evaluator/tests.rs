@@ -21,7 +21,7 @@ fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
 fn int(value: Value) -> i32 {
     match value {
         Value::Int(value) => value,
-        Value::Set(_) => panic!("not an integer"),
+        _ => panic!("not an integer"),
     }
 }
 
@@ -703,8 +703,8 @@ fn test_order_rate_converts_to_rounded_order() {
         (12, 7, [true, true, false, false]),
     ];
     for (runners, order, expected) in cases {
-        solver.runners[0].order.runner_count = runners;
         solver.runners[0].order.order = order;
+        solver.runners[0].update_order_rate(runners, false);
         let actual = [
             CompOp::Greater,
             CompOp::GreaterEqual,
@@ -720,7 +720,68 @@ fn test_order_rate_converts_to_rounded_order() {
 }
 
 #[test]
-#[should_panic(expected = "should be handled in evaluate()")]
+fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
+    let mut solver = create_test_race_solver(vec![]);
+    let var = VarType::Order(OrderVar::OrderRate);
+    // (runners, order, rates).
+    let cases = [
+        (9, 1, 6..=16),
+        (9, 5, 50..=61),
+        (9, 9, 95..=105),
+        (12, 6, 46..=54),
+        (1, 1, 50..=149),
+    ];
+    for (runners, order, expected) in cases {
+        solver.runners[0].order.order = order;
+        solver.runners[0].update_order_rate(runners, false);
+        let runner = &solver.runners[0];
+        let Value::Range(actual) = get_variable_value(&var, &solver.state, runner, None) else {
+            panic!("{var} isn't a range");
+        };
+        assert_eq!(actual, expected, "runners {runners}, order {order}");
+        // Every rate in the range, and only those, round to the order.
+        for rate in [
+            *actual.start() - 1,
+            *actual.start(),
+            *actual.end(),
+            *actual.end() + 1,
+        ] {
+            let rounded = runner.order.order_at_rate(rate) == order as i32;
+            assert_eq!(rounded, actual.contains(&rate), "rate {rate}");
+        }
+    }
+}
+
+#[test]
+fn test_range_values_hold_if_any_value_does() {
+    let comp = |op| Comparison {
+        var: VarType::Order(OrderVar::OrderRate),
+        op,
+        value: 50,
+    };
+    // (range, [==, !=, <=, >, >=, <]).
+    let cases = [
+        (40..=60, [true, false, true, false, true, false]),
+        (50..=50, [true, false, true, false, true, false]),
+        (51..=60, [false, true, false, true, true, false]),
+        (40..=49, [false, true, true, false, false, true]),
+    ];
+    let ops = [
+        CompOp::Equal,
+        CompOp::NotEqual,
+        CompOp::LessEqual,
+        CompOp::Greater,
+        CompOp::GreaterEqual,
+        CompOp::Less,
+    ];
+    for (range, expected) in cases {
+        let actual = ops.map(|op| comp(op).holds(Value::Range(range.clone())));
+        assert_eq!(actual, expected, "{range:?}");
+    }
+}
+
+#[test]
+#[should_panic(expected = "should be read as a range")]
 fn test_order_rate_value_panics() {
     let solver = create_test_race_solver(vec![]);
     get_rank_value(&OrderVar::OrderRate, &solver.runners[0]);
