@@ -176,10 +176,10 @@ impl CompEvaluator for EvaluatorFull {
     ) -> bool {
         use VarType::*;
         let runner = context;
-        // Special cases: activation queries and lineup variables require
-        // different logic.
+        // Special cases: skill queries require different logic.
         match &comp.var {
             ActivationQuery(var) => evaluate_activation_query(var, comp, state, runner),
+            Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
             // `order_rate OP X` is converted to `order OP round(runners * X%)`.
@@ -187,14 +187,6 @@ impl CompEvaluator for EvaluatorFull {
                 let order = &runner.order;
                 comp.op
                     .apply(order.order as i32, order.order_at_rate(comp.value))
-            }
-            Lineup(lineup_var) => {
-                // Extract the skill being evaluated from logic context.
-                let skill_id = logic_ctx
-                    .and_then(|logic| runner.available_skills.get(logic.skill_index))
-                    .map(|skill| skill.id.as_str())
-                    .unwrap_or("");
-                evaluate_lineup(lineup_var, comp, state, skill_id)
             }
             _ => {
                 // Normal case: get variable value and compare.
@@ -224,10 +216,8 @@ impl CompEvaluator for EvaluatorOutOfGate {
     ) -> bool {
         use VarType::*;
         match &comp.var {
-            // Special case: lineup variables require different logic.
-            Lineup(lineup_var) => {
-                evaluate_lineup(lineup_var, comp, state, &context.evaluated_skill_id)
-            }
+            // Special case: skill queries require different logic.
+            Lineup(LineupVar::IsExistSkillId) => evaluate_is_exist_skill_id(comp, state),
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if context.initial_state.ignores_popularity => true,
             // "random_lot==X" means X% chance, rolled every time it's evaluated.
@@ -270,10 +260,17 @@ pub fn get_variable_value(
         Status(status_var) => get_status_value(status_var, runner),
         Blocking(blocking_var) => get_blocking_value(blocking_var, runner),
         Temptation(tempt_var) => get_temptation_value(tempt_var, state, runner),
+        Lineup(lineup_var) => {
+            // Extract the skill being evaluated from logic context.
+            let skill_id = logic_ctx
+                .and_then(|logic| runner.available_skills.get(logic.skill_index))
+                .map_or("", |skill| skill.id.as_str());
+            get_lineup_value(lineup_var, state, skill_id)
+        }
         AccumulateTime => state.elapsed_time.floor() as i32,
         // Always returns 1 (true).
         Always => 1,
-        Lineup(_) | ActivationQuery(_) => panic!("BUG: {var} should be handled in evaluate()"),
+        ActivationQuery(_) => panic!("BUG: {var} should be handled in evaluate()"),
         // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
             runner.all_out_spurt.is_active() as i32
@@ -300,6 +297,7 @@ pub fn get_variable_value_out_of_gate(
         Course(course_var) => get_course_value(course_var, &state.course),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
+        Lineup(lineup_var) => get_lineup_value(lineup_var, state, &builder.evaluated_skill_id),
         // Always returns 1 (true).
         Always => 1,
         // Not applicable in out-of-gate contexts.
@@ -535,34 +533,35 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     }
 }
 
-/// Evaluate a comparison on the lineup (every runner entered in the race).
+/// Get lineup values (from every runner entered in the race).
 ///
-/// Unlike most variables, some of these use the comparison value as parameter
-/// instead of comparing against it. `skill_id` is the ID of the skill whose
-/// condition is being evaluated.
-fn evaluate_lineup(var: &LineupVar, comp: &Comparison, state: &RaceState, skill_id: &str) -> bool {
+/// `skill_id` is the ID of the skill whose condition is being evaluated.
+fn get_lineup_value(var: &LineupVar, state: &RaceState, skill_id: &str) -> i32 {
     use LineupVar::*;
 
     match var {
-        // Whether any runner has the skill with ID == `comp.value`.
-        IsExistSkillId => {
-            let exists = state.existing_skills.contains_key(&comp.value.to_string());
-            match comp.op {
-                CompOp::Equal => exists,
-                CompOp::NotEqual => !exists,
-                // Rejected by the parser.
-                op => unreachable!("is_exist_skill_id doesn't support operator {op:?}"),
-            }
-        }
-
         // Number of runners with the skill being evaluated.
-        SameSkillHorseCount => {
-            let count = state.existing_skills.get(skill_id).copied().unwrap_or(0);
-            comp.op.apply(count as i32, comp.value)
-        }
+        SameSkillHorseCount => state.existing_skills.get(skill_id).copied().unwrap_or(0) as i32,
+
+        IsExistSkillId => panic!("BUG: {var} should be handled in evaluate()"),
 
         // Existence checks - out of scope.
         IsExistCharaId => unimplemented!("is_exist_chara_id not implemented"),
+    }
+}
+
+/// Evaluate `is_exist_skill_id`: whether any runner has the skill with ID ==
+/// `comp.value`.
+///
+/// Unlike most variables, it uses the comparison value as parameter instead of
+/// comparing against it.
+fn evaluate_is_exist_skill_id(comp: &Comparison, state: &RaceState) -> bool {
+    let exists = state.existing_skills.contains_key(&comp.value.to_string());
+    match comp.op {
+        CompOp::Equal => exists,
+        CompOp::NotEqual => !exists,
+        // Rejected by the parser.
+        op => unreachable!("is_exist_skill_id doesn't support operator {op:?}"),
     }
 }
 

@@ -1188,10 +1188,41 @@ fn test_out_of_gate_in_race_variables_are_zero() {
 
 #[test]
 #[should_panic(expected = "should be handled in evaluate()")]
-fn test_lineup_variable_value_panics() {
+fn test_is_exist_skill_id_value_panics() {
     let solver = create_test_race_solver(vec![]);
-    let var = VarType::Lineup(LineupVar::SameSkillHorseCount);
+    let var = VarType::Lineup(LineupVar::IsExistSkillId);
     get_variable_value(&var, &solver.state, &solver.runners[0], None);
+}
+
+#[test]
+fn test_same_skill_horse_count_value() {
+    let skill = Skill::new("200331".to_string(), skill_data(vec![]));
+    let mut solver = create_test_race_solver(vec![skill]);
+    solver.state.existing_skills.insert("200331".to_string(), 3);
+
+    let var = LineupVar::SameSkillHorseCount;
+    assert_eq!(get_lineup_value(&var, &solver.state, "200331"), 3);
+    // Skills nobody has, or no skill being evaluated.
+    assert_eq!(get_lineup_value(&var, &solver.state, "200332"), 0);
+    let var = VarType::Lineup(var);
+    let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
+    assert_eq!(actual, 0);
+}
+
+#[test]
+fn test_same_skill_horse_count_out_of_gate() {
+    let (mut state, mut runner) = create_out_of_gate_runner();
+    state.existing_skills.insert("200331".to_string(), 2);
+    runner.evaluated_skill_id = "200331".to_string();
+
+    let cases = [
+        ("same_skill_horse_count==2", true),
+        ("same_skill_horse_count>=3", false),
+    ];
+    for (condition, expected) in cases {
+        let actual = EvaluatorOutOfGate.evaluate(&comp(condition), None, &state, &runner);
+        assert_eq!(actual, expected, "{condition}");
+    }
 }
 
 #[test]
