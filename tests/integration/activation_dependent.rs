@@ -42,7 +42,7 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
             0.4,
         ),
     ];
-    let skill = Skill::new("100661".to_string(), skill_data(alternatives));
+    let skill = Skill::new(100661, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -91,7 +91,7 @@ fn test_heal_skill_activation_dependency() {
             0.4,
         ),
     ];
-    let skill = Skill::new("110771".to_string(), skill_data(alternatives));
+    let skill = Skill::new(110771, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -138,7 +138,7 @@ fn test_activation_dependent_or_branches() {
             0.4,
         ),
     ];
-    let skill = Skill::new("100901".to_string(), skill_data(alternatives));
+    let skill = Skill::new(100901, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -195,7 +195,7 @@ fn test_alternative_with_and_without_dependency() {
             0.4,
         ),
     ];
-    let skill = Skill::new("101021".to_string(), skill_data(alternatives));
+    let skill = Skill::new(101021, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -248,7 +248,7 @@ fn test_other_character_skill_activation() {
     // Tests: External (other character) activation tracking
 
     let skill = skill(
-        "101103211",
+        101103211,
         "distance_type==3&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==27@distance_type==4&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==27@distance_type==3&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==22@distance_type==4&phase>=2&is_finalcorner==1&is_other_character_activate_advantage_skill==22",
         SkillType::TargetSpeed,
         0.4,
@@ -294,7 +294,7 @@ fn test_activation_dependency_variable_detection() {
     // Test 1: is_activate_other_skill_detail (checked during the whole race)
     {
         let skill = skill(
-            "test_dep1",
+            1,
             "is_activate_other_skill_detail==1",
             SkillType::TargetSpeed,
             0.4,
@@ -319,12 +319,7 @@ fn test_activation_dependency_variable_detection() {
 
     // Test 2: is_activate_heal_skill (checked when a heal skill activates)
     {
-        let skill = skill(
-            "test_dep2",
-            "is_activate_heal_skill==1",
-            SkillType::TargetSpeed,
-            0.4,
-        );
+        let skill = skill(2, "is_activate_heal_skill==1", SkillType::TargetSpeed, 0.4);
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
@@ -346,7 +341,7 @@ fn test_activation_dependency_variable_detection() {
     // runners activate advantage skills)
     {
         let skill = skill(
-            "test_dep3",
+            3,
             "is_other_character_activate_advantage_skill==27",
             SkillType::TargetSpeed,
             0.4,
@@ -380,7 +375,7 @@ fn test_activation_dependency_with_precondition() {
         SkillType::TargetSpeed,
         0.4,
     )];
-    let skill = Skill::new("test_combined".to_string(), skill_data(alternatives));
+    let skill = Skill::new(0, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);

@@ -81,7 +81,7 @@ fn main() {
     // Convert skill IDs to actual Skill objects.
     let skills: Vec<Skill> = skill_ids
         .iter()
-        .filter_map(|id| skills_map.get(&id.to_string()).cloned())
+        .filter_map(|id| skills_map.get(id).cloned())
         .collect();
 
     println!("Uma has {} skills", skills.len());

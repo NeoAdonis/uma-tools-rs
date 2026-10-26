@@ -18,7 +18,7 @@ fn all_out_spurt_skill() -> Skill {
             0.2,
         )
     };
-    Skill::new("204222".to_string(), skill_data(vec![alternative]))
+    Skill::new(204222, skill_data(vec![alternative]))
 }
 
 /// Build a solver with a single runner on a 2000m course whose threshold stat

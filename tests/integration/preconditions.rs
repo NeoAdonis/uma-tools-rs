@@ -29,7 +29,7 @@ fn test_precondition_with_window_trigger() {
     // Tests: Complex precondition properly separated from spatial window trigger
 
     let skill = Skill::new(
-        "100031".to_string(),
+        100031,
         skill_data(vec![alternative_with_precondition(
             "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
             "is_last_straight==1",
@@ -88,7 +88,7 @@ fn test_precondition_with_or_condition() {
         SkillType::TargetSpeed,
         0.4,
     );
-    let skill = Skill::new("test_or_precond".to_string(), skill_data(vec![alternative]));
+    let skill = Skill::new(0, skill_data(vec![alternative]));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -134,10 +134,7 @@ fn test_multiple_alternatives_precondition_independence() {
         // No precondition
         alternative("is_last_straight==1", SkillType::TargetSpeed, 0.5),
     ];
-    let skill = Skill::new(
-        "test_multi_alt_precond".to_string(),
-        skill_data(alternatives),
-    );
+    let skill = Skill::new(0, skill_data(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -184,10 +181,10 @@ const RUNTIME_COURSE: u32 = 10104;
 
 /// Always available target speed skill, locked until `precondition` is
 /// satisfied.
-fn speed_skill(id: &str, condition: &str, precondition: &str) -> Skill {
+fn speed_skill(id: i32, condition: &str, precondition: &str) -> Skill {
     let alternative =
         alternative_with_precondition(precondition, condition, SkillType::TargetSpeed, 0.035);
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 /// Ready race with a single runner with the given skills.
@@ -201,21 +198,21 @@ fn ready_runner(skills: Vec<Skill>) -> RaceSolver<Runner> {
 }
 
 /// Run a race with a single runner and return where each skill activated.
-fn activation_distances(skills: Vec<Skill>) -> Vec<(String, f64)> {
+fn activation_distances(skills: Vec<Skill>) -> Vec<(i32, f64)> {
     let mut solver = ready_runner(skills);
     solver.run();
     solver.runners[0]
         .activated_skills
         .iter()
-        .map(|record| (record.skill_id.clone(), record.distance))
+        .map(|record| (record.skill_id, record.distance))
         .collect()
 }
 
 /// Where a skill activated, if it did.
-fn activation_distance(activations: &[(String, f64)], id: &str) -> Option<f64> {
+fn activation_distance(activations: &[(i32, f64)], id: i32) -> Option<f64> {
     activations
         .iter()
-        .find(|(skill_id, _)| skill_id == id)
+        .find(|&&(skill_id, _)| skill_id == id)
         .map(|(_, distance)| *distance)
 }
 
@@ -223,13 +220,13 @@ fn activation_distance(activations: &[(String, f64)], id: &str) -> Option<f64> {
 fn test_precondition_unlocks_skill_once_satisfied() {
     // The condition holds from 10% on, but the skill must wait for Late phase
     let activations = activation_distances(vec![speed_skill(
-        "late",
+        4,
         "distance_rate>=10&order<=18",
         "phase>=2",
     )]);
 
     let late_start = load_course(RUNTIME_COURSE).section_length() * 16.0;
-    let distance = activation_distance(&activations, "late").expect("Skill should activate");
+    let distance = activation_distance(&activations, 4).expect("Skill should activate");
     assert!(
         (late_start..late_start + 30.0).contains(&distance),
         "Should activate right after Late phase starts ({late_start}m), got {distance}m"
@@ -240,12 +237,12 @@ fn test_precondition_unlocks_skill_once_satisfied() {
 fn test_unsatisfied_precondition_blocks_skill() {
     // Early phase and the final corner never overlap
     let activations = activation_distances(vec![speed_skill(
-        "blocked",
+        1,
         "distance_rate>=10&order<=18",
         "phase==0&is_finalcorner==1",
     )]);
 
-    assert_eq!(activation_distance(&activations, "blocked"), None);
+    assert_eq!(activation_distance(&activations, 1), None);
 }
 
 #[test]
@@ -253,12 +250,12 @@ fn test_heal_precondition_unlocks_on_heal_activation() {
     // Skill 110771 (Joy to the World) waits for a heal in the first half of
     // Mid phase (17%-42% of the race)
     let precondition = "phase_firsthalf==1&is_activate_heal_skill==1";
-    let joy = || speed_skill("joy", "distance_rate>=45&order<=18", precondition);
-    let heal = skill("heal", "distance_rate>=20", SkillType::Recovery, 0.035);
+    let joy = || speed_skill(3, "distance_rate>=45&order<=18", precondition);
+    let heal = skill(2, "distance_rate>=20", SkillType::Recovery, 0.035);
 
     let activations = activation_distances(vec![heal, joy()]);
-    assert!(activation_distance(&activations, "heal").is_some());
-    let distance = activation_distance(&activations, "joy").expect("Heal should unlock skill");
+    assert!(activation_distance(&activations, 2).is_some());
+    let distance = activation_distance(&activations, 3).expect("Heal should unlock skill");
     assert!(
         (900.0..930.0).contains(&distance),
         "Should activate at 45% (900m), got {distance}m"
@@ -266,7 +263,7 @@ fn test_heal_precondition_unlocks_on_heal_activation() {
 
     // Without a heal, the skill stays locked
     let activations = activation_distances(vec![joy()]);
-    assert_eq!(activation_distance(&activations, "joy"), None);
+    assert_eq!(activation_distance(&activations, 3), None);
 }
 
 #[test]
@@ -274,13 +271,13 @@ fn test_last_straight_onetime_precondition() {
     // Skill 100911 has `is_last_straight_onetime==1` in its precondition, which
     // can only be checked when entering the last straight
     let activations = activation_distances(vec![speed_skill(
-        "straight",
+        8,
         "is_last_straight==1&order<=18",
         "phase>=2&is_last_straight_onetime==1",
     )]);
 
     let straight_start = load_course(RUNTIME_COURSE).straights.last().unwrap().start;
-    let distance = activation_distance(&activations, "straight").expect("Skill should activate");
+    let distance = activation_distance(&activations, 8).expect("Skill should activate");
     assert!(
         (straight_start..straight_start + 30.0).contains(&distance),
         "Should activate when entering the last straight ({straight_start}m), got {distance}m"
@@ -291,13 +288,9 @@ fn test_last_straight_onetime_precondition() {
 fn test_static_preconditions_resolved_at_race_start() {
     // Course 10104 is a medium distance (distance_type==3) turf course
     let solver = ready_runner(vec![
-        speed_skill("medium", "distance_rate>=10&order<=18", "distance_type==3"),
-        speed_skill("short", "distance_rate>=10&order<=18", "distance_type==1"),
-        speed_skill(
-            "mixed",
-            "distance_rate>=10&order<=18",
-            "ground_type==1&order<=18",
-        ),
+        speed_skill(5, "distance_rate>=10&order<=18", "distance_type==3"),
+        speed_skill(7, "distance_rate>=10&order<=18", "distance_type==1"),
+        speed_skill(6, "distance_rate>=10&order<=18", "ground_type==1&order<=18"),
     ]);
     let scheduler = &solver.runners[0].trigger_scheduler;
 
@@ -314,9 +307,9 @@ fn test_static_preconditions_resolved_at_race_start() {
     assert_eq!(windows[1].guards.len(), 1, "Only order<=18 should remain");
 
     let activations = activation_distances(vec![
-        speed_skill("medium", "distance_rate>=10&order<=18", "distance_type==3"),
-        speed_skill("short", "distance_rate>=10&order<=18", "distance_type==1"),
+        speed_skill(5, "distance_rate>=10&order<=18", "distance_type==3"),
+        speed_skill(7, "distance_rate>=10&order<=18", "distance_type==1"),
     ]);
-    assert!(activation_distance(&activations, "medium").is_some());
-    assert_eq!(activation_distance(&activations, "short"), None);
+    assert!(activation_distance(&activations, 5).is_some());
+    assert_eq!(activation_distance(&activations, 7), None);
 }

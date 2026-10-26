@@ -133,7 +133,7 @@ fn test_or_branch_skill_id_uniqueness() {
     // Tests: OR branches are treated as separate skills in the scheduler
 
     let skill = skill(
-        "test_unique_ids",
+        2,
         "distance_rate>=50@hp_per<=50@accumulatetime>=10",
         SkillType::TargetSpeed,
         0.4,
@@ -173,7 +173,7 @@ fn test_or_branches_independent_activation_tracking() {
     // Tests: each branch starts off cooldown
 
     let skill = skill(
-        "test_independent_tracking",
+        1,
         "distance_rate>=50@hp_per<=50",
         SkillType::TargetSpeed,
         0.4,

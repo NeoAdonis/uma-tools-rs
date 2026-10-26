@@ -16,7 +16,7 @@ fn skill(condition: &str, base_cooldown: f64) -> Skill {
         base_cooldown,
         ..alternative(condition, SkillType::TargetSpeed, 0.0001)
     };
-    Skill::new("999999".to_string(), skill_data(vec![alternative]))
+    Skill::new(999999, skill_data(vec![alternative]))
 }
 
 /// Run a single-runner race and return the finished runner.

@@ -175,7 +175,7 @@ pub struct UmaData {
     #[serde(rename = "motivation")]
     pub mood: Mood,
     /// List of [`skill`](crate::skill::Skill)s by ID that the Uma has.
-    pub skills: Vec<u32>,
+    pub skills: Vec<i32>,
 }
 
 impl UmaData {

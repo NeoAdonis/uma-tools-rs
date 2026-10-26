@@ -16,34 +16,29 @@ fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
 }
 
 /// IDs of the skills that activate on the first frame the runner moves.
-fn race_start_ids<'a>(skills: &'a [Skill], scheduler: &TriggerScheduler) -> Vec<&'a str> {
+fn race_start_ids(skills: &[Skill], scheduler: &TriggerScheduler) -> Vec<i32> {
     scheduler
         .race_start_triggers
         .iter()
-        .map(|&logic_idx| {
-            skills[scheduler.skill_logics[logic_idx].skill_index]
-                .id
-                .as_str()
-        })
+        .map(|&logic_idx| skills[scheduler.skill_logics[logic_idx].skill_index].id)
         .collect()
 }
 
 /// IDs of the out-of-gate skills activated before the race.
-fn activated_ids(runner: &UnreadyRunner) -> Vec<&str> {
+fn activated_ids(runner: &UnreadyRunner) -> Vec<i32> {
     race_start_ids(&runner.skills, &runner.trigger_scheduler)
 }
 
 #[test]
 fn test_stat_boost_is_applied() {
     // Stat boosts are in stat points (800000 in the skill data = +80 speed).
-    let (mut runner, state) =
-        unready_runner(vec![skill("speed", "always==1", SkillType::SpeedUp, 80.0)]);
+    let (mut runner, state) = unready_runner(vec![skill(8, "always==1", SkillType::SpeedUp, 80.0)]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.adjusted.speed, speed + 80);
-    assert_eq!(activated_ids(&runner), vec!["speed"]);
+    assert_eq!(activated_ids(&runner), vec![8]);
 }
 
 #[test]
@@ -178,11 +173,10 @@ fn test_rush_style_changes() {
 /// Start delay of a runner before and after applying an out-of-gate skill with
 /// the given effect.
 fn start_delays(skill_type: SkillType, modifier: f64) -> (f64, f64) {
-    let (mut runner, state) =
-        unready_runner(vec![skill("delay", "always==1", skill_type, modifier)]);
+    let (mut runner, state) = unready_runner(vec![skill(2, "always==1", skill_type, modifier)]);
     let before = runner.start_delay;
     runner.apply_out_of_gate_skills(&state);
-    assert_eq!(activated_ids(&runner), vec!["delay"]);
+    assert_eq!(activated_ids(&runner), vec![2]);
     (before, runner.start_delay)
 }
 
@@ -199,8 +193,8 @@ fn test_start_delay_modifications() {
 #[test]
 fn test_every_out_of_gate_skill_is_applied() {
     let (mut runner, state) = unready_runner(vec![
-        skill("delay", "always==1", SkillType::AddStartDelay, 0.1),
-        skill("rush", "always==1", SkillType::RushChanceUp, -3.0),
+        skill(2, "always==1", SkillType::AddStartDelay, 0.1),
+        skill(7, "always==1", SkillType::RushChanceUp, -3.0),
     ]);
     let start_delay = runner.start_delay;
 
@@ -208,14 +202,14 @@ fn test_every_out_of_gate_skill_is_applied() {
 
     assert_eq!(runner.start_delay, start_delay + 0.1);
     assert_eq!(runner.rush_chance_modifier, -3.0);
-    assert_eq!(activated_ids(&runner), vec!["delay", "rush"]);
+    assert_eq!(activated_ids(&runner), vec![2, 7]);
 }
 
 #[test]
 fn test_unsatisfied_condition_is_not_applied() {
     // Course 10104 is turf (ground_type==1).
     let (mut runner, state) = unready_runner(vec![skill(
-        "dirt_delay",
+        3,
         "ground_type==2",
         SkillType::AddStartDelay,
         0.1,
@@ -231,12 +225,8 @@ fn test_unsatisfied_condition_is_not_applied() {
 #[test]
 fn test_unsatisfied_stat_boost_is_not_applied() {
     // Course 10104 is turf (ground_type==1).
-    let (mut runner, state) = unready_runner(vec![skill(
-        "dirt_speed",
-        "ground_type==2",
-        SkillType::SpeedUp,
-        80.0,
-    )]);
+    let (mut runner, state) =
+        unready_runner(vec![skill(4, "ground_type==2", SkillType::SpeedUp, 80.0)]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
@@ -254,14 +244,14 @@ fn test_first_satisfied_alternative_is_applied() {
         alternative("ground_type==1", SkillType::SpeedUp, 40.0),
         alternative("always==1", SkillType::SpeedUp, 80.0),
     ];
-    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let skill = Skill::new(8, skill_data(alternatives));
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.adjusted.speed, speed + 40);
-    assert_eq!(activated_ids(&runner), vec!["speed"]);
+    assert_eq!(activated_ids(&runner), vec![8]);
 }
 
 #[test]
@@ -269,9 +259,9 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     // Out-of-gate skills listed first must not shift the skills the trigger
     // scheduler refers to.
     let skills = vec![
-        skill("speed", "always==1", SkillType::SpeedUp, 40.0),
-        skill("delay", "always==1", SkillType::AddStartDelay, 0.1),
-        skill("late", "distance_rate>=50", SkillType::TargetSpeed, 0.35),
+        skill(8, "always==1", SkillType::SpeedUp, 40.0),
+        skill(2, "always==1", SkillType::AddStartDelay, 0.1),
+        skill(5, "distance_rate>=50", SkillType::TargetSpeed, 0.35),
     ];
     let mut solver = ready_solver(10104, uma(Style::Pace), skills, &seeded_config(0));
     solver.run();
@@ -279,11 +269,11 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
     let activations: Vec<_> = solver.runners[0]
         .activated_skills
         .iter()
-        .map(|record| (record.skill_id.as_str(), record.distance))
+        .map(|record| (record.skill_id, record.distance))
         .collect();
     assert_eq!(activations.len(), 3, "{activations:?}");
-    assert_eq!(&activations[..2], &[("speed", 0.0), ("delay", 0.0)]);
-    assert_eq!(activations[2].0, "late");
+    assert_eq!(&activations[..2], &[(8, 0.0), (2, 0.0)]);
+    assert_eq!(activations[2].0, 5);
     assert!(activations[2].1 >= 1000.0, "{activations:?}");
 }
 
@@ -297,7 +287,7 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
                 wit_check: true,
                 ..skill_data(vec![alternative])
             };
-            Skill::new(i.to_string(), data)
+            Skill::new(i as i32, data)
         })
         .collect();
     let uma = Uma {
@@ -367,7 +357,7 @@ fn test_rush_chance_is_rounded_up() {
 #[test]
 fn test_rush_chance_is_clamped() {
     // Rush chance down by 3% (as in the skill data).
-    let calm = |i: usize| skill(&i.to_string(), "always==1", SkillType::RushChanceUp, -3.0);
+    let calm = |i| skill(i, "always==1", SkillType::RushChanceUp, -3.0);
     for seed in 0..10 {
         // Very low wit: over 100% (about 24,600%).
         let runner = runner_with_wit(1, vec![], seed);
@@ -390,7 +380,7 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
 
 #[test]
 fn test_out_of_gate_skills_are_counted_as_activated() {
-    let speed = skill("speed", "always==1", SkillType::SpeedUp, 80.0);
+    let speed = skill(8, "always==1", SkillType::SpeedUp, 80.0);
     let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
     solver.run();
 
@@ -399,14 +389,14 @@ fn test_out_of_gate_skills_are_counted_as_activated() {
     assert_eq!(counts.start, 1);
 }
 
-const CONNECT_ID: &str = "201632";
-const METI_RESONANCE_ID: &str = "110502211";
+const CONNECT_ID: i32 = 201632;
+const METI_RESONANCE_ID: i32 = 110502211;
 
 /// Run the out-of-gate step of a race on `course_id` with one runner per skill
 /// set, using the skills in `data/skill_data.json`.
 ///
 /// Runners are returned in the order of their skill sets.
-fn sympathy_runners(course_id: u32, skill_sets: &[&[&str]]) -> Vec<Runner> {
+fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
     let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), &seeded_config(0));
     for (i, ids) in skill_sets.iter().enumerate() {
@@ -415,7 +405,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[&str]]) -> Vec<Runner> {
             guts: 800 + i as u16,
             ..uma(Style::Pace)
         };
-        let skills = ids.iter().map(|id| skills[*id].clone()).collect();
+        let skills = ids.iter().map(|id| skills[id].clone()).collect();
         solver.add_runner(uma, Mood::Normal, skills);
     }
     let mut runners = solver.ready_runners().runners;
@@ -484,7 +474,7 @@ fn test_sympathy_is_not_activated_if_connect_isnt() {
 fn test_sympathy_activates_once() {
     // Activated both by its own condition and by "Connect", listed before and after
     // it.
-    let mut skill_sets: Vec<&[&str]> = vec![&[SYMPATHY_ID]; 5];
+    let mut skill_sets: Vec<&[i32]> = vec![&[SYMPATHY_ID]; 5];
     skill_sets[0] = &[CONNECT_ID, SYMPATHY_ID];
     skill_sets[4] = &[SYMPATHY_ID, CONNECT_ID];
     let runners = sympathy_runners(10104, &skill_sets);
@@ -494,15 +484,15 @@ fn test_sympathy_activates_once() {
 #[test]
 fn test_random_lot_is_rolled_before_the_race() {
     let (mut runner, state) = unready_runner(vec![
-        skill("never", "random_lot==0", SkillType::SpeedUp, 40.0),
-        skill("always", "random_lot==100", SkillType::SpeedUp, 80.0),
+        skill(6, "random_lot==0", SkillType::SpeedUp, 40.0),
+        skill(1, "random_lot==100", SkillType::SpeedUp, 80.0),
     ]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.adjusted.speed, speed + 80);
-    assert_eq!(activated_ids(&runner), vec!["always"]);
+    assert_eq!(activated_ids(&runner), vec![1]);
 }
 
 #[test]
@@ -511,20 +501,20 @@ fn test_failed_random_lot_falls_through_to_next_alternative() {
         alternative("random_lot==0", SkillType::SpeedUp, 100.0),
         alternative("always==1", SkillType::SpeedUp, 40.0),
     ];
-    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let skill = Skill::new(8, skill_data(alternatives));
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.adjusted.speed, speed + 40);
-    assert_eq!(activated_ids(&runner), vec!["speed"]);
+    assert_eq!(activated_ids(&runner), vec![8]);
 }
 
 #[test]
 fn test_gambler_activation_rate() {
     // As the only runner, she's the most popular: `popularity<=3&random_lot==30`.
-    const GAMBLER_ID: &str = "202441";
+    const GAMBLER_ID: i32 = 202441;
     const RACES: u64 = 300;
     let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
     let course = load_course(10104);
@@ -532,7 +522,7 @@ fn test_gambler_activation_rate() {
     let activations = (0..RACES)
         .filter(|&seed| {
             let mut solver = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed));
-            let gambler = skills[GAMBLER_ID].clone();
+            let gambler = skills[&GAMBLER_ID].clone();
             solver.add_runner(uma(Style::Pace), Mood::Normal, vec![gambler]);
             let runner = &solver.ready_runners().runners[0];
             !race_start_ids(&runner.available_skills, &runner.trigger_scheduler).is_empty()
@@ -550,7 +540,7 @@ fn test_gambler_activation_rate() {
 fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
     // Course 10104 is turf (ground_type==1): both OR branches hold.
     let (mut runner, state) = unready_runner(vec![skill(
-        "speed",
+        8,
         "ground_type==1@always==1",
         SkillType::SpeedUp,
         40.0,
@@ -560,7 +550,7 @@ fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.adjusted.speed, speed + 40);
-    assert_eq!(activated_ids(&runner), vec!["speed"]);
+    assert_eq!(activated_ids(&runner), vec![8]);
 }
 
 /// Speed gains, over 50 races, of a skill whose two alternatives are eligible
@@ -571,7 +561,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
         alternative(&condition, SkillType::SpeedUp, 100.0),
         alternative(&condition, SkillType::SpeedUp, 40.0),
     ];
-    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let skill = Skill::new(8, skill_data(alternatives));
     let course = load_course(10104);
 
     (0..50)
@@ -614,7 +604,7 @@ fn alternative_with_precondition(
 /// Speed gained before the race by a runner with the given skill alternatives,
 /// on a 2000m turf course (10104).
 fn out_of_gate_speed_gain(alternatives: Vec<SkillAlternative>) -> u16 {
-    let skill = Skill::new("speed".to_string(), skill_data(alternatives));
+    let skill = Skill::new(8, skill_data(alternatives));
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
     runner.apply_out_of_gate_skills(&state);

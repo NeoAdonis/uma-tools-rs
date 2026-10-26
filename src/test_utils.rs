@@ -149,9 +149,9 @@ pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub(crate) fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
+pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
     Skill::new(
-        id.to_string(),
+        id,
         skill_data(vec![alternative(condition, skill_type, modifier)]),
     )
 }

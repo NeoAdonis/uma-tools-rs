@@ -18,19 +18,19 @@ fn test_skill_popularity_from_data() {
 
     // Expected values are the ones given in-game.
     let cases = [
-        ("200961", points(&[(Stat::Speed, 30.0)])),
-        ("200962", points(&[(Stat::Speed, 20.0)])),
-        ("200011", points(&[(Stat::Speed, 45.0)])),
-        ("200342", points(&[(Stat::Power, 20.0)])),
-        ("200433", points(&[(Stat::Speed, -30.0)])),
-        ("200851", points(&[(Stat::Speed, 10.0), (Stat::Wit, 10.0)])),
-        ("202521", points(&[(Stat::Power, 60.0)])),
-        ("10071", points(&[(Stat::Speed, 30.0)])),
-        ("900011", points(&[(Stat::Power, 15.0)])),
-        ("900091", points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
+        (200961, points(&[(Stat::Speed, 30.0)])),
+        (200962, points(&[(Stat::Speed, 20.0)])),
+        (200011, points(&[(Stat::Speed, 45.0)])),
+        (200342, points(&[(Stat::Power, 20.0)])),
+        (200433, points(&[(Stat::Speed, -30.0)])),
+        (200851, points(&[(Stat::Speed, 10.0), (Stat::Wit, 10.0)])),
+        (202521, points(&[(Stat::Power, 60.0)])),
+        (10071, points(&[(Stat::Speed, 30.0)])),
+        (900011, points(&[(Stat::Power, 15.0)])),
+        (900091, points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
     ];
     for (id, expected) in cases {
-        assert_eq!(skill_popularity(&skills[id]), expected, "skill {id}");
+        assert_eq!(skill_popularity(&skills[&id]), expected, "skill {id}");
     }
 }
 
@@ -43,7 +43,7 @@ fn test_skill_popularity_reads_data() {
             popularity,
             ..skill_data(vec![])
         };
-        Skill::new("1".to_string(), data)
+        Skill::new(1, data)
     };
     let with_data = |entries: Vec<Entry>| with_popularity(Some(entries));
     let entry = |stat, value| Entry { stat, value };
@@ -126,7 +126,7 @@ fn popularity_skill(conditions: &[&str], wit_check: bool) -> Skill {
         wit_check,
         ..skill_data(alternatives)
     };
-    Skill::new("1".to_string(), data)
+    Skill::new(1, data)
 }
 
 /// Get the speed points a skill adds to a Pace runner with 1000 wit on a 2000m

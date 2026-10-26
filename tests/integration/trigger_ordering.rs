@@ -46,7 +46,7 @@ fn test_phase_and_distance_intersect() {
     // The phase must still be Mid when reaching 50%
     let scheduler = scheduler(
         skill(
-            "100621",
+            100621,
             "distance_rate>=50&phase==1&order>=3&order_rate<=70",
             SkillType::TargetSpeed,
             0.4,
@@ -74,7 +74,7 @@ fn test_impossible_on_course_is_skipped() {
         SkillType::TargetSpeed,
         0.4,
     );
-    let skill = Skill::new("110121".to_string(), skill_data(vec![alternative]));
+    let skill = Skill::new(110121, skill_data(vec![alternative]));
     let scheduler = scheduler(skill, 10104);
 
     assert!(scheduler.skill_logics.is_empty());
@@ -90,7 +90,7 @@ fn test_six_conditions_intersect() {
     // - remain_distance>=500: until 1500m
     let scheduler = scheduler(
         skill(
-            "110591",
+            110591,
             "distance_rate>=60&slope==2&phase==1&order_rate>=40&order_rate<=80&remain_distance>=500",
             SkillType::TargetSpeed,
             0.4,
@@ -117,7 +117,7 @@ fn test_distance_rate_and_remain_distance_intersect() {
     // 66-68% (floored, so until 69%) is 1320-1380m, well before 500m remain
     let scheduler = scheduler(
         skill(
-            "101191",
+            101191,
             "distance_rate>=66&distance_rate<=68&order_rate>=50&remain_distance>=500",
             SkillType::TargetSpeed,
             0.4,
@@ -141,7 +141,7 @@ fn test_hp_window() {
     // Skill 200761: distance_type==4&hp_per<=30 (HP is floored, so until 31%)
     let scheduler = scheduler(
         skill(
-            "200761",
+            200761,
             "distance_type==4&hp_per<=30",
             SkillType::TargetSpeed,
             0.4,
@@ -161,7 +161,7 @@ fn test_time_window_with_dynamic_guards() {
     // Checked every frame after 5 seconds until every guard holds
     let scheduler = scheduler(
         skill(
-            "test_time",
+            2,
             "accumulatetime>=5&blocked_front_continuetime>=1&order_rate<=50&overtake_target_time>=2",
             SkillType::TargetSpeed,
             0.4,
@@ -181,7 +181,7 @@ fn test_phase_window_with_dynamic_guards() {
     // Checked every frame during Late phase (not only when entering it)
     let scheduler = scheduler(
         skill(
-            "test_phase",
+            1,
             "phase==2&blocked_front_continuetime>=1&order_rate<=50",
             SkillType::TargetSpeed,
             0.4,

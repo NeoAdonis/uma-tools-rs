@@ -271,12 +271,12 @@ fn test_multiple_trigger_comparisons_are_combined() {
 }
 
 /// Helper function to create a test skill with precondition.
-fn create_skill_with_precondition(id: &str, condition: &str, precondition: &str) -> Skill {
+fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) -> Skill {
     let alternative = SkillAlternative {
         precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
         ..alternative(condition, SkillType::TargetSpeed, 0.4)
     };
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 /// Build a scheduler for the given skills on the test course.
@@ -288,8 +288,7 @@ fn build_test_scheduler(skills: &[Skill]) -> crate::trigger::system::TriggerSche
 
 #[test]
 fn test_precondition_creates_unlock_logic_before_skill_logic() {
-    let skill =
-        create_skill_with_precondition("test_precondition", "distance_rate>=80", "phase>=2");
+    let skill = create_skill_with_precondition(7, "distance_rate>=80", "phase>=2");
     let scheduler = build_test_scheduler(&[skill]);
 
     assert_eq!(scheduler.skill_logics.len(), 2);
@@ -319,7 +318,7 @@ fn test_precondition_creates_unlock_logic_before_skill_logic() {
 
 #[test]
 fn test_empty_precondition_treated_as_none() {
-    let skill = create_skill_with_precondition("test_empty", "distance_rate>=80", "");
+    let skill = create_skill_with_precondition(5, "distance_rate>=80", "");
     let scheduler = build_test_scheduler(&[skill]);
 
     assert_eq!(scheduler.skill_logics.len(), 1);
@@ -331,7 +330,7 @@ fn test_empty_precondition_treated_as_none() {
 #[test]
 fn test_or_condition_branches_share_precondition() {
     let skill = create_skill_with_precondition(
-        "test_or",
+        6,
         // OR condition.
         "distance_rate>=80@hp_per<=50",
         // Shared precondition.
@@ -349,7 +348,7 @@ fn test_or_condition_branches_share_precondition() {
 
 #[test]
 fn test_or_precondition_creates_one_unlock_logic_per_branch() {
-    let skill = create_skill_with_precondition("test_or", "distance_rate>=80", "phase==1@phase==3");
+    let skill = create_skill_with_precondition(6, "distance_rate>=80", "phase==1@phase==3");
     let scheduler = build_test_scheduler(&[skill]);
 
     assert_eq!(scheduler.skill_logics.len(), 3);
@@ -369,7 +368,7 @@ fn test_precondition_only_in_alternative_zero() {
         },
         alternative("hp_per<=50", SkillType::TargetSpeed, 0.3),
     ];
-    let skill = Skill::new("test_multi_alt".to_string(), skill_data(alternatives));
+    let skill = Skill::new(0, skill_data(alternatives));
     let scheduler = build_test_scheduler(&[skill]);
 
     // Unlock logic, then one logic per alternative.
@@ -383,9 +382,9 @@ fn test_precondition_only_in_alternative_zero() {
 #[test]
 fn test_precondition_ids_are_assigned_per_alternative() {
     let skills = [
-        create_skill_with_precondition("skill1", "distance_rate>=80", "phase>=2"),
-        create_skill_with_precondition("skill2", "hp_per<=50", ""),
-        create_skill_with_precondition("skill3", "distance_rate>=50", "order<=3"),
+        create_skill_with_precondition(1, "distance_rate>=80", "phase>=2"),
+        create_skill_with_precondition(2, "hp_per<=50", ""),
+        create_skill_with_precondition(3, "distance_rate>=50", "order<=3"),
     ];
     let scheduler = build_test_scheduler(&skills);
 
@@ -404,7 +403,7 @@ fn test_precondition_ids_are_assigned_per_alternative() {
 fn test_unsatisfiable_precondition_skips_alternative() {
     // The test course has no downhill slopes and 3 corners (second to fourth).
     for precondition in ["slope==2", "corner==1", "phase==1&distance_rate>=90"] {
-        let skill = create_skill_with_precondition("test", "distance_rate>=80", precondition);
+        let skill = create_skill_with_precondition(4, "distance_rate>=80", precondition);
         let scheduler = build_test_scheduler(&[skill]);
 
         assert!(
@@ -418,7 +417,7 @@ fn test_unsatisfiable_precondition_skips_alternative() {
 #[test]
 fn test_precondition_time_and_hp_windows_cover_the_race() {
     // The precondition queue only tracks positions.
-    let skill = create_skill_with_precondition("test", "distance_rate>=80", "accumulatetime>=10");
+    let skill = create_skill_with_precondition(4, "distance_rate>=80", "accumulatetime>=10");
     let scheduler = build_test_scheduler(&[skill]);
 
     let windows: Vec<_> = scheduler.precondition_windows.iter().collect();
@@ -433,7 +432,7 @@ fn test_precondition_time_and_hp_windows_cover_the_race() {
 #[test]
 fn test_precondition_event_is_indexed_before_skill() {
     let skill = create_skill_with_precondition(
-        "test_straight",
+        8,
         "is_last_straight_onetime==1",
         "phase>=2&is_last_straight_onetime==1",
     );
@@ -558,7 +557,7 @@ fn test_alternatives_share_random_rolls() {
     // The first alternative only adds a requirement to the second one, so both
     // must be checked at the same random point.
     let skill = Skill::new(
-        "shared".to_string(),
+        0,
         skill_data(vec![
             alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 0.35),
             alternative("phase_random==1", SkillType::TargetSpeed, 0.15),

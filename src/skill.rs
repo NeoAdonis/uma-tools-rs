@@ -413,7 +413,7 @@ pub const DEFAULT_COOLDOWN: f64 = 500.0;
 
 /// ID of the "Sympathy" skill, which skills with an
 /// [`SkillType::ActivateSympathy`] effect activate for every runner.
-pub const SYMPATHY_ID: &str = "201631";
+pub const SYMPATHY_ID: i32 = 201631;
 
 fn default_cooldown() -> f64 {
     DEFAULT_COOLDOWN
@@ -549,7 +549,7 @@ pub struct SkillPopularity {
 /// The data is shared, so cloning a skill is cheap.
 #[derive(Clone, Debug)]
 pub struct Skill {
-    pub id: String,
+    pub id: i32,
     data: Arc<SkillData>,
 }
 
@@ -583,7 +583,7 @@ pub struct SkillData {
 
 impl Skill {
     /// Create a new Skill from ID and SkillData.
-    pub fn new(id: String, data: SkillData) -> Self {
+    pub fn new(id: i32, data: SkillData) -> Self {
         Skill {
             id,
             data: Arc::new(data),
@@ -621,7 +621,7 @@ impl Skill {
     /// is the unique's ID with its first digit replaced by 9 (e.g. 900011 for
     /// 100011).
     pub fn is_inherited_unique(&self) -> bool {
-        self.id.len() == 6 && self.id.starts_with('9')
+        (900_000..1_000_000).contains(&self.id)
     }
 
     /// Check if `self` is a green skill, i.e. one that boosts stats.
@@ -677,15 +677,16 @@ impl Skill {
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
     pub fn load_skills_from_file(
         json_path: &str,
-    ) -> Result<HashMap<String, Skill>, Box<dyn std::error::Error>> {
+    ) -> Result<HashMap<i32, Skill>, Box<dyn std::error::Error>> {
         use std::fs;
 
         let json_content = fs::read_to_string(json_path)?;
         let skills_data: HashMap<String, SkillData> = serde_json::from_str(&json_content)?;
 
         let mut skills_map = HashMap::new();
-        for (id_str, data) in skills_data {
-            skills_map.insert(id_str.clone(), Skill::new(id_str, data));
+        for (id, data) in skills_data {
+            let id: i32 = id.parse()?;
+            skills_map.insert(id, Skill::new(id, data));
         }
 
         Ok(skills_map)
@@ -702,7 +703,7 @@ mod tests {
             wit_check,
             ..skill_data(vec![])
         };
-        Skill::new("test".to_string(), data)
+        Skill::new(0, data)
     }
 
     #[test]
@@ -728,7 +729,7 @@ mod tests {
                 rarity,
                 ..skill_data(vec![])
             };
-            Skill::new("test".to_string(), data)
+            Skill::new(0, data)
         };
         assert!(!skill(SkillRarity::White).is_wit_limit_break_eligible());
         assert!(skill(SkillRarity::Gold).is_wit_limit_break_eligible());
@@ -975,7 +976,7 @@ mod tests {
     fn test_is_green() {
         let skill = |skill_type| {
             let alternatives = vec![test_utils::alternative("always==1", skill_type, 40.0)];
-            Skill::new("test".to_string(), skill_data(alternatives))
+            Skill::new(0, skill_data(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).is_green());
         assert!(skill(SkillType::AllStatsUp).is_green());
@@ -1026,7 +1027,7 @@ mod tests {
     fn test_pre_race_effects_activate_out_of_gate() {
         let skill = |skill_type| {
             let alternatives = vec![test_utils::alternative("running_style==1", skill_type, 0.0)];
-            Skill::new("test".to_string(), skill_data(alternatives))
+            Skill::new(0, skill_data(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).should_activate_out_of_gate());
         assert!(skill(SkillType::MultiplyStartDelay).should_activate_out_of_gate());

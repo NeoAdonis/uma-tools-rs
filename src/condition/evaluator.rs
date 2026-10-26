@@ -298,7 +298,7 @@ pub fn get_variable_value(
             // Extract the skill being evaluated from logic context.
             let skill_id = logic_ctx
                 .and_then(|logic| runner.available_skills.get(logic.skill_index))
-                .map_or("", |skill| skill.id.as_str());
+                .map_or(0, |skill| skill.id);
             get_lineup_value(lineup_var, state, skill_id)
         }
         AccumulateTime => state.elapsed_time.floor() as i32,
@@ -331,7 +331,7 @@ pub fn get_variable_value_out_of_gate(
         Course(course_var) => get_course_value(course_var, &state.course),
         RaceParam(param_var) => get_race_param_value(param_var, &state.params),
         RunningStyle(style_var) => get_running_style_value(style_var, state, builder.base.style),
-        Lineup(lineup_var) => get_lineup_value(lineup_var, state, &builder.evaluated_skill_id),
+        Lineup(lineup_var) => get_lineup_value(lineup_var, state, builder.evaluated_skill_id),
         // Always returns 1 (true).
         Always => 1,
         // Not applicable in out-of-gate contexts.
@@ -570,12 +570,12 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 /// Get lineup values (from every runner entered in the race).
 ///
 /// `skill_id` is the ID of the skill whose condition is being evaluated.
-fn get_lineup_value(var: &LineupVar, state: &RaceState, skill_id: &str) -> i32 {
+fn get_lineup_value(var: &LineupVar, state: &RaceState, skill_id: i32) -> i32 {
     use LineupVar::*;
 
     match var {
         // Number of runners with the skill being evaluated.
-        SameSkillHorseCount => state.existing_skills.get(skill_id).copied().unwrap_or(0) as i32,
+        SameSkillHorseCount => state.existing_skills.get(&skill_id).copied().unwrap_or(0) as i32,
 
         IsExistSkillId => panic!("BUG: {var} should be handled in evaluate()"),
 
@@ -590,7 +590,7 @@ fn get_lineup_value(var: &LineupVar, state: &RaceState, skill_id: &str) -> i32 {
 /// Unlike most variables, it uses the comparison value as parameter instead of
 /// comparing against it.
 fn evaluate_is_exist_skill_id(comp: &Comparison, state: &RaceState) -> bool {
-    let exists = state.existing_skills.contains_key(&comp.value.to_string());
+    let exists = state.existing_skills.contains_key(&comp.value);
     match comp.op {
         CompOp::Equal => exists,
         CompOp::NotEqual => !exists,
@@ -613,7 +613,7 @@ fn evaluate_activation_query(
         IsUsedSkillId | IsUsedSkillIdWithDetailOne => {
             // Check if skill with ID == `comp.value` has been activated (through
             // its first alternative for `is_used_skill_id_with_detail_one`).
-            let mask = runner.activated_mask(&comp.value.to_string());
+            let mask = runner.activated_mask(comp.value);
             let is_used = match var {
                 IsUsedSkillId => mask != 0,
                 _ => mask & 1 != 0,

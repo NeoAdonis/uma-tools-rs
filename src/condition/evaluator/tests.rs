@@ -19,8 +19,8 @@ fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
 
 /// Ready race with a single Late Surger holding a skill with the given ID,
 /// activated through the alternatives in `mask`.
-fn solver_with_activated_skill(skill_id: &str, mask: u8) -> RaceSolver<Runner> {
-    let skill = Skill::new(skill_id.to_string(), skill_data(vec![]));
+fn solver_with_activated_skill(skill_id: i32, mask: u8) -> RaceSolver<Runner> {
+    let skill = Skill::new(skill_id, skill_data(vec![]));
     let mut solver = create_test_race_solver(vec![skill]);
     solver.runners[0].activated_alternatives[0] = mask;
     solver
@@ -28,7 +28,7 @@ fn solver_with_activated_skill(skill_id: &str, mask: u8) -> RaceSolver<Runner> {
 
 #[test]
 fn test_is_used_skill_id_with_activated_skill() {
-    let solver = solver_with_activated_skill("202051", 1);
+    let solver = solver_with_activated_skill(202051, 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -61,7 +61,7 @@ fn test_is_used_skill_id_without_activated_skill() {
 #[test]
 fn test_is_used_skill_id_with_different_skill() {
     // Different from what we're checking.
-    let solver = solver_with_activated_skill("203781", 1);
+    let solver = solver_with_activated_skill(203781, 1);
 
     // Create comparison: is_used_skill_id == 202051.
     let comp = Comparison {
@@ -76,7 +76,7 @@ fn test_is_used_skill_id_with_different_skill() {
 
 #[test]
 fn test_is_used_skill_id_not_equal() {
-    let state = solver_with_activated_skill("202051", 1);
+    let state = solver_with_activated_skill(202051, 1);
 
     // Create comparison: is_used_skill_id != 202051.
     let comp = Comparison {
@@ -97,7 +97,7 @@ fn is_used_skill_id_with_alternative(activated: Option<usize>) -> (bool, bool) {
         alternative("phase==1", SkillType::TargetSpeed, 0.35),
         alternative("phase==1", SkillType::CurrentSpeed, -0.15),
     ];
-    let skill = Skill::new("204452".to_string(), skill_data(alternatives));
+    let skill = Skill::new(204452, skill_data(alternatives));
     let mut solver = create_test_race_solver(vec![skill]);
     if let Some(alternative_index) = activated {
         solver.runners[0].activate_skill(0, alternative_index, &solver.state);
@@ -136,7 +136,7 @@ fn test_is_used_skill_id_with_detail_one_not_activated() {
 #[test]
 fn test_is_used_skill_id_with_detail_one_not_equal() {
     // Only the second alternative activated.
-    let solver = solver_with_activated_skill("204452", 0b10);
+    let solver = solver_with_activated_skill(204452, 0b10);
 
     let comp = Comparison {
         var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne),
@@ -148,7 +148,7 @@ fn test_is_used_skill_id_with_detail_one_not_equal() {
 
 #[test]
 fn test_is_exist_skill_id_in_available_skills() {
-    let skill = Skill::new("203061".to_string(), skill_data(vec![]));
+    let skill = Skill::new(203061, skill_data(vec![]));
     let solver = create_test_race_solver(vec![skill]);
 
     // Create comparison: is_exist_skill_id == 203061.
@@ -1017,7 +1017,7 @@ fn test_activation_counts() {
 
 #[test]
 fn test_is_activate_other_skill_detail_without_logic() {
-    let solver = solver_with_activated_skill("test", 0b10);
+    let solver = solver_with_activated_skill(1, 0b10);
 
     let var = ActivationVar::IsActivateOtherSkillDetail;
     let actual = get_activation_value(&var, &solver.state, &solver.runners[0], None);
@@ -1210,14 +1210,14 @@ fn test_is_exist_skill_id_value_panics() {
 
 #[test]
 fn test_same_skill_horse_count_value() {
-    let skill = Skill::new("200331".to_string(), skill_data(vec![]));
+    let skill = Skill::new(200331, skill_data(vec![]));
     let mut solver = create_test_race_solver(vec![skill]);
-    solver.state.existing_skills.insert("200331".to_string(), 3);
+    solver.state.existing_skills.insert(200331, 3);
 
     let var = LineupVar::SameSkillHorseCount;
-    assert_eq!(get_lineup_value(&var, &solver.state, "200331"), 3);
+    assert_eq!(get_lineup_value(&var, &solver.state, 200331), 3);
     // Skills nobody has, or no skill being evaluated.
-    assert_eq!(get_lineup_value(&var, &solver.state, "200332"), 0);
+    assert_eq!(get_lineup_value(&var, &solver.state, 200332), 0);
     let var = VarType::Lineup(var);
     let actual = get_variable_value(&var, &solver.state, &solver.runners[0], None);
     assert_eq!(actual, 0);
@@ -1226,8 +1226,8 @@ fn test_same_skill_horse_count_value() {
 #[test]
 fn test_same_skill_horse_count_out_of_gate() {
     let (mut state, mut runner) = create_out_of_gate_runner();
-    state.existing_skills.insert("200331".to_string(), 2);
-    runner.evaluated_skill_id = "200331".to_string();
+    state.existing_skills.insert(200331, 2);
+    runner.evaluated_skill_id = 200331;
 
     let cases = [
         ("same_skill_horse_count==2", true),
@@ -1329,9 +1329,9 @@ fn test_is_popularity_top_character_activate_advantage_skill() {
 
 #[test]
 fn test_succession_skill_count() {
-    let skill = |id: &str| Skill::new(id.to_string(), skill_data(vec![]));
+    let skill = |id: i32| Skill::new(id, skill_data(vec![]));
     // Inherited uniques, a unique and a white skill.
-    let skills = ["900011", "900021", "100011", "200012"].map(skill).to_vec();
+    let skills = [900011, 900021, 100011, 200012].map(skill).to_vec();
     let solver = create_test_race_solver(skills);
     let actual = get_status_value(&StatusVar::SuccessionSkillCount, &solver.runners[0]);
     assert_eq!(actual, 2);

@@ -178,7 +178,7 @@ pub struct UnreadyRunner {
     /// Temporary: ID of the out-of-gate skill currently being evaluated. Used for
     /// conditions like `same_skill_horse_count` that need to know which skill
     /// they're checking.
-    pub evaluated_skill_id: String,
+    pub evaluated_skill_id: i32,
     /// Temporary: lottery draw of the out-of-gate skill currently being evaluated,
     /// if drawn yet (see [`Self::evaluated_skill_lot`]).
     evaluated_skill_lot_draw: Cell<Option<f64>>,
@@ -260,7 +260,7 @@ impl UnreadyRunner {
             skills,
             failed_skills,
             popularity_bonus: SkillPopularity::default(),
-            evaluated_skill_id: String::new(),
+            evaluated_skill_id: 0,
             evaluated_skill_lot_draw: Cell::new(None),
             casts_sympathy: false,
             rush_chance_modifier: 0.0,
@@ -399,7 +399,7 @@ impl UnreadyRunner {
                 continue;
             }
             // Set the skill being evaluated (same_skill_horse_count, random_lot).
-            self.evaluated_skill_id.clone_from(&skill.id);
+            self.evaluated_skill_id = skill.id;
             self.evaluated_skill_lot_draw.set(None);
 
             // Satisfied if all comparisons of any OR branch are true, once rewritten

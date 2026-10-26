@@ -281,7 +281,7 @@ pub struct PendingEffect {
 #[derive(Debug, Clone)]
 pub struct SkillActivationRecord {
     /// Skill ID of the activated skill from the global skill list.
-    pub skill_id: String,
+    pub skill_id: i32,
     /// Distance when the skill was activated (in meters from start).
     pub distance: f64,
 }

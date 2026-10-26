@@ -142,9 +142,9 @@ pub fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
+pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
     Skill::new(
-        id.to_string(),
+        id,
         skill_data(vec![alternative(condition, skill_type, modifier)]),
     )
 }
@@ -152,7 +152,7 @@ pub fn skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) ->
 /// Always available skill whose target speed effect is too small to change the
 /// race.
 pub fn negligible_skill(condition: &str) -> Skill {
-    skill("999999", condition, SkillType::TargetSpeed, 0.0001)
+    skill(999999, condition, SkillType::TargetSpeed, 0.0001)
 }
 
 /// Logics that activate skills (excluding the ones that unlock preconditions).

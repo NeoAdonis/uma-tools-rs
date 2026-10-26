@@ -415,7 +415,7 @@ impl Runner {
         );
 
         // Clone the skill data we need to avoid borrow checker issues.
-        let skill_id = self.available_skills[skill_index].id.clone();
+        let skill_id = self.available_skills[skill_index].id;
         let alternative =
             self.available_skills[skill_index].alternatives[alternative_index].clone();
 
@@ -776,7 +776,7 @@ impl Runner {
 
     /// Mask of the activated alternatives of the skill with the given ID (see
     /// [`Self::activated_alternatives`]), or 0 if the runner doesn't have it.
-    pub fn activated_mask(&self, skill_id: &str) -> u8 {
+    pub fn activated_mask(&self, skill_id: i32) -> u8 {
         self.available_skills
             .iter()
             .position(|skill| skill.id == skill_id)

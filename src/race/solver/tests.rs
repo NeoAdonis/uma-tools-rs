@@ -76,7 +76,7 @@ fn test_skills_see_state_after_the_move() {
     // The distance trigger and the phase guard become true on the same frame, so
     // both must be seen at once.
     let skill = skill(
-        "late",
+        24,
         "remain_distance<=800&phase>=2",
         SkillType::TargetSpeed,
         0.35,
@@ -1791,9 +1791,9 @@ fn test_team_activations_match_runners_each_frame() {
     let skills = || {
         vec![
             // Out-of-gate.
-            skill("speed", "always==1", SkillType::SpeedUp, 80.0),
-            skill("mid", "phase==1", SkillType::TargetSpeed, 0.1),
-            skill("late", "phase>=2", SkillType::TargetSpeed, 0.1),
+            skill(32, "always==1", SkillType::SpeedUp, 80.0),
+            skill(25, "phase==1", SkillType::TargetSpeed, 0.1),
+            skill(24, "phase>=2", SkillType::TargetSpeed, 0.1),
         ]
     };
     let member = |style| (uma(style), Mood::Normal, skills());
@@ -2048,7 +2048,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
             ..effect(SkillType::SpeedUp, -60.0)
         },
     ]);
-    let debuff = Skill::new("debuff".to_string(), skill_data(vec![alternative]));
+    let debuff = Skill::new(8, skill_data(vec![alternative]));
 
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![debuff]);
@@ -2130,7 +2130,7 @@ fn test_lane_and_duration_effects_set_skill_modifiers() {
 
 #[test]
 fn test_duration_scaling_extends_activated_skills() {
-    let skill = skill("speed", "always==1", SkillType::TargetSpeed, 0.15);
+    let skill = skill(32, "always==1", SkillType::TargetSpeed, 0.15);
     let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
     let extend = received(SkillType::ExtendEvolvedDuration, 2.0);
     solver.runners[0].receive_skill_effect(&extend, &solver.state);
@@ -2166,7 +2166,7 @@ fn test_rush_time_up_extends_rush_of_runners_bound_to_rush() {
 
 /// Run a race with one runner per skill list and return, for each list, whether
 /// the runner activated `skill_id`.
-fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
+fn activates(skills: Vec<Vec<Skill>>, skill_id: i32) -> Vec<bool> {
     activates_with_most_popular(skills, None, skill_id)
 }
 
@@ -2175,12 +2175,12 @@ fn activates(skills: Vec<Vec<Skill>>, skill_id: &str) -> Vec<bool> {
 fn activates_with_most_popular(
     skills: Vec<Vec<Skill>>,
     most_popular: Option<usize>,
-    skill_id: &str,
+    skill_id: i32,
 ) -> Vec<bool> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
-    let ids: Vec<Vec<String>> = skills
+    let ids: Vec<Vec<i32>> = skills
         .iter()
-        .map(|skills| skills.iter().map(|skill| skill.id.clone()).collect())
+        .map(|skills| skills.iter().map(|skill| skill.id).collect())
         .collect();
     for skills in skills {
         solver.add_runner(uma(Style::Late), Mood::Normal, skills);
@@ -2188,7 +2188,7 @@ fn activates_with_most_popular(
     let mut solver = solver.ready_runners();
 
     // Runners are built in gate order, so find each one by her skills.
-    let has_skills = |runner: &Runner, ids: &[String]| {
+    let has_skills = |runner: &Runner, ids: &[i32]| {
         runner
             .available_skills
             .iter()
@@ -2217,14 +2217,14 @@ fn activates_with_most_popular(
 
 /// Heal skill activating 5 seconds into the race.
 fn heal() -> Skill {
-    skill("heal", "accumulatetime>=5", SkillType::Recovery, 0.055)
+    skill(22, "accumulatetime>=5", SkillType::Recovery, 0.055)
 }
 
 #[test]
 fn test_other_runner_advantage_skill_triggers_skill() {
     let react = || {
         skill(
-            "react",
+            29,
             "is_other_character_activate_advantage_skill==9",
             SkillType::TargetSpeed,
             0.35,
@@ -2232,26 +2232,23 @@ fn test_other_runner_advantage_skill_triggers_skill() {
     };
     // Own heals don't count.
     assert_eq!(
-        activates(
-            vec![vec![heal()], vec![react()], vec![heal(), react()]],
-            "react"
-        ),
+        activates(vec![vec![heal()], vec![react()], vec![heal(), react()]], 29),
         [false, true, true]
     );
-    assert_eq!(activates(vec![vec![heal(), react()]], "react"), [false]);
+    assert_eq!(activates(vec![vec![heal(), react()]], 29), [false]);
 }
 
 #[test]
 fn test_other_runner_advantage_skill_is_only_seen_on_its_frame() {
     // The heal activates long before the rest of the condition is true.
     let react = skill(
-        "react",
+        29,
         "is_other_character_activate_advantage_skill==9&accumulatetime>=20",
         SkillType::TargetSpeed,
         0.35,
     );
     assert_eq!(
-        activates(vec![vec![heal()], vec![react]], "react"),
+        activates(vec![vec![heal()], vec![react]], 29),
         [false, false]
     );
 }
@@ -2260,20 +2257,16 @@ fn test_other_runner_advantage_skill_is_only_seen_on_its_frame() {
 fn test_most_popular_runner_skill_triggers_skill() {
     let react = |value| {
         skill(
-            "react",
+            29,
             &format!("is_popularity_top_character_activate_advantage_skill=={value}"),
             SkillType::TargetSpeed,
             0.35,
         )
     };
     // Debuffs only count as any skill.
-    let debuff = || skill("debuff", "accumulatetime>=5", SkillType::TargetSpeed, -0.1);
+    let debuff = || skill(8, "accumulatetime>=5", SkillType::TargetSpeed, -0.1);
     let react_to = |top: Skill, value, most_popular| {
-        activates_with_most_popular(
-            vec![vec![top], vec![react(value)]],
-            Some(most_popular),
-            "react",
-        )
+        activates_with_most_popular(vec![vec![top], vec![react(value)]], Some(most_popular), 29)
     };
     assert_eq!(react_to(heal(), 9, 0), [false, true]);
     assert_eq!(react_to(heal(), -1, 0), [false, true]);
@@ -2283,35 +2276,29 @@ fn test_most_popular_runner_skill_triggers_skill() {
     assert_eq!(react_to(heal(), 9, 1), [false, false]);
     // ...even if she's the runner herself.
     assert_eq!(
-        activates_with_most_popular(vec![vec![heal(), react(9)]], Some(0), "react"),
+        activates_with_most_popular(vec![vec![heal(), react(9)]], Some(0), 29),
         [true]
     );
 }
 
 #[test]
 fn test_ignored_popularity_satisfies_popularity_conditions() {
-    let ignore = || skill("ignore", "always==1", SkillType::IgnorePopularity, 1.0);
+    let ignore = || skill(23, "always==1", SkillType::IgnorePopularity, 1.0);
     // During the race and out of the gate.
-    let popular = || skill("popular", "popularity>=10", SkillType::TargetSpeed, 0.15);
-    let green = || skill("green", "popularity>=10", SkillType::SpeedUp, 40.0);
-    assert_eq!(
-        activates(vec![vec![popular(), green()]], "popular"),
-        [false]
-    );
-    assert_eq!(activates(vec![vec![popular(), green()]], "green"), [false]);
-    assert_eq!(
-        activates(vec![vec![ignore(), popular()]], "popular"),
-        [true]
-    );
-    assert_eq!(activates(vec![vec![ignore(), green()]], "green"), [true]);
+    let popular = || skill(27, "popularity>=10", SkillType::TargetSpeed, 0.15);
+    let green = || skill(18, "popularity>=10", SkillType::SpeedUp, 40.0);
+    assert_eq!(activates(vec![vec![popular(), green()]], 27), [false]);
+    assert_eq!(activates(vec![vec![popular(), green()]], 18), [false]);
+    assert_eq!(activates(vec![vec![ignore(), popular()]], 27), [true]);
+    assert_eq!(activates(vec![vec![ignore(), green()]], 18), [true]);
     // Whatever the order of the skills.
-    assert_eq!(activates(vec![vec![green(), ignore()]], "green"), [true]);
+    assert_eq!(activates(vec![vec![green(), ignore()]], 18), [true]);
 }
 
 #[test]
 fn test_guards_are_rewritten_for_the_runner() {
     let rate = skill(
-        "rate",
+        28,
         "order_rate<=50&hp_per>=20",
         SkillType::TargetSpeed,
         0.15,
@@ -2348,7 +2335,7 @@ fn activated_alternatives(conditions: &[&str]) -> Vec<usize> {
         .iter()
         .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.15))
         .collect();
-    let skill = Skill::new("test".to_string(), skill_data(alternatives));
+    let skill = Skill::new(0, skill_data(alternatives));
     let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
     solver.run();
 
@@ -2406,7 +2393,7 @@ fn test_forced_activation_disables_other_alternatives() {
         alternative("accumulatetime>=999", SkillType::TargetSpeed, 0.15),
         alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15),
     ];
-    let skill = Skill::new("test".to_string(), skill_data(alternatives));
+    let skill = Skill::new(0, skill_data(alternatives));
     let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
     // Bypassing conditions, like random gold activations.
     solver.runners[0].activate_skill(0, 0, &solver.state);
@@ -2416,7 +2403,7 @@ fn test_forced_activation_disables_other_alternatives() {
 
 /// Out-of-gate skill with the given effects on oneself, whose condition is
 /// always satisfied.
-fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)]) -> Skill {
+fn out_of_gate_skill(id: i32, base_duration: f64, effects: &[(SkillType, f64)]) -> Skill {
     let alternative = SkillAlternative {
         base_duration,
         effects: effects
@@ -2425,21 +2412,21 @@ fn out_of_gate_skill(id: &str, base_duration: f64, effects: &[(SkillType, f64)])
             .collect(),
         ..alternative("always==1", SkillType::SpeedUp, 0.0)
     };
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 /// IDs and distances of the skills activated by the only runner.
-fn activations(solver: &RaceSolver<Runner>) -> Vec<(&str, f64)> {
+fn activations(solver: &RaceSolver<Runner>) -> Vec<(i32, f64)> {
     solver.runners[0]
         .activated_skills
         .iter()
-        .map(|record| (record.skill_id.as_str(), record.distance))
+        .map(|record| (record.skill_id, record.distance))
         .collect()
 }
 
 #[test]
 fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
-    let speed = out_of_gate_skill("speed", f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
+    let speed = out_of_gate_skill(32, f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
     let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], &seeded_config(0));
     // Longer than a frame: the runner doesn't move during the first one.
     solver.runners[0].start_delay = 0.09;
@@ -2450,7 +2437,7 @@ fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
 
     // Activated before moving, on the frame she leaves the gate.
     solver.step(DELTA_TIME);
-    assert_eq!(activations(&solver), vec![("speed", 0.0)]);
+    assert_eq!(activations(&solver), vec![(32, 0.0)]);
     assert!(solver.runners[0].position > 0.0);
     let counts = &solver.runners[0].trigger_scheduler.activation_counts;
     assert_eq!((counts.all, counts.start), (1, 1));
@@ -2460,7 +2447,7 @@ fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
 fn test_out_of_gate_timed_effects_apply_from_first_frame() {
     // Like "Perfect Concentration": start delay before the race, then acceleration.
     let concentration = out_of_gate_skill(
-        "concentration",
+        7,
         3.0,
         &[
             (SkillType::MultiplyStartDelay, 0.4),
@@ -2478,7 +2465,7 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
 
     solver.step(DELTA_TIME);
     let runner = &solver.runners[0];
-    assert_eq!(activations(&solver), vec![("concentration", 0.0)]);
+    assert_eq!(activations(&solver), vec![(7, 0.0)]);
     assert_close!(runner.skill_modifiers.acceleration, 0.2);
     // Usual duration, scaled with the course distance.
     let distance = solver.state.course.distance as f64;
@@ -2494,20 +2481,20 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
     let fov = SkillAlternative {
         base_cooldown: 0.0,
         ..out_of_gate_skill(
-            "fov",
+            16,
             f64::INFINITY,
             &[(SkillType::WitUp, 40.0), (SkillType::Fov, 10.0)],
         )
         .alternatives[0]
             .clone()
     };
-    let fov = Skill::new("fov".to_string(), skill_data(vec![fov]));
+    let fov = Skill::new(16, skill_data(vec![fov]));
     let mut solver = ready_solver(10101, uma(Style::Pace), vec![fov], &seeded_config(0));
 
     solver.run();
     let runner = &solver.runners[0];
     // Activated only once, even without cooldown.
-    assert_eq!(activations(&solver), vec![("fov", 0.0)]);
+    assert_eq!(activations(&solver), vec![(16, 0.0)]);
     assert_close!(runner.skill_modifiers.visible_distance, 10.0);
     assert!(
         runner
@@ -2519,13 +2506,8 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
 
 #[test]
 fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
-    let speed = out_of_gate_skill("speed", f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
-    let follow = skill(
-        "follow",
-        "is_activate_any_skill==1",
-        SkillType::TargetSpeed,
-        0.15,
-    );
+    let speed = out_of_gate_skill(32, f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
+    let follow = skill(14, "is_activate_any_skill==1", SkillType::TargetSpeed, 0.15);
     let mut solver = ready_solver(
         10101,
         uma(Style::Pace),
@@ -2535,37 +2517,32 @@ fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
     solver.runners[0].start_delay = 0.0;
 
     solver.step(DELTA_TIME);
-    assert_eq!(activations(&solver), vec![("speed", 0.0), ("follow", 0.0)]);
+    assert_eq!(activations(&solver), vec![(32, 0.0), (14, 0.0)]);
 }
 
 #[test]
 fn test_out_of_gate_style_change_is_applied_before_the_race() {
     // Like "Great Escape".
-    let escape = skill(
-        "escape",
-        "running_style==1",
-        SkillType::ChangeStyleRunaway,
-        0.0,
-    );
+    let escape = skill(11, "running_style==1", SkillType::ChangeStyleRunaway, 0.0);
     let solver = ready_solver(10101, uma(Style::Front), vec![escape], &seeded_config(0));
     assert_eq!(solver.runners[0].adjusted.style, Style::Runaway);
 }
 
 /// Gold skill with the given condition.
-fn gold_skill(id: &str, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
+fn gold_skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
     let data = SkillData {
         rarity: SkillRarity::Gold,
         ..skill_data(vec![alternative(condition, skill_type, modifier)])
     };
-    Skill::new(id.to_string(), data)
+    Skill::new(id, data)
 }
 
 /// Sorted IDs of the skills activated by the only runner after a whole race,
 /// with "Adventure of 564"-like skill activating `modifier` random gold
 /// skills in the second half of the race.
-fn random_gold_activations(modifier: f64, mut skills: Vec<Skill>) -> Vec<String> {
+fn random_gold_activations(modifier: f64, mut skills: Vec<Skill>) -> Vec<i32> {
     let adventure = skill(
-        "adventure",
+        3,
         "distance_rate>=50",
         SkillType::ActivateRandomGold,
         modifier,
@@ -2574,16 +2551,13 @@ fn random_gold_activations(modifier: f64, mut skills: Vec<Skill>) -> Vec<String>
     let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
     solver.run();
 
-    let mut ids: Vec<_> = activations(&solver)
-        .into_iter()
-        .map(|(id, _)| id.to_string())
-        .collect();
+    let mut ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
     ids.sort();
     ids
 }
 
 /// Gold skill that never activates on its own (there are no heals).
-fn forced_gold_skill(id: &str) -> Skill {
+fn forced_gold_skill(id: i32) -> Skill {
     gold_skill(
         id,
         "is_activate_heal_skill==1",
@@ -2595,52 +2569,52 @@ fn forced_gold_skill(id: &str) -> Skill {
 #[test]
 fn test_activate_random_gold_activates_one_skill_per_unit() {
     let skills = vec![
-        forced_gold_skill("a"),
-        forced_gold_skill("b"),
-        forced_gold_skill("c"),
+        forced_gold_skill(1),
+        forced_gold_skill(5),
+        forced_gold_skill(6),
     ];
     let ids = random_gold_activations(2.0, skills);
 
-    // "adventure" and two distinct gold skills.
+    // The adventure skill (3) and two distinct gold skills.
     assert_eq!(ids.len(), 3, "{ids:?}");
-    assert!(ids.contains(&"adventure".to_string()), "{ids:?}");
+    assert!(ids.contains(&3), "{ids:?}");
     assert!(ids.windows(2).all(|pair| pair[0] != pair[1]), "{ids:?}");
 }
 
 #[test]
 fn test_activate_random_gold_bypasses_conditions() {
-    let ids = random_gold_activations(1.0, vec![forced_gold_skill("forced")]);
-    assert_eq!(ids, vec!["adventure", "forced"]);
+    let ids = random_gold_activations(1.0, vec![forced_gold_skill(15)]);
+    assert_eq!(ids, vec![3, 15]);
 }
 
 #[test]
 fn test_activate_random_gold_skips_activated_and_out_of_gate_skills() {
     let skills = vec![
-        // Activates on its own before "adventure".
-        gold_skill("early", "distance_rate>=10", SkillType::TargetSpeed, 0.15),
+        // Activates on its own before the adventure skill (3).
+        gold_skill(10, "distance_rate>=10", SkillType::TargetSpeed, 0.15),
         // Activates before the race.
-        gold_skill("green", "always==1", SkillType::SpeedUp, 40.0),
+        gold_skill(18, "always==1", SkillType::SpeedUp, 40.0),
         // White skills can't be picked.
         skill(
-            "white",
+            35,
             "is_activate_heal_skill==1",
             SkillType::TargetSpeed,
             0.15,
         ),
-        forced_gold_skill("forced"),
+        forced_gold_skill(15),
     ];
-    // Only "forced" can be picked, although two skills should be.
+    // Only the forced skill (15) can be picked, although two skills should be.
     let ids = random_gold_activations(2.0, skills);
-    assert_eq!(ids, vec!["adventure", "early", "forced", "green"]);
+    assert_eq!(ids, vec![3, 10, 15, 18]);
 }
 
 /// Unique skill with the given alternatives.
-fn unique_skill(id: &str, alternatives: Vec<SkillAlternative>) -> Skill {
+fn unique_skill(id: i32, alternatives: Vec<SkillAlternative>) -> Skill {
     let data = SkillData {
         rarity: SkillRarity::UniqueNatural,
         ..skill_data(alternatives)
     };
-    Skill::new(id.to_string(), data)
+    Skill::new(id, data)
 }
 
 /// Alternative whose effect lasts until the end of the race.
@@ -2654,12 +2628,7 @@ fn lasting_alternative(condition: &str, skill_type: SkillType, modifier: f64) ->
 /// Runner after a whole race, with a skill activating `modifier` unique
 /// skills again in the second half of the race.
 fn unique_reactivation_runner(modifier: f64, mut skills: Vec<Skill>) -> Runner {
-    let again = skill(
-        "again",
-        "distance_rate>=50",
-        SkillType::ActivateUnique,
-        modifier,
-    );
+    let again = skill(4, "distance_rate>=50", SkillType::ActivateUnique, modifier);
     skills.push(again);
     let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
     solver.run();
@@ -2667,11 +2636,11 @@ fn unique_reactivation_runner(modifier: f64, mut skills: Vec<Skill>) -> Runner {
 }
 
 /// Sorted IDs of the skills activated by `runner`.
-fn sorted_activation_ids(runner: &Runner) -> Vec<&str> {
+fn sorted_activation_ids(runner: &Runner) -> Vec<i32> {
     let mut ids: Vec<_> = runner
         .activated_skills
         .iter()
-        .map(|record| record.skill_id.as_str())
+        .map(|record| record.skill_id)
         .collect();
     ids.sort();
     ids
@@ -2689,7 +2658,7 @@ fn active_effect_count(runner: &Runner, skill_type: SkillType) -> usize {
 #[test]
 fn test_activate_unique_fires_the_unique_again() {
     let unique = unique_skill(
-        "unique",
+        34,
         vec![lasting_alternative(
             "distance_rate>=10",
             SkillType::TargetSpeed,
@@ -2697,10 +2666,7 @@ fn test_activate_unique_fires_the_unique_again() {
         )],
     );
     let runner = unique_reactivation_runner(1.0, vec![unique]);
-    assert_eq!(
-        sorted_activation_ids(&runner),
-        vec!["again", "unique", "unique"]
-    );
+    assert_eq!(sorted_activation_ids(&runner), vec![4, 34, 34]);
     // Both activations' effects stack.
     assert_eq!(active_effect_count(&runner, SkillType::TargetSpeed), 2);
 }
@@ -2708,7 +2674,7 @@ fn test_activate_unique_fires_the_unique_again() {
 #[test]
 fn test_activate_unique_bypasses_conditions() {
     let unique = unique_skill(
-        "unique",
+        34,
         vec![alternative(
             "is_activate_heal_skill==1",
             SkillType::TargetSpeed,
@@ -2716,13 +2682,13 @@ fn test_activate_unique_bypasses_conditions() {
         )],
     );
     let runner = unique_reactivation_runner(1.0, vec![unique]);
-    assert_eq!(sorted_activation_ids(&runner), vec!["again", "unique"]);
+    assert_eq!(sorted_activation_ids(&runner), vec![4, 34]);
 }
 
 #[test]
 fn test_activate_unique_uses_the_alternative_that_activated() {
     let unique = unique_skill(
-        "unique",
+        34,
         vec![
             lasting_alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.35),
             lasting_alternative("distance_rate>=10", SkillType::Acceleration, 0.2),
@@ -2747,33 +2713,27 @@ fn test_activate_unique_skips_other_and_out_of_gate_skills() {
     };
     let skills = vec![
         // Activates before the race.
-        unique_skill(
-            "green",
-            vec![alternative("always==1", SkillType::SpeedUp, 40.0)],
-        ),
+        unique_skill(18, vec![alternative("always==1", SkillType::SpeedUp, 40.0)]),
         // Gold skills can't be picked.
-        forced_gold_skill("gold"),
-        never("first"),
-        never("second"),
+        forced_gold_skill(17),
+        never(13),
+        never(31),
     ];
     // Only the first eligible unique activates.
     let runner = unique_reactivation_runner(1.0, skills);
-    assert_eq!(
-        sorted_activation_ids(&runner),
-        vec!["again", "first", "green"]
-    );
+    assert_eq!(sorted_activation_ids(&runner), vec![4, 13, 18]);
 }
 
 /// Skill with a target speed effect on oneself whose value scales as
 /// `value_usage`. It never activates on its own.
-fn scaled_skill(id: &str, value_usage: ValueUsage, modifier: f64) -> Skill {
+fn scaled_skill(id: i32, value_usage: ValueUsage, modifier: f64) -> Skill {
     let mut alternative = alternative(
         "is_activate_heal_skill==1",
         SkillType::TargetSpeed,
         modifier,
     );
     alternative.effects[0].value_usage = value_usage;
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 /// Ready race with a single runner having `skills` and a [`scaled_skill`] last.
@@ -2783,7 +2743,7 @@ fn scaled_skill_solver(
     value_usage: ValueUsage,
     config: &Configuration,
 ) -> RaceSolver<Runner> {
-    skills.push(scaled_skill("scaled", value_usage, 0.25));
+    skills.push(scaled_skill(30, value_usage, 0.25));
     ready_solver(10101, uma, skills, config)
 }
 
@@ -2811,14 +2771,7 @@ fn test_direct_values_are_not_scaled() {
 fn test_skill_count_scaling() {
     // Nine other skills, plus the scaled skill.
     let others: Vec<_> = (0..9)
-        .map(|i| {
-            skill(
-                &format!("other{i}"),
-                "always==1",
-                SkillType::TargetSpeed,
-                0.1,
-            )
-        })
+        .map(|i| skill(i, "always==1", SkillType::TargetSpeed, 0.1))
         .collect();
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
@@ -2836,14 +2789,7 @@ fn test_skill_count_includes_failed_wit_checks() {
         ..seeded_config(0)
     };
     let skills = (0..3)
-        .map(|i| {
-            skill(
-                &format!("skill{i}"),
-                "always==1",
-                SkillType::TargetSpeed,
-                0.1,
-            )
-        })
+        .map(|i| skill(i, "always==1", SkillType::TargetSpeed, 0.1))
         .collect();
     let solver = ready_solver(10101, uma(Style::Late), skills, &config);
     let runner = &solver.runners[0];
@@ -3020,15 +2966,10 @@ fn test_green_skill_count_scaling() {
     let green = |id| skill(id, "always==1", SkillType::SpeedUp, 10.0);
     // Green skills that never activate don't count.
     let skills = vec![
-        green("green1"),
-        green("green2"),
-        green("green3"),
-        skill(
-            "never",
-            "is_activate_heal_skill==1",
-            SkillType::SpeedUp,
-            10.0,
-        ),
+        green(19),
+        green(20),
+        green(21),
+        skill(26, "is_activate_heal_skill==1", SkillType::SpeedUp, 10.0),
     ];
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
@@ -3086,13 +3027,7 @@ fn test_bashin_from_first_adds_to_value() {
 
 #[test]
 fn test_medium_distance_adds_to_value() {
-    let skills = || {
-        vec![scaled_skill(
-            "scaled",
-            ValueUsage::AddDistanceTypeMedium,
-            0.25,
-        )]
-    };
+    let skills = || vec![scaled_skill(30, ValueUsage::AddDistanceTypeMedium, 0.25)];
     // 1200m (Short).
     let mut solver = ready_solver(10101, uma(Style::Late), skills(), &seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.25);
@@ -3141,11 +3076,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
 #[test]
 fn test_largest_lead_before_late_race_is_tracked() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
-    let skills = vec![scaled_skill(
-        "scaled",
-        ValueUsage::MultiplyTopLeadAmount,
-        0.25,
-    )];
+    let skills = vec![scaled_skill(30, ValueUsage::MultiplyTopLeadAmount, 0.25)];
     solver.add_runner(uma(Style::Front), Mood::Normal, skills);
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
     let mut solver = solver.ready_runners();
@@ -3176,12 +3107,12 @@ fn test_largest_lead_before_late_race_is_tracked() {
 
 /// Skill with a 3-second target speed effect whose duration scales as
 /// `time_usage`. It never activates on its own.
-fn timed_skill(id: &str, time_usage: TimeUsage) -> Skill {
+fn timed_skill(id: i32, time_usage: TimeUsage) -> Skill {
     let alternative = SkillAlternative {
         time_usage,
         ..alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25)
     };
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 /// Ready race on a 1200m course with a single runner having `skills`.
@@ -3230,7 +3161,7 @@ fn test_duration_scaling_by_runner_situation() {
         (TimeUsage::IncrementOrderUp, |_| {}, 1.0),
     ];
     for (time_usage, setup, multiplier) in cases {
-        let mut solver = timed_skill_solver(vec![timed_skill("timed", time_usage)]);
+        let mut solver = timed_skill_solver(vec![timed_skill(33, time_usage)]);
         setup(&mut solver.runners[0]);
         solver.runners[0].activate_skill(0, 0, &solver.state);
         let durations = remaining_durations(&solver);
@@ -3242,14 +3173,13 @@ fn test_duration_scaling_by_runner_situation() {
 #[test]
 fn test_overtakes_extend_effects() {
     // Two effects extended by overtaking, and another skill's effect that isn't.
-    let mut alternative =
-        timed_skill("extended", TimeUsage::IncrementOrderUp).alternatives[0].clone();
+    let mut alternative = timed_skill(12, TimeUsage::IncrementOrderUp).alternatives[0].clone();
     alternative.effects.push(effect(
         SkillType::Acceleration,
         alternative.effects[0].modifier,
     ));
-    let extended = Skill::new("extended".to_string(), skill_data(vec![alternative]));
-    let direct = timed_skill("direct", TimeUsage::Direct);
+    let extended = Skill::new(12, skill_data(vec![alternative]));
+    let direct = timed_skill(9, TimeUsage::Direct);
     let mut solver = timed_skill_solver(vec![extended, direct]);
     let course = solver.state.course.clone();
     solver.runners[0].activate_skill(0, 0, &solver.state);
@@ -3368,8 +3298,7 @@ fn test_uphills_climbed_extend_duration() {
     // Base duration of 3 seconds plus 0.5 seconds per uphill (up to 4), scaled to
     // the 1200m course.
     for (uphills, base_duration) in [(0, 3.0), (2, 4.0), (4, 5.0), (6, 5.0)] {
-        let mut solver =
-            timed_skill_solver(vec![timed_skill("timed", TimeUsage::IncrementUphillCount)]);
+        let mut solver = timed_skill_solver(vec![timed_skill(33, TimeUsage::IncrementUphillCount)]);
         solver.runners[0].uphills_climbed = uphills;
         solver.runners[0].activate_skill(0, 0, &solver.state);
         let durations = remaining_durations(&solver);
@@ -3379,21 +3308,18 @@ fn test_uphills_climbed_extend_duration() {
 
 /// Skill with a 0.25 target speed effect, and a 0.05 one applied as
 /// `additional`. It never activates on its own.
-fn additional_skill(id: &str, additional: AdditionalActivation) -> Skill {
+fn additional_skill(id: i32, additional: AdditionalActivation) -> Skill {
     let mut alternative = alternative("is_activate_heal_skill==1", SkillType::TargetSpeed, 0.25);
     alternative.effects.push(SkillEffect {
         additional,
         ..effect(SkillType::TargetSpeed, 0.05)
     });
-    Skill::new(id.to_string(), skill_data(vec![alternative]))
+    Skill::new(id, skill_data(vec![alternative]))
 }
 
 #[test]
 fn test_additional_effects_apply_on_overtakes() {
-    let skills = vec![additional_skill(
-        "additional",
-        AdditionalActivation::OrderUp,
-    )];
+    let skills = vec![additional_skill(2, AdditionalActivation::OrderUp)];
     let mut solver = timed_skill_solver(skills);
     let course = solver.state.course.clone();
     let change_order = |solver: &mut RaceSolver<Runner>, from, to| {
@@ -3432,10 +3358,10 @@ fn test_additional_effects_apply_on_other_skill_activations() {
         )
     };
     let mut skills = vec![
-        additional_skill("first", AdditionalActivation::ActivateAnySkill1),
-        additional_skill("second", AdditionalActivation::ActivateAnySkill2),
+        additional_skill(13, AdditionalActivation::ActivateAnySkill1),
+        additional_skill(31, AdditionalActivation::ActivateAnySkill2),
     ];
-    skills.extend(["a", "b", "c", "d"].map(other));
+    skills.extend([1, 5, 6, 36].map(other));
     let mut solver = timed_skill_solver(skills);
     let activate = |solver: &mut RaceSolver<Runner>, skill_index| {
         let runner = &mut solver.runners[0];

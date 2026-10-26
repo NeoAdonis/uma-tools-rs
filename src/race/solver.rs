@@ -74,7 +74,7 @@ pub struct RaceState {
     /// of the current frame. Indexed by team.
     pub team_activations: Vec<usize>,
     /// Count of existing skill IDs among all runners.
-    pub existing_skills: HashMap<String, u8>,
+    pub existing_skills: HashMap<i32, u8>,
     /// Number of runners that activated a buff (advantage) skill in the current
     /// frame, by effect type.
     pub buffs_activated: HashMap<SkillType, u8>,
@@ -183,11 +183,7 @@ impl RaceSolver<UnreadyRunner> {
     fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>, team: u8) {
         // Get existing skills before moving them into builder.
         for skill in &skills {
-            *self
-                .state
-                .existing_skills
-                .entry(skill.id.clone())
-                .or_insert(0) += 1;
+            *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
 
         // Roll gate.
