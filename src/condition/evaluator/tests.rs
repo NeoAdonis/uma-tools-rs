@@ -1430,3 +1430,24 @@ fn test_set_values_reject_order_operators() {
     };
     EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]);
 }
+
+#[test]
+fn test_lottery_draws_are_hit_by_higher_chances() {
+    // (draw, [==0, ==37, ==38, ==100]).
+    let cases = [
+        (0.0, [false, true, true, true]),
+        (37.4, [false, false, true, true]),
+        (99.9, [false, false, false, true]),
+    ];
+    for (draw, expected) in cases {
+        let actual = [0, 37, 38, 100].map(|chance| {
+            let comp = Comparison {
+                var: VarType::Random(RandomVar::RandomLot),
+                op: CompOp::Equal,
+                value: chance,
+            };
+            comp.holds(lot_hits(draw))
+        });
+        assert_eq!(actual, expected, "draw {draw}");
+    }
+}
