@@ -27,3 +27,7 @@ The demo simulates a single race with one Umamusume and prints a summary of it. 
 
 > [!NOTE]
 > The demo is still very limited compared to the objectives above. For now, it serves mostly as a way to try out the simulation.
+
+## License
+
+Licensed under the [MIT license](LICENSE).
