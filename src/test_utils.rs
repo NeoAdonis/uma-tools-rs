@@ -41,9 +41,8 @@ pub(crate) fn load_course(course_id: u32) -> Course {
 pub(crate) fn course_data() -> CourseData {
     CourseData {
         distance: 2000,
-        distance_type: DistanceType::Medium,
         surface: Track::Turf,
-        turn: Direction::Left,
+        direction: Direction::Left,
         course_set_status: vec![],
         corners: vec![],
         slopes: vec![],

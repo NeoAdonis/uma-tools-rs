@@ -621,13 +621,13 @@ impl Runner {
                 modifier + skill_scaling::distance_from_first_bonus(self.position_diff.from_first)
             }
             AddDistanceTypeMedium => {
-                modifier + skill_scaling::medium_distance_bonus(state.course.distance_type)
+                modifier + skill_scaling::medium_distance_bonus(state.course.distance_type())
             }
             CinderellaGray => {
                 let course = &state.course;
                 let fans = self.initial_state.fan_count;
                 modifier
-                    + skill_scaling::cinderella_gray_bonus(course.id, course.distance_type, fans)
+                    + skill_scaling::cinderella_gray_bonus(course.id, course.distance_type(), fans)
             }
             AddBashinDiffTop => {
                 let bashin = meters_to_bashin(self.position_diff.from_first);

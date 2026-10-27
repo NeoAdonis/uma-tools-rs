@@ -125,10 +125,7 @@ pub enum Direction {
     Straight = 4,
 }
 
-/// Course distance type.
-///
-/// N.B. Even though distance type can be inferred from distance, it is
-/// explicitly stored in the data.
+/// Course distance type, inferred from the course distance.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DistanceType {
@@ -201,12 +198,10 @@ impl std::ops::Deref for Course {
 pub struct CourseData {
     /// Course distance in meters.
     pub distance: i32,
-    /// Course distance type.
-    pub distance_type: DistanceType,
     /// Course track surface type.
     pub surface: Track,
     /// Course turn direction.
-    pub turn: Direction,
+    pub direction: Direction,
     /// Stats used for course set status checks.
     ///
     /// If an Uma's base stat exceeds a threshold, they receive a speed bonus.
@@ -273,6 +268,16 @@ impl Course {
     /// than one lap), its number is repeated.
     pub fn corner_number(&self, idx: usize) -> u8 {
         4 - ((self.corners.len() - 1 - idx) % 4) as u8
+    }
+
+    /// Get the distance type of the course, inferred from its distance.
+    pub fn distance_type(&self) -> DistanceType {
+        match self.distance {
+            ..=1400 => DistanceType::Short,
+            1401..=1800 => DistanceType::Mile,
+            1801..=2400 => DistanceType::Medium,
+            _ => DistanceType::Long,
+        }
     }
 
     /// Check if the course distance is a basis distance (multiple of 400m).
@@ -424,7 +429,29 @@ mod tests {
         assert_eq!(course.finish_time_min, 54.7);
         assert_eq!(course.finish_time_max, 57.0);
         assert_eq!(course.width, 1.47);
-        assert_eq!(course.slopes[0].slope, 1.0);
+        assert_eq!(course.slopes[0].grade, 1.0);
+    }
+
+    #[test]
+    fn test_distance_type_from_distance() {
+        let cases = [
+            (1000, DistanceType::Short),
+            (1400, DistanceType::Short),
+            (1401, DistanceType::Mile),
+            (1800, DistanceType::Mile),
+            (1801, DistanceType::Medium),
+            (2400, DistanceType::Medium),
+            (2401, DistanceType::Long),
+            (3600, DistanceType::Long),
+        ];
+        for (distance, expected) in cases {
+            let data = CourseData {
+                distance,
+                ..course_data()
+            };
+            let course = Course::new_test(0, data);
+            assert_eq!(course.distance_type(), expected, "{distance}m");
+        }
     }
 
     #[test]

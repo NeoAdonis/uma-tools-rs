@@ -61,12 +61,12 @@ pub struct Slope {
     pub start: f64,
     /// Length of the slope in meters.
     pub length: f64,
-    /// Slope gradient as a percentage (positive uphill, negative downhill).
+    /// Slope grade as a percentage (positive uphill, negative downhill).
     ///
     /// Stored in 10000ths of a percent in the course data, and converted when
     /// deserializing.
     #[serde(deserialize_with = "deserialize_ten_thousandths")]
-    pub slope: f64,
+    pub grade: f64,
 }
 
 impl Segment for Slope {
@@ -82,29 +82,29 @@ impl Segment for Slope {
 impl Slope {
     /// Create a new Slope for testing purposes.
     #[cfg(test)]
-    pub fn new(start: f64, length: f64, slope: f64) -> Self {
+    pub fn new(start: f64, length: f64, grade: f64) -> Self {
         Slope {
             start,
             length,
-            slope,
+            grade,
         }
     }
 
     /// Check if the slope is uphill.
     pub fn is_uphill(&self) -> bool {
-        self.slope > 0.0
+        self.grade > 0.0
     }
 
     /// Check if the slope is downhill.
     pub fn is_downhill(&self) -> bool {
-        self.slope < 0.0
+        self.grade < 0.0
     }
 
     /// Get the slope type classification.
     pub fn slope_type(&self) -> SlopeType {
-        if self.slope > 0.0 {
+        if self.grade > 0.0 {
             SlopeType::Uphill
-        } else if self.slope < 0.0 {
+        } else if self.grade < 0.0 {
             SlopeType::Downhill
         } else {
             SlopeType::Flat

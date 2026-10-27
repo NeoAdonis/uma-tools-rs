@@ -113,7 +113,7 @@ impl ChargeUp {
         if self.outcome != ChargeUpOutcome::Pending {
             return;
         }
-        let duration = release_duration(self.conserved, course.distance, course.distance_type);
+        let duration = release_duration(self.conserved, course.distance, course.distance_type());
         self.outcome = if duration < MIN_DURATION {
             ChargeUpOutcome::Insufficient
         } else {
@@ -122,7 +122,7 @@ impl ChargeUp {
                 acceleration: release_acceleration(
                     self.power,
                     style,
-                    course.distance_type,
+                    course.distance_type(),
                     activity,
                 ),
                 duration,

@@ -472,7 +472,7 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
         CourseDistance => course.distance,
 
         // Distance type: 1=short, 2=mile, 3=medium, 4=long.
-        DistanceType => course.distance_type as i32,
+        DistanceType => course.distance_type() as i32,
 
         // Ground type: 1=turf, 2=dirt.
         GroundType => course.surface as i32,
@@ -490,7 +490,7 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
         IsTightTrack => course.is_tight_track() as i32,
 
         // Rotation: 1=clockwise, 2=counterclockwise, 4=straight.
-        Rotation => course.turn as i32,
+        Rotation => course.direction as i32,
 
         // Track ID.
         TrackId => course.race_track_id as i32,

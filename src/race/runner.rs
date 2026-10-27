@@ -979,7 +979,7 @@ impl Runner {
         if slope.is_uphill() {
             if transition.entered.is_some() {
                 self.slope_speed_modifier =
-                    Some(uphill_speed_modifier(slope.slope, self.adjusted.power));
+                    Some(uphill_speed_modifier(slope.grade, self.adjusted.power));
             }
             return;
         }
@@ -1005,7 +1005,7 @@ impl Runner {
         } else {
             let chance = (self.adjusted.wit as f64 * 0.0004).min(1.0);
             if rng.random_bool(chance) {
-                self.slope_speed_modifier = Some(downhill_speed_modifier(slope.slope));
+                self.slope_speed_modifier = Some(downhill_speed_modifier(slope.grade));
             }
         }
     }
