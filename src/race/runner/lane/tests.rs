@@ -291,7 +291,7 @@ fn test_target_lane_decision_mode_selection() {
     let normal = 0.3 - 0.05;
     let overtake = 0.3 - LANE;
     let mut solver = lane_solver(&[(100.0, 0.3)]);
-    let move_lane_point = solver.state.course.move_lane_point();
+    let move_lane_point = solver.state.course.move_lane_point().unwrap();
     let target = |solver: &mut RaceSolver<Runner>, position| {
         solver.runners[0].position = position;
         let decision =

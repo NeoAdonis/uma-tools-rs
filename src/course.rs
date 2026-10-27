@@ -212,6 +212,12 @@ pub struct CourseData {
     pub slopes: Vec<Slope>,
     /// Course straights.
     pub straights: Vec<Straight>,
+    /// Move lane point in meters, for the few courses that set it explicitly.
+    ///
+    /// Use [`Course::move_lane_point`] instead, which falls back to the first
+    /// corner start.
+    #[serde(default)]
+    pub move_lane_point: Option<f64>,
     /// Race track ID associated with this course.
     pub race_track_id: u16,
     /// Minimum finish time that can be displayed on the scoreboard in seconds.
@@ -253,12 +259,13 @@ impl Course {
         self.distance as f64 / 2.0
     }
 
-    /// Get the move lane point in meters.
+    /// Get the move lane point in meters, or `None` if the course has neither
+    /// an explicit one nor corners.
     ///
-    /// STUB: Uses the first corner start (or halfway if there are no corners)
-    /// until the actual move lane point is available.
-    pub fn move_lane_point(&self) -> f64 {
-        self.corners.first().map_or(self.halfway(), |c| c.start)
+    /// Courses without an explicit move lane point use the first corner start.
+    pub fn move_lane_point(&self) -> Option<f64> {
+        let first_corner = || self.corners.first().map(|c| c.start);
+        self.data.move_lane_point.or_else(first_corner)
     }
 
     /// Get the corner number (1-4) of the corner at `idx` in the course corners.
@@ -452,6 +459,32 @@ mod tests {
             let course = Course::new_test(0, data);
             assert_eq!(course.distance_type(), expected, "{distance}m");
         }
+    }
+
+    #[test]
+    fn test_move_lane_point() {
+        let corner = Corner {
+            start: 400.0,
+            length: 200.0,
+        };
+        let course = |move_lane_point, corners| {
+            let data = CourseData {
+                move_lane_point,
+                corners,
+                ..course_data()
+            };
+            Course::new_test(0, data)
+        };
+
+        // An explicit move lane point takes precedence over the first corner.
+        let explicit = course(Some(1.0), vec![corner.clone()]);
+        assert_eq!(explicit.move_lane_point(), Some(1.0));
+        assert_eq!(course(None, vec![corner]).move_lane_point(), Some(400.0));
+        assert_eq!(course(None, vec![]).move_lane_point(), None);
+
+        // Niigata 1000m straight course.
+        let niigata = crate::test_utils::load_course(10301);
+        assert_eq!(niigata.move_lane_point(), Some(1.0));
     }
 
     #[test]

@@ -89,12 +89,14 @@ impl Runner {
             return;
         }
 
-        let first_move_modifier =
-            if self.phase <= Phase::Mid && self.position < course.move_lane_point() {
-                1.0 + self.lane.current / course.width * 0.05
-            } else {
-                1.0
-            };
+        let before_move_lane = course
+            .move_lane_point()
+            .is_some_and(|point| self.position < point);
+        let first_move_modifier = if self.phase <= Phase::Mid && before_move_lane {
+            1.0 + self.lane.current / course.width * 0.05
+        } else {
+            1.0
+        };
         let order_modifier = if self.phase >= Phase::Late {
             1.0 + self.order.order as f64 * 0.01
         } else {
@@ -257,10 +259,11 @@ impl Runner {
             });
         }
 
-        let distance_to_move_lane = course.move_lane_point() - self.position;
+        let near_move_lane = course
+            .move_lane_point()
+            .is_some_and(|point| (0.0..=200.0).contains(&(point - self.position)));
         let use_normal_mode = !self.is_in_overtake_mode()
-            || (matches!(self.phase, Phase::Early | Phase::Mid)
-                && (0.0..=200.0).contains(&distance_to_move_lane));
+            || (matches!(self.phase, Phase::Early | Phase::Mid) && near_move_lane);
         let decision = if use_normal_mode {
             self.normal_mode_lane_decision(course, all_runners)
         } else {
