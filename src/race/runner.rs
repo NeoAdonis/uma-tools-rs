@@ -18,6 +18,7 @@
 use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rand::prelude::*;
 
@@ -235,7 +236,7 @@ pub struct Runner {
     /// List of skills of the runner: those that passed the wit check first, then
     /// those that failed it (see [`Self::available_skills`] and
     /// [`Self::failed_skills`]).
-    pub skills: Vec<Skill>,
+    pub skills: Vec<Arc<Skill>>,
     /// Number of skills that passed the wit check, at the start of `skills`.
     pub available_skill_count: usize,
     /// Elapsed time when the runner finished the race, in seconds.
@@ -409,13 +410,13 @@ impl Runner {
     }
 
     /// Skills that passed the wit check, so they can activate on their own.
-    pub fn available_skills(&self) -> &[Skill] {
+    pub fn available_skills(&self) -> &[Arc<Skill>] {
         &self.skills[..self.available_skill_count]
     }
 
     /// Skills that failed the wit check, so they can only be activated by other
     /// skills (see [`SkillType::ActivateRandomGold`]).
-    pub fn failed_skills(&self) -> &[Skill] {
+    pub fn failed_skills(&self) -> &[Arc<Skill>] {
         &self.skills[self.available_skill_count..]
     }
 

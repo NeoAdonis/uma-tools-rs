@@ -6,8 +6,11 @@ use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, skill_data, uma};
+use crate::test_utils::{
+    alternative, assert_close, ready_solver, seeded_config, synthetic_skill, uma,
+};
 use crate::uma::*;
+use std::sync::Arc;
 
 #[test]
 fn test_wit_limit_break_multiplier_brackets() {
@@ -53,20 +56,17 @@ fn test_wit_limit_break_phase_coefficient() {
     }
 }
 
-fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Skill {
+fn speed_skill(rarity: SkillRarity, skill_type: SkillType) -> Arc<Skill> {
     let alternatives = vec![alternative("phase==3", skill_type, 0.35)];
-    Skill::new(
-        0,
-        SkillData {
-            rarity,
-            ..skill_data(alternatives)
-        },
-    )
+    Arc::new(Skill {
+        rarity,
+        ..synthetic_skill(alternatives)
+    })
 }
 
 /// Build a ready race with a single high-wit runner that only has the given
 /// skill.
-fn high_wit_race(skill: Skill) -> RaceSolver<Runner> {
+fn high_wit_race(skill: Arc<Skill>) -> RaceSolver<Runner> {
     let uma = Uma {
         wit: 1500,
         ..uma(Style::Pace)
@@ -77,7 +77,7 @@ fn high_wit_race(skill: Skill) -> RaceSolver<Runner> {
 /// Activate the only skill of a single runner with high wit and return
 /// (target speed modifier, current speed modifier, expected wit limit break
 /// bonus rate).
-fn activate_on_high_wit_runner(skill: Skill) -> (f64, f64, f64) {
+fn activate_on_high_wit_runner(skill: Arc<Skill>) -> (f64, f64, f64) {
     let mut solver = high_wit_race(skill);
     let runner = &mut solver.runners[0];
 

@@ -5,10 +5,11 @@
 
 use crate::common::{
     activation_logics, alternative, alternative_with_precondition, assert_close, load_course,
-    skill, skill_data,
+    skill, synthetic_skill,
 };
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
+use std::sync::Arc;
 use uma_tools::skill::{Skill, SkillType};
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
@@ -42,7 +43,10 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
             0.4,
         ),
     ];
-    let skill = Skill::new(100661, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 100661,
+        ..synthetic_skill(alternatives)
+    });
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -91,7 +95,10 @@ fn test_heal_skill_activation_dependency() {
             0.4,
         ),
     ];
-    let skill = Skill::new(110771, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 110771,
+        ..synthetic_skill(alternatives)
+    });
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -138,7 +145,10 @@ fn test_activation_dependent_or_branches() {
             0.4,
         ),
     ];
-    let skill = Skill::new(100901, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 100901,
+        ..synthetic_skill(alternatives)
+    });
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -195,7 +205,10 @@ fn test_alternative_with_and_without_dependency() {
             0.4,
         ),
     ];
-    let skill = Skill::new(101021, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 101021,
+        ..synthetic_skill(alternatives)
+    });
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -375,7 +388,7 @@ fn test_activation_dependency_with_precondition() {
         SkillType::TargetSpeed,
         0.4,
     )];
-    let skill = Skill::new(0, skill_data(alternatives));
+    let skill = Arc::new(synthetic_skill(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);

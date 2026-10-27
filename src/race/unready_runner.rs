@@ -62,6 +62,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rand::RngExt;
 
@@ -173,12 +174,12 @@ pub struct UnreadyRunner {
     trigger_scheduler: TriggerScheduler,
     /// Skills that passed the wit check. Out-of-gate skills among them are
     /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
-    pub skills: Vec<Skill>,
+    pub skills: Vec<Arc<Skill>>,
     /// Skills that failed the wit check. They can't activate on their own, but
     /// they still count towards the runner's skills (e.g. for popularity or skill
     /// count scaling), and gold skills among them can be activated by other
     /// skills (see [`SkillType::ActivateRandomGold`]).
-    pub failed_skills: Vec<Skill>,
+    pub failed_skills: Vec<Arc<Skill>>,
     /// Popularity points added to stats by all skills, including those that
     /// failed the wit check.
     pub(crate) popularity_bonus: SkillPopularity,
@@ -205,7 +206,7 @@ impl UnreadyRunner {
         gate_roll: u8,
         mood: Mood,
         state: &RaceState,
-        skills: Vec<Skill>,
+        skills: Vec<Arc<Skill>>,
     ) -> Self {
         let course = &state.course;
         let params = &state.params;
@@ -263,7 +264,11 @@ impl UnreadyRunner {
 
         // Popularity guards are known before the race, so the skill bonus can be
         // calculated now. The runner is needed to evaluate the guards.
-        let all_skills = runner.skills.iter().chain(&runner.failed_skills);
+        let all_skills = runner
+            .skills
+            .iter()
+            .chain(&runner.failed_skills)
+            .map(Arc::as_ref);
         runner.popularity_bonus = popularity::skill_bonus(all_skills, &runner, state);
 
         runner

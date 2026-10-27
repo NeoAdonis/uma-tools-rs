@@ -584,26 +584,18 @@ pub struct SkillPopularity {
 
 /// Represents a skill with its ID and data.
 ///
-/// The data is shared, so cloning a skill is cheap.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Skill {
-    pub id: i32,
-    data: Arc<SkillData>,
-}
-
-impl std::ops::Deref for Skill {
-    type Target = SkillData;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-/// Represents the data of a skill.
+/// Skills are shared as `Arc<Skill>`, so that cloning them for every runner
+/// of every race is cheap.
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct SkillData {
+pub struct Skill {
+    /// Skill ID.
+    ///
+    /// Not part of each skill's data, but the key of the skill in the skill
+    /// data. Set when loading the skill.
+    #[serde(skip)]
+    pub id: i32,
     /// Skill rarity.
     pub rarity: SkillRarity,
     /// Skill alternatives, each with its own conditions and effects.
@@ -620,16 +612,8 @@ pub struct SkillData {
 }
 
 impl Skill {
-    /// Create a new Skill from ID and SkillData.
-    pub fn new(id: i32, data: SkillData) -> Self {
-        Skill {
-            id,
-            data: Arc::new(data),
-        }
-    }
-
     /// Check if `self` is a unique skill (i.e. only available to a specific Uma).
-    pub fn is_unique(self: &Skill) -> bool {
+    pub fn is_unique(&self) -> bool {
         matches!(
             self.rarity,
             SkillRarity::Unique | SkillRarity::UniqueUpgraded | SkillRarity::UniqueNatural
@@ -704,16 +688,16 @@ impl Skill {
     /// Returns an error if the file can't be read or the JSON is invalid.
     pub fn load_skills_from_file(
         json_path: impl AsRef<Path>,
-    ) -> Result<HashMap<i32, Skill>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<HashMap<i32, Arc<Skill>>, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
 
         let json_content = fs::read_to_string(json_path)?;
         // JSON keys are strings, but serde parses them as integers.
-        let skills_data: HashMap<i32, SkillData> = serde_json::from_str(&json_content)?;
+        let skills: HashMap<i32, Skill> = serde_json::from_str(&json_content)?;
 
-        Ok(skills_data
+        Ok(skills
             .into_iter()
-            .map(|(id, data)| (id, Skill::new(id, data)))
+            .map(|(id, skill)| (id, Arc::new(Skill { id, ..skill })))
             .collect())
     }
 }
@@ -721,14 +705,13 @@ impl Skill {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{self, assert_close, skill_data};
+    use crate::test_utils::{self, assert_close, synthetic_skill};
 
-    fn skill_with_wit_check(wit_check: bool) -> Skill {
-        let data = SkillData {
+    fn skill_with_wit_check(wit_check: bool) -> Arc<Skill> {
+        Arc::new(Skill {
             wit_check,
-            ..skill_data(vec![])
-        };
-        Skill::new(0, data)
+            ..synthetic_skill(vec![])
+        })
     }
 
     #[test]
@@ -750,11 +733,10 @@ mod tests {
     #[test]
     fn test_wit_limit_break_eligibility() {
         let skill = |rarity| {
-            let data = SkillData {
+            Arc::new(Skill {
                 rarity,
-                ..skill_data(vec![])
-            };
-            Skill::new(0, data)
+                ..synthetic_skill(vec![])
+            })
         };
         assert!(!skill(SkillRarity::White).is_wit_limit_break_eligible());
         assert!(skill(SkillRarity::Gold).is_wit_limit_break_eligible());
@@ -1007,7 +989,7 @@ mod tests {
     fn test_is_green() {
         let skill = |skill_type| {
             let alternatives = vec![test_utils::alternative("always==1", skill_type, 40.0)];
-            Skill::new(0, skill_data(alternatives))
+            Arc::new(synthetic_skill(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).is_green());
         assert!(skill(SkillType::AllStatsUp).is_green());
@@ -1023,13 +1005,10 @@ mod tests {
                 SkillType::TargetSpeed,
                 0.15,
             )];
-            Skill::new(
-                0,
-                SkillData {
-                    rarity,
-                    ..skill_data(alternatives)
-                },
-            )
+            Arc::new(Skill {
+                rarity,
+                ..synthetic_skill(alternatives)
+            })
         };
         assert!(skill(SkillRarity::Gold).is_gold());
         assert!(skill(SkillRarity::Evolution).is_gold());
@@ -1094,7 +1073,7 @@ mod tests {
     fn test_pre_race_effects_activate_out_of_gate() {
         let skill = |skill_type| {
             let alternatives = vec![test_utils::alternative("running_style==1", skill_type, 0.0)];
-            Skill::new(0, skill_data(alternatives))
+            Arc::new(synthetic_skill(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).should_activate_out_of_gate());
         assert!(skill(SkillType::MultiplyStartDelay).should_activate_out_of_gate());

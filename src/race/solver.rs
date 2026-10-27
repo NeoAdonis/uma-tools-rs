@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::vec;
 
 use rand::prelude::*;
@@ -157,7 +158,7 @@ impl RaceSolver<UnreadyRunner> {
     /// # Panics
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
-    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>) {
+    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>) {
         if self.builders.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
@@ -175,7 +176,7 @@ impl RaceSolver<UnreadyRunner> {
     /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], or if
     /// there aren't enough free gates for all of them (see
     /// [`RaceParameters::gates`]).
-    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Skill>)>) {
+    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Arc<Skill>>)>) {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
@@ -201,7 +202,7 @@ impl RaceSolver<UnreadyRunner> {
 
     /// Add a runner as a member of `team`. Gate capacity must be checked by the
     /// caller.
-    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>, team: u8) {
+    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>, team: u8) {
         // Get existing skills before moving them into builder.
         for skill in &skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;

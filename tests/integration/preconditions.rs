@@ -6,10 +6,11 @@
 
 use crate::common::{
     activation_logics, alternative, alternative_with_precondition, load_course, ready_solver,
-    seeded_config, skill, skill_data, uma,
+    seeded_config, skill, synthetic_skill, uma,
 };
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
+use std::sync::Arc;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
@@ -28,15 +29,15 @@ fn test_precondition_with_window_trigger() {
     // Condition: is_last_straight==1
     // Tests: Complex precondition properly separated from spatial window trigger
 
-    let skill = Skill::new(
-        100031,
-        skill_data(vec![alternative_with_precondition(
+    let skill = Arc::new(Skill {
+        id: 100031,
+        ..synthetic_skill(vec![alternative_with_precondition(
             "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
             "is_last_straight==1",
             SkillType::TargetSpeed,
             0.4,
-        )]),
-    );
+        )])
+    });
 
     let course = load_course(10104); // 2000m course
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -88,7 +89,7 @@ fn test_precondition_with_or_condition() {
         SkillType::TargetSpeed,
         0.4,
     );
-    let skill = Skill::new(0, skill_data(vec![alternative]));
+    let skill = Arc::new(synthetic_skill(vec![alternative]));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -134,7 +135,7 @@ fn test_multiple_alternatives_precondition_independence() {
         // No precondition
         alternative("is_last_straight==1", SkillType::TargetSpeed, 0.5),
     ];
-    let skill = Skill::new(0, skill_data(alternatives));
+    let skill = Arc::new(synthetic_skill(alternatives));
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
@@ -181,19 +182,22 @@ const RUNTIME_COURSE: u32 = 10104;
 
 /// Always available target speed skill, locked until `precondition` is
 /// satisfied.
-fn speed_skill(id: i32, condition: &str, precondition: &str) -> Skill {
+fn speed_skill(id: i32, condition: &str, precondition: &str) -> Arc<Skill> {
     let alternative =
         alternative_with_precondition(precondition, condition, SkillType::TargetSpeed, 0.035);
-    Skill::new(id, skill_data(vec![alternative]))
+    Arc::new(Skill {
+        id,
+        ..synthetic_skill(vec![alternative])
+    })
 }
 
 /// Ready race with a single runner with the given skills.
-fn ready_runner(skills: Vec<Skill>) -> RaceSolver<Runner> {
+fn ready_runner(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
     ready_solver(RUNTIME_COURSE, uma(Style::Front), skills, seeded_config(42))
 }
 
 /// Run a race with a single runner and return where each skill activated.
-fn activation_distances(skills: Vec<Skill>) -> Vec<(i32, f64)> {
+fn activation_distances(skills: Vec<Arc<Skill>>) -> Vec<(i32, f64)> {
     let mut solver = ready_runner(skills);
     solver.run();
     solver.runners[0]

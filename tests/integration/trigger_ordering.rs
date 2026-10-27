@@ -5,17 +5,19 @@
 //! true.
 
 use crate::common::{
-    activation_logics, alternative_with_precondition, assert_close, load_course, skill, skill_data,
+    activation_logics, alternative_with_precondition, assert_close, load_course, skill,
+    synthetic_skill,
 };
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
+use std::sync::Arc;
 use uma_tools::skill::{Skill, SkillType};
 use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
 use uma_tools::trigger::system::TriggerScheduler;
 
 /// Build a scheduler for a single skill.
-fn scheduler(skill: Skill, course_id: u32) -> TriggerScheduler {
+fn scheduler(skill: Arc<Skill>, course_id: u32) -> TriggerScheduler {
     let mut rng = Pcg64Mcg::seed_from_u64(0);
     build_trigger_scheduler(&[skill], &load_course(course_id), &mut rng)
 }
@@ -74,7 +76,10 @@ fn test_impossible_on_course_is_skipped() {
         SkillType::TargetSpeed,
         0.4,
     );
-    let skill = Skill::new(110121, skill_data(vec![alternative]));
+    let skill = Arc::new(Skill {
+        id: 110121,
+        ..synthetic_skill(vec![alternative])
+    });
     let scheduler = scheduler(skill, 10104);
 
     assert!(scheduler.skill_logics().is_empty());

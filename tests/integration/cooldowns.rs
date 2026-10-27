@@ -2,7 +2,8 @@
 //! of its OR branches can activate again until the cooldown, scaled by the
 //! course distance, is over.
 
-use crate::common::{alternative, load_course, ready_solver, seeded_config, skill_data, uma};
+use crate::common::{alternative, load_course, ready_solver, seeded_config, synthetic_skill, uma};
+use std::sync::Arc;
 use uma_tools::race::runner::Runner;
 use uma_tools::skill::*;
 use uma_tools::uma::*;
@@ -11,12 +12,15 @@ const COURSE_ID: u32 = 10104;
 
 /// Always available skill with the given condition and base cooldown, whose
 /// target speed effect is too small to change the race.
-fn skill(condition: &str, base_cooldown: f64) -> Skill {
+fn skill(condition: &str, base_cooldown: f64) -> Arc<Skill> {
     let alternative = SkillAlternative {
         base_cooldown,
         ..alternative(condition, SkillType::TargetSpeed, 0.0001)
     };
-    Skill::new(999999, skill_data(vec![alternative]))
+    Arc::new(Skill {
+        id: 999999,
+        ..synthetic_skill(vec![alternative])
+    })
 }
 
 /// Run a single-runner race and return the finished runner.

@@ -2,21 +2,25 @@ use super::*;
 use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
 use crate::test_utils::*;
+use std::sync::Arc;
 
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
 /// race state it was built with.
-fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
+fn unready_runner(skills: Vec<Arc<Skill>>) -> (UnreadyRunner, RaceState) {
     let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
     let runner = UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
     assert!(
-        runner.skills.iter().all(Skill::should_activate_out_of_gate),
+        runner
+            .skills
+            .iter()
+            .all(|skill| skill.should_activate_out_of_gate()),
         "All skills should be out-of-gate"
     );
     (runner, state)
 }
 
 /// IDs of the skills that activate on the first frame the runner moves.
-fn race_start_ids(skills: &[Skill], scheduler: &TriggerScheduler) -> Vec<i32> {
+fn race_start_ids(skills: &[Arc<Skill>], scheduler: &TriggerScheduler) -> Vec<i32> {
     scheduler
         .race_start_triggers
         .iter()
@@ -244,7 +248,10 @@ fn test_first_satisfied_alternative_is_applied() {
         alternative("ground_type==1", SkillType::SpeedUp, 40.0),
         alternative("always==1", SkillType::SpeedUp, 80.0),
     ];
-    let skill = Skill::new(8, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 8,
+        ..synthetic_skill(alternatives)
+    });
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
 
@@ -283,11 +290,11 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
     let skills = (0..skill_count)
         .map(|i| {
             let alternative = alternative("distance_rate>=50", SkillType::TargetSpeed, 0.0001);
-            let data = SkillData {
+            Arc::new(Skill {
+                id: i as i32,
                 wit_check: true,
-                ..skill_data(vec![alternative])
-            };
-            Skill::new(i as i32, data)
+                ..synthetic_skill(vec![alternative])
+            })
         })
         .collect();
     let uma = Uma {
@@ -335,7 +342,7 @@ fn test_rushing_can_be_forced() {
 }
 
 /// Ready runner with the given wit and skills.
-fn runner_with_wit(wit: u16, skills: Vec<Skill>, seed: u64) -> Runner {
+fn runner_with_wit(wit: u16, skills: Vec<Arc<Skill>>, seed: u64) -> Runner {
     let uma = Uma {
         wit,
         ..uma(Style::Pace)
@@ -501,7 +508,10 @@ fn test_failed_random_lot_falls_through_to_next_alternative() {
         alternative("random_lot==0", SkillType::SpeedUp, 100.0),
         alternative("always==1", SkillType::SpeedUp, 40.0),
     ];
-    let skill = Skill::new(8, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 8,
+        ..synthetic_skill(alternatives)
+    });
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
 
@@ -561,7 +571,10 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
         alternative(&condition, SkillType::SpeedUp, 100.0),
         alternative(&condition, SkillType::SpeedUp, 40.0),
     ];
-    let skill = Skill::new(8, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 8,
+        ..synthetic_skill(alternatives)
+    });
     let course = load_course(10104);
 
     (0..50)
@@ -604,7 +617,10 @@ fn alternative_with_precondition(
 /// Speed gained before the race by a runner with the given skill alternatives,
 /// on a 2000m turf course (10104).
 fn out_of_gate_speed_gain(alternatives: Vec<SkillAlternative>) -> u16 {
-    let skill = Skill::new(8, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 8,
+        ..synthetic_skill(alternatives)
+    });
     let (mut runner, state) = unready_runner(vec![skill]);
     let speed = runner.adjusted.speed;
     runner.apply_out_of_gate_skills(&state);
@@ -655,7 +671,10 @@ fn test_in_race_alternatives_are_not_activated_before_the_race() {
         alternative("course_distance==9999", SkillType::SpeedUp, 80.0),
         alternative("always==1", SkillType::TargetSpeed, 0.15),
     ];
-    let (mut runner, state) = unready_runner(vec![Skill::new(8, skill_data(alternatives))]);
+    let (mut runner, state) = unready_runner(vec![Arc::new(Skill {
+        id: 8,
+        ..synthetic_skill(alternatives)
+    })]);
     let speed = runner.adjusted.speed;
 
     runner.apply_out_of_gate_skills(&state);

@@ -4,12 +4,15 @@ use crate::race::last_spurt::*;
 use crate::race::runner::{MAX_TARGET_SPEED, Runner};
 use crate::race::solver::{DELTA_TIME, RaceSolver};
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, ready_solver, seeded_config, skill_data, uma};
+use crate::test_utils::{
+    alternative, assert_close, ready_solver, seeded_config, synthetic_skill, uma,
+};
 use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
+use std::sync::Arc;
 
 /// Same as skill 204222, but without wit check so it is always available.
-fn all_out_spurt_skill() -> Skill {
+fn all_out_spurt_skill() -> Arc<Skill> {
     let alternative = SkillAlternative {
         base_duration: 2.0,
         ..alternative(
@@ -18,7 +21,10 @@ fn all_out_spurt_skill() -> Skill {
             0.2,
         )
     };
-    Skill::new(204222, skill_data(vec![alternative]))
+    Arc::new(Skill {
+        id: 204222,
+        ..synthetic_skill(vec![alternative])
+    })
 }
 
 /// Build a solver with a single runner on a 2000m course whose threshold stat
@@ -26,7 +32,7 @@ fn all_out_spurt_skill() -> Skill {
 fn solver(
     speed: u16,
     game_version: GameVersion,
-    skills: Vec<Skill>,
+    skills: Vec<Arc<Skill>>,
     rng_seed: u64,
 ) -> RaceSolver<Runner> {
     let uma = Uma {

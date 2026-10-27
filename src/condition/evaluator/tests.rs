@@ -11,9 +11,10 @@ use crate::race::solver::RaceSolver;
 use crate::race::transitions::SegmentState;
 use crate::skill::{Skill, SkillType};
 use crate::test_utils::*;
+use std::sync::Arc;
 
 /// Ready race with a single Late Surger with the given skills.
-fn create_test_race_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
+fn create_test_race_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
     ready_solver(10101, uma(Style::Late), skills, seeded_config(12345))
 }
 
@@ -28,7 +29,10 @@ fn int(value: Value) -> i32 {
 /// Ready race with a single Late Surger holding a skill with the given ID,
 /// activated through the alternatives in `mask`.
 fn solver_with_activated_skill(skill_id: i32, mask: u8) -> RaceSolver<Runner> {
-    let skill = Skill::new(skill_id, skill_data(vec![]));
+    let skill = Arc::new(Skill {
+        id: skill_id,
+        ..synthetic_skill(vec![])
+    });
     let mut solver = create_test_race_solver(vec![skill]);
     solver.runners[0].activated_alternatives[0] = mask;
     solver
@@ -105,7 +109,10 @@ fn is_used_skill_id_with_alternative(activated: Option<usize>) -> (bool, bool) {
         alternative("phase==1", SkillType::TargetSpeed, 0.35),
         alternative("phase==1", SkillType::CurrentSpeed, -0.15),
     ];
-    let skill = Skill::new(204452, skill_data(alternatives));
+    let skill = Arc::new(Skill {
+        id: 204452,
+        ..synthetic_skill(alternatives)
+    });
     let mut solver = create_test_race_solver(vec![skill]);
     if let Some(alternative_index) = activated {
         solver.runners[0].activate_skill(0, alternative_index, &solver.state);
@@ -156,7 +163,10 @@ fn test_is_used_skill_id_with_detail_one_not_equal() {
 
 #[test]
 fn test_is_exist_skill_id_in_available_skills() {
-    let skill = Skill::new(203061, skill_data(vec![]));
+    let skill = Arc::new(Skill {
+        id: 203061,
+        ..synthetic_skill(vec![])
+    });
     let solver = create_test_race_solver(vec![skill]);
 
     // Create comparison: is_exist_skill_id == 203061.
@@ -1312,7 +1322,10 @@ fn test_out_of_gate_in_race_variables_are_zero() {
 
 #[test]
 fn test_same_skill_horse_count_value() {
-    let skill = Skill::new(200331, skill_data(vec![]));
+    let skill = Arc::new(Skill {
+        id: 200331,
+        ..synthetic_skill(vec![])
+    });
     let mut solver = create_test_race_solver(vec![skill]);
     solver.state.existing_skills.insert(200331, 3);
 
@@ -1420,7 +1433,12 @@ fn test_is_popularity_top_character_activate_advantage_skill() {
 
 #[test]
 fn test_succession_skill_count() {
-    let skill = |id: i32| Skill::new(id, skill_data(vec![]));
+    let skill = |id: i32| {
+        Arc::new(Skill {
+            id,
+            ..synthetic_skill(vec![])
+        })
+    };
     // Inherited uniques, a unique and a white skill.
     let skills = [900011, 900021, 100011, 200012].map(skill).to_vec();
     let solver = create_test_race_solver(skills);

@@ -3,6 +3,7 @@
 //! These mirror the crate's internal `test_utils`, which isn't available here,
 //! so tests can be moved between both with few changes.
 
+use std::sync::Arc;
 use uma_tools::configuration::Configuration;
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
@@ -81,7 +82,7 @@ pub fn uma(style: Style) -> Uma {
 pub fn ready_solver(
     course_id: u32,
     uma: Uma,
-    skills: Vec<Skill>,
+    skills: Vec<Arc<Skill>>,
     config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
@@ -128,12 +129,13 @@ pub fn alternative_with_precondition(
     }
 }
 
-/// White skill data without popularity data or wit check, so the skill is
+/// White skill with ID 0, without popularity data or wit check, so it's
 /// always available.
 ///
-/// Override fields with `SkillData { rarity, ..skill_data(...) }`.
-pub fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
-    SkillData {
+/// Override fields with `Skill { id, rarity, ..synthetic_skill(...) }`.
+pub fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
+    Skill {
+        id: 0,
         rarity: SkillRarity::White,
         alternatives,
         popularity: None,
@@ -142,16 +144,16 @@ pub fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
-    Skill::new(
+pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Arc<Skill> {
+    Arc::new(Skill {
         id,
-        skill_data(vec![alternative(condition, skill_type, modifier)]),
-    )
+        ..synthetic_skill(vec![alternative(condition, skill_type, modifier)])
+    })
 }
 
 /// Always available skill whose target speed effect is too small to change the
 /// race.
-pub fn negligible_skill(condition: &str) -> Skill {
+pub fn negligible_skill(condition: &str) -> Arc<Skill> {
     skill(999999, condition, SkillType::TargetSpeed, 0.0001)
 }
 

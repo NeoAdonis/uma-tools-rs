@@ -4,8 +4,9 @@ use super::*;
 use crate::course::geometry::*;
 use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, skill_data, synthetic_course};
+use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
 use crate::trigger::builder::build_trigger_scheduler;
+use std::sync::Arc;
 
 /// Create a simple test course for testing spatial triggers.
 fn create_test_course() -> Course {
@@ -278,16 +279,19 @@ fn test_multiple_trigger_comparisons_are_combined() {
 }
 
 /// Helper function to create a test skill with precondition.
-fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) -> Skill {
+fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) -> Arc<Skill> {
     let alternative = SkillAlternative {
         precondition: (!precondition.is_empty()).then(|| precondition.parse().unwrap()),
         ..alternative(condition, SkillType::TargetSpeed, 0.4)
     };
-    Skill::new(id, skill_data(vec![alternative]))
+    Arc::new(Skill {
+        id,
+        ..synthetic_skill(vec![alternative])
+    })
 }
 
 /// Build a scheduler for the given skills on the test course.
-fn build_test_scheduler(skills: &[Skill]) -> crate::trigger::system::TriggerScheduler {
+fn build_test_scheduler(skills: &[Arc<Skill>]) -> crate::trigger::system::TriggerScheduler {
     use rand::SeedableRng;
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
     build_trigger_scheduler(skills, &create_test_course(), &mut rng)
@@ -375,7 +379,7 @@ fn test_precondition_only_in_alternative_zero() {
         },
         alternative("hp_per<=50", SkillType::TargetSpeed, 0.3),
     ];
-    let skill = Skill::new(0, skill_data(alternatives));
+    let skill = Arc::new(synthetic_skill(alternatives));
     let scheduler = build_test_scheduler(&[skill]);
 
     // Unlock logic, then one logic per alternative.
@@ -563,13 +567,10 @@ fn test_alternatives_share_random_rolls() {
 
     // The first alternative only adds a requirement to the second one, so both
     // must be checked at the same random point.
-    let skill = Skill::new(
-        0,
-        skill_data(vec![
-            alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 0.35),
-            alternative("phase_random==1", SkillType::TargetSpeed, 0.15),
-        ]),
-    );
+    let skill = Arc::new(synthetic_skill(vec![
+        alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 0.35),
+        alternative("phase_random==1", SkillType::TargetSpeed, 0.15),
+    ]));
     for seed in 0..20 {
         let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(seed);
         let scheduler = build_trigger_scheduler(

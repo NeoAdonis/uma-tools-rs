@@ -7,6 +7,7 @@ use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
 use crate::uma::*;
+use std::sync::Arc;
 
 /// Assert that two floats are equal, or within `1e-9` of each other.
 ///
@@ -99,7 +100,7 @@ pub(crate) fn uma(style: Style) -> Uma {
 pub(crate) fn ready_solver(
     course_id: u32,
     uma: Uma,
-    skills: Vec<Skill>,
+    skills: Vec<Arc<Skill>>,
     config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
@@ -137,12 +138,13 @@ pub(crate) fn alternative(
     }
 }
 
-/// White skill data without popularity data or wit check, so the skill is
+/// White skill with ID 0, without popularity data or wit check, so it's
 /// always available.
 ///
-/// Override fields with `SkillData { rarity, ..skill_data(...) }`.
-pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
-    SkillData {
+/// Override fields with `Skill { id, rarity, ..synthetic_skill(...) }`.
+pub(crate) fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
+    Skill {
+        id: 0,
         rarity: SkillRarity::White,
         alternatives,
         popularity: None,
@@ -151,9 +153,9 @@ pub(crate) fn skill_data(alternatives: Vec<SkillAlternative>) -> SkillData {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Skill {
-    Skill::new(
+pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Arc<Skill> {
+    Arc::new(Skill {
         id,
-        skill_data(vec![alternative(condition, skill_type, modifier)]),
-    )
+        ..synthetic_skill(vec![alternative(condition, skill_type, modifier)])
+    })
 }

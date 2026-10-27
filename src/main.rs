@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use uma_tools::configuration::Configuration;
 use uma_tools::course::*;
@@ -78,7 +79,7 @@ fn main() {
     println!("\nLoaded {} skills from JSON", skills_map.len());
 
     // Convert skill IDs to actual Skill objects.
-    let skills: Vec<Skill> = skill_ids
+    let skills: Vec<Arc<Skill>> = skill_ids
         .iter()
         .filter_map(|id| skills_map.get(id).cloned())
         .collect();

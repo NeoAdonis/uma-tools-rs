@@ -62,6 +62,8 @@
 //!     `hp_per>=20 & ground_type==2`.
 //!   - **If guards pass**: Activate skill.
 
+use std::sync::Arc;
+
 use crate::course::Course;
 use crate::skill::*;
 use crate::trigger::random::{RandomRolls, roll_condition};
@@ -85,7 +87,7 @@ use rand::Rng;
 /// (see [`TriggerScheduler::add_race_start_logic`]). Other alternatives of
 /// their skills (e.g. continuations) are compiled as usual.
 pub fn build_trigger_scheduler(
-    skills: &[Skill],
+    skills: &[Arc<Skill>],
     course: &Course,
     rng: &mut impl Rng,
 ) -> TriggerScheduler {

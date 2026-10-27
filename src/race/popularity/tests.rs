@@ -1,6 +1,7 @@
 use super::*;
-use crate::skill::{PopularityStat as Stat, SkillData, SkillType};
-use crate::test_utils::{alternative, assert_close, skill_data};
+use crate::skill::{PopularityStat as Stat, Skill, SkillType};
+use crate::test_utils::{alternative, assert_close, synthetic_skill};
+use std::sync::Arc;
 
 /// Create popularity points with the given points added to each stat.
 fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
@@ -39,11 +40,11 @@ fn test_skill_popularity_reads_data() {
     use crate::skill::SkillPopularity as Entry;
 
     let with_popularity = |popularity| {
-        let data = SkillData {
+        Arc::new(Skill {
+            id: 1,
             popularity,
-            ..skill_data(vec![])
-        };
-        Skill::new(1, data)
+            ..synthetic_skill(vec![])
+        })
     };
     let with_data = |entries: Vec<Entry>| with_popularity(Some(entries));
     let entry = |stat, value| Entry { stat, value };
@@ -83,7 +84,7 @@ fn test_skill_popularity_reads_data() {
 fn test_skill_popularity_deserialization() {
     let parse = |popularity: &str| {
         let json = format!(r#"{{"rarity": 1, "alternatives": [], {popularity} "witCheck": 1}}"#);
-        serde_json::from_str::<SkillData>(&json)
+        serde_json::from_str::<Skill>(&json)
             .expect("Failed to parse skill data")
             .popularity
             .map(|entries| {
@@ -111,22 +112,22 @@ fn test_skill_popularity_deserialization() {
 }
 
 /// Build a skill with one alternative per condition, giving 100 speed points.
-fn popularity_skill(conditions: &[&str], wit_check: bool) -> Skill {
+fn popularity_skill(conditions: &[&str], wit_check: bool) -> Arc<Skill> {
     use crate::skill::SkillPopularity as Entry;
 
     let alternatives = conditions
         .iter()
         .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.35))
         .collect();
-    let data = SkillData {
+    Arc::new(Skill {
+        id: 1,
         popularity: Some(vec![Entry {
             stat: Stat::Speed,
             value: 100,
         }]),
         wit_check,
-        ..skill_data(alternatives)
-    };
-    Skill::new(1, data)
+        ..synthetic_skill(alternatives)
+    })
 }
 
 /// Get the speed points a skill adds to a Pace runner with 1000 wit on a 2000m
