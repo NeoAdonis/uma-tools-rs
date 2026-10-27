@@ -65,6 +65,7 @@ pub const FORCE_IN_MIN_LANE: f64 = 0.12;
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
 
+#[derive(Debug, Clone)]
 pub struct InitialState {
     /// Runner mood level. It affects initial stat adjustments and is also used to
     /// evaluate some skill conditions.
@@ -87,6 +88,7 @@ pub struct InitialState {
 }
 
 /// State related to order (rank) in the race.
+#[derive(Debug, Clone)]
 pub struct OrderState {
     /// Current order (rank), 1-based.
     pub order: u8,
@@ -154,7 +156,7 @@ pub fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
 }
 
 /// Distance differences from other runners.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
     pub from_first: f64,
@@ -171,7 +173,7 @@ pub struct PositionDiff {
 }
 
 /// Rush counters.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RushCounter {
     /// Number of runners currently in rush state ahead.
     pub ahead: u8,
@@ -186,8 +188,12 @@ pub struct RushCounter {
 /// An Uma with additional data related to racing, that is, an Uma who is
 /// running.
 ///
-/// N.B. This structure should be created from an `UnreadyRunner` via
-/// `RaceSolver`.
+/// N.B. This structure should be created from an [`UnreadyRunner`] via
+/// [`RaceSolver`].
+///
+/// [`UnreadyRunner`]: crate::race::unready_runner::UnreadyRunner
+/// [`RaceSolver`]: crate::race::solver::RaceSolver
+#[derive(Debug)]
 pub struct Runner {
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.
@@ -346,7 +352,8 @@ pub struct Runner {
     /// It records the power conserved during the first 10 sections and its release
     /// upon entering the last spurt. `None` if the runner is not eligible.
     pub charge_up: Option<ChargeUp>,
-    /// Reference to a `RaceSolver`'s RNG, shared with other runners.
+    /// Reference to a [`RaceSolver`](crate::race::solver::RaceSolver)'s RNG,
+    /// shared with other runners.
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub segments: SegmentState,
@@ -360,7 +367,7 @@ pub struct Runner {
     pub activation_flags: SkillActivationFlags,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StartType {
     Good,
     Normal,
@@ -794,7 +801,7 @@ impl Runner {
             && !rush_state.is_rushed
         {
             rush_state.start(state.elapsed_time);
-            self.on_rush_change(state, true);
+            self.on_rush_change(state);
             if let Some(charge) = &mut self.charge_up {
                 charge.penalize(charge_up::RUSH_PENALTY);
             }
@@ -807,13 +814,14 @@ impl Runner {
             && rush_state.is_rushed
         {
             rush_state.end(state.elapsed_time);
-            self.on_rush_change(state, false);
+            self.on_rush_change(state);
         }
     }
 
     /// Update the race's count of rushed runners after this runner started or
     /// stopped rushing, and force a positioning strategy change immediately.
-    fn on_rush_change(&mut self, state: &mut RaceState, is_rushed: bool) {
+    fn on_rush_change(&mut self, state: &mut RaceState) {
+        let is_rushed = self.is_rushed();
         let count =
             &mut state.rushed_by_team[self.initial_state.team as usize][self.base_style() as usize];
         if is_rushed {

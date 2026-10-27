@@ -8,21 +8,22 @@
 //! Each trigger ([`TriggerCondition`]) is stored where it can be checked
 //! cheaply:
 //!
-//! - `Segments` (random variables): one window per segment in the position
+//! - [`Segments`] (random variables): one window per segment in the position
 //!   [`WindowQueue`]. Fires every frame while inside a segment.
-//! - `Window` (position, time): a [`WindowQueue`]. Fires every frame while
+//! - [`Window`] (position, time): a [`WindowQueue`]. Fires every frame while
 //!   inside the range.
-//! - `Window` (HP): a list. Fires every frame while inside the range.
-//! - `LastStraightEntry`: a list. Fires once, when entering the last straight.
-//! - `RaceStart` (out-of-gate skills): a list. Fires once, on the first frame
+//! - [`Window`] (HP): a list. Fires every frame while inside the range.
+//! - [`LastStraightEntry`]: a list. Fires once, when entering the last
+//!   straight.
+//! - [`RaceStart`] (out-of-gate skills): a list. Fires once, on the first frame
 //!   the runner moves.
-//! - `AllOutSpurtStart`: a list. Converted to a segment window when the spurt
+//! - [`AllOutSpurtStart`]: a list. Converted to a segment window when the spurt
 //!   starts.
-//! - `AnySkillActivation` / `HealSkillActivation`: lists. Fire on frames where
-//!   a (heal) skill activated.
-//! - `BuffSkillActivation`: a list. Fires on frames where any runner activated
-//!   a buff, or the most popular runner activated any skill, after every runner
-//!   checked her skills.
+//! - [`AnySkillActivation`] / [`HealSkillActivation`]: lists. Fire on frames
+//!   where a (heal) skill activated.
+//! - [`BuffSkillActivation`]: a list. Fires on frames where any runner
+//!   activated a buff, or the most popular runner activated any skill, after
+//!   every runner checked her skills.
 //!
 //! **Window queues.** Position and time only increase, so their windows wait in
 //! a pending list sorted by start, are checked while active, and are dropped
@@ -41,15 +42,31 @@
 //! over entirely is missed.
 //!
 //! [`TriggerCondition`]: crate::trigger::skill_activation::TriggerCondition
+//! [`Segments`]:
+//!     crate::trigger::skill_activation::TriggerCondition::Segments
+//! [`Window`]:
+//!     crate::trigger::skill_activation::TriggerCondition::Window
+//! [`LastStraightEntry`]:
+//!     crate::trigger::skill_activation::TriggerCondition::LastStraightEntry
+//! [`RaceStart`]:
+//!     crate::trigger::skill_activation::TriggerCondition::RaceStart
+//! [`AllOutSpurtStart`]:
+//!     crate::trigger::skill_activation::TriggerCondition::AllOutSpurtStart
+//! [`AnySkillActivation`]:
+//!     crate::trigger::skill_activation::TriggerCondition::AnySkillActivation
+//! [`HealSkillActivation`]:
+//!     crate::trigger::skill_activation::TriggerCondition::HealSkillActivation
+//! [`BuffSkillActivation`]:
+//!     crate::trigger::skill_activation::TriggerCondition::BuffSkillActivation
 
 use crate::course::Phase;
 use crate::trigger::skill_activation::SkillActivationLogic;
 
 /// Main scheduler coordinating all trigger types.
 ///
-/// This scheduler stores `SkillActivationLogic` which separates triggers
+/// This scheduler stores [`SkillActivationLogic`] which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct TriggerScheduler {
     pub skill_logics: Vec<SkillActivationLogic>,
 
@@ -121,7 +138,7 @@ impl TriggerScheduler {
 ///
 /// The variable is implied by the collection holding the trigger (see
 /// [`TriggerScheduler`]).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WindowTrigger {
     pub logic_idx: usize,
     pub min_threshold: f64,
@@ -133,7 +150,7 @@ pub struct WindowTrigger {
 /// Windows wait in `pending` until their range starts, stay in `active` while
 /// inside it, and are dropped once the value moves past their range. This way,
 /// windows are only looked at while they matter.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct WindowQueue {
     /// Windows that haven't started yet, sorted by `min_threshold` in descending
     /// order (the next window to start is last).
@@ -190,7 +207,7 @@ impl WindowQueue {
 
 // ========== ACTIVATION TRACKING ==========
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct ActivationCounts {
     pub all: usize,
     // Phase::RunUp + Phase::Early (sections 0-4).

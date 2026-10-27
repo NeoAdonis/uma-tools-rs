@@ -39,7 +39,7 @@ fn solver(
         game_version,
         ..seeded_config(rng_seed)
     };
-    ready_solver(10204, uma, skills, &config)
+    ready_solver(10204, uma, skills, config)
 }
 
 /// Put the runner in her last spurt (20 m/s) with the given current speed.

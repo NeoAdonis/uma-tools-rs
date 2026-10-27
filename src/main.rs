@@ -35,25 +35,21 @@ fn main() {
 
     // Load configuration from JSON file.
     let mut config =
-        Configuration::from_json_file(config_path.to_str().expect("Invalid --config path"))
-            .expect("Failed to parse config JSON");
+        Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
 
     // Resolve the seed so that the race can be reproduced.
     let seed = *config.seed.get_or_insert_with(rand::random);
     println!("RNG seed: {seed}");
 
     // Load Uma data from JSON file.
-    let uma_data = UmaData::from_json_file(uma_path.to_str().expect("Invalid --uma path"))
-        .expect("Failed to parse uma JSON");
+    let uma_data = UmaData::from_json_file(&uma_path).expect("Failed to parse uma JSON");
     let uma = uma_data.uma;
     let mood = uma_data.mood;
     let skill_ids = uma_data.skills;
 
     // Load race parameters from JSON file.
-    let parameters = RaceParametersData::from_json_file(
-        parameters_path.to_str().expect("Invalid --parameters path"),
-    )
-    .expect("Failed to parse parameters JSON");
+    let parameters = RaceParametersData::from_json_file(&parameters_path)
+        .expect("Failed to parse parameters JSON");
 
     let race_parameters = parameters.race;
     let course_id = parameters.course_id;
@@ -93,7 +89,7 @@ fn main() {
     }
 
     // Initialize the race state.
-    let mut solver = RaceSolver::new(course, race_parameters, &config);
+    let mut solver = RaceSolver::new(course, race_parameters, config);
     solver.add_runner(uma, mood, skills);
 
     // Initialize runners.

@@ -6,7 +6,7 @@ use crate::units::*;
 use super::Runner;
 
 /// Surrounding state information.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SurroundState {
     pub front: bool,
     pub back: bool,
@@ -14,7 +14,7 @@ pub struct SurroundState {
 }
 
 /// Blocking state information.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BlockedState {
     /// Speed limit imposed by front blocking, if any.
     /// This also determines whether the runner is front-blocked.
@@ -44,7 +44,7 @@ impl BlockedState {
 }
 
 /// Information about nearby runners.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct NearbyState {
     /// Total number of nearby runners.
     pub count: u8,

@@ -30,9 +30,9 @@
 //!
 //! It's up to the evaluator implementation to fetch/provide variable values.
 //! However, common variable retrieval logic is provided via the
-//! [`get_variable_value()`] function.
+//! [`variable_value()`] function.
 //!
-//! [`get_variable_value()`] maps ~150+ condition variables (see the
+//! [`variable_value()`] maps ~150+ condition variables (see the
 //! [variable reference](crate::condition::variable_reference)) to their current
 //! runtime values from [`RaceState`] or [`Runner`], which
 //! [`Comparison::holds`] then compares against the comparison value. Variables
@@ -45,7 +45,7 @@
 //!   precomputed during race updates, then stored either as race-level or
 //!   runner-level values depending on their nature.
 //!
-//! A similar function, [`get_variable_value_out_of_gate()`], is provided for
+//! A similar function, [`variable_value_out_of_gate()`], is provided for
 //! out-of-gate evaluations, which only uses data available before a race
 //! starts.
 //!
@@ -126,8 +126,10 @@ use std::ops::RangeInclusive;
 /// - `[hp_per>=20, running_style==1]` → true if HP >= 20% AND style is Front
 ///   Runner.
 ///
-/// This function panics if any comparison contains trigger variables that
-/// should have been separated during the splitting phase.
+/// # Panics
+///
+/// Panics if any comparison contains trigger variables that should have been
+/// separated during the splitting phase.
 pub fn evaluate_comparison_list<E>(
     comparisons: &ComparisonList,
     evaluator: &E,
@@ -145,6 +147,7 @@ where
 }
 
 /// Value of a variable (see [Value Kinds](self#value-kinds)).
+#[derive(Debug, Clone)]
 pub enum Value<'a> {
     /// Integer value, compared with any operator.
     Int(i32),
@@ -156,6 +159,7 @@ pub enum Value<'a> {
 }
 
 /// Set of values, as a view of the race state.
+#[derive(Debug, Clone, Copy)]
 pub enum ValueSet<'a> {
     /// Keys of a map, e.g. skill IDs counted by how many runners have them.
     Keys(&'a HashMap<i32, u8>),
@@ -178,17 +182,19 @@ impl ValueSet<'_> {
     pub fn contains(&self, value: i32) -> bool {
         // Effect types are only valid if implemented.
         let buff = |flags: &SkillActivationFlags| {
-            skill_type(value).is_some_and(|value| flags.buff_activated.contains(&value))
+            SkillType::from_id(value).is_some_and(|value| flags.buff_activated.contains(&value))
         };
         match *self {
             ValueSet::Keys(map) => map.contains_key(&value),
             ValueSet::UsedSkills { runner, mask } => runner.activated_mask(value) & mask != 0,
             ValueSet::Activations(flags) => (value == -1 && flags.any_activated) || buff(flags),
-            ValueSet::OtherBuffs { counts, own } => skill_type(value).is_some_and(|value| {
-                // Discount the runner's own activation.
-                let own = own.buff_activated.contains(&value) as u8;
-                counts.get(&value).is_some_and(|&count| count > own)
-            }),
+            ValueSet::OtherBuffs { counts, own } => {
+                SkillType::from_id(value).is_some_and(|value| {
+                    // Discount the runner's own activation.
+                    let own = own.buff_activated.contains(&value) as u8;
+                    counts.get(&value).is_some_and(|&count| count > own)
+                })
+            }
         }
     }
 }
@@ -198,6 +204,10 @@ impl Comparison {
     ///
     /// Sets only support the operators that the parser allows for them (see
     /// `Comparison::is_supported`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value` is a set and the operator is neither `==` nor `!=`.
     pub fn holds(&self, value: Value) -> bool {
         match value {
             Value::Int(value) => match self.op {
@@ -263,6 +273,7 @@ pub trait CompEvaluator {
 }
 
 /// Reference evaluator using actual race state and runner data.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct EvaluatorFull;
 impl CompEvaluator for EvaluatorFull {
     type State = RaceState;
@@ -281,12 +292,13 @@ impl CompEvaluator for EvaluatorFull {
         match &comp.var {
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if runner.initial_state.ignores_popularity => true,
-            _ => comp.holds(get_variable_value(&comp.var, state, runner, logic_ctx)),
+            _ => comp.holds(variable_value(&comp.var, state, runner, logic_ctx)),
         }
     }
 }
 
 /// Evaluator for out-of-gate context (before a race starts).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct EvaluatorOutOfGate;
 impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
@@ -305,13 +317,20 @@ impl CompEvaluator for EvaluatorOutOfGate {
         match &comp.var {
             // Popularity requirements may be satisfied regardless of the actual value.
             Entry(EntryVar::Popularity) if context.initial_state.ignores_popularity => true,
-            _ => comp.holds(get_variable_value_out_of_gate(&comp.var, state, context)),
+            _ => comp.holds(variable_value_out_of_gate(&comp.var, state, context)),
         }
     }
 }
 
 /// Get current value for any variable type.
-pub fn get_variable_value<'a>(
+///
+/// # Panics
+///
+/// Panics if `var` is a trigger variable (random, random spatial or random
+/// phase variables, except `run_at_full_speed_random`, and
+/// `is_last_straight_onetime`), or a variable that isn't implemented yet
+/// (`remain_distance_viewer_id` and `is_exist_chara_id`).
+pub fn variable_value<'a>(
     var: &VarType,
     state: &'a RaceState,
     runner: &'a Runner,
@@ -320,35 +339,33 @@ pub fn get_variable_value<'a>(
     use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => Int(get_base_stat(stat_var, &runner.base)),
-        Entry(entry_var) => Int(get_entry_value(entry_var, &runner.initial_state)),
-        Order(pos_var) => Int(get_rank_value(pos_var, runner)),
-        OrderRate(rate_var) => get_order_rate_value(rate_var, &runner.order),
-        Distance(dist_var) => Int(get_distance_value(dist_var, runner)),
-        Phase(phase_var) => Int(get_phase_value(phase_var, &state.course, runner)),
-        Course(course_var) => Int(get_course_value(course_var, &state.course)),
-        Spatial(location_var) => Int(get_location_value(location_var, &state.course, runner)),
-        Activation(act_var) => Int(get_activation_value(act_var, state, runner, logic_ctx)),
-        RaceParam(param_var) => Int(get_race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => Int(get_running_style_value(
-            style_var,
-            state,
-            runner.adjusted.style,
-        )),
-        Status(status_var) => Int(get_status_value(status_var, runner)),
-        Blocking(blocking_var) => Int(get_blocking_value(blocking_var, runner)),
-        Temptation(tempt_var) => Int(get_temptation_value(tempt_var, state, runner)),
+        BaseStat(stat_var) => Int(base_stat(stat_var, &runner.base)),
+        Entry(entry_var) => Int(entry_value(entry_var, &runner.initial_state)),
+        Order(pos_var) => Int(rank_value(pos_var, runner)),
+        OrderRate(rate_var) => order_rate_value(rate_var, &runner.order),
+        Distance(dist_var) => Int(distance_value(dist_var, runner)),
+        Phase(phase_var) => Int(phase_value(phase_var, &state.course, runner)),
+        Course(course_var) => Int(course_value(course_var, &state.course)),
+        Spatial(location_var) => Int(location_value(location_var, &state.course, runner)),
+        Activation(act_var) => Int(activation_value(act_var, state, runner, logic_ctx)),
+        RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => {
+            Int(running_style_value(style_var, state, runner.adjusted.style))
+        }
+        Status(status_var) => Int(status_value(status_var, runner)),
+        Blocking(blocking_var) => Int(blocking_value(blocking_var, runner)),
+        Temptation(tempt_var) => Int(temptation_value(tempt_var, state, runner)),
         Lineup(lineup_var) => {
             // Extract the skill being evaluated from logic context.
             let skill_id = logic_ctx
                 .and_then(|logic| runner.skills.get(logic.skill_index))
                 .map_or(0, |skill| skill.id);
-            get_lineup_value(lineup_var, state, skill_id)
+            lineup_value(lineup_var, state, skill_id)
         }
         AccumulateTime => Int(state.elapsed_time.floor() as i32),
         // Always returns 1 (true).
         Always => Int(1),
-        ActivationQuery(query_var) => get_activation_query_value(query_var, state, runner),
+        ActivationQuery(query_var) => activation_query_value(query_var, state, runner),
         // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
             Int(runner.all_out_spurt.is_active() as i32)
@@ -363,7 +380,7 @@ pub fn get_variable_value<'a>(
 }
 
 /// Get current value for any variable type in out-of-gate context.
-pub fn get_variable_value_out_of_gate<'a>(
+pub fn variable_value_out_of_gate<'a>(
     var: &VarType,
     state: &'a RaceState,
     builder: &UnreadyRunner,
@@ -371,16 +388,12 @@ pub fn get_variable_value_out_of_gate<'a>(
     use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => Int(get_base_stat(stat_var, &builder.base)),
-        Entry(entry_var) => Int(get_entry_value(entry_var, &builder.initial_state)),
-        Course(course_var) => Int(get_course_value(course_var, &state.course)),
-        RaceParam(param_var) => Int(get_race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => Int(get_running_style_value(
-            style_var,
-            state,
-            builder.base.style,
-        )),
-        Lineup(lineup_var) => get_lineup_value(lineup_var, state, builder.evaluated_skill_id),
+        BaseStat(stat_var) => Int(base_stat(stat_var, &builder.base)),
+        Entry(entry_var) => Int(entry_value(entry_var, &builder.initial_state)),
+        Course(course_var) => Int(course_value(course_var, &state.course)),
+        RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => Int(running_style_value(style_var, state, builder.base.style)),
+        Lineup(lineup_var) => lineup_value(lineup_var, state, builder.evaluated_skill_id),
         // "random_lot==X" means X% chance, drawn every time it's read. Only
         // out-of-gate skills with a single condition use it, which is evaluated
         // once, so it's never drawn twice in practice.
@@ -401,7 +414,7 @@ fn lot_hits(draw: f64) -> Value<'static> {
 }
 
 /// Get base stat value.
-fn get_base_stat(stat: &BaseStatVar, uma: &Uma) -> i32 {
+fn base_stat(stat: &BaseStatVar, uma: &Uma) -> i32 {
     use BaseStatVar::*;
     match stat {
         BaseSpeed => uma.speed as i32,
@@ -413,7 +426,7 @@ fn get_base_stat(stat: &BaseStatVar, uma: &Uma) -> i32 {
 }
 
 /// Get values related to distance between runners.
-fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
+fn distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
     use DistanceVar::*;
     match var {
         BashinDiffBehind => meters_to_bashin(runner.position_diff.from_prev).floor() as i32,
@@ -425,7 +438,7 @@ fn get_distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
 }
 
 /// Get phase-related values.
-fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
+fn phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     use PhaseVar::*;
 
     match var {
@@ -462,7 +475,7 @@ fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
 }
 
 /// Get course-related values.
-fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
+fn course_value(var: &CourseVar, course: &Course) -> i32 {
     use CourseVar::*;
 
     match var {
@@ -499,7 +512,7 @@ fn get_course_value(var: &CourseVar, course: &Course) -> i32 {
 }
 
 /// Get location-related values.
-fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
+fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
     use SpatialVar::*;
 
     match var {
@@ -604,7 +617,7 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
 }
 
 /// Get race parameter values.
-fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
+fn race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     use RaceParamVar::*;
 
     match var {
@@ -632,7 +645,7 @@ fn get_race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
 /// Get lineup values (from every runner entered in the race).
 ///
 /// `skill_id` is the ID of the skill whose condition is being evaluated.
-fn get_lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Value<'a> {
+fn lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Value<'a> {
     use LineupVar::*;
 
     match var {
@@ -650,7 +663,7 @@ fn get_lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) ->
 }
 
 /// Get sets of skill activations, by skill ID or type.
-fn get_activation_query_value<'a>(
+fn activation_query_value<'a>(
     var: &ActivationQueryVar,
     state: &'a RaceState,
     runner: &'a Runner,
@@ -676,7 +689,7 @@ fn get_activation_query_value<'a>(
 }
 
 /// Get activation counter values.
-fn get_activation_value(
+fn activation_value(
     var: &ActivationVar,
     state: &RaceState,
     runner: &Runner,
@@ -713,7 +726,7 @@ fn get_activation_value(
 }
 
 /// Get running style values.
-fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
+fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
     use RunningStyleVar::*;
     let my_style = my_style.base_style();
 
@@ -721,39 +734,38 @@ fn get_running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: S
         // TODO: generate simulation values for one-runner simulations.
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End.
         RunningStyle => my_style as i32,
-        RunningStyleCountNigeOtherself => get_style_count_otherself(state, Style::Front, my_style),
-        RunningStyleCountOikomiOtherself => get_style_count_otherself(state, Style::End, my_style),
-        RunningStyleCountSame => get_style_count(state, my_style),
+        RunningStyleCountNigeOtherself => style_count_otherself(state, Style::Front, my_style),
+        RunningStyleCountOikomiOtherself => style_count_otherself(state, Style::End, my_style),
+        RunningStyleCountSame => style_count(state, my_style),
         RunningStyleCountSameRate => {
-            (get_style_count(state, my_style) as f64 / state.params.gates as f64 * 100.0).floor()
-                as i32
+            (style_count(state, my_style) as f64 / state.params.gates as f64 * 100.0).floor() as i32
         }
-        RunningStyleCountSashiOtherself => get_style_count_otherself(state, Style::Late, my_style),
-        RunningStyleCountSenkoOtherself => get_style_count_otherself(state, Style::Pace, my_style),
+        RunningStyleCountSashiOtherself => style_count_otherself(state, Style::Late, my_style),
+        RunningStyleCountSenkoOtherself => style_count_otherself(state, Style::Pace, my_style),
         RunningStyleEqualPopularityOne => (my_style == state.style_most_popular) as i32,
     }
 }
 
-fn get_style_count(state: &RaceState, my_style: Style) -> i32 {
+fn style_count(state: &RaceState, my_style: Style) -> i32 {
     state.runners_by_style.get(&my_style).cloned().unwrap_or(0) as i32
 }
 
-fn get_style_count_otherself(state: &RaceState, style: Style, my_style: Style) -> i32 {
+fn style_count_otherself(state: &RaceState, style: Style, my_style: Style) -> i32 {
     state.runners_by_style.get(&style).cloned().unwrap_or(0) as i32 - (my_style == style) as i32
 }
 
-fn get_style_temptation_count(state: &RaceState, style: Style) -> i32 {
+fn style_temptation_count(state: &RaceState, style: Style) -> i32 {
     let rushed = state.rushed_by_team.iter().map(|team| team[style as usize]);
     rushed.map(i32::from).sum()
 }
 
-fn get_style_temptation_opponent_count(state: &RaceState, style: Style, runner: &Runner) -> i32 {
+fn style_temptation_opponent_count(state: &RaceState, style: Style, runner: &Runner) -> i32 {
     let team = &state.rushed_by_team[runner.initial_state.team as usize];
-    get_style_temptation_count(state, style) - team[style as usize] as i32
+    style_temptation_count(state, style) - team[style as usize] as i32
 }
 
 /// Get runner entry values.
-fn get_entry_value(var: &EntryVar, state: &InitialState) -> i32 {
+fn entry_value(var: &EntryVar, state: &InitialState) -> i32 {
     use EntryVar::*;
 
     match var {
@@ -773,7 +785,7 @@ fn get_entry_value(var: &EntryVar, state: &InitialState) -> i32 {
 }
 
 /// Get status values (HP, last spurt, continuous checks).
-fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
+fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
     use StatusVar::*;
 
     match var {
@@ -829,7 +841,7 @@ fn get_status_value(var: &StatusVar, runner: &Runner) -> i32 {
 }
 
 /// Get rank-related values.
-fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
+fn rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     use OrderVar::*;
     let order = &runner.order;
 
@@ -846,7 +858,7 @@ fn get_rank_value(var: &OrderVar, runner: &Runner) -> i32 {
 }
 
 /// Get order rate values.
-fn get_order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
+fn order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
     use OrderRateVar::*;
 
     // Order rate continue checks: whether `order_rate<=X` (in) or
@@ -872,7 +884,7 @@ fn get_order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static
 }
 
 /// Get blocking values.
-fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
+fn blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     use BlockingVar::*;
 
     match var {
@@ -901,7 +913,7 @@ fn get_blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
 }
 
 /// Get temptation/rush values of other umas.
-fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
+fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     use TemptationVar::*;
 
     match var {
@@ -912,21 +924,21 @@ fn get_temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner)
         TemptationOpponentCountInfront => runner.rush_counter.opponents_ahead as i32,
 
         // Rush counts by running style.
-        RunningStyleTemptationCountNige => get_style_temptation_count(state, Style::Front),
-        RunningStyleTemptationCountOikomi => get_style_temptation_count(state, Style::End),
-        RunningStyleTemptationCountSashi => get_style_temptation_count(state, Style::Late),
-        RunningStyleTemptationCountSenko => get_style_temptation_count(state, Style::Pace),
+        RunningStyleTemptationCountNige => style_temptation_count(state, Style::Front),
+        RunningStyleTemptationCountOikomi => style_temptation_count(state, Style::End),
+        RunningStyleTemptationCountSashi => style_temptation_count(state, Style::Late),
+        RunningStyleTemptationCountSenko => style_temptation_count(state, Style::Pace),
         RunningStyleTemptationOpponentCountNige => {
-            get_style_temptation_opponent_count(state, Style::Front, runner)
+            style_temptation_opponent_count(state, Style::Front, runner)
         }
         RunningStyleTemptationOpponentCountOikomi => {
-            get_style_temptation_opponent_count(state, Style::End, runner)
+            style_temptation_opponent_count(state, Style::End, runner)
         }
         RunningStyleTemptationOpponentCountSashi => {
-            get_style_temptation_opponent_count(state, Style::Late, runner)
+            style_temptation_opponent_count(state, Style::Late, runner)
         }
         RunningStyleTemptationOpponentCountSenko => {
-            get_style_temptation_opponent_count(state, Style::Pace, runner)
+            style_temptation_opponent_count(state, Style::Pace, runner)
         }
     }
 }

@@ -22,7 +22,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
-use crate::race::parameters::RaceParameters;
+use crate::race::parameters::{MAX_GATES, RaceParameters};
 use crate::race::proximity;
 use crate::race::runner::{
     POSITIONING_END_SECTION, PositioningStrategy, Runner, SkillActivationFlags,
@@ -47,6 +47,7 @@ const MARGIN_SPEED: f64 = 15.0;
 /// Maximum number of runners in a single team.
 pub const MAX_TEAM_SIZE: usize = 3;
 
+#[derive(Debug)]
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,
@@ -90,6 +91,7 @@ pub struct RaceState {
 ///    added, but their stats are not calculated yet.
 /// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are
 ///    calculated and out-of-gate skills are applied. The simulation can begin.
+#[derive(Debug)]
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
     // Ordered by gate so that runners are always built in the same order (which
@@ -109,14 +111,23 @@ impl RaceSolver<UnreadyRunner> {
     /// Create a new RaceSolver for a given course and parameters.
     ///
     /// If the configuration has no seed, a random one is used.
-    pub fn new(course: Course, params: RaceParameters, config: &Configuration) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `params.gates` isn't between 1 and [`MAX_GATES`].
+    pub fn new(course: Course, params: RaceParameters, config: Configuration) -> Self {
+        let gates = params.gates;
+        assert!(
+            (1..=MAX_GATES).contains(&gates),
+            "Invalid gates {gates}: expected 1 to {MAX_GATES}"
+        );
         let seed = config.seed.unwrap_or_else(rand::random);
         let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
 
         let state = RaceState {
             course,
             params,
-            config: *config,
+            config,
             rng,
             elapsed_time: 0.0,
             finish_time: None,
@@ -142,6 +153,10 @@ impl RaceSolver<UnreadyRunner> {
     /// Add an individual runner to the race BEFORE it starts.
     ///
     /// The runner gets a team of its own, so every other runner is an opponent.
+    ///
+    /// # Panics
+    ///
+    /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
     pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Skill>) {
         if self.builders.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
@@ -154,6 +169,12 @@ impl RaceSolver<UnreadyRunner> {
     /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
     ///
     /// Members are allies of each other and opponents of everyone else.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], or if
+    /// there aren't enough free gates for all of them (see
+    /// [`RaceParameters::gates`]).
     pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Skill>)>) {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");

@@ -60,7 +60,7 @@ use rand::prelude::*;
 /// It should be shared by every condition of a skill: its alternatives often
 /// share a random variable (e.g. `phase_laterhalf_random==1`, where one of them
 /// adds requirements), and must get the same points, or the same failure.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RandomRolls<'a> {
     rolled: Vec<(&'a Comparison, Option<Vec<f64>>)>,
 }

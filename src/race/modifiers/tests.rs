@@ -71,7 +71,7 @@ fn high_wit_race(skill: Skill) -> RaceSolver<Runner> {
         wit: 1500,
         ..uma(Style::Pace)
     };
-    ready_solver(10101, uma, vec![skill], &seeded_config(42))
+    ready_solver(10101, uma, vec![skill], seeded_config(42))
 }
 
 /// Activate the only skill of a single runner with high wit and return
@@ -174,7 +174,7 @@ fn run_stamina_limit_break_runner(speed: f64) -> (f64, f64) {
         stamina: 1600,
         ..uma(Style::Pace)
     };
-    let mut solver = ready_solver(10105, uma, vec![], &seeded_config(42));
+    let mut solver = ready_solver(10105, uma, vec![], seeded_config(42));
     let runner = &mut solver.runners[0];
 
     runner.position = 2000.0;

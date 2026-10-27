@@ -25,7 +25,7 @@ fn run_race(condition: &str, rng_seed: u64) -> Runner {
         ..uma(Style::Pace)
     };
     let skills = vec![negligible_skill(condition)];
-    let mut solver = ready_solver(COURSE_ID, uma, skills, &seeded_config(rng_seed));
+    let mut solver = ready_solver(COURSE_ID, uma, skills, seeded_config(rng_seed));
     solver.run();
     solver.runners.remove(0)
 }

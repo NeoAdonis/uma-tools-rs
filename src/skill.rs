@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer, de::Error};
 use serde_repr::Deserialize_repr;
 use serde_with::{BoolFromInt, serde_as};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::condition::parser::Condition;
@@ -74,6 +75,11 @@ pub enum SkillType {
 }
 
 impl SkillType {
+    /// Get the skill type with the given ID, if it's implemented.
+    pub fn from_id(id: i32) -> Option<Self> {
+        u8::try_from(id).ok()?.try_into().ok()
+    }
+
     /// Check if this effect type is a stat boost (applied permanently).
     pub fn is_stat_boost(self) -> bool {
         use SkillType::*;
@@ -137,7 +143,7 @@ impl SkillType {
 }
 
 /// Represents the rarity of a skill.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillRarity {
     /// Common skill.
@@ -162,7 +168,7 @@ pub enum SkillRarity {
 /// opponents: allies can be selected and count towards the maximum number of
 /// targets. However, allies are excluded from debuffs afterwards (see
 /// [`SkillTarget::is_opponent_only`]).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(try_from = "RawSkillTarget")]
 pub enum SkillTarget {
     /// Skill affects oneself.
@@ -262,7 +268,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 /// situation when the skill activates (see [`crate::race::skill_scaling`]).
 ///
 /// Each variant's discriminant is its ID in the skill data.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
 #[repr(u8)]
 pub enum ValueScaling {
     /// No scaling.
@@ -347,7 +353,7 @@ pub enum ValueScaling {
 /// skill's other effects.
 ///
 /// Each variant's discriminant is its ID in the skill data.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
 #[repr(u8)]
 pub enum AdditionalActivation {
     /// Applies on activation.
@@ -375,7 +381,7 @@ impl AdditionalActivation {
 }
 
 /// Represents a single effect of a skill.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillEffect {
     /// Type of the skill effect.
@@ -394,6 +400,27 @@ pub struct SkillEffect {
     /// When the effect applies. Regular (on activation) if missing.
     #[serde(default)]
     pub additional: AdditionalActivation,
+}
+
+impl SkillEffect {
+    /// Determine whether `self` is positive or negative.
+    pub fn is_positive(&self) -> bool {
+        match self.skill_type {
+            // Purely positive effects.
+            SkillType::ActivateRandomGold
+            | SkillType::ActivateUnique
+            | SkillType::ActivateSympathy
+            | SkillType::ChangeStyleRunaway => true,
+            // Less start delay is good.
+            SkillType::AddStartDelay => self.modifier <= 0.0,
+            // Multiplier of less than or equal to 1.0 is a reduction in delay.
+            SkillType::MultiplyStartDelay => self.modifier <= 1.0,
+            // Less chance or shorter rush time is good.
+            SkillType::RushChanceUp | SkillType::RushTimeUp => self.modifier <= 0.0,
+            // Positive modifier is good for other effects.
+            _ => self.modifier >= 0.0,
+        }
+    }
 }
 
 /// Convert a base duration from 10000ths of a second while deserializing. A
@@ -425,7 +452,7 @@ fn default_cooldown() -> f64 {
 /// The scaling is applied on top of the course distance scaling.
 ///
 /// Each variant's discriminant is its ID in the skill data.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
 #[repr(u8)]
 pub enum DurationScaling {
     /// No scaling.
@@ -448,7 +475,7 @@ pub enum DurationScaling {
 
 /// Represents an alternative version of a skill, with its own conditions and
 /// effects.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
     /// Base cooldown duration in seconds.
@@ -534,7 +561,7 @@ fn deserialize_precondition<'de, D: Deserializer<'de>>(
 }
 
 /// Stat that can receive popularity points from a skill.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr)]
 #[repr(u8)]
 pub enum PopularityStat {
     None = 0,
@@ -546,7 +573,7 @@ pub enum PopularityStat {
 }
 
 /// Represents the popularity points granted by a skill to a specific stat.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillPopularity {
     /// Stat that receives popularity points.
@@ -558,7 +585,7 @@ pub struct SkillPopularity {
 /// Represents a skill with its ID and data.
 ///
 /// The data is shared, so cloning a skill is cheap.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Skill {
     pub id: i32,
     data: Arc<SkillData>,
@@ -574,7 +601,7 @@ impl std::ops::Deref for Skill {
 
 /// Represents the data of a skill.
 #[serde_as]
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillData {
     /// Skill rarity.
@@ -598,25 +625,6 @@ impl Skill {
         Skill {
             id,
             data: Arc::new(data),
-        }
-    }
-
-    /// Determine whether a skill effect is positive or negative.
-    pub fn is_effect_positive(effect: &SkillEffect) -> bool {
-        match effect.skill_type {
-            // Purely positive effects.
-            SkillType::ActivateRandomGold
-            | SkillType::ActivateUnique
-            | SkillType::ActivateSympathy
-            | SkillType::ChangeStyleRunaway => true,
-            // Less start delay is good.
-            SkillType::AddStartDelay => effect.modifier <= 0.0,
-            // Multiplier of less than or equal to 1.0 is a reduction in delay.
-            SkillType::MultiplyStartDelay => effect.modifier <= 1.0,
-            // Less chance or shorter rush time is good.
-            SkillType::RushChanceUp | SkillType::RushTimeUp => effect.modifier <= 0.0,
-            // Positive modifier is good for other effects.
-            _ => effect.modifier >= 0.0,
         }
     }
 
@@ -690,9 +698,13 @@ impl Skill {
     }
 
     /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read or the JSON is invalid.
     pub fn load_skills_from_file(
-        json_path: &str,
-    ) -> Result<HashMap<i32, Skill>, Box<dyn std::error::Error>> {
+        json_path: impl AsRef<Path>,
+    ) -> Result<HashMap<i32, Skill>, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
 
         let json_content = fs::read_to_string(json_path)?;
@@ -875,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_effect_positive() {
+    fn test_effect_is_positive() {
         let cases = [
             // Purely positive.
             (SkillType::ActivateRandomGold, 0.0, true),
@@ -895,7 +907,7 @@ mod tests {
             (SkillType::TargetSpeed, -0.1, false),
         ];
         for (skill_type, modifier, expected) in cases {
-            let actual = Skill::is_effect_positive(&test_utils::effect(skill_type, modifier));
+            let actual = test_utils::effect(skill_type, modifier).is_positive();
             assert_eq!(actual, expected, "{skill_type:?} with {modifier}");
         }
     }
@@ -1031,7 +1043,7 @@ mod tests {
         let load = |id: &str| {
             let json = format!(r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0}}}}"#);
             std::fs::write(&path, json).unwrap();
-            let result = Skill::load_skills_from_file(path.to_str().unwrap());
+            let result = Skill::load_skills_from_file(&path);
             std::fs::remove_file(&path).unwrap();
             result
         };

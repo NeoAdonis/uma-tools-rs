@@ -2,7 +2,7 @@ use crate::configuration::Language;
 
 /// Get the track name for a given track ID and language.
 /// Returns `None` if the track ID is unknown.
-pub fn get_track_name(track_id: u16, language: Language) -> Option<&'static str> {
+pub fn track_name(track_id: u16, language: Language) -> Option<&'static str> {
     match (track_id, language) {
         (10001, Language::Japanese) => Some("札幌"),
         (10001, _) => Some("Sapporo"),

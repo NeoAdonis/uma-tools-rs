@@ -81,9 +81,9 @@ use rand::Rng;
 ///
 /// Alternatives whose condition or precondition can never be satisfied on this
 /// course are skipped. So are out-of-gate alternatives: their condition is
-/// evaluated before the race, then they're activated by a race start logic (see
-/// [`add_race_start_logic`]). Other alternatives of their skills (e.g.
-/// continuations) are compiled as usual.
+/// evaluated before the race, then they're activated by a race start logic
+/// (see [`TriggerScheduler::add_race_start_logic`]). Other alternatives of
+/// their skills (e.g. continuations) are compiled as usual.
 pub fn build_trigger_scheduler(
     skills: &[Skill],
     course: &Course,
@@ -147,28 +147,31 @@ pub fn build_trigger_scheduler(
     scheduler
 }
 
-/// Add the logic activating an out-of-gate skill alternative on the first frame
-/// the runner moves.
-///
-/// Its condition was already satisfied before the race, so it has no guards.
-pub fn add_race_start_logic(
-    skill_idx: usize,
-    alt_idx: usize,
-    is_continuation: bool,
-    scheduler: &mut TriggerScheduler,
-) {
-    add_logic(
-        SkillActivationLogic::new(
-            skill_idx,
-            alt_idx,
-            TriggerCondition::RaceStart,
-            Vec::new(),
-            None,
-            LogicAction::Activate,
-            is_continuation,
-        ),
-        scheduler,
-    );
+impl TriggerScheduler {
+    /// Add the logic activating an out-of-gate skill alternative on the first
+    /// frame the runner moves.
+    ///
+    /// Its condition was already satisfied before the race, so it has no
+    /// guards.
+    pub fn add_race_start_logic(
+        &mut self,
+        skill_idx: usize,
+        alt_idx: usize,
+        is_continuation: bool,
+    ) {
+        add_logic(
+            SkillActivationLogic::new(
+                skill_idx,
+                alt_idx,
+                TriggerCondition::RaceStart,
+                Vec::new(),
+                None,
+                LogicAction::Activate,
+                is_continuation,
+            ),
+            self,
+        );
+    }
 }
 
 /// Add the logics unlocking a precondition, and return the precondition ID.

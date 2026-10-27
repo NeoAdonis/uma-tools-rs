@@ -22,7 +22,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
     // Skills are checked against the runner's state; everything derived from the
     // position must match the position at the end of each frame.
     for course_id in [10101, 10104, 10606, 10913] {
-        let mut solver = RaceSolver::new(load_course(course_id), race_params(), &seeded_config(0));
+        let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
         for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
             solver.add_runner(uma(style), Mood::Normal, vec![]);
         }
@@ -86,7 +86,7 @@ fn test_skills_see_state_after_the_move() {
         stamina: 1200,
         ..uma(Style::Pace)
     };
-    let mut solver = ready_solver(10108, uma, vec![skill], &seeded_config(0));
+    let mut solver = ready_solver(10108, uma, vec![skill], seeded_config(0));
     assert_eq!(solver.state.course.distance, 2400);
     solver.run();
 
@@ -106,7 +106,7 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
         game_version,
         ..seeded_config(0)
     };
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &config);
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     for &(style, _) in runners {
         solver.add_runner(uma(style), Mood::Normal, vec![]);
     }
@@ -402,7 +402,7 @@ fn test_positioning_ends_after_first_ten_sections() {
 
 /// Solver with a single runner whose start delay is overridden.
 fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], &seeded_config(rng_seed));
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(rng_seed));
     solver.runners[0].start_delay = start_delay;
     solver
 }
@@ -498,7 +498,7 @@ fn test_position_never_decreases_regardless_of_start_delay() {
 
 #[test]
 fn test_runners_bound_to_rush_do_rush() {
-    let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), seeded_config(0));
     for _ in 0..9 {
         // Low wit for a high rush chance.
         let uma = Uma {
@@ -523,7 +523,7 @@ fn test_runners_bound_to_rush_do_rush() {
 
 #[test]
 fn test_all_runners_finish_with_margins() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for (i, style) in [Style::Front, Style::Pace, Style::Late, Style::End]
         .into_iter()
         .enumerate()
@@ -1588,7 +1588,7 @@ fn test_fov_debuffs_cannot_shorten_field_of_view_below_zero() {
 
 #[test]
 fn test_individual_runners_are_all_opponents() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..3 {
         solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }
@@ -1604,7 +1604,7 @@ fn test_individual_runners_are_all_opponents() {
 
 #[test]
 fn test_team_members_are_allies() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let member = || (uma(Style::Pace), Mood::Normal, vec![]);
     solver.add_team(vec![member(), member(), member()]);
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
@@ -1629,7 +1629,7 @@ fn test_team_members_are_allies() {
 #[test]
 #[should_panic(expected = "Team must have between 1 and 3 runners")]
 fn test_team_larger_than_max_size_panics() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let member = || (uma(Style::Pace), Mood::Normal, vec![]);
     solver.add_team(vec![member(), member(), member(), member()]);
 }
@@ -1637,15 +1637,35 @@ fn test_team_larger_than_max_size_panics() {
 #[test]
 #[should_panic(expected = "Team must have between 1 and 3 runners")]
 fn test_empty_team_panics() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     solver.add_team(vec![]);
+}
+
+#[test]
+#[should_panic(expected = "Invalid gates 0")]
+fn test_no_gates_panics() {
+    let params = RaceParameters {
+        gates: 0,
+        ..race_params()
+    };
+    RaceSolver::new(load_course(10101), params, seeded_config(0));
+}
+
+#[test]
+#[should_panic(expected = "Invalid gates 19")]
+fn test_too_many_gates_panics() {
+    let params = RaceParameters {
+        gates: MAX_GATES + 1,
+        ..race_params()
+    };
+    RaceSolver::new(load_course(10101), params, seeded_config(0));
 }
 
 #[test]
 #[should_panic(expected = "Cannot add more runners than available gates")]
 fn test_runner_exceeding_gates_panics() {
     // 9 gates.
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..10 {
         solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }
@@ -1655,7 +1675,7 @@ fn test_runner_exceeding_gates_panics() {
 #[should_panic(expected = "Cannot add more runners than available gates")]
 fn test_team_exceeding_gates_panics() {
     // 9 gates: 8 individual runners leave room for one more, not a team of two.
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..8 {
         solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }
@@ -1678,7 +1698,7 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
 #[test]
 fn test_rush_counters_by_position_count_opponents() {
     // In position order: team 0 (×2), team 1 and team 2.
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let member = || (uma(Style::Pace), Mood::Normal, vec![]);
     solver.add_team(vec![member(), member()]);
     solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
@@ -1720,7 +1740,7 @@ fn test_rush_counters_by_position_count_opponents() {
 
 #[test]
 fn test_rushed_by_team_matches_runners() {
-    let mut solver = RaceSolver::new(load_course(10204), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), seeded_config(0));
     // Low wit for a high rush chance.
     let member = |style| {
         let uma = Uma {
@@ -1766,7 +1786,7 @@ fn test_rushed_by_team_matches_runners() {
 
 #[test]
 fn test_team_activations_sum_team_members() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let member = || (uma(Style::Pace), Mood::Normal, vec![]);
     solver.add_team(vec![member(), member()]);
     solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
@@ -1787,7 +1807,7 @@ fn test_team_activations_sum_team_members() {
 
 #[test]
 fn test_team_activations_match_runners_each_frame() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let skills = || {
         vec![
             // Out-of-gate.
@@ -1824,7 +1844,7 @@ fn test_team_activations_match_runners_each_frame() {
 /// Ready race with one runner per `(style, team)`, placed in that order from
 /// first to last, 10 meters apart.
 fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
         solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
     }
@@ -1978,7 +1998,7 @@ fn test_targets_rushed_runners() {
 
 #[test]
 fn test_scoreboard_time() {
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
     let min = solver.state.course.finish_time_min;
     let max = solver.state.course.finish_time_max;
 
@@ -2050,7 +2070,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     ]);
     let debuff = Skill::new(8, skill_data(vec![alternative]));
 
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![debuff]);
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
     let mut solver = solver.ready_runners();
@@ -2102,7 +2122,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
 
 #[test]
 fn test_lane_and_duration_effects_set_skill_modifiers() {
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
     let effects = [
         (SkillType::LaneMovementSpeed, 0.02),
         (SkillType::LaneMovementSpeed, 0.03),
@@ -2131,7 +2151,7 @@ fn test_lane_and_duration_effects_set_skill_modifiers() {
 #[test]
 fn test_duration_scaling_extends_activated_skills() {
     let skill = skill(32, "always==1", SkillType::TargetSpeed, 0.15);
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
     let extend = received(SkillType::ExtendEvolvedDuration, 2.0);
     solver.runners[0].receive_skill_effect(&extend, &solver.state);
 
@@ -2177,7 +2197,7 @@ fn activates_with_most_popular(
     most_popular: Option<usize>,
     skill_id: i32,
 ) -> Vec<bool> {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let ids: Vec<Vec<i32>> = skills
         .iter()
         .map(|skills| skills.iter().map(|skill| skill.id).collect())
@@ -2315,7 +2335,7 @@ fn test_ignored_popularity_satisfies_popularity_conditions() {
 
 #[test]
 fn test_order_rates_count_every_gate() {
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
     solver.step(DELTA_TIME);
 
     // A single runner, but every gate counts: 6% to 16% of 9 round to 1st place.
@@ -2350,7 +2370,7 @@ fn activated_alternatives(conditions: &[&str]) -> Vec<usize> {
         .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.15))
         .collect();
     let skill = Skill::new(0, skill_data(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
     solver.run();
 
     let mask = solver.runners[0].activated_alternatives[0];
@@ -2414,7 +2434,7 @@ fn out_of_gate_continuation_mask(condition: &str) -> u8 {
         ),
     ];
     let skill = Skill::new(0, skill_data(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
     solver.run();
     solver.runners[0].activated_alternatives[0]
 }
@@ -2433,7 +2453,7 @@ fn test_forced_activation_disables_other_alternatives() {
         alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15),
     ];
     let skill = Skill::new(0, skill_data(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
     // Bypassing conditions, like random gold activations.
     solver.runners[0].activate_skill(0, 0, &solver.state);
     solver.run();
@@ -2466,7 +2486,7 @@ fn activations(solver: &RaceSolver<Runner>) -> Vec<(i32, f64)> {
 #[test]
 fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
     let speed = out_of_gate_skill(32, f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], seeded_config(0));
     // Longer than a frame: the runner doesn't move during the first one.
     solver.runners[0].start_delay = 0.09;
 
@@ -2497,7 +2517,7 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
         10101,
         uma(Style::Pace),
         vec![concentration],
-        &seeded_config(0),
+        seeded_config(0),
     );
     // At most 0.1 * 0.4 seconds, within the first frame.
     assert!(solver.runners[0].start_delay <= 0.04);
@@ -2528,7 +2548,7 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
             .clone()
     };
     let fov = Skill::new(16, skill_data(vec![fov]));
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![fov], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![fov], seeded_config(0));
 
     solver.run();
     let runner = &solver.runners[0];
@@ -2551,7 +2571,7 @@ fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
         10101,
         uma(Style::Pace),
         vec![speed, follow],
-        &seeded_config(0),
+        seeded_config(0),
     );
     solver.runners[0].start_delay = 0.0;
 
@@ -2563,7 +2583,7 @@ fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
 fn test_out_of_gate_style_change_is_applied_before_the_race() {
     // Like "Great Escape".
     let escape = skill(11, "running_style==1", SkillType::ChangeStyleRunaway, 0.0);
-    let solver = ready_solver(10101, uma(Style::Front), vec![escape], &seeded_config(0));
+    let solver = ready_solver(10101, uma(Style::Front), vec![escape], seeded_config(0));
     assert_eq!(solver.runners[0].adjusted.style, Style::Runaway);
 }
 
@@ -2587,7 +2607,7 @@ fn random_gold_activations(modifier: f64, mut skills: Vec<Skill>) -> Vec<i32> {
         modifier,
     );
     skills.push(adventure);
-    let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Pace), skills, seeded_config(0));
     solver.run();
 
     let mut ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
@@ -2686,12 +2706,7 @@ fn test_activate_random_gold_picks_skills_that_failed_the_wit_check() {
         wit_checks: Roll::Never,
         ..seeded_config(0)
     };
-    let mut solver = ready_solver(
-        10101,
-        uma(Style::Pace),
-        vec![forced_gold_skill(15)],
-        &config,
-    );
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![forced_gold_skill(15)], config);
     let runner = &mut solver.runners[0];
     assert_eq!(runner.failed_skills().len(), 1);
     let activate_random_gold = |runner: &mut Runner, state: &RaceState| {
@@ -2738,7 +2753,7 @@ fn lasting_alternative(condition: &str, skill_type: SkillType, modifier: f64) ->
 fn unique_reactivation_runner(modifier: f64, mut skills: Vec<Skill>) -> Runner {
     let again = skill(4, "distance_rate>=50", SkillType::ActivateUnique, modifier);
     skills.push(again);
-    let mut solver = ready_solver(10101, uma(Style::Pace), skills, &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Pace), skills, seeded_config(0));
     solver.run();
     solver.runners.swap_remove(0)
 }
@@ -2849,7 +2864,7 @@ fn scaled_skill_solver(
     uma: Uma,
     mut skills: Vec<Skill>,
     value_scaling: ValueScaling,
-    config: &Configuration,
+    config: Configuration,
 ) -> RaceSolver<Runner> {
     skills.push(scaled_skill(30, value_scaling, 0.25));
     ready_solver(10101, uma, skills, config)
@@ -2870,7 +2885,7 @@ fn test_direct_values_are_not_scaled() {
         uma(Style::Late),
         vec![],
         ValueScaling::Direct,
-        &seeded_config(0),
+        seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25);
 }
@@ -2885,7 +2900,7 @@ fn test_skill_count_scaling() {
         uma(Style::Late),
         others,
         ValueScaling::MultiplySkillNum,
-        &seeded_config(0),
+        seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
 }
@@ -2899,7 +2914,7 @@ fn test_skill_count_includes_failed_wit_checks() {
     let skills = (0..3)
         .map(|i| skill(i, "always==1", SkillType::TargetSpeed, 0.1))
         .collect();
-    let solver = ready_solver(10101, uma(Style::Late), skills, &config);
+    let solver = ready_solver(10101, uma(Style::Late), skills, config);
     let runner = &solver.runners[0];
     assert!(runner.available_skills().is_empty());
     assert_eq!(runner.failed_skills().len(), 3);
@@ -2925,7 +2940,7 @@ fn test_scenario_values_assume_the_maximum() {
     ];
     for (value_scaling, multiplier) in cases {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
         assert_close!(
             activate_last_skill(&mut solver),
             0.25 * multiplier,
@@ -2940,7 +2955,7 @@ fn test_fan_count_scaling() {
         uma(Style::Late),
         vec![],
         ValueScaling::FanCount,
-        &seeded_config(0),
+        seeded_config(0),
     );
     // No fans by default.
     assert_close!(activate_last_skill(&mut solver), 0.25 * 0.8);
@@ -2954,7 +2969,7 @@ fn test_late_race_corner_overtakes_are_tracked() {
         uma(Style::Late),
         vec![],
         ValueScaling::CornerOvertakeCount,
-        &seeded_config(0),
+        seeded_config(0),
     );
     // On the 1200m course, the Late race starts at 800m, in the second corner
     // (675-934m), followed by the final straight.
@@ -2990,7 +3005,7 @@ fn test_late_race_corner_overtakes_are_tracked() {
 fn test_random_scaling_distribution() {
     for value_scaling in [ValueScaling::MultiplyRandom1, ValueScaling::MultiplyRandom2] {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
         let mut counts = [0; 3];
         let rolls = 10000;
         for _ in 0..rolls {
@@ -3018,7 +3033,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
         uma,
         vec![],
         ValueScaling::MultiplyMaximumRawStatus,
-        &seeded_config(0),
+        seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.2);
 
@@ -3034,7 +3049,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
         uma,
         vec![],
         ValueScaling::MultiplyMaximumRawStatus,
-        &seeded_config(0),
+        seeded_config(0),
     );
     assert_close!(activate_last_skill(&mut solver), 0.25 * 0.9);
 }
@@ -3047,7 +3062,7 @@ fn test_speed_scaling_uses_adjusted_speed() {
     ];
     for (value_scaling, speed, multiplier) in cases {
         let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, &seeded_config(0));
+            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
         solver.runners[0].adjusted.speed = speed;
         let gained = activate_last_skill(&mut solver);
         assert_close!(gained, 0.25 * multiplier, "{value_scaling:?}");
@@ -3060,7 +3075,7 @@ fn test_buffs_scaled_to_zero_still_count() {
         uma(Style::Late),
         vec![],
         ValueScaling::MultiplySpeed1,
-        &seeded_config(0),
+        seeded_config(0),
     );
     // Too slow for any bonus.
     solver.runners[0].adjusted.speed = 1600;
@@ -3083,7 +3098,7 @@ fn test_green_skill_count_scaling() {
         uma(Style::Late),
         skills,
         ValueScaling::MultiplyActivateSpecificTagSkillCount,
-        &seeded_config(0),
+        seeded_config(0),
     );
     // Before the race starts, no green skill has activated yet.
     assert_close!(activate_last_skill(&mut solver), 0.0);
@@ -3110,7 +3125,7 @@ fn test_distance_from_first_adds_to_value() {
         uma(Style::Late),
         vec![],
         ValueScaling::AddDistanceDiffTop,
-        &seeded_config(0),
+        seeded_config(0),
     );
     solver.runners[0].position_diff.from_first = 19.0;
     assert_close!(activate_last_skill(&mut solver), 0.25);
@@ -3124,7 +3139,7 @@ fn test_bashin_from_first_adds_to_value() {
         uma(Style::Late),
         vec![],
         ValueScaling::AddBashinDiffTop,
-        &seeded_config(0),
+        seeded_config(0),
     );
     // 8 bashin are 20 meters.
     solver.runners[0].position_diff.from_first = 19.9;
@@ -3137,10 +3152,10 @@ fn test_bashin_from_first_adds_to_value() {
 fn test_medium_distance_adds_to_value() {
     let skills = || vec![scaled_skill(30, ValueScaling::AddDistanceTypeMedium, 0.25)];
     // 1200m (Short).
-    let mut solver = ready_solver(10101, uma(Style::Late), skills(), &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), skills(), seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.25);
     // 2400m (Medium).
-    let mut solver = ready_solver(10606, uma(Style::Late), skills(), &seeded_config(0));
+    let mut solver = ready_solver(10606, uma(Style::Late), skills(), seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.45);
 }
 
@@ -3150,7 +3165,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
         uma(Style::Late),
         vec![],
         ValueScaling::MultiplyBlockedSideMaxTimeMidRace,
-        &seeded_config(0),
+        seeded_config(0),
     );
     let runner = &mut solver.runners[0];
     let block = |runner: &mut Runner, phase, side_in, side_out, time| {
@@ -3183,7 +3198,7 @@ fn test_longest_mid_race_side_block_is_tracked() {
 
 #[test]
 fn test_largest_lead_before_late_race_is_tracked() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let skills = vec![scaled_skill(30, ValueScaling::MultiplyTopLeadAmount, 0.25)];
     solver.add_runner(uma(Style::Front), Mood::Normal, skills);
     solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
@@ -3225,7 +3240,7 @@ fn timed_skill(id: i32, duration_scaling: DurationScaling) -> Skill {
 
 /// Ready race on a 1200m course with a single runner having `skills`.
 fn timed_skill_solver(skills: Vec<Skill>) -> RaceSolver<Runner> {
-    ready_solver(10101, uma(Style::Late), skills, &seeded_config(0))
+    ready_solver(10101, uma(Style::Late), skills, seeded_config(0))
 }
 
 /// Remaining duration of each of the first runner's active timed effects.

@@ -32,7 +32,7 @@ fn test_rates_at_order_round_to_nearest() {
 #[test]
 fn test_update_order_rate_tracks_best_and_worst_orders() {
     use crate::test_utils::*;
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
     let runner = &mut solver.runners[0];
 
     // (order, should update range, [rate, best, worst]).
@@ -61,7 +61,7 @@ fn test_update_position_slows_down_off_rail_in_corners() {
     // Course distance covered in one frame from `position` at `lane`, after a
     // 1m move at the same lane.
     let advance = |position: f64, lane: f64| {
-        let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+        let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
         solver.state.elapsed_time = 10.0;
         let runner = &mut solver.runners[0];
         runner.position = position;

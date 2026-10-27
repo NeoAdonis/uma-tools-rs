@@ -279,17 +279,6 @@ pub fn calculate_adjusted_wit(base_wit: u16, style_aptitude: Aptitude) -> u16 {
     ((base_wit as f64 * aptitude_mod) as u16).max(1)
 }
 
-/// Given a [`ThresholdStat`], return the corresponding base stat from an Uma.
-pub fn get_base_stat_by_type(uma: &Uma, stat_type: ThresholdStat) -> u16 {
-    match stat_type {
-        ThresholdStat::Speed => uma.speed,
-        ThresholdStat::Stamina => uma.stamina,
-        ThresholdStat::Power => uma.power,
-        ThresholdStat::Guts => uma.guts,
-        ThresholdStat::Wit => uma.wit,
-    }
-}
-
 /// Calculate course speed modifier based on course set status.
 ///
 /// Each course has a set of stats that provide bonuses if the [`Uma`]'s
@@ -303,7 +292,7 @@ pub fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) ->
     let total_bonus: f64 = course_set_status
         .iter()
         .map(|&stat_type| {
-            let stat_value = get_base_stat_by_type(base, stat_type);
+            let stat_value = base.stat(stat_type);
             threshold_stat_bonus(stat_value)
         })
         .sum();

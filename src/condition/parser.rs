@@ -33,7 +33,7 @@ use crate::skill::SkillType;
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompOp {
     Equal,        // "=="
     NotEqual,     // "!="
@@ -84,7 +84,7 @@ pub struct Condition {
     pub branches: Vec<ComparisonList>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Comparison {
     pub var: VarType,
     pub op: CompOp,
@@ -118,7 +118,7 @@ impl fmt::Display for Comparison {
 }
 
 /// Error parsing a condition, holding the offending comparison or variable.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ParseError {
     ExpectedOperator(String),
     UnknownVariable(String),
@@ -132,12 +132,12 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ParseError::ExpectedOperator(comp) => {
-                write!(f, "Expected comparison operator in '{comp}'")
+                write!(f, "expected comparison operator in '{comp}'")
             }
-            ParseError::UnknownVariable(var) => write!(f, "Unknown variable '{var}'"),
-            ParseError::InvalidValue(comp) => write!(f, "Invalid value in '{comp}'"),
+            ParseError::UnknownVariable(var) => write!(f, "unknown variable '{var}'"),
+            ParseError::InvalidValue(comp) => write!(f, "invalid value in '{comp}'"),
             ParseError::UnsupportedComparison(comp) => {
-                write!(f, "Unsupported comparison '{comp}'")
+                write!(f, "unsupported comparison '{comp}'")
             }
         }
     }
@@ -148,6 +148,11 @@ impl std::error::Error for ParseError {}
 /// Parse a condition string, such as `phase>=2&order<=3@is_overtake==1`.
 ///
 /// Whitespace is allowed around variables and values.
+///
+/// # Errors
+///
+/// Returns a [`ParseError`] if any comparison lacks an operator, uses an
+/// unknown variable or an invalid value, or can't be evaluated.
 pub fn parse_condition(input: &str) -> Result<Condition, ParseError> {
     let branches = input
         .split('@')
@@ -200,11 +205,11 @@ impl Comparison {
             }
             // The value is the type of the activated buff.
             ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill) => {
-                is_equal && skill_type(self.value).is_some()
+                is_equal && SkillType::from_id(self.value).is_some()
             }
             // Same, or -1 for any skill.
             ActivationQuery(ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill) => {
-                is_equal && (self.value == -1 || skill_type(self.value).is_some())
+                is_equal && (self.value == -1 || SkillType::from_id(self.value).is_some())
             }
             // The value is the chance of success, as a percentage.
             Random(_) => is_equal && (0..=100).contains(&self.value),
@@ -217,11 +222,6 @@ impl Comparison {
             _ => true,
         }
     }
-}
-
-/// Skill type with the given ID, if it's implemented.
-pub fn skill_type(id: i32) -> Option<SkillType> {
-    u8::try_from(id).ok()?.try_into().ok()
 }
 
 impl FromStr for Condition {

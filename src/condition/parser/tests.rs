@@ -235,12 +235,12 @@ fn test_error_cases() {
 #[test]
 fn test_error_display() {
     let cases = [
-        ("hp_per=1", "Expected comparison operator in 'hp_per=1'"),
-        ("unknown==1", "Unknown variable 'unknown'"),
-        ("hp_per==x", "Invalid value in 'hp_per==x'"),
+        ("hp_per=1", "expected comparison operator in 'hp_per=1'"),
+        ("unknown==1", "unknown variable 'unknown'"),
+        ("hp_per==x", "invalid value in 'hp_per==x'"),
         (
             "is_exist_skill_id<1",
-            "Unsupported comparison 'is_exist_skill_id<1'",
+            "unsupported comparison 'is_exist_skill_id<1'",
         ),
     ];
     for (input, expected) in cases {

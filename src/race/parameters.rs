@@ -1,9 +1,10 @@
 //! Race parameters that define the conditions of a race.
 
 use serde::{Deserialize, Deserializer, de::Error};
+use std::path::Path;
 
 /// Track condition (a.k.a. ground condition) enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum TrackCondition {
     /// 良
     Firm = 1,
@@ -16,7 +17,7 @@ pub enum TrackCondition {
 }
 
 /// Weather enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Weather {
     /// 晴
     Sunny = 1,
@@ -29,7 +30,7 @@ pub enum Weather {
 }
 
 /// Season enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Season {
     /// 春
     Spring = 1,
@@ -46,7 +47,7 @@ pub enum Season {
 }
 
 /// Time of day enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Time {
     None,
     /// 午前
@@ -60,7 +61,7 @@ pub enum Time {
 }
 
 /// Race grade enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Grade {
     /// Grade 1 races, as well as other important races (e.g. URA Finals, Champions
     /// Meeting, etc.).
@@ -70,9 +71,11 @@ pub enum Grade {
     /// Grade 3 races.
     G3 = 300,
     /// OP races.
-    OP = 400,
+    #[serde(rename = "OP")]
+    Op = 400,
     /// Pre-OP races.
-    PreOP = 700,
+    #[serde(rename = "PreOP")]
+    PreOp = 700,
     /// Maiden races; the only races that runners can enter before winning their
     /// first race.
     Maiden = 800,
@@ -83,7 +86,7 @@ pub enum Grade {
 }
 
 /// Struct representing the parameters of a race.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RaceParameters {
     /// Track condition. Affects speed, power and HP consumption.
@@ -116,8 +119,8 @@ fn deserialize_gates<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u8, D
 
 /// On-disk representation of `parameters.json`.
 ///
-/// Bundles `RaceParameters` together with `course_id`.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+/// Bundles [`RaceParameters`] together with a course ID.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RaceParametersData {
     #[serde(flatten)]
@@ -126,17 +129,23 @@ pub struct RaceParametersData {
 }
 
 impl RaceParametersData {
-    /// Parse `RaceParameters` from a JSON string.
+    /// Parse `RaceParametersData` from a JSON string.
+    ///
+    /// # Errors
     ///
     /// Returns an error if the JSON is invalid.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
 
-    /// Parse `RaceParameters` from a JSON file.
+    /// Parse `RaceParametersData` from a JSON file.
     ///
-    /// Returns an error if the file can't be read or JSON is invalid.
-    pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read or the JSON is invalid.
+    pub fn from_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
     }
@@ -170,7 +179,7 @@ mod tests {
                 weather: Weather::Snowy,
                 season: Season::Sakura,
                 time: Time::Evening,
-                grade: Grade::PreOP,
+                grade: Grade::PreOp,
                 gates: 12,
             },
             course_id: "10101".to_string(),
@@ -232,8 +241,8 @@ mod tests {
             ("G1", Grade::G1),
             ("G2", Grade::G2),
             ("G3", Grade::G3),
-            ("OP", Grade::OP),
-            ("PreOP", Grade::PreOP),
+            ("OP", Grade::Op),
+            ("PreOP", Grade::PreOp),
             ("Maiden", Grade::Maiden),
             ("Debut", Grade::Debut),
             ("Daily", Grade::Daily),

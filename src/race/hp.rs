@@ -10,6 +10,7 @@ use crate::uma::Style;
 /// if it reaches 0.
 ///
 /// It's also used to get the distance at which her last spurt can start.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HpState {
     /// Current HP.
     ///

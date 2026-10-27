@@ -121,7 +121,7 @@ use crate::units::furlongs_to_meters;
 ///
 /// Combines a trigger (WHEN to check), guards (IF to activate), and a
 /// precondition (unlock gate) in a single structure.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SkillActivationLogic {
     /// Index into runner.skills.
     pub skill_index: usize,
@@ -153,7 +153,7 @@ pub struct SkillActivationLogic {
 }
 
 /// What a [`SkillActivationLogic`] does when it succeeds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicAction {
     /// Activate the skill alternative.
     Activate,
@@ -162,7 +162,7 @@ pub enum LogicAction {
 }
 
 /// Variables that window triggers can be based on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WindowVariable {
     /// Position (meters from start).
     Position,
@@ -215,7 +215,7 @@ pub enum TriggerCondition {
 }
 
 /// A timed skill effect that is currently active.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActiveTimedEffect {
     /// Skill effect being applied.
     pub effect: SkillEffect,
@@ -252,7 +252,7 @@ impl ActiveTimedEffect {
 /// The default doesn't extend the effect.
 ///
 /// [increment]: crate::skill::DurationScaling::IncrementOrderUp
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct OvertakeExtension {
     /// Duration in seconds added for each overtake, already scaled.
     pub duration: f64,
@@ -264,7 +264,7 @@ pub struct OvertakeExtension {
 ///
 /// Values that depend on the caster (duration, wit limit break bonus) are fixed
 /// at activation time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PendingEffect {
     /// Skill effect to apply to each target.
     pub effect: SkillEffect,
@@ -275,7 +275,7 @@ pub struct PendingEffect {
 }
 
 /// Record of a skill activation during the race.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SkillActivationRecord {
     /// Skill ID of the activated skill from the global skill list.
     pub skill_id: i32,
@@ -307,7 +307,7 @@ impl SkillActivationLogic {
 }
 
 /// One OR branch of a compiled condition.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CompiledBranch {
     /// When to check the branch.
     pub trigger: TriggerCondition,

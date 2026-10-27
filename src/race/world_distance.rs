@@ -18,7 +18,7 @@
 use crate::units::course_widths_to_meters;
 
 /// Course distance and starting lane of a runner's last move.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LastMove {
     /// Course distance covered in meters.
     pub distance: f64,

@@ -6,7 +6,7 @@ use crate::test_utils::*;
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
 /// race state it was built with.
 fn unready_runner(skills: Vec<Skill>) -> (UnreadyRunner, RaceState) {
-    let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
+    let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
     let runner = UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
     assert!(
         runner.skills.iter().all(Skill::should_activate_out_of_gate),
@@ -88,7 +88,7 @@ fn test_fan_count_falls_back_to_configured_default() {
         default_fan_count: 500000,
         ..seeded_config(0)
     };
-    let state = RaceSolver::new(load_course(10104), race_params(), &config).state;
+    let state = RaceSolver::new(load_course(10104), race_params(), config).state;
     let fan_count = |fan_count| {
         let uma = Uma {
             fan_count,
@@ -120,7 +120,7 @@ fn test_gate_brackets() {
     ];
     for (gates, expected) in cases {
         let brackets: Vec<u8> = (1..=gates)
-            .map(|gate| UnreadyRunner::get_gate_bracket(gate, gates))
+            .map(|gate| UnreadyRunner::gate_bracket(gate, gates))
             .collect();
         assert_eq!(brackets, expected, "{gates} gates");
     }
@@ -133,7 +133,7 @@ fn test_rush_style_changes() {
         rushing: Roll::Always,
         ..seeded_config(0)
     };
-    let state = RaceSolver::new(load_course(10104), race_params(), &config).state;
+    let state = RaceSolver::new(load_course(10104), race_params(), config).state;
     let rush_styles = |style: Style| -> Vec<Style> {
         (0..2000)
             .map(|_| {
@@ -263,7 +263,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
         skill(2, "always==1", SkillType::AddStartDelay, 0.1),
         skill(5, "distance_rate>=50", SkillType::TargetSpeed, 0.35),
     ];
-    let mut solver = ready_solver(10104, uma(Style::Pace), skills, &seeded_config(0));
+    let mut solver = ready_solver(10104, uma(Style::Pace), skills, seeded_config(0));
     solver.run();
 
     let activations: Vec<_> = solver.runners[0]
@@ -294,7 +294,7 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
         wit: 100,
         ..uma(Style::Pace)
     };
-    let mut solver = ready_solver(10104, uma, skills, &config);
+    let mut solver = ready_solver(10104, uma, skills, config);
     solver.runners.remove(0)
 }
 
@@ -340,7 +340,7 @@ fn runner_with_wit(wit: u16, skills: Vec<Skill>, seed: u64) -> Runner {
         wit,
         ..uma(Style::Pace)
     };
-    ready_solver(10104, uma, skills, &seeded_config(seed))
+    ready_solver(10104, uma, skills, seeded_config(seed))
         .runners
         .remove(0)
 }
@@ -381,7 +381,7 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
 #[test]
 fn test_out_of_gate_skills_are_counted_as_activated() {
     let speed = skill(8, "always==1", SkillType::SpeedUp, 80.0);
-    let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], &seeded_config(0));
+    let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], seeded_config(0));
     solver.run();
 
     let counts = &solver.runners[0].trigger_scheduler.activation_counts;
@@ -398,7 +398,7 @@ const METI_RESONANCE_ID: i32 = 110502211;
 /// Runners are returned in the order of their skill sets.
 fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
     let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
-    let mut solver = RaceSolver::new(load_course(course_id), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
     for (i, ids) in skill_sets.iter().enumerate() {
         // Guts doesn't affect speed, so it tells runners apart.
         let uma = Uma {
@@ -521,7 +521,7 @@ fn test_gambler_activation_rate() {
 
     let activations = (0..RACES)
         .filter(|&seed| {
-            let mut solver = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed));
+            let mut solver = RaceSolver::new(course.clone(), race_params(), seeded_config(seed));
             let gambler = skills[&GAMBLER_ID].clone();
             solver.add_runner(uma(Style::Pace), Mood::Normal, vec![gambler]);
             let runner = &solver.ready_runners().runners[0];
@@ -566,7 +566,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
 
     (0..50)
         .map(|seed| {
-            let state = RaceSolver::new(course.clone(), race_params(), &seeded_config(seed)).state;
+            let state = RaceSolver::new(course.clone(), race_params(), seeded_config(seed)).state;
             let skills = vec![skill.clone()];
             let mut runner = UnreadyRunner::new(uma(Style::Pace), 1, Mood::Normal, &state, skills);
             let speed = runner.adjusted.speed;

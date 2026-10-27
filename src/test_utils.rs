@@ -99,7 +99,7 @@ pub(crate) fn ready_solver(
     course_id: u32,
     uma: Uma,
     skills: Vec<Skill>,
-    config: &Configuration,
+    config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
     solver.add_runner(uma, Mood::Normal, skills);

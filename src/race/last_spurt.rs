@@ -12,6 +12,7 @@ use crate::race::runner::Runner;
 use crate::race::solver::RaceState;
 
 /// Parameters defining the last spurt behavior of a runner.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LastSpurt {
     /// Maximum speed achievable during the last spurt (m/s).
     pub max_speed: f64,
@@ -24,7 +25,7 @@ pub struct LastSpurt {
 /// Category of last spurt based on achievable speed and HP.
 ///
 /// Values match those of the `lastspurt` condition variable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LastSpurtCategory {
     /// Last spurt cannot be fully carried out even at base target speed.
     CannotFinish = 0,

@@ -3,6 +3,7 @@
 
 use rand::{Rng, RngExt};
 use serde::Deserialize;
+use std::path::Path;
 
 /// Represents different versions of the game.
 ///
@@ -11,7 +12,7 @@ use serde::Deserialize;
 /// update, allowing to compare if a certain version is before or after a
 /// certain update. The list is not exhaustive, and only includes the versions
 /// that have a significant impact on the game mechanics.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
 pub enum GameVersion {
     /// When the game was first released.
     Original,
@@ -57,7 +58,7 @@ impl GameVersion {
 }
 
 /// Supported languages for track names, skill names, etc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum Language {
     Japanese,
     English,
@@ -67,7 +68,7 @@ pub enum Language {
 ///
 /// Used to force the outcome of random checks (e.g. wit checks or rushing)
 /// for analysis purposes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Deserialize)]
 pub enum Roll {
     /// The check succeeds randomly with the given probability.
     #[default]
@@ -97,7 +98,7 @@ impl Roll {
 ///
 /// Every field is optional when deserialized; missing fields take their
 /// default value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Configuration {
     pub game_version: GameVersion,
@@ -130,6 +131,8 @@ impl Default for Configuration {
 impl Configuration {
     /// Parse `Configuration` from a JSON string.
     ///
+    /// # Errors
+    ///
     /// Returns an error if the JSON is invalid.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
@@ -137,8 +140,12 @@ impl Configuration {
 
     /// Parse `Configuration` from a JSON file.
     ///
-    /// Returns an error if the file can't be read or JSON is invalid.
-    pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read or the JSON is invalid.
+    pub fn from_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
     }

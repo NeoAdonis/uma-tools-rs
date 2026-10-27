@@ -19,7 +19,7 @@ fn solver(wit: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runn
             ..uma(Style::Late)
         },
         vec![],
-        &config,
+        config,
     )
 }
 

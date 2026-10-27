@@ -15,6 +15,7 @@ use super::Runner;
 /// Lane state including current and target lane positions in course widths.
 ///
 /// Use [`course_widths_to_meters`] to convert them to meters for reporting.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LaneState {
     /// Current lane position in course widths.
     pub current: f64,
@@ -46,13 +47,14 @@ impl LaneState {
 /// Result of a lane target calculation to be written back to the runner.
 ///
 /// Both fields hold the runner's current values when unchanged.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LaneDecision {
     pub target: f64,
     pub extra_move_lane: Option<f64>,
 }
 
 /// Overtake mode state including persistence timer.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct OvertakeState {
     /// Ordered map of overtake targets by gate_roll.
     ///
@@ -63,7 +65,7 @@ pub struct OvertakeState {
 }
 
 /// Information about an overtake target ahead of this runner.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct OvertakeTarget {
     /// Whether this target has been checked in the current update cycle.
     is_checked: bool,

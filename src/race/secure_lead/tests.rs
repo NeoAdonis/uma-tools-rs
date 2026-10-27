@@ -109,7 +109,7 @@ fn test_hp_cost_style_coefficients() {
 }
 
 fn ready_runner(style: Style) -> (Runner, RaceState) {
-    let solver = ready_solver(10101, uma(style), vec![], &seeded_config(42));
+    let solver = ready_solver(10101, uma(style), vec![], seeded_config(42));
     let runner = solver.runners.into_iter().next().unwrap();
     (runner, solver.state)
 }

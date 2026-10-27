@@ -34,7 +34,7 @@
 //! sees it. Then:
 //!
 //! 1. Its pre-race effects are applied before the [`Runner`] is built.
-//! 2. A logic with a `RaceStart` trigger is added for it, so the skill
+//! 2. A logic with a [`RaceStart`] trigger is added for it, so the skill
 //!    activates on the first frame the runner moves. The logic has no guards
 //!    nor precondition, since both were already satisfied. From there, it's
 //!    handled like any other skill: its other effects (e.g. acceleration) apply
@@ -57,6 +57,8 @@
 //! "Sympathy" activated by another runner bypasses its condition: a race start
 //! logic is added for it, unless it already activates (see
 //! [`UnreadyRunner::activate_sympathy`]).
+//!
+//! [`RaceStart`]: crate::trigger::skill_activation::TriggerCondition::RaceStart
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -141,6 +143,7 @@ fn modify_stat(stat: &mut u16, modifier: i32) {
 /// [`Runner`]. It allows for proper activation of out-of-gate skills that can
 /// take into account the runner's base stats, race parameters, and most
 /// importantly, data about other runners.
+#[derive(Debug)]
 pub struct UnreadyRunner {
     // === Immutable context ===
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
@@ -209,8 +212,8 @@ impl UnreadyRunner {
         let rng = Rc::clone(&state.rng);
 
         // Calculate base stats.
-        let gate_block = Self::get_gate_bracket(gate_roll, params.gates);
-        let base_uma = Uma::raw_to_base(uma, mood);
+        let gate_block = Self::gate_bracket(gate_roll, params.gates);
+        let base_uma = uma.to_base(mood);
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
@@ -269,8 +272,9 @@ impl UnreadyRunner {
     /// Activate an out-of-gate skill alternative: apply its pre-race effects now,
     /// and activate it on the first frame the runner moves.
     ///
-    /// The activation itself (other effects, cooldown, tracking...) is handled like
-    /// any other skill's (see [`add_race_start_logic`]).
+    /// The activation itself (other effects, cooldown, tracking...) is handled
+    /// like any other skill's (see
+    /// [`TriggerScheduler::add_race_start_logic`]).
     fn activate_out_of_gate_skill(&mut self, skill_index: usize, alt_index: usize) {
         let skill = self.skills[skill_index].clone();
         for effect in &skill.alternatives[alt_index].effects {
@@ -310,12 +314,8 @@ impl UnreadyRunner {
         }
 
         let is_continuation = skill.alternatives[alt_index].is_continuation();
-        add_race_start_logic(
-            skill_index,
-            alt_index,
-            is_continuation,
-            &mut self.trigger_scheduler,
-        );
+        self.trigger_scheduler
+            .add_race_start_logic(skill_index, alt_index, is_continuation);
     }
 
     /// Whether the skill at `skill_index` activates on the first frame the runner
@@ -342,7 +342,7 @@ impl UnreadyRunner {
     /// more than 16 participants, the process starts from bracket 8 again.
     ///
     /// N.B. All inputs and outputs are 1-indexed.
-    fn get_gate_bracket(gate_roll: u8, max_gates: u8) -> u8 {
+    fn gate_bracket(gate_roll: u8, max_gates: u8) -> u8 {
         if max_gates <= 8 {
             return gate_roll;
         }

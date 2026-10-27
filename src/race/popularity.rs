@@ -42,7 +42,6 @@ use crate::race::modifiers::{
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::{PopularityStat, Skill};
-use crate::uma::mood_multiplier;
 
 /// Popularity points a skill adds to each stat.
 ///
@@ -104,7 +103,7 @@ fn is_popularity_eligible(skill: &Skill, state: &RaceState, runner: &UnreadyRunn
 }
 
 /// Popularity mark assigned by a judge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PopularityMark {
     None,
     Fourth, // △
@@ -138,7 +137,7 @@ impl PopularityMark {
 }
 
 /// Scores and marks from all three judges.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct JudgeScores {
     pub left_score: f64,
     pub left_mark: PopularityMark,
@@ -319,15 +318,14 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
 }
 
 /// Assign marks to top 5 runners for a single judge's scores.
-fn assign_marks_for_judge(scores: &[(usize, f64)]) -> HashMap<usize, PopularityMark> {
+fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, PopularityMark> {
     // Sort by score (descending).
-    let mut sorted: Vec<(usize, f64)> = scores.to_vec();
-    sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut marks = HashMap::new();
 
     // Assign marks to top 5 (or fewer if there are fewer runners).
-    for (rank, (runner_idx, _score)) in sorted.iter().enumerate() {
+    for (rank, (runner_idx, _score)) in scores.iter().enumerate() {
         let mark = match rank {
             0 => PopularityMark::First,      // ◎
             1 => PopularityMark::Second,     // ○
@@ -352,7 +350,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
         let bonus = &runner.popularity_bonus;
 
         // Get coefficients.
-        let mood_coef = mood_multiplier(runner.initial_state.mood);
+        let mood_coef = runner.initial_state.mood.multiplier();
         let raw = &runner.raw;
         let speed_distance_coef = distance_proficiency_multiplier(raw.distance_aptitude);
         let power_distance_coef =
@@ -395,9 +393,9 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
         .map(|(i, &(_, _, r))| (i, r))
         .collect();
 
-    let left_marks = assign_marks_for_judge(&left_scores);
-    let center_marks = assign_marks_for_judge(&center_scores);
-    let right_marks = assign_marks_for_judge(&right_scores);
+    let left_marks = assign_marks_for_judge(left_scores);
+    let center_marks = assign_marks_for_judge(center_scores);
+    let right_marks = assign_marks_for_judge(right_scores);
 
     // Calculate total popularity points and update runners.
     let mut popularity_data: Vec<(usize, f64, JudgeScores)> = Vec::with_capacity(n);

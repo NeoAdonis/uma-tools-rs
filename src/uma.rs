@@ -5,6 +5,9 @@
 
 use serde::Deserialize;
 
+use crate::course::ThresholdStat;
+use std::path::Path;
+
 /// Running style or strategy of an Uma. The values represent in order, from
 /// most to least aggressive:
 ///
@@ -90,7 +93,7 @@ impl Style {
 }
 
 /// Aptitude levels for distance, track surface, and running style.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Aptitude {
     S,
     A,
@@ -103,7 +106,7 @@ pub enum Aptitude {
 }
 
 /// Mood or condition of the Uma. Affects base stat multipliers.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Mood {
     /// 絶不調, very bad.
     Awful = -2,
@@ -118,7 +121,7 @@ pub enum Mood {
 }
 
 /// Core stats for an Umamusume.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Uma {
     /// Stat that affects max speed.
@@ -166,7 +169,7 @@ pub struct Uma {
 }
 
 /// Helper struct for deserializing [`Uma`] with mood and skills from JSON.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
     #[serde(flatten)]
@@ -181,11 +184,15 @@ pub struct UmaData {
 impl UmaData {
     /// Parse `UmaData` from a JSON string.
     ///
+    /// # Errors
+    ///
     /// Returns an error if the JSON is invalid.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// # use uma_tools::uma::UmaData;
-    /// # fn try_main() -> Result<(), serde_json::Error> {
+    /// # fn main() -> Result<(), serde_json::Error> {
     /// let json = r#"{
     ///     "speed": 1500,
     ///     "stamina": 800,
@@ -202,7 +209,6 @@ impl UmaData {
     /// let uma_data = UmaData::from_json(json)?;
     /// # Ok(())
     /// # }
-    /// # try_main().unwrap();
     /// ```
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
@@ -210,8 +216,12 @@ impl UmaData {
 
     /// Parse `UmaData` from a JSON file.
     ///
-    /// Returns an error if the file cannot be read or the JSON is invalid.
-    pub fn from_json_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read or the JSON is invalid.
+    pub fn from_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
     }
@@ -228,31 +238,41 @@ pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
     ((computed).max(1) as f64 * multiplier) as u16
 }
 
-/// Calculate base stats multiplier from mood.
-///
-/// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2 (awful)
-/// to +2 (great).
-pub fn mood_multiplier(mood: Mood) -> f64 {
-    1.0 + (mood as i8 as f64) * 0.02
+impl Mood {
+    /// Calculate base stats multiplier from `self`.
+    ///
+    /// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2
+    /// (awful) to +2 (great).
+    pub fn multiplier(self) -> f64 {
+        1.0 + (self as i8 as f64) * 0.02
+    }
 }
 
 impl Uma {
-    /// Convert raw Uma stats to base stats using mood multiplier.
-    pub fn raw_to_base(raw: Uma, mood: Mood) -> Self {
+    /// Convert `self`, holding raw stats, to base stats using the mood
+    /// multiplier.
+    pub fn to_base(self, mood: Mood) -> Self {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
         // multiplier based on team rank. This is out of scope for this simulator.
-        let mood_multiplier = mood_multiplier(mood);
+        let mood_multiplier = mood.multiplier();
         Uma {
-            speed: calculate_base_stat(raw.speed, mood_multiplier),
-            stamina: calculate_base_stat(raw.stamina, mood_multiplier),
-            power: calculate_base_stat(raw.power, mood_multiplier),
-            guts: calculate_base_stat(raw.guts, mood_multiplier),
-            wit: calculate_base_stat(raw.wit, mood_multiplier),
-            style: raw.style,
-            distance_aptitude: raw.distance_aptitude,
-            track_aptitude: raw.track_aptitude,
-            style_aptitude: raw.style_aptitude,
-            fan_count: raw.fan_count,
+            speed: calculate_base_stat(self.speed, mood_multiplier),
+            stamina: calculate_base_stat(self.stamina, mood_multiplier),
+            power: calculate_base_stat(self.power, mood_multiplier),
+            guts: calculate_base_stat(self.guts, mood_multiplier),
+            wit: calculate_base_stat(self.wit, mood_multiplier),
+            ..self
+        }
+    }
+
+    /// Get the stat of `self` corresponding to a [`ThresholdStat`].
+    pub fn stat(&self, stat: ThresholdStat) -> u16 {
+        match stat {
+            ThresholdStat::Speed => self.speed,
+            ThresholdStat::Stamina => self.stamina,
+            ThresholdStat::Power => self.power,
+            ThresholdStat::Guts => self.guts,
+            ThresholdStat::Wit => self.wit,
         }
     }
 }
@@ -272,7 +292,7 @@ mod tests {
             (Mood::Great, 1.04),
         ];
         for (mood, expected) in cases {
-            assert_close!(mood_multiplier(mood), expected, "{mood:?}");
+            assert_close!(mood.multiplier(), expected, "{mood:?}");
         }
     }
 
@@ -294,13 +314,13 @@ mod tests {
             (0, Mood::Great, 1),
         ];
         for (stat, mood, expected) in cases {
-            let actual = calculate_base_stat(stat, mood_multiplier(mood));
+            let actual = calculate_base_stat(stat, mood.multiplier());
             assert_eq!(actual, expected, "{stat} with {mood:?}");
         }
     }
 
     #[test]
-    fn test_raw_to_base() {
+    fn test_to_base() {
         let raw = Uma {
             speed: 1500,
             stamina: 800,
@@ -323,7 +343,7 @@ mod tests {
             wit: 1300,
             ..raw
         };
-        assert_eq!(Uma::raw_to_base(raw, Mood::Great), expected);
+        assert_eq!(raw.to_base(Mood::Great), expected);
     }
 
     /// JSON for [`UmaData`] with every field set, and the style as given.

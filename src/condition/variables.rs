@@ -38,7 +38,7 @@ use std::fmt;
 ///
 /// Variables are grouped by category. The meaning of each one is described in
 /// the [variable reference](crate::condition::variable_reference).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VarType {
     /// Variable representing accumulated (elapsed) time.
     AccumulateTime,
@@ -86,7 +86,7 @@ pub enum VarType {
     Always,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BaseStatVar {
     BaseSpeed,
     BaseStamina,
@@ -95,7 +95,7 @@ pub enum BaseStatVar {
     BaseWiz,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EntryVar {
     FanCount,
     Motivation,
@@ -103,7 +103,7 @@ pub enum EntryVar {
     PostNumber,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OrderVar {
     ChangeOrderOnetime,
     ChangeOrderUpEndAfter,
@@ -112,7 +112,7 @@ pub enum OrderVar {
     Order,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OrderRateVar {
     OrderRate,
     OrderRateIn20Continue,
@@ -125,7 +125,7 @@ pub enum OrderRateVar {
     OrderRateOut70Continue,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DistanceVar {
     BashinDiffBehind,
     BashinDiffInfront,
@@ -134,7 +134,7 @@ pub enum DistanceVar {
     DistanceDiffTopFloat,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PhaseVar {
     Phase,
     PhaseFirsthalf,
@@ -142,7 +142,7 @@ pub enum PhaseVar {
     PhaseLaterhalf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CourseVar {
     CornerCount,
     CourseDistance,
@@ -156,7 +156,7 @@ pub enum CourseVar {
     TrackId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpatialVar {
     Corner,
     DistanceRate,
@@ -172,7 +172,7 @@ pub enum SpatialVar {
     StraightFrontType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RandomSpatialVar {
     AllCornerRandom,
     CornerRandom,
@@ -187,7 +187,7 @@ pub enum RandomSpatialVar {
     UpSlopeRandomLaterHalf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RandomPhaseVar {
     PhaseCornerRandom,
     PhaseFirsthalfRandom,
@@ -199,7 +199,7 @@ pub enum RandomPhaseVar {
     PhaseStraightRandom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActivationVar {
     ActivateCountAll,
     ActivateCountAllTeam,
@@ -215,7 +215,7 @@ pub enum ActivationVar {
     IsActivateOtherSkillDetail,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActivationQueryVar {
     IsOtherCharacterActivateAdvantageSkill,
     IsPopularityTopCharacterActivateAdvantageSkill,
@@ -223,7 +223,7 @@ pub enum ActivationQueryVar {
     IsUsedSkillIdWithDetailOne,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RaceParamVar {
     Grade,
     GroundCondition,
@@ -232,14 +232,14 @@ pub enum RaceParamVar {
     Weather,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LineupVar {
     IsExistCharaId,
     IsExistSkillId,
     SameSkillHorseCount,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RunningStyleVar {
     RunningStyle,
     RunningStyleCountNigeOtherself,
@@ -251,7 +251,7 @@ pub enum RunningStyleVar {
     RunningStyleEqualPopularityOne,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StatusVar {
     HpPer,
     IsBadstart,
@@ -266,7 +266,7 @@ pub enum StatusVar {
     TemptationCount,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RandomVar {
     /// Lottery rolled every time it's evaluated.
     RandomLot,
@@ -274,7 +274,7 @@ pub enum RandomVar {
     RandomLotShared,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BlockingVar {
     BehindNearLaneTime,
     BehindNearLaneTimeSet1,
@@ -292,7 +292,7 @@ pub enum BlockingVar {
     Visiblehorse,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TemptationVar {
     RunningStyleTemptationCountNige,
     RunningStyleTemptationCountOikomi,

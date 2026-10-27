@@ -14,6 +14,7 @@ use crate::units::{deserialize_ten_thousandths, horse_lanes_to_course_widths};
 use num_enum::TryFromPrimitive;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::path::Path;
 
 // Track IDs for special handling.
 const TRACK_ID_OOI: u16 = 10101;
@@ -23,7 +24,7 @@ const TRACK_ID_LONGCHAMP: u16 = 10201;
 ///
 /// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
 /// the nominal distance, after the run-up.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, TryFromPrimitive)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, TryFromPrimitive)]
 #[repr(i8)]
 pub enum Phase {
     /// Run-up, from the starting gate to the official start line.
@@ -116,7 +117,7 @@ impl Phase {
 }
 
 /// Track surface type.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Track {
     /// 芝
@@ -126,7 +127,7 @@ pub enum Track {
 }
 
 /// Course turn direction.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum Direction {
     /// Clockwise (右回り).
@@ -138,7 +139,7 @@ pub enum Direction {
 }
 
 /// Course distance type, inferred from the course distance.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DistanceType {
     /// Also known as Sprint. Up to 1400m.
@@ -152,7 +153,7 @@ pub enum DistanceType {
 }
 
 /// Stats used for course set status checks.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum ThresholdStat {
     Speed = 1,
@@ -165,7 +166,7 @@ pub enum ThresholdStat {
 /// Lane type an Uma is running in.
 ///
 /// Used mainly by skill conditions.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LaneType {
     Inner,
@@ -190,7 +191,7 @@ impl LaneType {
 }
 
 /// Structure representing a race course.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Course {
     pub id: u16,
     data: CourseData,
@@ -205,7 +206,7 @@ impl std::ops::Deref for Course {
 }
 
 /// Course data structure as deserialized from JSON.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseData {
     /// Nominal course distance in meters, measured from the official start line
@@ -389,7 +390,7 @@ impl Course {
     /// Get the track name in the specified language, or `None` if the track name is
     /// not available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
-        get_track_name(self.race_track_id, language)
+        track_name(self.race_track_id, language)
     }
 
     /// Check if this is an exchange race (dirt grade).
@@ -420,33 +421,36 @@ impl Course {
 
     /// Load a specific course by ID from a JSON file.
     ///
-    /// Returns a `Result` containing the parsed `Course` or an error if the file
-    /// cannot be read, the JSON is invalid or the course ID is not found.
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read, the JSON is invalid, or the
+    /// course ID isn't found or isn't a valid number.
     pub fn from_json_file(
-        json_path: &str,
+        json_path: impl AsRef<Path>,
         course_id: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
         let json_content = fs::read_to_string(json_path)?;
-        Self::from_json_str(&json_content, course_id)
+        Self::from_json(&json_content, course_id)
     }
 
     /// Load a specific course by ID from a JSON string.
     ///
-    /// Returns a `Result` containing the parsed `Course` or an error if the JSON is
-    /// invalid or the course ID is not found.
-    pub fn from_json_str(
+    /// # Errors
+    ///
+    /// Returns an error if the JSON is invalid, or the course ID isn't found or
+    /// isn't a valid number.
+    pub fn from_json(
         json_str: &str,
         course_id: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::collections::HashMap;
 
-        let courses: HashMap<String, CourseData> = serde_json::from_str(json_str)?;
+        let mut courses: HashMap<String, CourseData> = serde_json::from_str(json_str)?;
 
         let data = courses
-            .get(course_id)
-            .ok_or_else(|| format!("Course ID '{}' not found in JSON", course_id))?
-            .clone();
+            .remove(course_id)
+            .ok_or_else(|| format!("Course ID '{}' not found in JSON", course_id))?;
 
         let id = course_id
             .parse::<u16>()
@@ -712,17 +716,17 @@ mod tests {
     }
 
     #[test]
-    fn test_from_json_str_errors() {
+    fn test_from_json_errors() {
         // Course data of 10101 under its own ID and under a non-numeric one.
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
         let courses: serde_json::Value = serde_json::from_str(&json).unwrap();
         let data = &courses["10101"];
         let json = serde_json::json!({ "10101": data, "abc": data }).to_string();
 
-        assert_eq!(Course::from_json_str(&json, "10101").unwrap().id, 10101);
-        let error = Course::from_json_str(&json, "10102").unwrap_err();
+        assert_eq!(Course::from_json(&json, "10101").unwrap().id, 10101);
+        let error = Course::from_json(&json, "10102").unwrap_err();
         assert_eq!(error.to_string(), "Course ID '10102' not found in JSON");
-        let error = Course::from_json_str(&json, "abc").unwrap_err();
+        let error = Course::from_json(&json, "abc").unwrap_err();
         assert_eq!(error.to_string(), "Invalid course ID format: 'abc'");
     }
 

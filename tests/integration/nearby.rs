@@ -6,7 +6,7 @@ use uma_tools::uma::*;
 fn ready_runners(count: usize) -> Vec<Runner> {
     let course = load_course(10101);
     let params = race_params();
-    let mut solver = RaceSolver::new(course, params, &seeded_config(42));
+    let mut solver = RaceSolver::new(course, params, seeded_config(42));
     for _ in 0..count {
         solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }

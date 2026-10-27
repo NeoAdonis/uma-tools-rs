@@ -115,6 +115,11 @@ pub fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
 }
 
 /// HP consumption multiplier during the spot struggle.
+///
+/// # Panics
+///
+/// Panics if `style` is neither [`Style::Runaway`] nor [`Style::Front`], the
+/// only styles that take part in spot struggles.
 pub fn hp_multiplier(style: Style, rushed: bool) -> f64 {
     match (style, rushed) {
         (Style::Runaway, true) => 7.7,

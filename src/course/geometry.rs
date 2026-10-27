@@ -11,7 +11,10 @@ use crate::units::deserialize_ten_thousandths;
 
 /// Course segment (corner, slope or straight) spanning from `start()`
 /// (inclusive) to `end()` (exclusive), in meters.
-pub trait Segment {
+///
+/// This trait is sealed: it's only implemented by [`Corner`], [`Slope`] and
+/// [`Straight`], and can't be implemented outside this crate.
+pub trait Segment: private::Sealed {
     fn start(&self) -> f64;
     fn end(&self) -> f64;
 
@@ -26,8 +29,18 @@ pub trait Segment {
     }
 }
 
+mod private {
+    /// Supertrait that keeps [`Segment`](super::Segment) from being implemented
+    /// outside this crate.
+    pub trait Sealed {}
+
+    impl Sealed for super::Corner {}
+    impl Sealed for super::Slope {}
+    impl Sealed for super::Straight {}
+}
+
 /// Represents a corner on the course.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Corner {
     /// Start position of the corner in meters.
@@ -57,7 +70,7 @@ impl Segment for Corner {
 }
 
 /// Represents the slope type of a course segment.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum SlopeType {
     Flat = 0,
@@ -66,7 +79,7 @@ pub enum SlopeType {
 }
 
 /// Represents a slope segment on the course.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Slope {
     /// Start position of the slope in meters.
     pub start: f64,
@@ -124,7 +137,7 @@ impl Slope {
 }
 
 /// Represents whether a straight segment is facing the audience or not.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FrontType {
     /// Towards the audience.
@@ -135,7 +148,7 @@ pub enum FrontType {
 }
 
 /// Represents a straight segment on the course.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Straight {
     /// Start position of the straight in meters.

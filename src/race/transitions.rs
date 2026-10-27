@@ -14,7 +14,7 @@ use crate::course::Course;
 use crate::course::geometry::Segment;
 
 /// Segment indices exited and entered during a [`SegmentManager::update`].
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Transition {
     pub exited: Option<usize>,
     pub entered: Option<usize>,
@@ -22,7 +22,7 @@ pub struct Transition {
 
 /// Structure used for segment entry/exit operations, tracking which segment of
 /// a kind (e.g. corners) a runner is in.
-#[derive(Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SegmentManager {
     current: Option<usize>,
 }
@@ -58,7 +58,7 @@ impl SegmentManager {
 }
 
 /// Transitions of each kind of segment during a [`SegmentState::update`].
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Transitions {
     pub corner: Transition,
     pub straight: Transition,
@@ -66,7 +66,7 @@ pub struct Transitions {
 }
 
 /// Course segments a runner is currently in.
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SegmentState {
     corner: SegmentManager,
     straight: SegmentManager,

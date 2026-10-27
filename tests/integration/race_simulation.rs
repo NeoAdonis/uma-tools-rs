@@ -77,7 +77,7 @@ fn test_multi_runner_race_simulation() {
             gates: styles.len() as u8,
             ..race_params()
         };
-        let mut solver = RaceSolver::new(course.clone(), params, &config);
+        let mut solver = RaceSolver::new(course.clone(), params, config);
         for style in styles {
             solver.add_runner(uma(style), Mood::Normal, vec![]);
         }
@@ -112,7 +112,7 @@ fn test_same_seed_gives_same_race() {
             ..race_params()
         };
         let config = seeded_config(seed);
-        let mut solver = RaceSolver::new(course, params, &config);
+        let mut solver = RaceSolver::new(course, params, config);
         for style in styles {
             solver.add_runner(uma(style), Mood::Normal, vec![]);
         }

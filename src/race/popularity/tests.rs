@@ -136,7 +136,7 @@ fn speed_bonus(skill: &Skill) -> f64 {
     use crate::test_utils::{load_course, race_params, seeded_config, uma};
     use crate::uma::{Mood, Style, Uma};
 
-    let state = RaceSolver::new(load_course(10104), race_params(), &seeded_config(0)).state;
+    let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
     let uma = Uma {
         speed: 1000,
         guts: 1000,

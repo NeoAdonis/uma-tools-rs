@@ -6,7 +6,7 @@ use crate::uma::*;
 /// Solver with Mid race runners at the given `(position, lane)` pairs, in
 /// order.
 fn lane_solver(runners: &[(f64, f64)]) -> RaceSolver<Runner> {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), &seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
         solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
     }

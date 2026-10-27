@@ -13,9 +13,9 @@
 //!    logic belongs to a continuation (see below).
 //! 4. Evaluate the guards (all must be true).
 //! 5. On success, run the action:
-//!    - `Activate`: activate the skill (see below), which starts the cooldown
+//!    - [`Activate`]: activate the skill (see below), which starts the cooldown
 //!      of the alternative. Once it ends, the logic can succeed again.
-//!    - `Unlock`: mark the precondition as satisfied. The logic is never
+//!    - [`Unlock`]: mark the precondition as satisfied. The logic is never
 //!      checked again.
 //!
 //! ## Activating a Skill
@@ -69,6 +69,9 @@
 //! Random gold skills can be picked among those that failed the wit check,
 //! which have no logics and only activate this way, and among those that
 //! already activated, once their cooldown and effects are over.
+//!
+//! [`Activate`]: crate::trigger::skill_activation::LogicAction::Activate
+//! [`Unlock`]: crate::trigger::skill_activation::LogicAction::Unlock
 
 use std::collections::HashSet;
 
@@ -93,7 +96,7 @@ use crate::units::meters_to_bashin;
 use super::{EPSILON, Runner};
 
 /// Skill modifiers that are applied during race calculations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SkillModifiers {
     /// Modifies target speed. Positive values increase it.
     pub target_speed: f64,
@@ -159,7 +162,7 @@ impl SkillModifiers {
 }
 
 /// Skill activation flags for the current update cycle.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SkillActivationFlags {
     /// Indicates if a skill was activated in the current update cycle.
     pub any_activated: bool,
@@ -484,7 +487,7 @@ impl Runner {
                 }
             }
             // Buffs count as activated even if their value scaled down to zero.
-            if effect.target == SkillTarget::Oneself && Skill::is_effect_positive(effect) {
+            if effect.target == SkillTarget::Oneself && effect.is_positive() {
                 self.activation_flags
                     .buff_activated
                     .insert(effect.skill_type);
