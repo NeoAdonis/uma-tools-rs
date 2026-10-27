@@ -71,7 +71,7 @@ fn test_precondition_with_window_trigger() {
 
     // Verify precondition_satisfied array is initialized correctly
     assert_eq!(
-        scheduler.precondition_satisfied,
+        scheduler.precondition_satisfied(),
         vec![false],
         "Skill with precondition should start locked"
     );
@@ -113,7 +113,7 @@ fn test_precondition_with_or_condition() {
     }
 
     // A single precondition, locked at the start
-    assert_eq!(scheduler.precondition_satisfied, vec![false]);
+    assert_eq!(scheduler.precondition_satisfied(), vec![false]);
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn test_multiple_alternatives_precondition_independence() {
 
     // Both preconditions start locked
     assert_eq!(
-        scheduler.precondition_satisfied,
+        scheduler.precondition_satisfied(),
         vec![false, false],
         "Precondition states should match alternative requirements"
     );
@@ -291,9 +291,9 @@ fn test_static_preconditions_resolved_at_race_start() {
 
     // True static comparisons are removed; unsatisfiable windows are dropped
     let windows: Vec<_> = scheduler
-        .precondition_windows
+        .precondition_windows()
         .iter()
-        .map(|window| &scheduler.skill_logics[window.logic_idx])
+        .map(|window| &scheduler.skill_logics()[window.logic_idx])
         .collect();
     assert_eq!(windows.len(), 2);
     assert_eq!(windows[0].skill_index, 0);

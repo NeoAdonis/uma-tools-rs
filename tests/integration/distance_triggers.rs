@@ -101,7 +101,7 @@ fn test_distance_windows_are_positions_in_order() {
 
     // Windows are queued by their start
     let order: Vec<(usize, f64)> = scheduler
-        .position_windows
+        .position_windows()
         .iter()
         .map(|window| (window.logic_idx, window.min_threshold))
         .collect();
@@ -127,8 +127,8 @@ fn test_reversed_remain_distance_window_range() {
         &mut rng,
     );
 
-    assert_eq!(scheduler.position_windows.len(), 1);
-    let window = scheduler.position_windows.iter().next().unwrap();
+    assert_eq!(scheduler.position_windows().len(), 1);
+    let window = scheduler.position_windows().iter().next().unwrap();
     assert_eq!(window.min_threshold, 0.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 350.0);
 }
@@ -148,9 +148,9 @@ fn test_remain_distance_pair_window_range() {
     );
 
     // A single window; both comparisons stay as guards
-    assert_eq!(scheduler.skill_logics[0].guards.len(), 2);
-    assert_eq!(scheduler.position_windows.len(), 1);
-    let window = scheduler.position_windows.iter().next().unwrap();
+    assert_eq!(scheduler.skill_logics()[0].guards.len(), 2);
+    assert_eq!(scheduler.position_windows().len(), 1);
+    let window = scheduler.position_windows().iter().next().unwrap();
     assert_eq!(window.min_threshold, COURSE_DISTANCE - 402.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }
@@ -185,7 +185,7 @@ fn test_random_segment_activates_within_segment() {
 
         // The rolled segment is 10m long
         let TriggerCondition::Segments { ranges } =
-            &runner.trigger_scheduler.skill_logics[0].trigger
+            &runner.trigger_scheduler.skill_logics()[0].trigger
         else {
             panic!("seed {seed}: expected segments");
         };

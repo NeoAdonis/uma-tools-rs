@@ -793,7 +793,7 @@ fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
         HpPer => runner.hp.percent().floor() as i32,
 
         // HP is (or has been at some point) empty.
-        IsHpEmptyOnetime => runner.hp.has_emptied as i32,
+        IsHpEmptyOnetime => runner.hp.has_emptied() as i32,
 
         // Is in last spurt mode (not the phase).
         IsLastspurt => runner.active_last_spurt().is_some() as i32,

@@ -138,7 +138,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     // If HP is sufficient for max speed, use it immediately.
     let max_hp_required = spurt_hp_required(runner, state, max_last_spurt_speed);
 
-    if runner.hp.current >= max_hp_required {
+    if runner.hp.current() >= max_hp_required {
         return LastSpurt {
             max_speed: max_last_spurt_speed,
             target_distance: course.length() - remaining_distance,
@@ -165,7 +165,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     // Numerator for last spurt distance calculation.
     // It equals the remaining HP after running calculation distance at base speed,
     // so it can also be used to check if the runner can even finish at base speed.
-    let numerator = runner.hp.current - calculation_distance * hp_rate_base;
+    let numerator = runner.hp.current() - calculation_distance * hp_rate_base;
     if numerator <= 0.0 {
         return LastSpurt {
             max_speed: late_base_target_speed,

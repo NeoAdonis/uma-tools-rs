@@ -410,7 +410,7 @@ fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
 /// `(position, speed, hp)` of the only runner.
 fn runner_state(solver: &RaceSolver<Runner>) -> (f64, f64, f64) {
     let runner = &solver.runners[0];
-    (runner.position, runner.speed, runner.hp.current)
+    (runner.position, runner.speed, runner.hp.current())
 }
 
 #[test]
@@ -978,7 +978,7 @@ fn update_duels(solver: &mut RaceSolver<Runner>, frames: usize) {
 /// Set the HP percentage of runner `i`.
 fn set_hp_percent(solver: &mut RaceSolver<Runner>, i: usize, percent: f64) {
     let hp = &mut solver.runners[i].hp;
-    hp.current = hp.maximum * percent / 100.0;
+    hp.set_current(hp.maximum() * percent / 100.0);
 }
 
 /// Whether each runner (in position order) is currently dueling.
@@ -3256,6 +3256,12 @@ fn remaining_durations(solver: &RaceSolver<Runner>) -> Vec<f64> {
 fn test_duration_scaling_by_runner_situation() {
     // Base duration of 3 seconds, scaled to the 1200m course.
     let base = 3.0 * 1.2;
+    // Base stamina of 1200 + 800 / 2 = 1600, so full HP is 0.8 × 1600 + 1200
+    // = 2480, within the HP bands tested below.
+    let uma = Uma {
+        stamina: 2000,
+        ..uma(Style::Late)
+    };
     /// Changes the runner's situation before activating the skill.
     type Setup = fn(&mut Runner);
     let cases: [(DurationScaling, Setup, f64); 6] = [
@@ -3265,16 +3271,8 @@ fn test_duration_scaling_by_runner_situation() {
             |runner| runner.position_diff.from_first = 25.0,
             1.2,
         ),
-        (
-            DurationScaling::MultiplyRemainHp1,
-            |runner| runner.hp.current = 2500.0,
-            2.0,
-        ),
-        (
-            DurationScaling::MultiplyRemainHp2,
-            |runner| runner.hp.current = 2500.0,
-            3.0,
-        ),
+        (DurationScaling::MultiplyRemainHp1, |_| {}, 2.0),
+        (DurationScaling::MultiplyRemainHp2, |_| {}, 3.0),
         (
             DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
             |runner| runner.blocked.max_mid_side_time = 4.5,
@@ -3284,7 +3282,8 @@ fn test_duration_scaling_by_runner_situation() {
         (DurationScaling::IncrementOrderUp, |_| {}, 1.0),
     ];
     for (duration_scaling, setup, multiplier) in cases {
-        let mut solver = timed_skill_solver(vec![timed_skill(33, duration_scaling)]);
+        let skills = vec![timed_skill(33, duration_scaling)];
+        let mut solver = ready_solver(10101, uma, skills, seeded_config(0));
         setup(&mut solver.runners[0]);
         solver.runners[0].activate_skill(0, 0, &solver.state);
         let durations = remaining_durations(&solver);

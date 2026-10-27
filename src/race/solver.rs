@@ -63,24 +63,24 @@ pub struct RaceState {
     /// from displayed finish time due to scoreboard conversion.
     pub finish_time: Option<f64>,
     /// Number of teams in the race. Team indices go from 0 to `team_count - 1`.
-    pub team_count: u8,
+    pub(crate) team_count: u8,
     /// Count of runners by base style (Runaways count as Front runners).
-    pub runners_by_style: HashMap<Style, u8>,
+    pub(crate) runners_by_style: HashMap<Style, u8>,
     /// Base style of the most popular runner (Runaway counts as Front).
-    pub style_most_popular: Style,
+    pub(crate) style_most_popular: Style,
     /// Count of runners currently rushed, by team and base style (Runaways count
     /// as Front runners). Indexed as `[team][style as usize]`.
-    pub rushed_by_team: Vec<[u8; Style::COUNT]>,
+    pub(crate) rushed_by_team: Vec<[u8; Style::COUNT]>,
     /// Skill activations by team (out-of-gate skills included), as of the start
     /// of the current frame. Indexed by team.
-    pub team_activations: Vec<usize>,
+    pub(crate) team_activations: Vec<usize>,
     /// Count of existing skill IDs among all runners.
-    pub existing_skills: HashMap<i32, u8>,
+    pub(crate) existing_skills: HashMap<i32, u8>,
     /// Number of runners that activated a buff (advantage) skill in the current
     /// frame, by effect type.
-    pub buffs_activated: HashMap<SkillType, u8>,
+    pub(crate) buffs_activated: HashMap<SkillType, u8>,
     /// Skill activations of the most popular runner in the current frame.
-    pub popularity_top_activations: SkillActivationFlags,
+    pub(crate) popularity_top_activations: SkillActivationFlags,
 }
 
 /// Race solver that manages the race simulation.

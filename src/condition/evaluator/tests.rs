@@ -975,8 +975,8 @@ fn test_blocking_values_when_free() {
 fn test_hp_values() {
     let mut solver = create_test_race_solver(vec![]);
     let hp = &mut solver.runners[0].hp;
-    hp.current = hp.maximum * 0.4999;
-    hp.has_emptied = true;
+    hp.consume(hp.maximum());
+    hp.recover(hp.maximum() * 0.4999);
 
     let runner = &solver.runners[0];
     let actual =
@@ -1215,7 +1215,7 @@ fn test_variable_value_dispatch() {
     runner.position_diff.from_first = 12.0;
     runner.position = 1000.0;
     runner.phase = CoursePhase::Mid;
-    runner.hp.current = runner.hp.maximum / 2.0;
+    runner.hp.set_current(runner.hp.maximum() / 2.0);
     runner.visible_count = 11;
     runner.rush_counter.ahead = 3;
     runner.trigger_scheduler.activation_counts.all = 6;

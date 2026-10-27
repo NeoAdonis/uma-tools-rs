@@ -54,8 +54,8 @@ fn test_phase_and_distance_intersect() {
         10104,
     );
 
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    let logic = &scheduler.skill_logics[0];
+    assert_eq!(scheduler.skill_logics().len(), 1);
+    let logic = &scheduler.skill_logics()[0];
     let (variable, min, max) = window(logic);
     assert_eq!(variable, WindowVariable::Position);
     assert_close!(min, 1000.0);
@@ -77,8 +77,8 @@ fn test_impossible_on_course_is_skipped() {
     let skill = Skill::new(110121, skill_data(vec![alternative]));
     let scheduler = scheduler(skill, 10104);
 
-    assert!(scheduler.skill_logics.is_empty());
-    assert!(scheduler.precondition_satisfied.is_empty());
+    assert!(scheduler.skill_logics().is_empty());
+    assert!(scheduler.precondition_satisfied().is_empty());
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn test_distance_rate_and_remain_distance_intersect() {
         10104,
     );
 
-    let logic = &scheduler.skill_logics[0];
+    let logic = &scheduler.skill_logics()[0];
     let (_, min, max) = window(logic);
     assert_close!(min, 1320.0);
     assert_close!(max, 1380.0);
@@ -149,7 +149,7 @@ fn test_hp_window() {
         10105,
     );
 
-    let logic = &scheduler.skill_logics[0];
+    let logic = &scheduler.skill_logics()[0];
     let (variable, min, max) = window(logic);
     assert_eq!(variable, WindowVariable::HpPercent);
     assert_eq!((min, max), (0.0, 31.0));
@@ -169,7 +169,7 @@ fn test_time_window_with_dynamic_guards() {
         10104,
     );
 
-    let logic = &scheduler.skill_logics[0];
+    let logic = &scheduler.skill_logics()[0];
     let (variable, min, max) = window(logic);
     assert_eq!(variable, WindowVariable::Time);
     assert_eq!((min, max), (5.0, f64::INFINITY));
@@ -189,7 +189,7 @@ fn test_phase_window_with_dynamic_guards() {
         10104,
     );
 
-    let logic = &scheduler.skill_logics[0];
+    let logic = &scheduler.skill_logics()[0];
     let (_, min, max) = window(logic);
     assert_close!(min, SECTION * 16.0);
     assert_close!(max, SECTION * 20.0);

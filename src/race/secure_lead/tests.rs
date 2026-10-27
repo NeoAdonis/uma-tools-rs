@@ -148,7 +148,7 @@ fn test_secure_lead_activation_and_expiry() {
     }
 
     // Insufficient lead eventually triggers.
-    let hp_before = runner.hp.current;
+    let hp_before = runner.hp.current();
     let mut elapsed = 0.0;
     while matches!(runner.secure_lead, TimedBoost::Idle { .. }) {
         elapsed += CHECK_INTERVAL;
@@ -166,7 +166,7 @@ fn test_secure_lead_activation_and_expiry() {
     let expected_boost = TimedBoost::start(expected_modifier, elapsed, DURATION, COOLDOWN);
     assert_eq!(runner.secure_lead, expected_boost);
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
-    assert_close!(runner.hp.current, expected_hp);
+    assert_close!(runner.hp.current(), expected_hp);
 
     // Boost is applied to target speed.
     runner.update_target_speed(&state);

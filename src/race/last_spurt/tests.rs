@@ -54,7 +54,7 @@ fn set_hp_above_base(solver: &mut RaceSolver<Runner>) {
         &solver.state,
         last_spurt_speed_max(runner, &solver.state),
     );
-    solver.runners[0].hp.current = (at_base + at_max) / 2.0;
+    solver.runners[0].hp.set_current((at_base + at_max) / 2.0);
 }
 
 /// Placeholder last spurt to detect whether it has been recalculated.
@@ -129,7 +129,7 @@ fn test_uses_hp_at_late_phase_entry() {
 
     let mut low_hp = self::solver(1000, GameVersion::LATEST, 0);
     move_to_section(&mut low_hp, 15);
-    low_hp.runners[0].hp.current = 1.0;
+    low_hp.runners[0].hp.set_current(1.0);
     move_to_section(&mut low_hp, 16);
     let last_spurt = low_hp.runners[0].last_spurt.as_ref().unwrap();
     assert_eq!(last_spurt.category, LastSpurtCategory::CannotFinish);
@@ -227,7 +227,7 @@ fn test_hp_loss_is_not_a_heal() {
     let runner = &mut solver.runners[0];
     runner.last_spurt = Some(placeholder());
     runner.stamina_keep.is_active = true;
-    let hp_before = runner.hp.current;
+    let hp_before = runner.hp.current();
 
     // 2% of maximum HP.
     runner.apply_skill_effect(
@@ -238,7 +238,7 @@ fn test_hp_loss_is_not_a_heal() {
         None,
         &solver.state,
     );
-    assert_close!(runner.hp.current, hp_before - runner.hp.maximum * 0.02);
+    assert_close!(runner.hp.current(), hp_before - runner.hp.maximum() * 0.02);
     assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
     assert_eq!(runner.trigger_scheduler.activation_counts.heal, 0);
     assert!(runner.stamina_keep.is_active);

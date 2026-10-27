@@ -68,42 +68,68 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
 #[derive(Debug, Default, Clone)]
 pub struct TriggerScheduler {
-    pub skill_logics: Vec<SkillActivationLogic>,
+    pub(crate) skill_logics: Vec<SkillActivationLogic>,
 
     // Precondition tracking - one-time unlocks, indexed by the precondition ID
     // stored in `SkillActivationLogic::precondition`.
-    pub precondition_satisfied: Vec<bool>,
+    pub(crate) precondition_satisfied: Vec<bool>,
     // Position windows of precondition logics. Kept apart from regular windows
     // because preconditions are checked before the triggers they unlock.
-    pub precondition_windows: WindowQueue,
+    pub(crate) precondition_windows: WindowQueue,
 
     // Window triggers - checked every frame while within bounds (including random
     // segments). Position and time only increase, so their windows are queued; HP
     // can recover, so HP windows are scanned every frame.
-    pub position_windows: WindowQueue,
-    pub time_windows: WindowQueue,
-    pub hp_windows: Vec<WindowTrigger>,
+    pub(crate) position_windows: WindowQueue,
+    pub(crate) time_windows: WindowQueue,
+    pub(crate) hp_windows: Vec<WindowTrigger>,
 
     // Last straight entry triggers (is_last_straight_onetime).
-    pub last_straight_triggers: Vec<usize>,
+    pub(crate) last_straight_triggers: Vec<usize>,
 
     // Race start triggers (out-of-gate skills), checked once.
-    pub race_start_triggers: Vec<usize>,
+    pub(crate) race_start_triggers: Vec<usize>,
 
     // Deferred random triggers - scheduled as distance triggers once
     // the all-out spurt starts.
-    pub all_out_spurt_triggers: Vec<usize>,
+    pub(crate) all_out_spurt_triggers: Vec<usize>,
 
     // Activation-dependent triggers - checked when skills activate.
-    pub any_activation_triggers: Vec<usize>,
-    pub buff_activation_triggers: Vec<usize>,
-    pub heal_activation_triggers: Vec<usize>,
+    pub(crate) any_activation_triggers: Vec<usize>,
+    pub(crate) buff_activation_triggers: Vec<usize>,
+    pub(crate) heal_activation_triggers: Vec<usize>,
 
     // Activation tracking.
-    pub activation_counts: ActivationCounts,
+    pub(crate) activation_counts: ActivationCounts,
 }
 
 impl TriggerScheduler {
+    /// Get the activation logics of every skill alternative, indexed by the
+    /// logic indices that triggers store.
+    pub fn skill_logics(&self) -> &[SkillActivationLogic] {
+        &self.skill_logics
+    }
+
+    /// Get whether each precondition is satisfied, indexed by precondition ID.
+    pub fn precondition_satisfied(&self) -> &[bool] {
+        &self.precondition_satisfied
+    }
+
+    /// Get the position windows of precondition logics.
+    pub fn precondition_windows(&self) -> &WindowQueue {
+        &self.precondition_windows
+    }
+
+    /// Get the position windows of regular triggers.
+    pub fn position_windows(&self) -> &WindowQueue {
+        &self.position_windows
+    }
+
+    /// Get the logics triggered by heal skill activations.
+    pub fn heal_activation_triggers(&self) -> &[usize] {
+        &self.heal_activation_triggers
+    }
+
     /// Remove every trigger of the given logics, so they're never checked.
     pub fn remove_triggers(&mut self, logic_indices: &[usize]) {
         if logic_indices.is_empty() {

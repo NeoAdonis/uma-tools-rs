@@ -948,7 +948,7 @@ impl Runner {
     ) {
         let elapsed_time = state.elapsed_time;
         if !self.stamina_keep.is_active
-            && self.hp.current < hp_required_to_finish(self, state) * self.stamina_keep.ratio
+            && self.hp.current() < hp_required_to_finish(self, state) * self.stamina_keep.ratio
             && self
                 .rng
                 .borrow_mut()

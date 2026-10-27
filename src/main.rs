@@ -99,7 +99,7 @@ fn main() {
         let runner = &solver.runners[0];
 
         println!("\nRace initialized successfully!");
-        println!("Initial HP: {:.2}", runner.hp.maximum);
+        println!("Initial HP: {:.2}", runner.hp.maximum());
         println!("Rush chance: {:.2}%", runner.rush_chance);
         if let Some(rush_state) = &runner.rush_state {
             println!("> Will rush in section {}", rush_state.section);
@@ -128,7 +128,7 @@ fn main() {
             "Scoreboard time: {:.1} seconds",
             solver.scoreboard_time().unwrap_or_default()
         );
-        println!("Final HP: {:.2}", runner.hp.current);
+        println!("Final HP: {:.2}", runner.hp.current());
         println!(
             "Last spurt started at {:.2} meters ({:?})",
             runner.last_spurt.as_ref().unwrap().target_distance,

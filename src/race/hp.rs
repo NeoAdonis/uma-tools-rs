@@ -18,13 +18,13 @@ pub struct HpState {
     /// It can be restored by skills but cannot exceed `maximum`.
     ///
     /// If HP reaches 0, the runner's maximum speed is greatly reduced.
-    pub current: f64,
+    current: f64,
     /// Maximum HP.
     ///
     /// Calculated from the stamina stat at the start of the race.
-    pub maximum: f64,
+    maximum: f64,
     /// Flag indicating if the runner has emptied her HP at least once.
-    pub has_emptied: bool,
+    has_emptied: bool,
 }
 
 impl HpState {
@@ -35,6 +35,21 @@ impl HpState {
             maximum,
             has_emptied: false,
         }
+    }
+
+    /// Get the current HP.
+    pub fn current(&self) -> f64 {
+        self.current
+    }
+
+    /// Get the maximum HP.
+    pub fn maximum(&self) -> f64 {
+        self.maximum
+    }
+
+    /// Check if HP has been emptied at least once.
+    pub fn has_emptied(&self) -> bool {
+        self.has_emptied
     }
 
     /// Check if HP is empty (i.e., current HP <= 0).
@@ -58,6 +73,21 @@ impl HpState {
     /// Recover HP by a given amount, clamped to maximum.
     pub fn recover(&mut self, amount: f64) {
         self.current = (self.current + amount).min(self.maximum);
+    }
+
+    /// Set the current HP to `value`, recording whether it has been emptied.
+    ///
+    /// Unlike [`recover`](Self::recover), `value` isn't clamped to the maximum;
+    /// exceeding it fails in debug builds instead.
+    #[cfg(test)]
+    pub(crate) fn set_current(&mut self, value: f64) {
+        debug_assert!(
+            value <= self.maximum,
+            "HP {value} exceeds maximum {}",
+            self.maximum
+        );
+        self.current = value;
+        self.has_emptied |= self.is_empty();
     }
 }
 

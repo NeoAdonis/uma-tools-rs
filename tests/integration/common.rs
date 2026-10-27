@@ -158,7 +158,7 @@ pub fn negligible_skill(condition: &str) -> Skill {
 /// Logics that activate skills (excluding the ones that unlock preconditions).
 pub fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
     scheduler
-        .skill_logics
+        .skill_logics()
         .iter()
         .filter(|logic| logic.action == LogicAction::Activate)
         .collect()

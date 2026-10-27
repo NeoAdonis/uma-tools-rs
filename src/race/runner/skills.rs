@@ -573,10 +573,10 @@ impl Runner {
                 base * skill_scaling::distance_from_first_duration_multiplier(distance)
             }
             MultiplyRemainHp1 => {
-                base * skill_scaling::remaining_hp_duration_multiplier_1(self.hp.current)
+                base * skill_scaling::remaining_hp_duration_multiplier_1(self.hp.current())
             }
             MultiplyRemainHp2 => {
-                base * skill_scaling::remaining_hp_duration_multiplier_2(self.hp.current)
+                base * skill_scaling::remaining_hp_duration_multiplier_2(self.hp.current())
             }
             MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
                 let time = self.blocked.max_mid_side_time;
@@ -705,7 +705,7 @@ impl Runner {
             // Recovery (HP restoration, or HP loss if negative), as a fraction of max
             // HP.
             SkillType::Recovery => {
-                self.hp.recover(self.hp.maximum * effect.modifier);
+                self.hp.recover(self.hp.maximum() * effect.modifier);
 
                 // HP loss (e.g., a skill's drawback) is not a heal.
                 if effect.modifier > 0.0 {

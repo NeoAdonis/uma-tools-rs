@@ -125,7 +125,7 @@ fn test_hp_out_drops_speed_to_minimum() {
 
     let runner = &mut solver.runners[0];
     runner.speed = 24.0;
-    runner.hp.current = 0.001;
+    runner.hp.set_current(0.001);
     runner.update_hp(DELTA_TIME, &solver.state);
     assert_eq!(runner.speed, runner.min_speed);
     assert_eq!(runner.all_out_spurt, AllOutSpurt::Ended);
