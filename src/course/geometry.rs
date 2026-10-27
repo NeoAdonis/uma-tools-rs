@@ -28,11 +28,15 @@ pub trait Segment {
 
 /// Represents a corner on the course.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Corner {
     /// Start position of the corner in meters.
     pub start: f64,
     /// Length of the corner in meters.
     pub length: f64,
+    /// Total angle the course turns through within the corner in degrees,
+    /// always positive (the turning side is given by the course direction).
+    pub turn_angle: f64,
 }
 
 impl Segment for Corner {
@@ -154,6 +158,7 @@ mod tests {
         let corner = Corner {
             start: 100.0,
             length: 50.0,
+            turn_angle: 90.0,
         };
         assert_eq!(corner.range(), (100.0, 150.0));
 

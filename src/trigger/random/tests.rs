@@ -9,10 +9,12 @@ fn create_test_course() -> Course {
             Corner {
                 start: 100.0,
                 length: 200.0,
+                turn_angle: 90.0,
             },
             Corner {
                 start: 500.0,
                 length: 150.0,
+                turn_angle: 90.0,
             },
         ],
         vec![Slope::new(800.0, 100.0, 0.05)],
@@ -178,6 +180,7 @@ fn test_corner_random_last_lap() {
         .map(|i| Corner {
             start: i as f64 * 200.0,
             length: 100.0,
+            turn_angle: 90.0,
         })
         .collect();
     let course = create_test_course_with(corners, vec![], vec![]);
@@ -455,6 +458,7 @@ fn test_phase_corner_random_partial_overlap() {
         vec![Corner {
             start: 300.0,
             length: 400.0,
+            turn_angle: 90.0,
         }],
         vec![],
         vec![],
@@ -626,10 +630,12 @@ fn test_phase_corner_random_stitched_segments() {
             Corner {
                 start: 390.0,
                 length: 35.0,
+                turn_angle: 90.0,
             },
             Corner {
                 start: 500.0,
                 length: 30.0,
+                turn_angle: 90.0,
             },
         ],
         vec![],
@@ -687,6 +693,7 @@ fn test_all_corner_random_short_corners() {
         vec![Corner {
             start: 500.0,
             length: 10.0,
+            turn_angle: 90.0,
         }],
         vec![],
         vec![],
@@ -699,6 +706,7 @@ fn test_all_corner_random_short_corners() {
         vec![Corner {
             start: 500.0,
             length: 25.0,
+            turn_angle: 90.0,
         }],
         vec![],
         vec![],

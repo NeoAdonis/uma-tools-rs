@@ -2,7 +2,11 @@ use super::*;
 use crate::course::geometry::Corner;
 
 fn create_test_corner(start: f64, length: f64) -> Corner {
-    Corner { start, length }
+    Corner {
+        start,
+        length,
+        turn_angle: 90.0,
+    }
 }
 
 fn transition(exited: Option<usize>, entered: Option<usize>) -> Transition {

@@ -589,6 +589,7 @@ mod tests {
         let corner = Corner {
             start: 400.0,
             length: 200.0,
+            turn_angle: 90.0,
         };
         let course = |move_lane_point, corners| {
             let data = CourseData {
@@ -689,6 +690,7 @@ mod tests {
                 .map(|i| Corner {
                     start: i as f64 * 200.0,
                     length: 100.0,
+                    turn_angle: 90.0,
                 })
                 .collect();
             course
