@@ -320,6 +320,8 @@ The distance in decimeters between the first place and you.
 
 Race progression in percentage.
 
+*Note:* On courses with a run-up, it's measured from the official start line, so it stays at 0 during the run-up.
+
 *Example:* `distance_rate>=50`
 
 *Meaning:* Race is in its half or later.
@@ -363,6 +365,8 @@ Checks the number of your fans.
 ## furlong
 
 How many entire furlongs you have completed in the race.
+
+*Note:* On courses with a run-up, furlongs are counted from the official start line.
 
 *Example:* `furlong==3`
 
@@ -855,6 +859,8 @@ Current phase of the race.
 
 *Possible values:* 0 (Early-race), 1 (Mid-race), 2 (Late-race), 3 (Last leg)
 
+*Note:* On courses with a run-up, the race starts in a run-up phase (-1) until the official start line. During it, `phase==0` doesn't hold yet.
+
 *Example:* `phase>=2`
 
 *Meaning:* You're currently either in the late-race or the last leg.
@@ -1004,6 +1010,8 @@ Rolls a random number from 0-100, once per skill.
 ## remain_distance
 
 The number of meters remaining in the race.
+
+*Note:* On courses with a run-up, it includes the run-up, i.e. it's the distance to the goal.
 
 *Example:* `remain_distance==200`
 

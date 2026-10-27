@@ -504,11 +504,10 @@ impl Runner {
         });
 
         // Increment activation counts for condition evaluation.
-        let section_length = state.course.distance as f64 / 24.0;
         self.trigger_scheduler.activation_counts.increment(
             self.phase,
             self.position,
-            section_length,
+            state.course.halfway(),
         );
         if self.skills[skill_index].is_green() {
             self.trigger_scheduler.activation_counts.green += 1;
@@ -919,10 +918,10 @@ impl Runner {
     /// contained a non-overlapping static guard that would have been false and
     /// therefore were removed when the runner was created.
     pub(super) fn schedule_all_out_spurt_triggers(&mut self, state: &RaceState) {
-        let course_distance = state.course.distance as f64;
+        let goal = state.course.length();
         let mut rng = self.rng.borrow_mut();
         for logic_idx in self.trigger_scheduler.all_out_spurt_triggers.drain(..) {
-            let start = random_segment(self.position, course_distance, &mut *rng);
+            let start = random_segment(self.position, goal, &mut *rng);
             self.trigger_scheduler.position_windows.push(WindowTrigger {
                 logic_idx,
                 min_threshold: start,

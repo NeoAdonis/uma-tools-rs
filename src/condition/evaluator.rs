@@ -429,10 +429,11 @@ fn get_phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     use PhaseVar::*;
 
     match var {
-        // Current phase: 0=Early, 1=Mid, 2=Late, 3=Last.
+        // Current phase: -1=run-up, 0=early, 1=mid, 2=late, 3=last.
         Phase => runner.phase as i32,
 
-        // Phase subdivisions: phase number if inside subdivision, -1 otherwise.
+        // Phase subdivisions: phase number if inside subdivision, -1 otherwise
+        // (including during the run-up, which has no subdivisions).
         PhaseFirstquarter => {
             let (_, end) = runner.phase.boundaries_first_quarter(course);
             if runner.position < end {
@@ -589,8 +590,8 @@ fn get_location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32
         // Distance covered as percentage (0-100).
         DistanceRate => course.distance_rate(runner.position).floor() as i32,
 
-        // Distance in furlongs.
-        Furlong => meters_to_furlongs(runner.position).floor() as i32,
+        // Distance in furlongs from the official start line.
+        Furlong => meters_to_furlongs(course.nominal_position(runner.position)).floor() as i32,
 
         // Remaining distance in meters.
         RemainDistance => course.remain_distance(runner.position).floor() as i32,

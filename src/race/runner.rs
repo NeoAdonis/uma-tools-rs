@@ -472,7 +472,7 @@ impl Runner {
             -0.5
         } else {
             match self.phase {
-                Phase::Early => -1.2,
+                Phase::RunUp | Phase::Early => -1.2,
                 Phase::Mid => -0.8,
                 Phase::Late | Phase::Last => -1.0,
             }
@@ -586,7 +586,7 @@ impl Runner {
             0.0
         };
 
-        let force_in_modifier = if self.phase == Phase::Early
+        let force_in_modifier = if self.phase <= Phase::Early
             && self.lane.current > FORCE_IN_MIN_LANE
             && self.blocked.side_in
         {
@@ -621,9 +621,9 @@ impl Runner {
         let prev_position = self.position;
         // Use effective_speed which includes current_speed modifiers.
         self.position += self.effective_speed() * move_time;
-        if self.finish_time.is_none() && self.position >= state.course.distance as f64 {
+        if self.finish_time.is_none() && self.position >= state.course.length() {
             // Calculate exact finish time.
-            let remaining_distance = state.course.distance as f64 - prev_position;
+            let remaining_distance = state.course.length() - prev_position;
             let time_to_finish = remaining_distance / self.effective_speed();
             self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
@@ -662,8 +662,11 @@ impl Runner {
             if self.section == spot_struggle::END_SECTION {
                 self.spot_struggle.stop();
             }
+        }
 
-            // Phase can only advance at section boundaries.
+        // Phase can only advance at section boundaries, or at the end of the
+        // run-up (which is part of section 0).
+        if self.section != prev_section || self.phase == Phase::RunUp {
             let prev_phase = self.phase;
             self.phase = Phase::from_position(self.position, &state.course);
             if prev_phase != self.phase && self.phase >= Phase::Late && self.last_spurt.is_none() {

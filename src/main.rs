@@ -69,6 +69,9 @@ fn main() {
         course.track_name(config.language).unwrap_or("Unknown")
     );
     println!("  Distance: {}m", course.distance);
+    if course.run_up > 0.0 {
+        println!("  Run-up: {}m", course.run_up);
+    }
     println!("  Surface: {:?}", course.surface);
     println!("  Course set status: {:?}", course.course_set_status);
 

@@ -48,6 +48,7 @@ pub(crate) fn course_data() -> CourseData {
         slopes: vec![],
         straights: vec![],
         move_lane_point: None,
+        run_up: 0.0,
         race_track_id: 10006,
         finish_time_min: 117.1,
         finish_time_max: 123.0,

@@ -143,7 +143,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         // Random point during a phase.
         RandomPhase(RandomPhaseVar::PhaseRandom) => {
             // "phase_random==X" where X is phase (0=Early, 1=Mid, 2=Late, 3=Last).
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries(course);
 
@@ -153,7 +153,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom) => {
             // "phase_firsthalf_random==X" where X is phase.
             // Activates at random point during first half of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries_first_half(course);
 
@@ -163,7 +163,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom) => {
             // "phase_firstquarter_random==X" where X is phase.
             // Activates at random point during first quarter of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries_first_quarter(course);
 
@@ -173,7 +173,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom) => {
             // "phase_laterhalf_random==X" where X is phase.
             // Activates at random point during second half of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries_second_half(course);
 
@@ -183,7 +183,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseCornerRandom) => {
             // "phase_corner_random==X" where X is phase.
             // Picks random point during a corner in specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries(course);
 
@@ -202,7 +202,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseStraightRandom) => {
             // "phase_straight_random==X" where X is phase.
             // Picks random point during a straight in specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries(course);
 
@@ -223,7 +223,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom) => {
             // "phase_first_half_straight_random==X" where X is phase.
             // Picks random point during a straight in first half of set phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries_first_half(course);
 
@@ -244,7 +244,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => {
             // "phase_latter_half_straight_random==X" where X is phase.
             // Picks random point during a straight in second half of set phase.
-            let (start, end) = CoursePhase::try_from(comp.value as u8)
+            let (start, end) = CoursePhase::try_from(comp.value as i8)
                 .ok()?
                 .boundaries_second_half(course);
 
@@ -338,9 +338,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .slopes
                 .iter()
                 .filter(|s| s.is_uphill())
-                .filter_map(|s| {
-                    intersect_intervals(s.start, s.end(), halfway, course.distance as f64)
-                })
+                .filter_map(|s| intersect_intervals(s.start, s.end(), halfway, course.length()))
                 .collect();
 
             // No uphills after halfway on course fails the roll.
@@ -363,9 +361,12 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom) => {
             // "distance_rate_after_random==X" where X is percentage.
             // Picks random segment after X% of the race.
-            let threshold_distance = (comp.value as f64 / 100.0) * course.distance as f64;
-            let end_distance = course.distance as f64;
-            Some(vec![random_segment(threshold_distance, end_distance, rng)])
+            let threshold_distance = course.position_at_rate(comp.value as f64);
+            Some(vec![random_segment(
+                threshold_distance,
+                course.length(),
+                rng,
+            )])
         }
 
         _ => {

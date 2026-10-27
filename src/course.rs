@@ -20,9 +20,18 @@ const TRACK_ID_OOI: u16 = 10101;
 const TRACK_ID_LONGCHAMP: u16 = 10201;
 
 /// Represents the phase of a race based on the position on the course.
+///
+/// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
+/// the nominal distance, after the run-up.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, TryFromPrimitive)]
-#[repr(u8)]
+#[repr(i8)]
 pub enum Phase {
+    /// Run-up, from the starting gate to the official start line.
+    ///
+    /// Only on courses with a run-up. Its value in conditions is -1, so
+    /// `phase==N` and `phase>=N` never hold, while `phase<=N` always does.
+    /// Mechanics otherwise treat it as [`Phase::Early`].
+    RunUp = -1,
     /// Early race (sections 0-3).
     Early = 0,
     /// Mid race (sections 4-15).
@@ -36,66 +45,69 @@ pub enum Phase {
 impl Phase {
     /// Get the boundaries `(start, end)` in meters for `self` on a given course.
     ///
-    /// Phases are defined by the following section ranges:
+    /// Phases are defined by the following section ranges, offset by the
+    /// run-up:
     ///
-    /// - Early: sections 0-3 (0.0 to `section_length * 4.0`).
-    /// - Mid: sections 4-15 (`section_length * 4.0` to `section_length * 16.0`).
-    /// - Late: sections 16-19 (`section_length * 16.0` to `section_length * 20.0`).
-    /// - Last: sections 20-23 (`section_length * 20.0` to course distance).
+    /// - Run-up: from the gate to the end of the run-up.
+    /// - Early: sections 0-3.
+    /// - Mid: sections 4-15.
+    /// - Late: sections 16-19.
+    /// - Last: sections 20-23, up to the goal.
     pub fn boundaries(&self, course: &Course) -> (f64, f64) {
-        let section = course.section_length();
         match self {
-            Phase::Early => (0.0, section * 4.0),
-            Phase::Mid => (section * 4.0, section * 16.0),
-            Phase::Late => (section * 16.0, section * 20.0),
-            Phase::Last => (section * 20.0, course.distance as f64),
+            Phase::RunUp => (0.0, course.run_up),
+            Phase::Early => (course.section_start(0), course.section_start(4)),
+            Phase::Mid => (course.section_start(4), course.section_start(16)),
+            Phase::Late => (course.section_start(16), course.section_start(20)),
+            Phase::Last => (course.section_start(20), course.length()),
         }
     }
 
     /// Get the boundaries `(start, end)` in meters for `self`'s first quarter on a
     /// given course.
     pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
-        let section = course.section_length();
         match self {
-            Phase::Early => (0.0, section * 1.0),
-            Phase::Mid => (section * 4.0, section * 7.0),
-            Phase::Late => (section * 16.0, section * 17.0),
-            Phase::Last => (section * 20.0, section * 21.0),
+            Phase::RunUp => (0.0, course.run_up),
+            Phase::Early => (course.section_start(0), course.section_start(1)),
+            Phase::Mid => (course.section_start(4), course.section_start(7)),
+            Phase::Late => (course.section_start(16), course.section_start(17)),
+            Phase::Last => (course.section_start(20), course.section_start(21)),
         }
     }
 
     /// Get the boundaries `(start, end)` in meters for `self`'s first half
     /// on a given course.
     pub fn boundaries_first_half(&self, course: &Course) -> (f64, f64) {
-        let section = course.section_length();
         match self {
-            Phase::Early => (0.0, section * 2.0),
-            Phase::Mid => (section * 4.0, section * 10.0),
-            Phase::Late => (section * 16.0, section * 18.0),
-            Phase::Last => (section * 20.0, section * 22.0),
+            Phase::RunUp => (0.0, course.run_up),
+            Phase::Early => (course.section_start(0), course.section_start(2)),
+            Phase::Mid => (course.section_start(4), course.section_start(10)),
+            Phase::Late => (course.section_start(16), course.section_start(18)),
+            Phase::Last => (course.section_start(20), course.section_start(22)),
         }
     }
 
     /// Get the boundaries `(start, end)` in meters for `self`'s second half
     /// on a given course.
     pub fn boundaries_second_half(&self, course: &Course) -> (f64, f64) {
-        let section = course.section_length();
         match self {
-            Phase::Early => (section * 2.0, section * 4.0),
-            Phase::Mid => (section * 10.0, section * 16.0),
-            Phase::Late => (section * 18.0, section * 20.0),
-            Phase::Last => (section * 22.0, course.distance as f64),
+            Phase::RunUp => (0.0, course.run_up),
+            Phase::Early => (course.section_start(2), course.section_start(4)),
+            Phase::Mid => (course.section_start(10), course.section_start(16)),
+            Phase::Late => (course.section_start(18), course.section_start(20)),
+            Phase::Last => (course.section_start(22), course.length()),
         }
     }
 
     /// Determine which phase a given position falls into.
     pub fn from_position(position: f64, course: &Course) -> Phase {
-        let section_length = course.section_length();
-        if position < section_length * 4.0 {
+        if position < course.run_up {
+            Phase::RunUp
+        } else if position < course.section_start(4) {
             Phase::Early
-        } else if position < section_length * 16.0 {
+        } else if position < course.section_start(16) {
             Phase::Mid
-        } else if position < section_length * 20.0 {
+        } else if position < course.section_start(20) {
             Phase::Late
         } else {
             Phase::Last
@@ -196,8 +208,19 @@ impl std::ops::Deref for Course {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseData {
-    /// Course distance in meters.
+    /// Nominal course distance in meters, measured from the official start line
+    /// (i.e. after the run-up).
+    ///
+    /// Use [`Course::length`] for the distance runners actually cover.
     pub distance: i32,
+    /// Run-up in meters, from the starting gate to the official start
+    /// line, for the few courses that have one.
+    ///
+    /// Positions on the course, including those of its corners, slopes and
+    /// straights, are measured from the gate, so the nominal distance starts at
+    /// `run_up` and the goal is at [`Course::length`].
+    #[serde(default)]
+    pub run_up: f64,
     /// Course track surface type.
     pub surface: Track,
     /// Course turn direction.
@@ -247,16 +270,40 @@ impl Course {
         Course { id, data }
     }
 
+    /// Get the distance in meters from the starting gate to the goal, i.e. the
+    /// nominal distance plus the run-up.
+    pub fn length(&self) -> f64 {
+        self.distance as f64 + self.run_up
+    }
+
+    /// Get the distance in meters covered from the official start line at
+    /// `position` (0 during the run-up).
+    pub fn nominal_position(&self, position: f64) -> f64 {
+        (position - self.run_up).max(0.0)
+    }
+
+    /// Get the position in meters where `rate` percent of the nominal distance
+    /// has been covered.
+    pub fn position_at_rate(&self, rate: f64) -> f64 {
+        self.run_up + rate / 100.0 * self.distance as f64
+    }
+
     /// Get the length of a single section in meters.
     ///
-    /// There are 24 equally-sized sections in a course.
+    /// There are 24 equally-sized sections in the nominal distance.
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / 24.0
     }
 
-    /// Get halfway point in meters.
+    /// Get the start position in meters of section `section` (0-24, the latter
+    /// being the goal).
+    pub fn section_start(&self, section: u8) -> f64 {
+        self.run_up + self.section_length() * section as f64
+    }
+
+    /// Get the halfway point of the nominal distance in meters.
     pub fn halfway(&self) -> f64 {
-        self.distance as f64 / 2.0
+        self.section_start(12)
     }
 
     /// Get the move lane point in meters, or `None` if the course has neither
@@ -299,20 +346,22 @@ impl Course {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
-    /// Get remaining distance in meters from a given position.
+    /// Get remaining distance in meters from a given position to the goal.
     pub fn remain_distance(&self, position: f64) -> f64 {
-        (self.distance as f64 - position).max(0.0)
+        (self.length() - position).max(0.0)
     }
 
-    /// Get the distance rate (percentage of course completed) from a given
-    /// position.
+    /// Get the distance rate (percentage of the nominal distance completed) from
+    /// a given position. It's 0 during the run-up.
     pub fn distance_rate(&self, position: f64) -> f64 {
-        (position / self.distance as f64 * 100.0).floor()
+        (self.nominal_position(position) / self.distance as f64 * 100.0).floor()
     }
 
     /// Get the section index (0-23) from a given position in meters.
+    ///
+    /// The run-up counts as section 0.
     pub fn section_from_position(&self, position: f64) -> u8 {
-        (position / self.section_length()).floor() as u8
+        (self.nominal_position(position) / self.section_length()).floor() as u8
     }
 
     /// Get the starting lane position in course widths based on the gate roll.
@@ -437,6 +486,80 @@ mod tests {
         assert_eq!(course.finish_time_max, 57.0);
         assert_eq!(course.width, 1.47);
         assert_eq!(course.slopes[0].grade, 1.0);
+    }
+
+    /// Create a 2400m course with a 100m run-up (100m sections).
+    fn create_run_up_course() -> Course {
+        let data = CourseData {
+            distance: 2400,
+            run_up: 100.0,
+            ..course_data()
+        };
+        Course::new_test(0, data)
+    }
+
+    #[test]
+    fn test_run_up_offsets_nominal_distance() {
+        let course = create_run_up_course();
+        assert_eq!(course.length(), 2500.0);
+        assert_eq!(course.section_length(), 100.0);
+        assert_eq!(course.section_start(0), 100.0);
+        assert_eq!(course.section_start(24), 2500.0);
+        assert_eq!(course.halfway(), 1300.0);
+        assert_eq!(course.position_at_rate(50.0), 1300.0);
+
+        // (position, nominal position, distance rate, remaining, section)
+        let cases = [
+            (0.0, 0.0, 0.0, 2500.0, 0),
+            (99.0, 0.0, 0.0, 2401.0, 0),
+            (100.0, 0.0, 0.0, 2400.0, 0),
+            (200.0, 100.0, 4.0, 2300.0, 1),
+            (1300.0, 1200.0, 50.0, 1200.0, 12),
+            (2499.0, 2399.0, 99.0, 1.0, 23),
+            (2600.0, 2500.0, 104.0, 0.0, 25),
+        ];
+        for (position, nominal, rate, remaining, section) in cases {
+            assert_eq!(course.nominal_position(position), nominal, "{position}m");
+            assert_eq!(course.distance_rate(position), rate, "{position}m");
+            assert_eq!(course.remain_distance(position), remaining, "{position}m");
+            assert_eq!(
+                course.section_from_position(position),
+                section,
+                "{position}m"
+            );
+        }
+    }
+
+    #[test]
+    fn test_phase_with_run_up() {
+        let course = create_run_up_course();
+        let cases = [
+            (Phase::RunUp, (0.0, 100.0)),
+            (Phase::Early, (100.0, 500.0)),
+            (Phase::Mid, (500.0, 1700.0)),
+            (Phase::Late, (1700.0, 2100.0)),
+            (Phase::Last, (2100.0, 2500.0)),
+        ];
+        for (phase, (start, end)) in cases {
+            assert_eq!(phase.boundaries(&course), (start, end), "{phase:?}");
+            assert_eq!(Phase::from_position(start, &course), phase, "{phase:?}");
+        }
+        assert_eq!(Phase::Mid.boundaries_first_quarter(&course), (500.0, 800.0));
+        assert_eq!(Phase::Mid.boundaries_first_half(&course), (500.0, 1100.0));
+        assert_eq!(
+            Phase::Last.boundaries_second_half(&course),
+            (2300.0, 2500.0)
+        );
+
+        // The run-up precedes every other phase, with -1 as its value.
+        assert!(Phase::RunUp < Phase::Early);
+        assert_eq!(Phase::RunUp as i32, -1);
+        assert_eq!(Phase::try_from(-1), Ok(Phase::RunUp));
+
+        // Without a run-up, the race starts in the early phase.
+        let course = Course::new_test(0, course_data());
+        assert_eq!(Phase::from_position(0.0, &course), Phase::Early);
+        assert_eq!(Phase::RunUp.boundaries(&course), (0.0, 0.0));
     }
 
     #[test]

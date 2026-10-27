@@ -67,8 +67,7 @@ fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
 /// Remaining distance from the start of the Late phase (or current position, if
 /// later) to the goal line.
 fn remaining_spurt_distance(runner: &Runner, course: &Course) -> f64 {
-    (course.distance as f64 - Phase::Late.boundaries(course).0)
-        .min(course.distance as f64 - runner.position)
+    (course.length() - Phase::Late.boundaries(course).0).min(course.length() - runner.position)
 }
 
 /// HP required to run the last spurt at `speed` until 60m before the goal line.
@@ -141,7 +140,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     if runner.hp.current >= max_hp_required {
         return LastSpurt {
             max_speed: max_last_spurt_speed,
-            target_distance: course.distance as f64 - remaining_distance,
+            target_distance: course.length() - remaining_distance,
             category: LastSpurtCategory::Full,
         };
     }
@@ -169,7 +168,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     if numerator <= 0.0 {
         return LastSpurt {
             max_speed: late_base_target_speed,
-            target_distance: course.distance as f64 - 60.0,
+            target_distance: course.length() - 60.0,
             category: LastSpurtCategory::CannotFinish,
         };
     }
@@ -241,7 +240,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
         if rng.random_bool(acceptance_chance) {
             return LastSpurt {
                 max_speed: candidate.speed,
-                target_distance: course.distance as f64 - candidate.distance,
+                target_distance: course.length() - candidate.distance,
                 category: LastSpurtCategory::AboveBase,
             };
         }
@@ -251,7 +250,7 @@ pub fn calculate_last_spurt(runner: &mut Runner, state: &RaceState) -> LastSpurt
     let last = candidates.last().expect("max speed is always a candidate");
     LastSpurt {
         max_speed: last.speed,
-        target_distance: course.distance as f64 - last.distance,
+        target_distance: course.length() - last.distance,
         category: LastSpurtCategory::AboveBase,
     }
 }

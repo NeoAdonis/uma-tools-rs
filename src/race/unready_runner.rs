@@ -525,7 +525,7 @@ impl UnreadyRunner {
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),
             section: 0,
-            phase: Phase::Early,
+            phase: Phase::from_position(0.0, course),
             section_speed_modifier,
             hp: HpState::new(max_hp),
             position: 0.0,

@@ -193,7 +193,7 @@ impl WindowQueue {
 #[derive(Default, Debug, Clone)]
 pub struct ActivationCounts {
     pub all: usize,
-    // Phase::Early (sections 0-4).
+    // Phase::RunUp + Phase::Early (sections 0-4).
     pub start: usize,
     // Phase::Mid (sections 4-16).
     pub middle: usize,
@@ -207,22 +207,23 @@ pub struct ActivationCounts {
 }
 
 impl ActivationCounts {
-    /// Increment activation counts based on current phase and position.
-    pub fn increment(&mut self, phase: Phase, position: f64, section_length: f64) {
+    /// Increment activation counts based on current phase and position, given
+    /// the course's `halfway` point.
+    pub fn increment(&mut self, phase: Phase, position: f64, halfway: f64) {
         self.all += 1;
 
         match phase {
-            Phase::Early => self.start += 1,
+            Phase::RunUp | Phase::Early => self.start += 1,
             Phase::Mid => {
                 self.middle += 1;
-                // Check if we're past section 12 (later half).
-                if position >= section_length * 12.0 {
+                // Check if we're past the halfway point.
+                if position >= halfway {
                     self.later_half += 1;
                 }
             }
             Phase::Late | Phase::Last => {
                 self.end_after += 1;
-                // Late/Last is always in later half.
+                // Late/Last is always past halfway.
                 self.later_half += 1;
             }
         }
@@ -322,7 +323,7 @@ mod tests {
     #[test]
     fn test_activation_counts_early_phase() {
         let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Early, 50.0, 100.0);
+        counts.increment(Phase::Early, 50.0, 1200.0);
 
         assert_eq!(counts.all, 1);
         assert_eq!(counts.start, 1);
@@ -332,10 +333,19 @@ mod tests {
     }
 
     #[test]
+    fn test_activation_counts_run_up_counts_as_start() {
+        let mut counts = ActivationCounts::default();
+        counts.increment(Phase::RunUp, 10.0, 1250.0);
+
+        assert_eq!(counts.all, 1);
+        assert_eq!(counts.start, 1);
+    }
+
+    #[test]
     fn test_activation_counts_mid_phase_before_section_12() {
         let mut counts = ActivationCounts::default();
-        // Section length 100, position 1000 = section 10 (before 12).
-        counts.increment(Phase::Mid, 1000.0, 100.0);
+        // Halfway at 1200m (section 12 of 100m sections).
+        counts.increment(Phase::Mid, 1000.0, 1200.0);
 
         assert_eq!(counts.all, 1);
         assert_eq!(counts.start, 0);
@@ -347,8 +357,8 @@ mod tests {
     #[test]
     fn test_activation_counts_mid_phase_after_section_12() {
         let mut counts = ActivationCounts::default();
-        // Section length 100, position 1300 = section 13 (after 12).
-        counts.increment(Phase::Mid, 1300.0, 100.0);
+        // Halfway at 1200m (section 12 of 100m sections).
+        counts.increment(Phase::Mid, 1300.0, 1200.0);
 
         assert_eq!(counts.all, 1);
         assert_eq!(counts.start, 0);
@@ -360,7 +370,7 @@ mod tests {
     #[test]
     fn test_activation_counts_late_phase() {
         let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Late, 1800.0, 100.0);
+        counts.increment(Phase::Late, 1800.0, 1200.0);
 
         assert_eq!(counts.all, 1);
         assert_eq!(counts.start, 0);
@@ -372,7 +382,7 @@ mod tests {
     #[test]
     fn test_activation_counts_last_phase() {
         let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Last, 2200.0, 100.0);
+        counts.increment(Phase::Last, 2200.0, 1200.0);
 
         assert_eq!(counts.all, 1);
         assert_eq!(counts.start, 0);

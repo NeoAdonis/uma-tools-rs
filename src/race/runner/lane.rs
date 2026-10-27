@@ -262,8 +262,8 @@ impl Runner {
         let near_move_lane = course
             .move_lane_point()
             .is_some_and(|point| (0.0..=200.0).contains(&(point - self.position)));
-        let use_normal_mode = !self.is_in_overtake_mode()
-            || (matches!(self.phase, Phase::Early | Phase::Mid) && near_move_lane);
+        let use_normal_mode =
+            !self.is_in_overtake_mode() || (self.phase <= Phase::Mid && near_move_lane);
         let decision = if use_normal_mode {
             self.normal_mode_lane_decision(course, all_runners)
         } else {
@@ -356,7 +356,7 @@ impl Runner {
         }
 
         // In early-race or mid-race, move inward.
-        if matches!(self.phase, Phase::Early | Phase::Mid) {
+        if self.phase <= Phase::Mid {
             let target = self.lane.current - 0.05;
             if target >= 0.0 && self.has_lane_space_to(target) {
                 return target;
@@ -530,7 +530,7 @@ impl Runner {
     /// with moving outward penalized, heavily in the Early race.
     fn overtake_lane_score(&self, lane: f64) -> f64 {
         let outward_coef = match self.phase {
-            Phase::Early => 100.0,
+            Phase::RunUp | Phase::Early => 100.0,
             Phase::Mid => 1.0,
             Phase::Late | Phase::Last => 1.15,
         };

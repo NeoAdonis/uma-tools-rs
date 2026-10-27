@@ -515,7 +515,13 @@ const FULL_RANGE: Range = (0.0, f64::INFINITY);
 const EMPTY_RANGE: Range = (f64::INFINITY, f64::NEG_INFINITY);
 
 /// All race phases, in order.
-const PHASES: [Phase; 4] = [Phase::Early, Phase::Mid, Phase::Late, Phase::Last];
+const PHASES: [Phase; 5] = [
+    Phase::RunUp,
+    Phase::Early,
+    Phase::Mid,
+    Phase::Late,
+    Phase::Last,
+];
 
 fn intersect(a: Range, b: Range) -> Range {
     (a.0.max(b.0), a.1.min(b.1))
@@ -560,18 +566,17 @@ fn floored_range(op: CompOp, value: i32) -> Range {
 fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
     use VarType::*;
 
-    let distance = course.distance as f64;
     let last_corner = course.corners.last();
     let subdivision = |boundaries| subdivision_range(comp.value, course, boundaries);
 
     let range = match (&comp.var, comp.op, comp.value) {
         (Spatial(SpatialVar::DistanceRate), op, value) => {
             let (min, max) = floored_range(op, value);
-            (min / 100.0 * distance, max / 100.0 * distance)
+            (course.position_at_rate(min), course.position_at_rate(max))
         }
         (Spatial(SpatialVar::RemainDistance), op, value) => {
             let (min, max) = floored_range(op, value);
-            (distance - max, distance - min)
+            (course.length() - max, course.length() - min)
         }
         (Spatial(SpatialVar::Furlong), op, value) => {
             let (min, max) = floored_range(op, value);

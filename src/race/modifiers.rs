@@ -15,11 +15,11 @@ use crate::uma::{Aptitude, Style, Uma};
 pub fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
-        (Style::Front, Phase::Early) => 1.0,
-        (Style::Pace, Phase::Early) => 0.985,
-        (Style::Late, Phase::Early) => 0.975,
-        (Style::End, Phase::Early) => 0.945,
-        (Style::Runaway, Phase::Early) => 1.17,
+        (Style::Front, Phase::RunUp | Phase::Early) => 1.0,
+        (Style::Pace, Phase::RunUp | Phase::Early) => 0.985,
+        (Style::Late, Phase::RunUp | Phase::Early) => 0.975,
+        (Style::End, Phase::RunUp | Phase::Early) => 0.945,
+        (Style::Runaway, Phase::RunUp | Phase::Early) => 1.17,
         // Mid-race.
         (Style::Runaway, Phase::Mid) => 0.94,
         (_, Phase::Mid) => 1.0, // All styles except Runaway
@@ -49,16 +49,16 @@ pub fn wit_limit_break_multiplier(wit: u16) -> f64 {
 /// Phase strategy coefficient for the wit limit break buff (5th Anniv. onward).
 pub fn wit_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
-        (Style::Front | Style::Runaway, Phase::Early) => 0.26,
+        (Style::Front | Style::Runaway, Phase::RunUp | Phase::Early) => 0.26,
         (Style::Front | Style::Runaway, Phase::Mid) => 0.23,
         (Style::Front | Style::Runaway, Phase::Late) => 0.19,
         (Style::Front | Style::Runaway, Phase::Last) => 0.16,
         (Style::Pace, _) => 0.21,
-        (Style::Late, Phase::Early) => 0.19,
+        (Style::Late, Phase::RunUp | Phase::Early) => 0.19,
         (Style::Late, Phase::Mid) => 0.18,
         (Style::Late, Phase::Late) => 0.23,
         (Style::Late, Phase::Last) => 0.24,
-        (Style::End, Phase::Early) => 0.15,
+        (Style::End, Phase::RunUp | Phase::Early) => 0.15,
         (Style::End, Phase::Mid) => 0.17,
         (Style::End, Phase::Late) => 0.25,
         (Style::End, Phase::Last) => 0.27,
@@ -135,11 +135,11 @@ pub fn acceleration_distance_proficiency_multiplier(distance_aptitude: Aptitude)
 pub fn strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
-        (Style::Front, Phase::Early) => 1.0,
-        (Style::Pace, Phase::Early) => 0.978,
-        (Style::Late, Phase::Early) => 0.938,
-        (Style::End, Phase::Early) => 0.931,
-        (Style::Runaway, Phase::Early) => 1.063,
+        (Style::Front, Phase::RunUp | Phase::Early) => 1.0,
+        (Style::Pace, Phase::RunUp | Phase::Early) => 0.978,
+        (Style::Late, Phase::RunUp | Phase::Early) => 0.938,
+        (Style::End, Phase::RunUp | Phase::Early) => 0.931,
+        (Style::Runaway, Phase::RunUp | Phase::Early) => 1.063,
         // Mid-race.
         (Style::Front, Phase::Mid) => 0.98,
         (Style::Pace, Phase::Mid) => 0.991,
@@ -180,7 +180,7 @@ pub fn base_target_speed(
     let base = base_speed * strategy_phase_multiplier(style, phase);
     // Speed stat only affects target speed during late-race and last spurt.
     match phase {
-        Phase::Early | Phase::Mid => base,
+        Phase::RunUp | Phase::Early | Phase::Mid => base,
         Phase::Late | Phase::Last => {
             let speed_modifier = (500.0 * speed_stat as f64).sqrt()
                 * distance_proficiency_multiplier(distance_aptitude)
