@@ -81,6 +81,7 @@ use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
+use crate::race::world_distance::LastMove;
 use crate::trigger::builder::*;
 use crate::trigger::system::*;
 use crate::*;
@@ -557,6 +558,7 @@ impl UnreadyRunner {
             ),
             rng: self.rng,
             segments: SegmentState::default(),
+            last_move: LastMove::default(),
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
             finish_margin: None,

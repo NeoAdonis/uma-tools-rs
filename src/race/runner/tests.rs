@@ -54,3 +54,32 @@ fn test_update_order_rate_tracks_best_and_worst_orders() {
         assert_eq!(o.worst_rates, rates_at_order(o.worst, 9), "order {order}");
     }
 }
+
+#[test]
+fn test_update_position_slows_down_off_rail_in_corners() {
+    use crate::test_utils::*;
+    // Course distance covered in one frame from `position` at `lane`, after a
+    // 1m move at the same lane.
+    let advance = |position: f64, lane: f64| {
+        let mut solver = ready_solver(10101, uma(Style::Late), vec![], &seeded_config(0));
+        solver.state.elapsed_time = 10.0;
+        let runner = &mut solver.runners[0];
+        runner.position = position;
+        runner.speed = 20.0;
+        runner.lane = LaneState::new(lane);
+        runner.last_move = LastMove {
+            distance: 1.0,
+            lane,
+        };
+        runner.segments.update(position, &solver.state.course);
+        runner.update_position(0.1, &solver.state);
+        runner.position - position
+    };
+
+    // Straight before the first corner (400m), then within it.
+    assert_eq!(advance(300.0, 1.0), 2.0);
+    assert_eq!(advance(500.0, 0.0), 2.0);
+    let corner = &load_course(10101).corners[0];
+    let expected = 2.0 / (1.0 + corner.curvature() * 11.25);
+    assert!((advance(500.0, 1.0) - expected).abs() < 1e-9);
+}

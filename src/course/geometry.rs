@@ -39,6 +39,13 @@ pub struct Corner {
     pub turn_angle: f64,
 }
 
+impl Corner {
+    /// Curvature in radians per meter, as if the corner turned evenly.
+    pub fn curvature(&self) -> f64 {
+        self.turn_angle.to_radians() / self.length
+    }
+}
+
 impl Segment for Corner {
     fn start(&self) -> f64 {
         self.start

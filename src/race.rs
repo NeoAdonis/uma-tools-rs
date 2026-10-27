@@ -31,3 +31,4 @@ pub mod spot_struggle;
 pub mod timed_boost;
 pub mod transitions;
 pub mod unready_runner;
+pub mod world_distance;

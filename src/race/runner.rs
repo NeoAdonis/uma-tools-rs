@@ -39,6 +39,7 @@ use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
+use crate::race::world_distance::{self, LastMove};
 use crate::skill::*;
 use crate::trigger::skill_activation::{ActiveTimedEffect, PendingEffect, SkillActivationRecord};
 use crate::trigger::system::TriggerScheduler;
@@ -349,6 +350,9 @@ pub struct Runner {
     pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub segments: SegmentState,
+    /// Last move, which slows down the next one if it covered more world
+    /// distance than course distance (see [`world_distance`]).
+    pub last_move: LastMove,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
     pub trigger_scheduler: TriggerScheduler,
@@ -619,14 +623,38 @@ impl Runner {
             .min(state.elapsed_time - self.start_delay)
             .max(0.0);
         let prev_position = self.position;
-        // Use effective_speed which includes current_speed modifiers.
-        self.position += self.effective_speed() * move_time;
+        // Use effective_speed which includes current_speed modifiers, slowed down
+        // along the course by the world distance covered on the last move.
+        let course_speed = self.effective_speed() / self.world_distance_ratio(&state.course);
+        self.position += course_speed * move_time;
+        // The lane changes after the move, so the next move ends at the new lane.
+        self.last_move = LastMove {
+            distance: self.position - prev_position,
+            lane: self.lane.current,
+        };
         if self.finish_time.is_none() && self.position >= state.course.length() {
             // Calculate exact finish time.
             let remaining_distance = state.course.length() - prev_position;
-            let time_to_finish = remaining_distance / self.effective_speed();
+            let time_to_finish = remaining_distance / course_speed;
             self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
+    }
+
+    /// Ratio of world distance to course distance of the last move, at least 1.
+    ///
+    /// The move ends at the current lane and position, so the current corner
+    /// (if any) gives its curvature.
+    fn world_distance_ratio(&self, course: &Course) -> f64 {
+        let curvature = self
+            .segments
+            .corner()
+            .map_or(0.0, |idx| course.corners[idx].curvature());
+        world_distance::ratio(
+            self.last_move.distance,
+            self.last_move.lane,
+            self.lane.current,
+            curvature,
+        )
     }
 
     /// Check if `other` is an opponent (i.e. on a different team).
