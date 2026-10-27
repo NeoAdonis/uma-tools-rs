@@ -6,7 +6,11 @@
 use serde::Deserialize;
 
 use crate::course::ThresholdStat;
+use crate::skill::Skill;
+use std::collections::HashMap;
+use std::fmt;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Running style or strategy of an Uma. The values represent in order, from
 /// most to least aggressive:
@@ -225,7 +229,36 @@ impl UmaData {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&content)?)
     }
+
+    /// Look up the skills of `self` in `all_skills` by ID, keeping their order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`UnknownSkill`] error with the first ID that isn't in
+    /// `all_skills`.
+    pub fn resolve_skills(
+        &self,
+        all_skills: &HashMap<i32, Arc<Skill>>,
+    ) -> Result<Vec<Arc<Skill>>, UnknownSkill> {
+        self.skills
+            .iter()
+            .map(|&id| all_skills.get(&id).cloned().ok_or(UnknownSkill(id)))
+            .collect()
+    }
 }
+
+/// Error resolving the skills of an Uma, holding the ID of a skill that isn't
+/// in the skill data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UnknownSkill(pub i32);
+
+impl fmt::Display for UnknownSkill {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "unknown skill ID {}", self.0)
+    }
+}
+
+impl std::error::Error for UnknownSkill {}
 
 /// Calculate base stat and apply mood multiplier.
 ///
@@ -280,7 +313,7 @@ impl Uma {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::assert_close;
+    use crate::test_utils::{assert_close, synthetic_skill};
 
     #[test]
     fn test_mood_multiplier() {
@@ -425,5 +458,43 @@ mod tests {
     #[test]
     fn test_uma_data_from_missing_file() {
         assert!(UmaData::from_json_file("does_not_exist.json").is_err());
+    }
+
+    /// Uma data with the given skill IDs.
+    fn uma_with_skills(skills: Vec<i32>) -> UmaData {
+        UmaData {
+            uma: crate::test_utils::uma(Style::Pace),
+            mood: Mood::Normal,
+            skills,
+        }
+    }
+
+    #[test]
+    fn test_resolve_skills_keeps_order_and_shares_skills() {
+        let all_skills: HashMap<_, _> = [1, 2, 3]
+            .map(|id| {
+                (
+                    id,
+                    Arc::new(Skill {
+                        id,
+                        ..synthetic_skill(vec![])
+                    }),
+                )
+            })
+            .into();
+        let skills = uma_with_skills(vec![3, 1])
+            .resolve_skills(&all_skills)
+            .unwrap();
+        assert_eq!(skills.len(), 2);
+        assert!(Arc::ptr_eq(&skills[0], &all_skills[&3]));
+        assert!(Arc::ptr_eq(&skills[1], &all_skills[&1]));
+    }
+
+    #[test]
+    fn test_resolve_skills_fails_on_unknown_id() {
+        let all_skills = HashMap::from([(1, Arc::new(synthetic_skill(vec![])))]);
+        let result = uma_with_skills(vec![1, 42, 43]).resolve_skills(&all_skills);
+        assert_eq!(result, Err(UnknownSkill(42)));
+        assert_eq!(UnknownSkill(42).to_string(), "unknown skill ID 42");
     }
 }

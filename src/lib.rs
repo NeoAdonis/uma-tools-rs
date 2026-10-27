@@ -46,11 +46,7 @@
 //! let course =
 //!     Course::from_json_file("data/course_data.json", &parameters.course_id)?;
 //! let all_skills = Skill::load_skills_from_file("data/skill_data.json")?;
-//! let skills = uma
-//!     .skills
-//!     .iter()
-//!     .filter_map(|id| all_skills.get(id).cloned())
-//!     .collect();
+//! let skills = uma.resolve_skills(&all_skills)?;
 //!
 //! let config = Configuration {
 //!     seed: Some(42),

@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use uma_tools::configuration::Configuration;
 use uma_tools::course::*;
@@ -44,9 +43,6 @@ fn main() {
 
     // Load Uma data from JSON file.
     let uma_data = UmaData::from_json_file(&uma_path).expect("Failed to parse uma JSON");
-    let uma = uma_data.uma;
-    let mood = uma_data.mood;
-    let skill_ids = uma_data.skills;
 
     // Load race parameters from JSON file.
     let parameters = RaceParametersData::from_json_file(&parameters_path)
@@ -78,11 +74,9 @@ fn main() {
 
     println!("\nLoaded {} skills from JSON", skills_map.len());
 
-    // Convert skill IDs to actual Skill objects.
-    let skills: Vec<Arc<Skill>> = skill_ids
-        .iter()
-        .filter_map(|id| skills_map.get(id).cloned())
-        .collect();
+    let skills = uma_data
+        .resolve_skills(&skills_map)
+        .expect("Failed to resolve uma skills");
 
     println!("Uma has {} skills", skills.len());
     for skill in &skills {
@@ -91,7 +85,7 @@ fn main() {
 
     // Initialize the race state.
     let mut solver = RaceSolver::new(course, race_parameters, config);
-    solver.add_runner(uma, mood, skills);
+    solver.add_runner(uma_data.uma, uma_data.mood, skills);
 
     // Initialize runners.
     let mut solver = solver.ready_runners();
