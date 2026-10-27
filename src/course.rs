@@ -191,24 +191,15 @@ impl LaneType {
 }
 
 /// Structure representing a race course.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Course {
-    pub id: u16,
-    data: CourseData,
-}
-
-impl std::ops::Deref for Course {
-    type Target = CourseData;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-/// Course data structure as deserialized from JSON.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct CourseData {
+pub struct Course {
+    /// Course ID.
+    ///
+    /// Not part of each course's data, but the key of the course in the course
+    /// data. Set when loading the course.
+    #[serde(skip)]
+    pub id: u16,
     /// Nominal course distance in meters, measured from the official start line
     /// (i.e. after the run-up).
     ///
@@ -265,12 +256,6 @@ pub struct CourseData {
 }
 
 impl Course {
-    /// Create a new Course for testing purposes.
-    #[cfg(test)]
-    pub fn new_test(id: u16, data: CourseData) -> Self {
-        Course { id, data }
-    }
-
     /// Get the distance in meters from the starting gate to the goal, i.e. the
     /// nominal distance plus the run-up.
     pub fn length(&self) -> f64 {
@@ -313,7 +298,7 @@ impl Course {
     /// Courses without an explicit move lane point use the first corner start.
     pub fn move_lane_point(&self) -> Option<f64> {
         let first_corner = || self.corners.first().map(|c| c.start);
-        self.data.move_lane_point.or_else(first_corner)
+        self.move_lane_point.or_else(first_corner)
     }
 
     /// Get the corner number (1-4) of the corner at `idx` in the course corners.
@@ -446,35 +431,34 @@ impl Course {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::collections::HashMap;
 
-        let mut courses: HashMap<String, CourseData> = serde_json::from_str(json_str)?;
+        let mut courses: HashMap<String, Course> = serde_json::from_str(json_str)?;
 
-        let data = courses
+        let mut course = courses
             .remove(course_id)
             .ok_or_else(|| format!("Course ID '{}' not found in JSON", course_id))?;
 
-        let id = course_id
+        course.id = course_id
             .parse::<u16>()
             .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
 
-        Ok(Course { id, data })
+        Ok(course)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::course_data;
+    use crate::test_utils::synthetic_course;
 
     /// Create a minimal course at the given racetrack.
     ///
     /// The course ID is unrelated to the racetrack ID, so that checks on the
     /// wrong one fail.
     fn create_test_course(track_id: u16) -> Course {
-        let data = CourseData {
+        Course {
             race_track_id: track_id,
-            ..course_data()
-        };
-        Course::new_test(0, data)
+            ..synthetic_course()
+        }
     }
 
     /// Racetrack IDs of every course in the course data.
@@ -494,12 +478,11 @@ mod tests {
 
     /// Create a 2400m course with a 100m run-up (100m sections).
     fn create_run_up_course() -> Course {
-        let data = CourseData {
+        Course {
             distance: 2400,
             run_up: 100.0,
-            ..course_data()
-        };
-        Course::new_test(0, data)
+            ..synthetic_course()
+        }
     }
 
     #[test]
@@ -561,7 +544,7 @@ mod tests {
         assert_eq!(Phase::try_from(-1), Ok(Phase::RunUp));
 
         // Without a run-up, the race starts in the early phase.
-        let course = Course::new_test(0, course_data());
+        let course = synthetic_course();
         assert_eq!(Phase::from_position(0.0, &course), Phase::Early);
         assert_eq!(Phase::RunUp.boundaries(&course), (0.0, 0.0));
     }
@@ -579,11 +562,10 @@ mod tests {
             (3600, DistanceType::Long),
         ];
         for (distance, expected) in cases {
-            let data = CourseData {
+            let course = Course {
                 distance,
-                ..course_data()
+                ..synthetic_course()
             };
-            let course = Course::new_test(0, data);
             assert_eq!(course.distance_type(), expected, "{distance}m");
         }
     }
@@ -595,13 +577,10 @@ mod tests {
             length: 200.0,
             turn_angle: 90.0,
         };
-        let course = |move_lane_point, corners| {
-            let data = CourseData {
-                move_lane_point,
-                corners,
-                ..course_data()
-            };
-            Course::new_test(0, data)
+        let course = |move_lane_point, corners| Course {
+            move_lane_point,
+            corners,
+            ..synthetic_course()
         };
 
         // An explicit move lane point takes precedence over the first corner.
@@ -678,11 +657,11 @@ mod tests {
         }
 
         // Course 10101 is at Sapporo, not at Ooi (racetrack 10101).
-        let sapporo = CourseData {
+        let course = Course {
+            id: 10101,
             race_track_id: 10001,
-            ..course_data()
+            ..synthetic_course()
         };
-        let course = Course::new_test(10101, sapporo);
         assert_eq!(course.starting_lane(12), lane(12.0 + 0.6));
     }
 
@@ -690,7 +669,7 @@ mod tests {
     fn test_corner_number() {
         let course_with_corners = |count: usize| {
             let mut course = create_test_course(10001);
-            course.data.corners = (0..count)
+            course.corners = (0..count)
                 .map(|i| Corner {
                     start: i as f64 * 200.0,
                     length: 100.0,
@@ -733,10 +712,9 @@ mod tests {
     #[test]
     fn test_every_course_has_a_track_name() {
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
-        let courses: std::collections::HashMap<String, CourseData> =
+        let courses: std::collections::HashMap<String, Course> =
             serde_json::from_str(&json).unwrap();
-        for (id, data) in courses {
-            let course = Course::new_test(id.parse().unwrap(), data);
+        for (id, course) in courses {
             for language in [Language::Japanese, Language::English] {
                 let name = course.track_name(language);
                 assert!(name.is_some(), "course {id} ({language:?})");

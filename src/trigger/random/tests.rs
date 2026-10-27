@@ -1,7 +1,7 @@
 use super::*;
 use crate::course::geometry::*;
 use crate::course::*;
-use crate::test_utils::course_data;
+use crate::test_utils::synthetic_course;
 
 fn create_test_course() -> Course {
     create_test_course_with(
@@ -41,16 +41,14 @@ fn create_test_course_with(
     slopes: Vec<Slope>,
     straights: Vec<Straight>,
 ) -> Course {
-    Course::new_test(
-        10001,
-        CourseData {
-            distance: 2400,
-            corners,
-            slopes,
-            straights,
-            ..course_data()
-        },
-    )
+    Course {
+        id: 10001,
+        distance: 2400,
+        corners,
+        slopes,
+        straights,
+        ..synthetic_course()
+    }
 }
 
 /// Roll a single-branch condition.

@@ -1,6 +1,6 @@
 use super::*;
+use crate::course::Phase as CoursePhase;
 use crate::course::geometry::*;
-use crate::course::{CourseData, Phase as CoursePhase};
 use crate::race::all_out_spurt::AllOutSpurt;
 use crate::race::duel::Duel;
 use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
@@ -487,12 +487,11 @@ fn test_course_flags_by_track() {
     ];
 
     for (race_track_id, distance, abroad, basis, dirtgrade, tight) in cases {
-        let data = CourseData {
+        let course = Course {
             race_track_id,
             distance,
-            ..course_data()
+            ..synthetic_course()
         };
-        let course = Course::new_test(0, data);
         let actual = [
             CourseVar::IsAbroad,
             CourseVar::IsBasisDistance,
@@ -512,7 +511,7 @@ fn test_course_flags_by_track() {
 /// straight on each end (opposite and facing the audience) and two slopes
 /// (uphill at 200-300 and downhill at 500-600).
 fn location_course() -> Course {
-    let data = CourseData {
+    Course {
         corners: vec![
             Corner {
                 start: 1000.0,
@@ -541,9 +540,8 @@ fn location_course() -> Course {
             Slope::new(200.0, 100.0, 1.5),
             Slope::new(500.0, 100.0, -1.0),
         ],
-        ..course_data()
-    };
-    Course::new_test(0, data)
+        ..synthetic_course()
+    }
 }
 
 /// Move a runner to `position`, entering the corner, straight and slope there
@@ -597,7 +595,7 @@ fn test_location_values_by_position() {
 #[test]
 fn test_location_values_without_corners() {
     let mut solver = create_test_race_solver(vec![]);
-    let course = Course::new_test(0, course_data());
+    let course = synthetic_course();
     place(&mut solver.runners[0], &course, 100.0);
 
     let runner = &solver.runners[0];

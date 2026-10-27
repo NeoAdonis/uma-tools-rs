@@ -4,47 +4,45 @@ use super::*;
 use crate::course::geometry::*;
 use crate::parser::{CompOp, parse_condition};
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, course_data, skill_data};
+use crate::test_utils::{alternative, assert_close, skill_data, synthetic_course};
 use crate::trigger::builder::build_trigger_scheduler;
 
 /// Create a simple test course for testing spatial triggers.
 fn create_test_course() -> Course {
-    Course::new_test(
-        10001,
-        CourseData {
-            corners: vec![
-                Corner {
-                    start: 100.0,
-                    length: 150.0,
-                    turn_angle: 90.0,
-                },
-                Corner {
-                    start: 500.0,
-                    length: 200.0,
-                    turn_angle: 90.0,
-                },
-                Corner {
-                    start: 1200.0,
-                    length: 180.0,
-                    turn_angle: 90.0,
-                },
-            ],
-            slopes: vec![Slope::new(800.0, 100.0, 0.05)],
-            straights: vec![
-                Straight {
-                    start: 0.0,
-                    end: 100.0,
-                    front_type: FrontType::Audience,
-                },
-                Straight {
-                    start: 1500.0,
-                    end: 2000.0,
-                    front_type: FrontType::Audience,
-                },
-            ],
-            ..course_data()
-        },
-    )
+    Course {
+        id: 10001,
+        corners: vec![
+            Corner {
+                start: 100.0,
+                length: 150.0,
+                turn_angle: 90.0,
+            },
+            Corner {
+                start: 500.0,
+                length: 200.0,
+                turn_angle: 90.0,
+            },
+            Corner {
+                start: 1200.0,
+                length: 180.0,
+                turn_angle: 90.0,
+            },
+        ],
+        slopes: vec![Slope::new(800.0, 100.0, 0.05)],
+        straights: vec![
+            Straight {
+                start: 0.0,
+                end: 100.0,
+                front_type: FrontType::Audience,
+            },
+            Straight {
+                start: 1500.0,
+                end: 2000.0,
+                front_type: FrontType::Audience,
+            },
+        ],
+        ..synthetic_course()
+    }
 }
 
 /// Compile a condition on the test course, with a single random point at 1000m.

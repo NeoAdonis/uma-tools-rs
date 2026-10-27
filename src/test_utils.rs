@@ -34,12 +34,13 @@ pub(crate) fn load_course(course_id: u32) -> Course {
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
-/// Synthetic 2000m (Medium) turf course data at Tokyo, without corners, slopes
-/// or straights.
+/// Synthetic 2000m (Medium) turf course at Tokyo with ID 0, without corners,
+/// slopes or straights.
 ///
-/// Override fields with `CourseData { distance: 2400, ..course_data() }`.
-pub(crate) fn course_data() -> CourseData {
-    CourseData {
+/// Override fields with `Course { distance: 2400, ..synthetic_course() }`.
+pub(crate) fn synthetic_course() -> Course {
+    Course {
+        id: 0,
         distance: 2000,
         surface: Track::Turf,
         direction: Direction::Left,

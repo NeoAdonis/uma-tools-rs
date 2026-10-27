@@ -1,7 +1,7 @@
 use super::*;
 use crate::configuration::Roll;
+use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
-use crate::course::{CourseData, Phase};
 use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
@@ -3358,13 +3358,10 @@ fn test_uphills_climbed_are_counted() {
 
 /// Synthetic course with the given slopes.
 fn course_with_slopes(slopes: Vec<Slope>) -> Course {
-    Course::new_test(
-        0,
-        CourseData {
-            slopes,
-            ..course_data()
-        },
-    )
+    Course {
+        slopes,
+        ..synthetic_course()
+    }
 }
 
 /// Move the first runner to `position` on `course`, applying slope effects.
