@@ -33,6 +33,7 @@
 //! total popularity score to determine their final favorite rank.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::condition::evaluator::check_popularity_guards;
 use crate::race::modifiers::{
@@ -125,7 +126,7 @@ impl PopularityMark {
     }
 
     /// Get the display character for this mark.
-    pub fn as_char(&self) -> char {
+    pub fn to_char(self) -> char {
         match self {
             PopularityMark::None => '-',
             PopularityMark::Fourth => '△',
@@ -133,6 +134,12 @@ impl PopularityMark {
             PopularityMark::Second => '○',
             PopularityMark::First => '◎',
         }
+    }
+}
+
+impl fmt::Display for PopularityMark {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_char())
     }
 }
 

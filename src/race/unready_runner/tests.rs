@@ -404,7 +404,7 @@ const METI_RESONANCE_ID: i32 = 110502211;
 ///
 /// Runners are returned in the order of their skill sets.
 fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
-    let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+    let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
     for (i, ids) in skill_sets.iter().enumerate() {
         // Guts doesn't affect speed, so it tells runners apart.
@@ -526,7 +526,7 @@ fn test_gambler_activation_rate() {
     // As the only runner, she's the most popular: `popularity<=3&random_lot==30`.
     const GAMBLER_ID: i32 = 202441;
     const RACES: u64 = 300;
-    let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+    let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
     let course = load_course(10104);
 
     let activations = (0..RACES)

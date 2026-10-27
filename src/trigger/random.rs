@@ -191,7 +191,9 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
             let corner_intervals: Vec<(f64, f64)> = course
                 .corners
                 .iter()
-                .filter_map(|corner| intersect_intervals(corner.start, corner.end(), start, end))
+                .filter_map(|corner| {
+                    intersect_intervals((corner.start, corner.end()), (start, end))
+                })
                 .collect();
 
             // No corners in this phase fails the roll.
@@ -211,7 +213,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, start, end)
+                    intersect_intervals((straight.start, straight.end), (start, end))
                 })
                 .collect();
 
@@ -232,7 +234,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, start, end)
+                    intersect_intervals((straight.start, straight.end), (start, end))
                 })
                 .collect();
 
@@ -253,7 +255,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .straights
                 .iter()
                 .filter_map(|straight| {
-                    intersect_intervals(straight.start, straight.end, start, end)
+                    intersect_intervals((straight.start, straight.end), (start, end))
                 })
                 .collect();
 
@@ -338,7 +340,7 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .slopes
                 .iter()
                 .filter(|s| s.is_uphill())
-                .filter_map(|s| intersect_intervals(s.start, s.end(), halfway, course.length()))
+                .filter_map(|s| intersect_intervals((s.start, s.end()), (halfway, course.length())))
                 .collect();
 
             // No uphills after halfway on course fails the roll.
@@ -376,13 +378,13 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
     }
 }
 
-/// Calculate intersection of two intervals `[a_start, a_end]` and
-/// `[b_start, b_end]`.
+/// Calculate intersection of two intervals `a` and `b`, each given as
+/// `(start, end)`.
 ///
 /// Returns `Some((start, end))` if there's an intersection, `None` otherwise.
-fn intersect_intervals(a_start: f64, a_end: f64, b_start: f64, b_end: f64) -> Option<(f64, f64)> {
-    let intersection_start = a_start.max(b_start);
-    let intersection_end = a_end.min(b_end);
+fn intersect_intervals(a: (f64, f64), b: (f64, f64)) -> Option<(f64, f64)> {
+    let intersection_start = a.0.max(b.0);
+    let intersection_end = a.1.min(b.1);
 
     (intersection_start < intersection_end).then_some((intersection_start, intersection_end))
 }

@@ -686,7 +686,7 @@ impl Skill {
     /// # Errors
     ///
     /// Returns an error if the file can't be read or the JSON is invalid.
-    pub fn load_skills_from_file(
+    pub fn load_all_from_json_file(
         json_path: impl AsRef<Path>,
     ) -> Result<HashMap<i32, Arc<Skill>>, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
@@ -1022,7 +1022,7 @@ mod tests {
         let load = |id: &str| {
             let json = format!(r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0}}}}"#);
             std::fs::write(&path, json).unwrap();
-            let result = Skill::load_skills_from_file(&path);
+            let result = Skill::load_all_from_json_file(&path);
             std::fs::remove_file(&path).unwrap();
             result
         };
@@ -1033,7 +1033,7 @@ mod tests {
     #[test]
     fn test_skill_data_loads() {
         // Every condition in the skill data must parse.
-        let skills = Skill::load_skills_from_file("data/skill_data.json").unwrap();
+        let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
         assert!(!skills.is_empty());
 
         // Activated alternatives are tracked as bits of a mask (see

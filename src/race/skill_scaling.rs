@@ -26,7 +26,7 @@ pub const CLIMAX_MULTIPLIER: f64 = 1.2;
 ///
 /// 1.0x below level 10, 1.1x below 20, and 1.2x from 20. The maximum is assumed
 /// for now.
-pub const L_ARC_MULTIPLIER: f64 = 1.2;
+pub const ARC_GLOBAL_POTENTIAL_MULTIPLIER: f64 = 1.2;
 
 /// Multiplier for skills scaling with the number of U.A.F. tournament wins.
 ///

@@ -641,7 +641,9 @@ impl Runner {
             }
             MultiplySpeed1 => modifier * skill_scaling::speed_multiplier_1(self.adjusted.speed),
             MultiplySpeed2 => modifier * skill_scaling::speed_multiplier_2(self.adjusted.speed),
-            MultiplyArcGlobalPotentialLevel => modifier * skill_scaling::L_ARC_MULTIPLIER,
+            MultiplyArcGlobalPotentialLevel => {
+                modifier * skill_scaling::ARC_GLOBAL_POTENTIAL_MULTIPLIER
+            }
             MultiplyTopLeadAmount => {
                 modifier * skill_scaling::lead_multiplier(self.position_diff.max_lead)
             }

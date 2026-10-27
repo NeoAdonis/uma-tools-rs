@@ -70,7 +70,7 @@ fn main() {
 
     // Load all skills from JSON file.
     let skills_map =
-        Skill::load_skills_from_file("data/skill_data.json").expect("Failed to load skill data");
+        Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");
 
     println!("\nLoaded {} skills from JSON", skills_map.len());
 

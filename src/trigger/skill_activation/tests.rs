@@ -546,7 +546,7 @@ fn test_multiple_random_segments_in_a_branch_panic() {
 fn test_skill_data_conditions_compile() {
     // Checks the assertions of `compile_condition` on every skill.
     let course = create_test_course();
-    for skill in Skill::load_skills_from_file("data/skill_data.json")
+    for skill in Skill::load_all_from_json_file("data/skill_data.json")
         .unwrap()
         .values()
     {

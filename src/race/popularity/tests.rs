@@ -15,7 +15,7 @@ fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
 #[test]
 fn test_skill_popularity_from_data() {
     let skills =
-        Skill::load_skills_from_file("data/skill_data.json").expect("Failed to load skill data");
+        Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");
 
     // Expected values are the ones given in-game.
     let cases = [
@@ -237,4 +237,11 @@ fn test_calculate_stats() {
 
     // No values (e.g. no runners).
     assert_eq!(calculate_stats(&[]), (0.0, 0.0));
+}
+
+#[test]
+fn test_popularity_mark_display() {
+    use PopularityMark::*;
+    let marks = [None, Fourth, Third, Second, First].map(|mark| mark.to_string());
+    assert_eq!(marks, ["-", "△", "▲", "○", "◎"]);
 }

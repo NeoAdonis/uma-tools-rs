@@ -45,7 +45,7 @@
 //! )?;
 //! let course =
 //!     Course::from_json_file("data/course_data.json", &parameters.course_id)?;
-//! let all_skills = Skill::load_skills_from_file("data/skill_data.json")?;
+//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
 //! let skills = uma.resolve_skills(&all_skills)?;
 //!
 //! let config = Configuration {
