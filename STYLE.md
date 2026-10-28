@@ -36,6 +36,25 @@ Refer to the official [Rust Style Guide](https://doc.rust-lang.org/style-guide/)
 
 Beyond formatting, code should be checked with [Clippy](https://doc.rust-lang.org/clippy/), the official Rust linter, which catches common mistakes and non-idiomatic code. The code base uses the default set of lints, so `cargo clippy` can be called as-is. When a lint doesn't apply to a specific case, it can be silenced on the affected item with an `#[allow(clippy::...)]` attribute.
 
+## API design
+
+The public API follows the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/). The crate isn't published and makes no compatibility guarantees yet, so the guidelines about stability and publishing apply loosely; the ones about the shape of the API still apply. The rules below are the ones most relevant to this code base. Check them, and the full guidelines when in doubt, whenever a change:
+
+- Adds or changes a `pub` item, or a re-export in `lib.rs`.
+- Adds a dependency whose types could appear in a public signature.
+- Adds a type that is read from data files or user input.
+- Adds an error type.
+
+Rules:
+
+- **Public surface:** The public API consists of the entry points and their results. Everything else is `pub(crate)` or private. `lib.rs` re-exports public types explicitly, never with globs.
+- **No dependency types in signatures** ([C-STABLE](https://rust-lang.github.io/api-guidelines/necessities.html#c-stable)): Public signatures don't expose types or traits from other crates, so dependencies can be replaced without breaking the API. For example, the random seed is a plain `u64` rather than a `rand` type.
+- **Validate at the boundary** ([C-VALIDATE](https://rust-lang.github.io/api-guidelines/dependability.html#c-validate)): Invalid input is rejected when it's parsed or deserialized, with an error. Internal invariants are checked with `debug_assert!`.
+- **Types over primitives** ([C-NEWTYPE](https://rust-lang.github.io/api-guidelines/type-safety.html#c-newtype), [C-CUSTOM-TYPE](https://rust-lang.github.io/api-guidelines/type-safety.html#c-custom-type)): Domain values with a unit or a restricted range use newtypes (e.g. `CourseWidths`), and arguments that select a behavior use enums rather than `bool`s, especially when several would be adjacent.
+- **Naming** ([C-CONV](https://rust-lang.github.io/api-guidelines/naming.html#c-conv), [C-GETTER](https://rust-lang.github.io/api-guidelines/naming.html#c-getter), [C-CTOR](https://rust-lang.github.io/api-guidelines/predictability.html#c-ctor)): Conversions use the `as_`, `to_` and `into_` prefixes according to their cost and ownership, getters have no `get_` prefix, and constructors are named `new` or `from_*`.
+- **Errors** ([C-GOOD-ERR](https://rust-lang.github.io/api-guidelines/interoperability.html#c-good-err)): Public error types implement `std::error::Error` and `Display`, and their messages say what was rejected.
+- **Documentation** ([C-FAILURE](https://rust-lang.github.io/api-guidelines/documentation.html#c-failure)): Public functions that can fail or panic document it in `# Errors` and `# Panics` sections.
+
 ## Commit messages
 
 Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
