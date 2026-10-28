@@ -748,11 +748,11 @@ fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style
 }
 
 fn style_count(state: &RaceState, my_style: Style) -> i32 {
-    state.runners_by_style.get(&my_style).cloned().unwrap_or(0) as i32
+    state.runners_by_style[my_style as usize] as i32
 }
 
 fn style_count_otherself(state: &RaceState, style: Style, my_style: Style) -> i32 {
-    state.runners_by_style.get(&style).cloned().unwrap_or(0) as i32 - (my_style == style) as i32
+    state.runners_by_style[style as usize] as i32 - (my_style == style) as i32
 }
 
 fn style_temptation_count(state: &RaceState, style: Style) -> i32 {

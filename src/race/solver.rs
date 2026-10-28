@@ -65,7 +65,8 @@ pub struct RaceState {
     /// Number of teams in the race. Team indices go from 0 to `team_count - 1`.
     pub(crate) team_count: u8,
     /// Count of runners by base style (Runaways count as Front runners).
-    pub(crate) runners_by_style: HashMap<Style, u8>,
+    /// Indexed as `[style as usize]`.
+    pub(crate) runners_by_style: [u8; Style::COUNT],
     /// Base style of the most popular runner (Runaway counts as Front).
     pub(crate) style_most_popular: Style,
     /// Count of runners currently rushed, by team and base style (Runaways count
@@ -145,7 +146,7 @@ impl RaceSolver<UnreadyRunner> {
             finish_time: None,
             team_count: 0,
             style_most_popular: Style::Front,
-            runners_by_style: HashMap::new(),
+            runners_by_style: [0; Style::COUNT],
             rushed_by_team: Vec::new(),
             team_activations: Vec::new(),
             existing_skills: HashMap::new(),
@@ -238,11 +239,7 @@ impl RaceSolver<UnreadyRunner> {
         builder.initial_state.team = team;
 
         // Update runnners-by-style count before moving builder.
-        *self
-            .state
-            .runners_by_style
-            .entry(builder.base.style.base_style())
-            .or_insert(0) += 1;
+        self.state.runners_by_style[builder.base.style.base_style() as usize] += 1;
 
         self.runners.push(builder);
     }
