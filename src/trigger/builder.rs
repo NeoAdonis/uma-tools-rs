@@ -128,15 +128,15 @@ impl TriggerScheduler {
 
                 for branch in branches {
                     add_logic(
-                        SkillActivationLogic::new(
-                            skill_idx,
-                            alt_idx,
-                            branch.trigger,
-                            branch.guards,
+                        SkillActivationLogic {
+                            skill_index: skill_idx,
+                            alternative_index: alt_idx,
+                            trigger: branch.trigger,
+                            guards: branch.guards,
                             precondition,
-                            LogicAction::Activate,
+                            action: LogicAction::Activate,
                             is_continuation,
-                        ),
+                        },
                         &mut scheduler,
                     );
                 }
@@ -158,15 +158,15 @@ impl TriggerScheduler {
         is_continuation: bool,
     ) {
         add_logic(
-            SkillActivationLogic::new(
-                skill_idx,
-                alt_idx,
-                TriggerCondition::RaceStart,
-                Vec::new(),
-                None,
-                LogicAction::Activate,
+            SkillActivationLogic {
+                skill_index: skill_idx,
+                alternative_index: alt_idx,
+                trigger: TriggerCondition::RaceStart,
+                guards: Vec::new(),
+                precondition: None,
+                action: LogicAction::Activate,
                 is_continuation,
-            ),
+            },
             self,
         );
     }
@@ -202,15 +202,15 @@ fn add_precondition(
             },
             event => event,
         };
-        let logic = SkillActivationLogic::new(
-            skill_idx,
-            alt_idx,
+        let logic = SkillActivationLogic {
+            skill_index: skill_idx,
+            alternative_index: alt_idx,
             trigger,
-            branch.guards,
-            None,
-            LogicAction::Unlock(precondition_id),
+            guards: branch.guards,
+            precondition: None,
+            action: LogicAction::Unlock(precondition_id),
             is_continuation,
-        );
+        };
 
         if let TriggerCondition::Window {
             min_threshold,

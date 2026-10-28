@@ -2108,7 +2108,7 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     assert_close!(caster.skill_modifiers.target_speed, 0.1);
     assert_close!(caster.skill_modifiers.current_speed, 0.0);
     let buffs = &caster.activation_flags.buff_activated;
-    assert_eq!(buffs.iter().collect::<Vec<_>>(), [&SkillType::TargetSpeed]);
+    assert_eq!(buffs.iter().collect::<Vec<_>>(), [SkillType::TargetSpeed]);
 
     solver.apply_pending_effects();
     assert!(solver.runners[0].pending_effects.is_empty());
@@ -3098,7 +3098,7 @@ fn test_buffs_scaled_to_zero_still_count() {
     solver.runners[0].adjusted.speed = 1600;
     assert_close!(activate_last_skill(&mut solver), 0.0);
     let buffs = &solver.runners[0].activation_flags.buff_activated;
-    assert!(buffs.contains(&SkillType::TargetSpeed));
+    assert!(buffs.contains(SkillType::TargetSpeed));
 }
 
 #[test]

@@ -73,8 +73,6 @@
 //! [`Activate`]: crate::trigger::skill_activation::LogicAction::Activate
 //! [`Unlock`]: crate::trigger::skill_activation::LogicAction::Unlock
 
-use std::collections::HashSet;
-
 use rand::prelude::*;
 
 use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_comparison_list};
@@ -161,7 +159,7 @@ impl SkillModifiers {
 }
 
 /// Skill activation flags for the current update cycle.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SkillActivationFlags {
     /// Indicates if a skill was activated in the current update cycle.
     pub any_activated: bool,
@@ -169,7 +167,7 @@ pub struct SkillActivationFlags {
     pub heal_activated: bool,
     /// Effect types of the buff (advantage) skills activated in the current update
     /// cycle. Only effects on oneself count.
-    pub buff_activated: HashSet<SkillType>,
+    pub buff_activated: SkillTypeSet,
 }
 
 impl Runner {

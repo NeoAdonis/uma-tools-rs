@@ -283,29 +283,6 @@ pub struct SkillActivationRecord {
     pub distance: f64,
 }
 
-impl SkillActivationLogic {
-    /// Create a new skill activation logic.
-    pub fn new(
-        skill_index: usize,
-        alternative_index: usize,
-        trigger: TriggerCondition,
-        guards: ComparisonList,
-        precondition: Option<usize>,
-        action: LogicAction,
-        is_continuation: bool,
-    ) -> Self {
-        SkillActivationLogic {
-            skill_index,
-            alternative_index,
-            trigger,
-            guards,
-            precondition,
-            action,
-            is_continuation,
-        }
-    }
-}
-
 /// One OR branch of a compiled condition.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledBranch {

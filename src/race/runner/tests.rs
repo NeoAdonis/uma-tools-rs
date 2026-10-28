@@ -35,17 +35,18 @@ fn test_update_order_rate_tracks_best_and_worst_orders() {
     let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
     let runner = &mut solver.runners[0];
 
-    // (order, should update range, [rate, best, worst]).
+    // (order, elapsed time, [rate, best, worst]). The best and worst orders
+    // are only tracked after 5 seconds.
     let cases = [
-        (3, false, [34, u8::MAX, 0]),
-        (5, true, [56, 5, 5]),
-        (2, true, [23, 2, 5]),
-        (7, true, [78, 2, 7]),
-        (9, false, [100, 2, 7]),
+        (3, 5.0, [34, u8::MAX, 0]),
+        (5, 5.1, [56, 5, 5]),
+        (2, 10.0, [23, 2, 5]),
+        (7, 10.0, [78, 2, 7]),
+        (9, 10.0, [100, 2, 9]),
     ];
-    for (order, should_update_range, expected) in cases {
+    for (order, elapsed_time, expected) in cases {
         runner.order.order = order;
-        runner.update_order_rate(9, should_update_range);
+        runner.update_order_rate(9, elapsed_time);
         let o = &runner.order;
         assert_eq!(o.runner_count, 9);
         assert_eq!([o.rate, o.best, o.worst], expected, "order {order}");

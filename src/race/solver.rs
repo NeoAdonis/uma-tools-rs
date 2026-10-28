@@ -368,11 +368,11 @@ impl RaceSolver<Runner> {
                 continue;
             }
             runner.check_skills(&mut self.state);
-            for &skill_type in &runner.activation_flags.buff_activated {
+            for skill_type in runner.activation_flags.buff_activated.iter() {
                 *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
             }
             if runner.initial_state.popularity_rank == 1 {
-                self.state.popularity_top_activations = runner.activation_flags.clone();
+                self.state.popularity_top_activations = runner.activation_flags;
             }
         }
         self.check_advantage_triggers(delta_time);
@@ -520,7 +520,7 @@ impl RaceSolver<Runner> {
                     runners[i]
                         .activation_flags
                         .buff_activated
-                        .contains(&SkillType::Recovery)
+                        .contains(SkillType::Recovery)
                 })
                 .collect(),
             // Not used by any skill.
@@ -559,7 +559,6 @@ impl RaceSolver<Runner> {
 
         // Every gate counts, even if fewer runners are simulated.
         let total_runners = self.state.params.gates;
-        let should_update_range = self.state.elapsed_time > 5.0;
         let position_first = self.runners.first().unwrap().position;
         let position_last = self.runners.last().unwrap().position;
         let position_range = position_first - position_last;
@@ -575,7 +574,7 @@ impl RaceSolver<Runner> {
             }
             let team = runner.initial_state.team as usize;
             runner.update_order((index + 1) as u8, &self.state.course);
-            runner.update_order_rate(total_runners, should_update_range);
+            runner.update_order_rate(total_runners, self.state.elapsed_time);
             runner.update_diff_from_ahead(position_first, position_next, position_range);
             runner.rush_counter.ahead = rushed;
             runner.rush_counter.opponents_ahead = rushed - rushed_by_team[team];

@@ -139,28 +139,30 @@ fn test_secure_lead_activation_and_expiry() {
     runner.section = 12;
 
     // Sufficient lead never triggers.
+    let (lead_insufficient, is_alone) = (false, false);
     for t in 0..50 {
         let elapsed = t as f64 * CHECK_INTERVAL;
         state.elapsed_time = elapsed;
-        runner.try_secure_lead(false, false, &state);
+        runner.try_secure_lead(lead_insufficient, is_alone, &state);
         let next_check = elapsed + CHECK_INTERVAL;
         assert_eq!(runner.secure_lead, TimedBoost::Idle { next_check });
     }
 
     // Insufficient lead eventually triggers.
+    let lead_insufficient = true;
     let hp_before = runner.hp.current();
     let mut elapsed = 0.0;
     while matches!(runner.secure_lead, TimedBoost::Idle { .. }) {
         elapsed += CHECK_INTERVAL;
         state.elapsed_time = elapsed;
-        runner.try_secure_lead(true, false, &state);
+        runner.try_secure_lead(lead_insufficient, is_alone, &state);
         assert!(elapsed < 1000.0, "secure lead never triggered");
     }
 
     let expected_modifier = target_speed_bonus(
         Style::Front,
         runner.adjusted.guts,
-        false,
+        is_alone,
         GameVersion::LATEST,
     );
     let expected_boost = TimedBoost::start(expected_modifier, elapsed, DURATION, COOLDOWN);

@@ -63,6 +63,9 @@ pub const MAX_TARGET_SPEED: f64 = 30.0;
 /// Distance from the inner fence above which the force-in modifier applies.
 pub const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
 
+/// Time (s) after which the best and worst orders of a runner are tracked.
+pub const ORDER_RANGE_START_TIME: f64 = 5.0;
+
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
 
@@ -1083,13 +1086,14 @@ impl Runner {
 
     /// Update order rate (percentage rank) based on total runners.
     ///
-    /// If `should_update_range` is true, also update the best/worst orders.
-    pub fn update_order_rate(&mut self, total_runners: u8, should_update_range: bool) {
+    /// After the first [`ORDER_RANGE_START_TIME`] seconds (`elapsed_time`),
+    /// also update the best/worst orders.
+    pub fn update_order_rate(&mut self, total_runners: u8, elapsed_time: f64) {
         let order = self.order.order;
         self.order.runner_count = total_runners;
         self.order.rate = ((order as f64 / total_runners as f64) * 100.0).ceil() as u8;
         self.order.rates = rates_at_order(order, total_runners);
-        if should_update_range {
+        if elapsed_time > ORDER_RANGE_START_TIME {
             self.order.best = self.order.best.min(order);
             self.order.worst = self.order.worst.max(order);
         }

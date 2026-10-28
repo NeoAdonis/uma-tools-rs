@@ -714,7 +714,7 @@ fn test_order_rate_converts_to_rounded_order() {
     ];
     for (runners, order, expected) in cases {
         solver.runners[0].order.order = order;
-        solver.runners[0].update_order_rate(runners, false);
+        solver.runners[0].update_order_rate(runners, 0.0);
         let actual = [
             CompOp::Greater,
             CompOp::GreaterEqual,
@@ -743,7 +743,7 @@ fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
     ];
     for (runners, order, expected) in cases {
         solver.runners[0].order.order = order;
-        solver.runners[0].update_order_rate(runners, false);
+        solver.runners[0].update_order_rate(runners, 0.0);
         let runner = &solver.runners[0];
         let Value::Range(actual) = variable_value(&var, &solver.state, runner, None) else {
             panic!("{var} isn't a range");
@@ -859,7 +859,7 @@ fn test_order_rate_in_continue_boundaries() {
     ];
     for (runners, worst, expected) in cases {
         solver.runners[0].order.worst = worst;
-        solver.runners[0].update_order_rate(runners, false);
+        solver.runners[0].update_order_rate(runners, 0.0);
         let actual = [
             OrderRateVar::OrderRateIn20Continue,
             OrderRateVar::OrderRateIn40Continue,
@@ -898,7 +898,7 @@ fn test_order_rate_out_continue_boundaries() {
     ];
     for (runners, best, expected) in cases {
         solver.runners[0].order.best = best;
-        solver.runners[0].update_order_rate(runners, false);
+        solver.runners[0].update_order_rate(runners, 0.0);
         let actual = [
             OrderRateVar::OrderRateOut20Continue,
             OrderRateVar::OrderRateOut40Continue,
@@ -1426,7 +1426,7 @@ fn test_is_popularity_top_character_activate_advantage_skill() {
 
     // The runner's own activations count too if she's the most popular one.
     solver.runners[0].initial_state.popularity_rank = 1;
-    solver.runners[0].activation_flags = solver.state.popularity_top_activations.clone();
+    solver.runners[0].activation_flags = solver.state.popularity_top_activations;
     assert!(popularity_top_activated(&solver, 9));
     assert!(popularity_top_activated(&solver, -1));
 }

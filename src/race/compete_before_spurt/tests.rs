@@ -129,24 +129,26 @@ fn test_compete_activation_and_expiry() {
     runner.stamina_keep.ratio = 0.0;
 
     // Neither far from lead nor nearby runners.
+    let (far_from_lead, is_alone) = (false, true);
     state.elapsed_time = 10.0;
-    runner.try_compete_before_spurt(false, true, &state);
+    runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     let next_check = 10.0 + CHECK_INTERVAL;
     assert_eq!(runner.compete_before_spurt, TimedBoost::Idle { next_check });
 
     // Far from lead.
+    let far_from_lead = true;
     let hp_before = runner.hp.current();
     state.elapsed_time = 12.0;
-    runner.try_compete_before_spurt(true, true, &state);
+    runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     let expected_modifier = target_speed_bonus(
         Style::Front,
         runner.adjusted.power,
         runner.adjusted.guts,
-        true,
+        is_alone,
     );
     let expected_boost = TimedBoost::start(expected_modifier, 12.0, DURATION, COOLDOWN);
     assert_eq!(runner.compete_before_spurt, expected_boost);
-    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, true);
+    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
 
     // Boost is applied to target speed.
@@ -161,15 +163,16 @@ fn test_compete_activation_and_expiry() {
     assert_close!(boosted - runner.target_speed, expected_modifier);
 
     // Nearby runners only: near factor is added to the HP cost.
+    let (far_from_lead, is_alone) = (false, false);
     let hp_before = runner.hp.current();
     runner.nearby.count = 1;
     state.elapsed_time = 20.0;
-    runner.try_compete_before_spurt(false, false, &state);
+    runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     assert!(matches!(
         runner.compete_before_spurt,
         TimedBoost::Active { .. }
     ));
-    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, false);
+    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
 }
 
@@ -179,6 +182,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
     runner.section = 12;
     runner.position = 700.0;
     runner.hp.set_current(1.0);
+    let (far_from_lead, is_alone) = (true, true);
 
     // Low HP is eventually noticed, and competing is blocked from then on.
     let mut elapsed = 0.0;
@@ -187,7 +191,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
         elapsed += CHECK_INTERVAL;
         state.elapsed_time = elapsed;
         runner.compete_before_spurt = idle;
-        runner.try_compete_before_spurt(true, true, &state);
+        runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
         assert!(elapsed < 1000.0, "stamina keep never triggered");
     }
     assert!(matches!(
@@ -195,7 +199,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
         TimedBoost::Idle { .. }
     ));
     state.elapsed_time = elapsed + CHECK_INTERVAL;
-    runner.try_compete_before_spurt(true, true, &state);
+    runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     assert!(matches!(
         runner.compete_before_spurt,
         TimedBoost::Idle { .. }
@@ -213,7 +217,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
     );
     assert!(!runner.stamina_keep.is_active);
     state.elapsed_time = elapsed + 2.0 * CHECK_INTERVAL;
-    runner.try_compete_before_spurt(true, true, &state);
+    runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     assert!(!runner.stamina_keep.is_active);
     assert!(matches!(
         runner.compete_before_spurt,

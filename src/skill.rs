@@ -74,6 +74,39 @@ pub enum SkillType {
     IgnorePopularity = 50,
 }
 
+/// Set of skill types, as a bitmask of their IDs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SkillTypeSet(u64);
+
+impl SkillTypeSet {
+    /// Add `skill_type` to the set.
+    pub fn insert(&mut self, skill_type: SkillType) {
+        self.0 |= Self::bit(skill_type);
+    }
+
+    /// Check if `skill_type` is in the set.
+    pub fn contains(self, skill_type: SkillType) -> bool {
+        self.0 & Self::bit(skill_type) != 0
+    }
+
+    /// Iterate over the skill types in the set, in ID order.
+    pub fn iter(self) -> impl Iterator<Item = SkillType> {
+        let mut bits = self.0;
+        std::iter::from_fn(move || {
+            if bits == 0 {
+                return None;
+            }
+            let id = bits.trailing_zeros() as u8;
+            bits &= bits - 1;
+            Some(SkillType::try_from(id).expect("only skill types are inserted"))
+        })
+    }
+
+    fn bit(skill_type: SkillType) -> u64 {
+        1 << skill_type as u8
+    }
+}
+
 impl SkillType {
     /// Get the skill type with the given ID, if it's implemented.
     pub fn from_id(id: i32) -> Option<Self> {
@@ -712,6 +745,28 @@ mod tests {
             wit_check,
             ..synthetic_skill(vec![])
         })
+    }
+
+    #[test]
+    fn test_skill_type_ids_fit_in_set() {
+        for id in 0..=u8::MAX {
+            if SkillType::try_from(id).is_ok() {
+                assert!(id < u64::BITS as u8, "skill type {id}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_skill_type_set() {
+        let mut set = SkillTypeSet::default();
+        assert_eq!(set.iter().next(), None);
+        set.insert(SkillType::IgnorePopularity);
+        set.insert(SkillType::SpeedUp);
+        set.insert(SkillType::IgnorePopularity);
+        assert!(set.contains(SkillType::SpeedUp));
+        assert!(!set.contains(SkillType::Recovery));
+        let types: Vec<_> = set.iter().collect();
+        assert_eq!(types, [SkillType::SpeedUp, SkillType::IgnorePopularity]);
     }
 
     #[test]

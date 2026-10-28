@@ -182,7 +182,7 @@ impl ValueSet<'_> {
     pub fn contains(&self, value: i32) -> bool {
         // Effect types are only valid if implemented.
         let buff = |flags: &SkillActivationFlags| {
-            SkillType::from_id(value).is_some_and(|value| flags.buff_activated.contains(&value))
+            SkillType::from_id(value).is_some_and(|value| flags.buff_activated.contains(value))
         };
         match *self {
             ValueSet::Keys(map) => map.contains_key(&value),
@@ -191,7 +191,7 @@ impl ValueSet<'_> {
             ValueSet::OtherBuffs { counts, own } => {
                 SkillType::from_id(value).is_some_and(|value| {
                     // Discount the runner's own activation.
-                    let own = own.buff_activated.contains(&value) as u8;
+                    let own = own.buff_activated.contains(value) as u8;
                     counts.get(&value).is_some_and(|&count| count > own)
                 })
             }
