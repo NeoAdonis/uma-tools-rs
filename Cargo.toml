@@ -1,16 +1,14 @@
 [package]
-name = "uma-tools-rs"
+name = "uma-tools"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+description = "Library to simulate Umamusume: Pretty Derby races at scale"
+readme = "README.md"
 license = "MIT"
-
-[lib]
-name = "uma_tools"
-path = "src/lib.rs"
-
-[[bin]]
-name = "uma-tools-rs"
-path = "src/main.rs"
+keywords = ["umamusume", "simulation", "racing", "game"]
+categories = ["simulation", "games"]
+publish = false
 
 [dependencies]
 derive_more = { version = "2", features = ["add", "add_assign", "mul", "not"] }
