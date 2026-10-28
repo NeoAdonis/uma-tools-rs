@@ -166,21 +166,25 @@ impl Runner {
     }
 
     /// Update nearby time counters based on current nearby counts.
+    ///
+    /// The counters also reset when this runner's order changes, so the order
+    /// must be updated first.
     pub(crate) fn update_near_time(&mut self, delta_time: f64) {
+        let same_order = self.order.delta == 0;
         let nearby = &mut self.nearby;
         tick(
             &mut nearby.ahead_same_lane_time,
-            nearby.ahead_same_lane_count > 0,
+            same_order && nearby.ahead_same_lane_count > 0,
             delta_time,
         );
         tick(
             &mut nearby.behind_same_lane_time,
-            nearby.behind_same_lane_count > 0,
+            same_order && nearby.behind_same_lane_count > 0,
             delta_time,
         );
         tick(
             &mut nearby.behind_set1_time,
-            nearby.behind_set1_count > 0,
+            same_order && nearby.behind_set1_count > 0,
             delta_time,
         );
     }
