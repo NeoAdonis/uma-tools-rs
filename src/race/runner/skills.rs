@@ -90,7 +90,7 @@ use crate::trigger::skill_activation::{
     ActiveTimedEffect, LogicAction, OvertakeExtension, PendingEffect, SkillActivationRecord,
 };
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
-use crate::units::meters_to_bashin;
+use crate::units::{CourseWidths, meters_to_bashin};
 
 use super::{EPSILON, Runner};
 
@@ -109,8 +109,8 @@ pub struct SkillModifiers {
     pub lane_speed: f64,
     /// Modifies visible distance. Positive values increase it.
     pub visible_distance: f64,
-    /// Sets the target lane directly in course widths, or `None` if no change.
-    pub target_lane: Option<f64>,
+    /// Sets the target lane directly, or `None` if no change.
+    pub target_lane: Option<CourseWidths>,
     /// Affects duration of timed effects. Multiplicative - 1.0 means no change.
     pub duration_scaling: f64,
 }
@@ -150,7 +150,7 @@ impl SkillModifiers {
                 CurrentSpeed | CurrentSpeedWithNaturalDeceleration => mods.current_speed += value,
                 LaneMovementSpeed => mods.lane_speed += value,
                 Fov => mods.visible_distance += value,
-                LaneChange => mods.target_lane = Some(value),
+                LaneChange => mods.target_lane = Some(CourseWidths(value)),
                 // Duration scaling is multiplicative.
                 ExtendEvolvedDuration => mods.duration_scaling *= value,
                 _ => {}

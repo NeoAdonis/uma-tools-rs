@@ -2,6 +2,7 @@ use super::*;
 use crate::race::solver::RaceSolver;
 use crate::test_utils::{assert_close, load_course, race_params, seeded_config, uma};
 use crate::uma::*;
+use crate::units::CourseWidths;
 
 /// Solver with Mid race runners at the given `(position, lane)` pairs, in
 /// order.
@@ -13,20 +14,20 @@ fn lane_solver(runners: &[(f64, f64)]) -> RaceSolver<Runner> {
     let mut solver = solver.ready_runners();
     for (runner, &(position, lane)) in solver.runners.iter_mut().zip(runners) {
         runner.position = position;
-        runner.lane = LaneState::new(lane);
+        runner.lane = LaneState::new(CourseWidths(lane));
         runner.phase = Phase::Mid;
     }
     solver
 }
 
 /// One horse lane in course widths.
-const LANE: f64 = 1.0 / crate::units::HORSE_LANES_PER_COURSE_WIDTH;
+const LANE: f64 = CourseWidths::from_horse_lanes(1.0).0;
 
 #[test]
 fn test_extra_lane_candidate_window() {
     // 1 horse lane inward during the Mid race, checked up to 3m past the
     // furthest target.
-    let lane = 0.3 - horse_lanes_to_course_widths(1.0);
+    let lane = 0.3 - LANE;
     let mut solver = lane_solver(&[(100.0, 0.3), (105.0, 0.6), (107.9, lane)]);
     let extra = |solver: &RaceSolver<Runner>, with_target: bool| {
         let targets = if with_target {
@@ -38,13 +39,13 @@ fn test_extra_lane_candidate_window() {
     };
     assert_eq!(extra(&solver, true), None);
     solver.runners[2].position = 108.1;
-    assert_eq!(extra(&solver, true), Some(lane));
+    assert_eq!(extra(&solver, true), Some(CourseWidths(lane)));
 
     // Without targets, checked up to 3m past the runner herself.
     solver.runners[2].position = 102.9;
     assert_eq!(extra(&solver, false), None);
     solver.runners[2].position = 103.1;
-    assert_eq!(extra(&solver, false), Some(lane));
+    assert_eq!(extra(&solver, false), Some(CourseWidths(lane)));
 }
 
 #[test]
@@ -61,14 +62,11 @@ fn test_target_lane_candidates_use_boundary_uma_distance() {
         (107.8, outer + LANE),
     ]);
     let runner = &solver.runners[0];
-    let candidates: Vec<f64> = runner
+    let candidates: Vec<CourseWidths> = runner
         .target_lane_candidates(&solver.runners[1], &solver.runners)
         .collect();
     // 1 horse lane inside the outer boundary is blocked by the target herself.
-    let expected = [
-        0.4 - horse_lanes_to_course_widths(1.0),
-        0.4 + horse_lanes_to_course_widths(1.0),
-    ];
+    let expected = [CourseWidths(0.4 - LANE), CourseWidths(0.4 + LANE)];
     assert_eq!(candidates, expected);
 }
 
@@ -77,10 +75,10 @@ fn test_only_visible_runners_block_lane_candidates() {
     // At 1m, the field of view is less than 1.3 horse lanes wide to each side.
     let mut solver = lane_solver(&[(100.0, 0.3), (101.0, 0.3 + 3.0 * LANE)]);
     let is_valid = |solver: &RaceSolver<Runner>, lane| {
-        solver.runners[0].is_lane_candidate_valid(lane, 5.0, &solver.runners)
+        solver.runners[0].is_lane_candidate_valid(CourseWidths(lane), 5.0, &solver.runners)
     };
     assert!(is_valid(&solver, 0.3 + 3.0 * LANE));
-    solver.runners[1].lane.current = 0.3 + LANE;
+    solver.runners[1].lane.current = CourseWidths(0.3 + LANE);
     assert!(!is_valid(&solver, 0.3 + LANE));
 }
 
@@ -91,17 +89,17 @@ fn test_overtake_lane_falls_back_to_current_lane() {
     let mut solver = lane_solver(&[(100.0, 0.3), (102.0, 0.3 - LANE), (50.0, 0.5)]);
     let runner = &mut solver.runners[0];
     runner.overtake_state = Some(OvertakeState::default());
-    runner.lane.target = 0.5;
+    runner.lane.target = CourseWidths(0.5);
     let decide = |solver: &RaceSolver<Runner>| {
         solver.runners[0].overtake_lane_decision(&solver.state.course, &solver.runners)
     };
-    assert_close!(decide(&solver).target, 0.3);
+    assert_close!(decide(&solver).target.0, 0.3);
 
     // The extra move lane, now outside, is still preferred over the current lane.
     solver.runners[2].position = 115.0;
     let decision = decide(&solver);
-    assert_eq!(decision.extra_move_lane, Some(0.5));
-    assert_close!(decision.target, 0.5);
+    assert_eq!(decision.extra_move_lane, Some(CourseWidths(0.5)));
+    assert_close!(decision.target.0, 0.5);
 }
 
 #[test]
@@ -125,25 +123,26 @@ fn test_lane_space_follows_side_blocking() {
     let mut solver = lane_solver(&[(100.0, 0.4)]);
     let runner = &mut solver.runners[0];
     runner.blocked.side_out = true;
-    assert!(!runner.has_lane_space_to(0.5));
-    assert!(runner.has_lane_space_to(0.3));
-    assert!(runner.has_lane_space_to(0.4));
+    let has_lane_space_to = |runner: &Runner, lane| runner.has_lane_space_to(CourseWidths(lane));
+    assert!(!has_lane_space_to(runner, 0.5));
+    assert!(has_lane_space_to(runner, 0.3));
+    assert!(has_lane_space_to(runner, 0.4));
 
     runner.blocked.side_out = false;
     runner.blocked.side_in = true;
-    assert!(runner.has_lane_space_to(0.5));
-    assert!(!runner.has_lane_space_to(0.3));
+    assert!(has_lane_space_to(runner, 0.5));
+    assert!(!has_lane_space_to(runner, 0.3));
 }
 
 #[test]
 fn test_target_lane_updates_when_close_or_blocked_towards_it() {
     let mut solver = lane_solver(&[(100.0, 0.4)]);
     let runner = &mut solver.runners[0];
-    runner.lane.target = 0.4 + 0.4 * LANE;
+    runner.lane.target = CourseWidths(0.4 + 0.4 * LANE);
     assert!(runner.should_update_target_lane());
 
     // Far from the target lane: only updated if blocked towards it.
-    runner.lane.target = 0.5;
+    runner.lane.target = CourseWidths(0.5);
     assert!(!runner.should_update_target_lane());
     runner.blocked.side_in = true;
     assert!(!runner.should_update_target_lane());
@@ -160,16 +159,16 @@ fn test_normal_mode_extra_move_lane_from_final_corner() {
     };
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Late;
-    runner.extra_move_lane = Some(0.5);
+    runner.extra_move_lane = Some(CourseWidths(0.5));
 
     // Otherwise, keep straight.
     runner.position = final_corner - 1.0;
-    runner.lane.target = 0.6;
-    assert_close!(target(&solver), 0.3);
+    runner.lane.target = CourseWidths(0.6);
+    assert_close!(target(&solver).0, 0.3);
 
     // In the final corner, not only on the final straight.
     solver.runners[0].position = final_corner + 1.0;
-    assert_close!(target(&solver), 0.5);
+    assert_close!(target(&solver).0, 0.5);
 }
 
 #[test]
@@ -179,7 +178,7 @@ fn test_normal_mode_moves_away_from_inside_uma_even_if_blocked() {
     runner.blocked.side_in = true;
     runner.blocked.side_out = true;
     let target = solver.runners[0].normal_mode_lane_target(&solver.state.course, &solver.runners);
-    assert_close!(target, 0.3 - LANE + 2.0 * LANE);
+    assert_close!(target.0, 0.3 - LANE + 2.0 * LANE);
 }
 
 #[test]
@@ -190,7 +189,7 @@ fn test_overtake_lane_ignores_blocking_on_the_other_side() {
     runner.overtake_state = Some(OvertakeState::default());
     runner.blocked.side_out = true;
     let decision = solver.runners[0].overtake_lane_decision(&solver.state.course, &solver.runners);
-    assert_close!(decision.target, 0.3 - horse_lanes_to_course_widths(1.0));
+    assert_close!(decision.target.0, 0.3 - LANE);
 }
 
 #[test]
@@ -199,10 +198,10 @@ fn test_fixed_mode_unless_blocked_towards_skill_lane() {
     let runner = &mut solver.runners[0];
     assert_eq!(runner.fixed_mode_lane_target(), None);
 
-    runner.skill_modifiers.target_lane = Some(0.5);
-    assert_eq!(runner.fixed_mode_lane_target(), Some(0.5));
+    runner.skill_modifiers.target_lane = Some(CourseWidths(0.5));
+    assert_eq!(runner.fixed_mode_lane_target(), Some(CourseWidths(0.5)));
     runner.blocked.side_in = true;
-    assert_eq!(runner.fixed_mode_lane_target(), Some(0.5));
+    assert_eq!(runner.fixed_mode_lane_target(), Some(CourseWidths(0.5)));
     runner.blocked.side_out = true;
     assert_eq!(runner.fixed_mode_lane_target(), None);
 }
@@ -233,14 +232,14 @@ fn test_extra_move_lane_set_upon_entering_final_corner() {
 
     // 0.05 / 0.1 * 0.5, plus up to 0.1.
     runner.update_final_extra_move_lane(&entering(last_corner, 0), &course, GameVersion::LATEST);
-    let extra = runner.extra_move_lane.unwrap();
+    let extra = runner.extra_move_lane.unwrap().0;
     assert!((0.25..0.35).contains(&extra), "{extra}");
 
     // Clamped beyond 0.1 course widths, and set on the final straight before
     // the 1st Anniv.
-    runner.lane.current = 0.3;
+    runner.lane.current = CourseWidths(0.3);
     runner.update_final_extra_move_lane(&entering(0, last_straight), &course, original);
-    let extra = runner.extra_move_lane.unwrap();
+    let extra = runner.extra_move_lane.unwrap().0;
     assert!((0.5..0.6).contains(&extra), "{extra}");
 }
 
@@ -248,15 +247,15 @@ fn test_extra_move_lane_set_upon_entering_final_corner() {
 fn test_extra_move_lane_kept_after_mid_race() {
     let mut solver = lane_solver(&[(100.0, 0.3), (105.0, 0.4)]);
     let runner = &mut solver.runners[0];
-    runner.extra_move_lane = Some(0.35);
+    runner.extra_move_lane = Some(CourseWidths(0.35));
     runner.phase = Phase::Late;
     let next = solver.runners[0].next_extra_move_lane(&solver.runners);
-    assert_eq!(next, Some(0.35));
+    assert_eq!(next, Some(CourseWidths(0.35)));
 
     // Furthest visible runner ahead during the Mid race.
     solver.runners[0].phase = Phase::Mid;
     let next = solver.runners[0].next_extra_move_lane(&solver.runners);
-    assert_eq!(next, Some(0.4));
+    assert_eq!(next, Some(CourseWidths(0.4)));
 }
 
 #[test]
@@ -266,7 +265,7 @@ fn test_target_lane_decision_only_when_target_lane_should_update() {
         solver.runners[0].target_lane_decision(&solver.state.course, &solver.runners)
     };
     assert!(decide(&solver).is_some());
-    solver.runners[0].lane.target = 0.5;
+    solver.runners[0].lane.target = CourseWidths(0.5);
     assert!(decide(&solver).is_none());
 }
 
@@ -275,13 +274,13 @@ fn test_target_lane_decision_fixed_mode_keeps_extra_move_lane() {
     let mut solver = lane_solver(&[(100.0, 0.3)]);
     let runner = &mut solver.runners[0];
     runner.overtake_state = Some(OvertakeState::default());
-    runner.skill_modifiers.target_lane = Some(0.6);
-    runner.extra_move_lane = Some(0.45);
+    runner.skill_modifiers.target_lane = Some(CourseWidths(0.6));
+    runner.extra_move_lane = Some(CourseWidths(0.45));
     let decision = solver.runners[0]
         .target_lane_decision(&solver.state.course, &solver.runners)
         .unwrap();
-    assert_eq!(decision.target, 0.6);
-    assert_eq!(decision.extra_move_lane, Some(0.45));
+    assert_eq!(decision.target, CourseWidths(0.6));
+    assert_eq!(decision.extra_move_lane, Some(CourseWidths(0.45)));
 }
 
 #[test]
@@ -296,7 +295,7 @@ fn test_target_lane_decision_mode_selection() {
         solver.runners[0].position = position;
         let decision =
             solver.runners[0].target_lane_decision(&solver.state.course, &solver.runners);
-        decision.unwrap().target
+        decision.unwrap().target.0
     };
 
     // Not in overtake mode.
@@ -314,7 +313,7 @@ fn test_target_lane_decision_mode_selection() {
     // to the extra move lane on the outside, while normal mode keeps straight.
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Late;
-    runner.extra_move_lane = Some(0.5);
+    runner.extra_move_lane = Some(CourseWidths(0.5));
     assert_close!(target(&mut solver, move_lane_point - 100.0), 0.5);
     solver.runners[0].overtake_state = None;
     assert_close!(target(&mut solver, move_lane_point - 100.0), 0.3);

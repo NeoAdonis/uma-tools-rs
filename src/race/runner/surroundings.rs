@@ -85,7 +85,7 @@ impl Runner {
         visible_distance > 0.0
             && distance <= visible_distance
             && (self.lane.current - other.lane.current).abs()
-                <= horse_lanes_to_course_widths((distance / visible_distance) * 11.5 + 2.0) / 2.0
+                <= CourseWidths::from_horse_lanes((distance / visible_distance) * 11.5 + 2.0) / 2.0
     }
 
     /// Mark this runner as blocked from the front by `ahead`, limiting her speed
@@ -103,12 +103,12 @@ impl Runner {
     ///
     /// `lane_diff` is the other runner's lane minus this runner's lane. Runners in
     /// the same lane block each other in both directions.
-    pub fn update_side_blocked_by(&mut self, other: &mut Self, lane_diff: f64) {
-        if lane_diff >= 0.0 {
+    pub fn update_side_blocked_by(&mut self, other: &mut Self, lane_diff: CourseWidths) {
+        if lane_diff >= CourseWidths(0.0) {
             self.blocked.side_out = true;
             other.blocked.side_in = true;
         }
-        if lane_diff <= 0.0 {
+        if lane_diff <= CourseWidths(0.0) {
             self.blocked.side_in = true;
             other.blocked.side_out = true;
         }

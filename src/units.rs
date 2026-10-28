@@ -1,5 +1,6 @@
 //! Unit conversion utilities for race measurements.
 
+use derive_more::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 use serde::{Deserialize, Deserializer};
 
 /// Convert a value from 10000ths while deserializing, as most fractional values
@@ -11,28 +12,81 @@ pub(crate) fn deserialize_ten_thousandths<'de, D: Deserializer<'de>>(
 }
 
 /// Course width to meters conversion unit. 1 course width = 11.25 meters.
-///
-/// Lane positions are measured in course widths. For example, a turf course in
-/// Tokyo is 1.5 courses wide, which is 16.875 meters.
 pub const COURSE_WIDTH_TO_METERS: f64 = 11.25;
-
-/// Convert course widths to meters.
-pub fn course_widths_to_meters(widths: f64) -> f64 {
-    widths * COURSE_WIDTH_TO_METERS
-}
 
 /// Horse lanes per course width. 1 horse lane = 1/18 course width = 0.625
 /// meters.
 pub const HORSE_LANES_PER_COURSE_WIDTH: f64 = 18.0;
 
-/// Convert horse lanes to course widths.
-pub fn horse_lanes_to_course_widths(lanes: f64) -> f64 {
-    lanes / HORSE_LANES_PER_COURSE_WIDTH
+/// Lateral position or distance across the course, in course widths.
+///
+/// Lane positions are measured from the inner fence. For example, a turf course
+/// in Tokyo is 1.5 course widths wide, which is 16.875 meters.
+///
+/// Game formulas often use horse lanes instead (see
+/// [`HORSE_LANES_PER_COURSE_WIDTH`]); they're plain numbers, converted with
+/// [`CourseWidths::from_horse_lanes`], so that both units can't be mixed up.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    PartialOrd,
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+    Neg,
+    Mul,
+    Div,
+)]
+pub struct CourseWidths(pub f64);
+
+impl CourseWidths {
+    /// Convert horse lanes to course widths.
+    pub const fn from_horse_lanes(lanes: f64) -> Self {
+        Self(lanes / HORSE_LANES_PER_COURSE_WIDTH)
+    }
+
+    /// Convert to horse lanes.
+    pub const fn horse_lanes(self) -> f64 {
+        self.0 * HORSE_LANES_PER_COURSE_WIDTH
+    }
+
+    /// Convert to meters.
+    pub const fn meters(self) -> f64 {
+        self.0 * COURSE_WIDTH_TO_METERS
+    }
+
+    /// Absolute value, e.g. of a lane difference.
+    pub fn abs(self) -> Self {
+        Self(self.0.abs())
+    }
+
+    /// Minimum of both values.
+    pub fn min(self, other: Self) -> Self {
+        Self(self.0.min(other.0))
+    }
+
+    /// Maximum of both values.
+    pub fn max(self, other: Self) -> Self {
+        Self(self.0.max(other.0))
+    }
+
+    /// Restrict the value to `min..=max`.
+    pub fn clamp(self, min: Self, max: Self) -> Self {
+        Self(self.0.clamp(min.0, max.0))
+    }
 }
 
-/// Convert course widths to horse lanes.
-pub fn course_widths_to_horse_lanes(widths: f64) -> f64 {
-    widths * HORSE_LANES_PER_COURSE_WIDTH
+/// Ratio between both values.
+impl std::ops::Div for CourseWidths {
+    type Output = f64;
+
+    fn div(self, divisor: Self) -> f64 {
+        self.0 / divisor.0
+    }
 }
 
 /// Bashin (バ身, horse-length) to meters conversion unit. 1 bashin = 2.5 meters.
@@ -69,12 +123,9 @@ mod tests {
 
     #[test]
     fn test_horse_lane_conversion() {
-        assert_eq!(
-            course_widths_to_meters(horse_lanes_to_course_widths(1.0)),
-            0.625
-        );
-        assert_eq!(horse_lanes_to_course_widths(18.0), 1.0);
-        assert_eq!(course_widths_to_horse_lanes(0.5), 9.0);
+        assert_eq!(CourseWidths::from_horse_lanes(1.0).meters(), 0.625);
+        assert_eq!(CourseWidths::from_horse_lanes(18.0), CourseWidths(1.0));
+        assert_eq!(CourseWidths(0.5).horse_lanes(), 9.0);
     }
 
     #[test]

@@ -644,7 +644,7 @@ fn test_lane_type_values() {
 
     let cases = [(0.0, 0), (0.2, 0), (0.3, 1), (0.5, 2), (0.7, 3)];
     for (lane, expected) in cases {
-        solver.runners[0].lane.current = lane;
+        solver.runners[0].lane.current = CourseWidths(lane);
         let actual = location_value(&SpatialVar::LaneType, &course, &solver.runners[0]);
         assert_eq!(actual, expected, "lane {lane}");
     }

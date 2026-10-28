@@ -46,27 +46,27 @@ fn test_duration_scales_with_style_aptitude() {
 
 #[test]
 fn test_trigger_proximity_in_course_widths() {
-    assert!(is_close_to_leader(3.7, 0.164));
-    assert!(is_close_to_leader(0.0, -0.164));
-    assert!(!is_close_to_leader(3.75, 0.0));
-    assert!(!is_close_to_leader(0.0, 0.166));
+    assert!(is_close_to_leader(3.7, CourseWidths(0.164)));
+    assert!(is_close_to_leader(0.0, CourseWidths(-0.164)));
+    assert!(!is_close_to_leader(3.75, CourseWidths(0.0)));
+    assert!(!is_close_to_leader(0.0, CourseWidths(0.166)));
 }
 
 #[test]
 fn test_exit_proximity_in_course_widths() {
-    assert!(!is_too_far(-5.0, -0.415));
-    assert!(!is_too_far(0.0, 0.415));
-    assert!(is_too_far(-5.01, 0.0));
-    assert!(is_too_far(0.0, 0.417));
-    assert!(is_too_far(0.0, -0.417));
-    assert!(is_too_far(5.0, 4.69));
+    assert!(!is_too_far(-5.0, CourseWidths(-0.415)));
+    assert!(!is_too_far(0.0, CourseWidths(0.415)));
+    assert!(is_too_far(-5.01, CourseWidths(0.0)));
+    assert!(is_too_far(0.0, CourseWidths(0.417)));
+    assert!(is_too_far(0.0, CourseWidths(-0.417)));
+    assert!(is_too_far(5.0, CourseWidths(4.69)));
 }
 
 #[test]
 fn test_exit_only_when_behind() {
-    assert!(is_too_far(-5.01, 0.0));
-    assert!(!is_too_far(5.01, 0.0));
-    assert!(!is_too_far(100.0, 0.0));
+    assert!(is_too_far(-5.01, CourseWidths(0.0)));
+    assert!(!is_too_far(5.01, CourseWidths(0.0)));
+    assert!(!is_too_far(100.0, CourseWidths(0.0)));
 }
 
 #[test]

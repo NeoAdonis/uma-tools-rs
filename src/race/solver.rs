@@ -34,7 +34,7 @@ use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
-use crate::units::horse_lanes_to_course_widths;
+use crate::units::CourseWidths;
 
 /// Scale applied to raw finish times to get displayed times.
 pub const FINISH_TIME_SCALE: f64 = 1.18;
@@ -740,13 +740,13 @@ impl RaceSolver<Runner> {
                     }
 
                     // ? Assume the runner behind is bumped if both are in the same line.
-                    let (inner_lane, outer) = if lane_diff > 0.0 {
+                    let (inner_lane, outer) = if lane_diff > CourseWidths(0.0) {
                         (behind.lane.current, i)
                     } else {
                         (ahead.lane.current, j)
                     };
                     let bumped_lane =
-                        inner_lane + horse_lanes_to_course_widths(proximity::OVERLAP_LANE_GAP);
+                        inner_lane + CourseWidths::from_horse_lanes(proximity::OVERLAP_LANE_GAP);
                     bumps.push((outer, bumped_lane.min(course_width)));
                 }
             }

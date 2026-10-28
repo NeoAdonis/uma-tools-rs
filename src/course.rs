@@ -10,9 +10,9 @@ include!("course/track_names.rs");
 pub mod geometry;
 
 use crate::course::geometry::*;
-use crate::units::{deserialize_ten_thousandths, horse_lanes_to_course_widths};
+use crate::units::{CourseWidths, deserialize_ten_thousandths};
 use num_enum::TryFromPrimitive;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
 
@@ -177,12 +177,12 @@ pub enum LaneType {
 
 impl LaneType {
     /// Lane type of a runner at `lane`, in course widths from the inner fence.
-    pub fn from_lane(lane: f64) -> Self {
-        if lane <= 0.2 {
+    pub fn from_lane(lane: CourseWidths) -> Self {
+        if lane <= CourseWidths(0.2) {
             LaneType::Inner
-        } else if lane <= 0.4 {
+        } else if lane <= CourseWidths(0.4) {
             LaneType::Middle
-        } else if lane <= 0.6 {
+        } else if lane <= CourseWidths(0.6) {
             LaneType::Outer
         } else {
             LaneType::Outside
@@ -251,8 +251,13 @@ pub struct Course {
     ///
     /// Stored in 10000ths of a course width in the course data (as `laneMax`), and
     /// converted when deserializing.
-    #[serde(rename = "laneMax", deserialize_with = "deserialize_ten_thousandths")]
-    pub width: f64,
+    #[serde(rename = "laneMax", deserialize_with = "deserialize_width")]
+    pub width: CourseWidths,
+}
+
+/// Deserialize the course width from 10000ths of a course width.
+fn deserialize_width<'de, D: Deserializer<'de>>(deserializer: D) -> Result<CourseWidths, D::Error> {
+    deserialize_ten_thousandths(deserializer).map(CourseWidths)
 }
 
 impl Course {
@@ -351,7 +356,7 @@ impl Course {
     }
 
     /// Get the starting lane position in course widths based on the gate roll.
-    pub fn starting_lane(&self, gate_roll: u8) -> f64 {
+    pub fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
         let adjustor = match self.race_track_id {
             TRACK_ID_OOI => 0.0,
             TRACK_ID_LONGCHAMP => {
@@ -369,7 +374,7 @@ impl Course {
                 }
             }
         };
-        horse_lanes_to_course_widths(gate_roll as f64 + adjustor)
+        CourseWidths::from_horse_lanes(gate_roll as f64 + adjustor)
     }
 
     /// Get the track name in the specified language, or `None` if the track name is
@@ -472,7 +477,7 @@ mod tests {
         let course = crate::test_utils::load_course(10201);
         assert_eq!(course.finish_time_min, 54.7);
         assert_eq!(course.finish_time_max, 57.0);
-        assert_eq!(course.width, 1.47);
+        assert_eq!(course.width, CourseWidths(1.47));
         assert_eq!(course.slopes[0].grade, 1.0);
     }
 
@@ -635,7 +640,7 @@ mod tests {
 
     #[test]
     fn test_starting_lane_adjustment_by_racetrack() {
-        let lane = horse_lanes_to_course_widths;
+        let lane = CourseWidths::from_horse_lanes;
         // (racetrack, gate roll, expected lane in horse lanes)
         let cases = [
             // Ooi: never adjusted.
@@ -736,7 +741,11 @@ mod tests {
             (0.61, LaneType::Outside),
         ];
         for (lane, expected) in cases {
-            assert_eq!(LaneType::from_lane(lane), expected, "lane {lane}");
+            assert_eq!(
+                LaneType::from_lane(CourseWidths(lane)),
+                expected,
+                "lane {lane}"
+            );
         }
     }
 }

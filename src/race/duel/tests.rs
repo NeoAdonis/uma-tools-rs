@@ -28,13 +28,13 @@ fn test_formulas() {
 
 #[test]
 fn test_trigger_proximity_in_course_widths() {
-    assert!(is_close(0.0, 0.0));
-    assert!(is_close(2.9, 0.249));
-    assert!(is_close(-2.9, -0.249));
-    assert!(!is_close(3.0, 0.0));
-    assert!(!is_close(-3.0, 0.0));
-    assert!(!is_close(0.0, 0.251));
-    assert!(!is_close(0.0, -0.251));
+    assert!(is_close(0.0, CourseWidths(0.0)));
+    assert!(is_close(2.9, CourseWidths(0.249)));
+    assert!(is_close(-2.9, CourseWidths(-0.249)));
+    assert!(!is_close(3.0, CourseWidths(0.0)));
+    assert!(!is_close(-3.0, CourseWidths(0.0)));
+    assert!(!is_close(0.0, CourseWidths(0.251)));
+    assert!(!is_close(0.0, CourseWidths(-0.251)));
 }
 
 #[test]

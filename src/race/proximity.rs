@@ -5,27 +5,27 @@
 //! whose sign doesn't matter.
 
 use crate::configuration::GameVersion;
-use crate::units::horse_lanes_to_course_widths;
+use crate::units::CourseWidths;
 
 /// Check if a runner is blocked by another runner from the front based on
 /// distance and lane difference.
 ///
 /// When front-blocked, the runner's speed is capped.
-pub fn check_front_blocked(distance: f64, lane_diff: f64) -> bool {
+pub fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
     if !(0.0..2.0).contains(&distance) {
         return false;
     }
     // Lane difference threshold decreases linearly with distance between runners.
     // At 0m, threshold is 0.75 lanes.
     // At 2m, threshold is 0.3 lanes.
-    lane_diff.abs() <= horse_lanes_to_course_widths((1.0 - 0.3 * distance) * 0.75)
+    lane_diff.abs() <= CourseWidths::from_horse_lanes((1.0 - 0.3 * distance) * 0.75)
 }
 
 /// Check if a runner is blocking another runner from the side based on distance
 /// and lane difference.
 ///
 /// When side-blocked, the runner cannot change lanes.
-pub fn check_side_blocked(distance: f64, lane_diff: f64) -> bool {
+pub fn check_side_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 1.05, 2.0)
 }
 
@@ -37,7 +37,7 @@ pub fn check_side_blocked(distance: f64, lane_diff: f64) -> bool {
 /// (1.5m and 1.5 lanes).
 ///
 /// This is checked by certain skills (`near_count`).
-pub fn is_near(distance: f64, lane_diff: f64, game_version: GameVersion) -> bool {
+pub fn is_near(distance: f64, lane_diff: CourseWidths, game_version: GameVersion) -> bool {
     let threshold = if game_version >= GameVersion::FirstAnniversary {
         3.0
     } else {
@@ -50,7 +50,7 @@ pub fn is_near(distance: f64, lane_diff: f64, game_version: GameVersion) -> bool
 /// distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_near_same_lane(distance: f64, lane_diff: f64) -> bool {
+pub fn is_near_same_lane(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 2.5, 1.0)
 }
 
@@ -58,7 +58,7 @@ pub fn is_near_same_lane(distance: f64, lane_diff: f64) -> bool {
 /// lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_near_behind_set1(distance: f64, lane_diff: f64) -> bool {
+pub fn is_near_behind_set1(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 5.0, 2.7)
 }
 
@@ -67,7 +67,7 @@ pub fn is_near_behind_set1(distance: f64, lane_diff: f64) -> bool {
 /// distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_front_surrounded(distance: f64, lane_diff: f64) -> bool {
+pub fn is_front_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 3.0, 1.5)
 }
 
@@ -75,7 +75,7 @@ pub fn is_front_surrounded(distance: f64, lane_diff: f64) -> bool {
 /// from the side based on distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_side_surrounded(distance: f64, lane_diff: f64) -> bool {
+pub fn is_side_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 1.5, 3.0)
 }
 
@@ -87,7 +87,7 @@ pub const OVERLAP_LANE_GAP: f64 = 0.4;
 
 /// Check if a runner is overlapping with another runner based on position and
 /// lane difference.
-pub fn is_overlapping(distance: f64, lane_diff: f64) -> bool {
+pub fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, OVERLAP_DISTANCE, OVERLAP_LANE_GAP)
 }
 
@@ -96,11 +96,16 @@ pub fn is_overlapping(distance: f64, lane_diff: f64) -> bool {
 ///
 /// `distance` and `max_distance` are in meters, `lane_diff` is in course widths
 /// and `max_lane_diff` is in horse lanes.
-pub fn is_near_by(distance: f64, lane_diff: f64, max_distance: f64, max_lane_diff: f64) -> bool {
+pub fn is_near_by(
+    distance: f64,
+    lane_diff: CourseWidths,
+    max_distance: f64,
+    max_lane_diff: f64,
+) -> bool {
     if !(0.0..max_distance).contains(&distance) {
         return false;
     }
-    lane_diff.abs() < horse_lanes_to_course_widths(max_lane_diff)
+    lane_diff.abs() < CourseWidths::from_horse_lanes(max_lane_diff)
 }
 
 #[cfg(test)]

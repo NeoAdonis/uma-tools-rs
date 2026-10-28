@@ -7,6 +7,7 @@ use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
 use crate::uma::*;
+use crate::units::CourseWidths;
 use std::sync::Arc;
 
 /// Assert that two floats are equal, or within `1e-9` of each other.
@@ -54,7 +55,7 @@ pub(crate) fn synthetic_course() -> Course {
         race_track_id: 10006,
         finish_time_min: 117.1,
         finish_time_max: 123.0,
-        width: 1.0,
+        width: CourseWidths(1.0),
     }
 }
 

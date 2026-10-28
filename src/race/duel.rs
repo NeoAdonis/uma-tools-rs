@@ -5,10 +5,12 @@
 //! runner keeps dueling until her HP runs low or she gets far from everyone
 //! who has dueled during the race. Once she leaves, she can't duel again.
 
+use crate::units::CourseWidths;
+
 /// Maximum distance (m) between two runners to count as close.
 pub const TRIGGER_DISTANCE: f64 = 3.0;
 /// Maximum lane gap (in course widths) between two runners to count as close.
-pub const TRIGGER_LANE_GAP: f64 = 0.25;
+pub const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
 /// Time (s) two runners must stay close in a row before they can start dueling,
 /// counted from the first frame they're close.
 pub const TRIGGER_TIME: f64 = 2.0;
@@ -97,7 +99,7 @@ impl Duel {
 
 /// Check if two runners `distance` meters and `lane_diff` course widths apart
 /// are close enough to start counting towards a duel.
-pub fn is_close(distance: f64, lane_diff: f64) -> bool {
+pub fn is_close(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 

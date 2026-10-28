@@ -45,6 +45,7 @@ use crate::skill::*;
 use crate::trigger::skill_activation::{ActiveTimedEffect, PendingEffect, SkillActivationRecord};
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
+use crate::units::CourseWidths;
 
 mod lane;
 mod positioning;
@@ -59,9 +60,8 @@ pub use surroundings::{BlockedState, NearbyState, SurroundState};
 /// Maximum target speed a runner can reach in m/s.
 pub const MAX_TARGET_SPEED: f64 = 30.0;
 
-/// Distance from the inner fence (in course widths) above which the force-in
-/// modifier applies.
-pub const FORCE_IN_MIN_LANE: f64 = 0.12;
+/// Distance from the inner fence above which the force-in modifier applies.
+pub const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
 
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
@@ -288,11 +288,11 @@ pub struct Runner {
     pub overtake_target_time: f64,
     /// Time spent being an overtake target of someone else in seconds.
     pub being_overtake_target_time: f64,
-    /// Extra move lane position in course widths.
+    /// Extra move lane position.
     ///
     /// It's set during early/mid phase based on furthest visible runner. Used as
     /// fallback in overtake mode lane selection.
-    pub extra_move_lane: Option<f64>,
+    pub extra_move_lane: Option<CourseWidths>,
     /// State related to order (rank) in the race.
     pub order: OrderState,
     /// Distance differences between this runner and others.

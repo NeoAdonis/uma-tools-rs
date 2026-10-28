@@ -6,7 +6,7 @@ use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
 use crate::trigger::skill_activation::{OvertakeExtension, PendingEffect};
-use crate::units::horse_lanes_to_course_widths;
+use crate::units::CourseWidths;
 use std::sync::Arc;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -580,7 +580,7 @@ fn place(solver: &mut RaceSolver<Runner>, i: usize, position: f64, lane: f64) {
     let runner = &mut solver.runners[i];
     runner.position = position;
     runner.section = section;
-    runner.lane.current = lane;
+    runner.lane.current = CourseWidths(lane);
 }
 
 fn update_struggle(solver: &mut RaceSolver<Runner>) {
@@ -1253,7 +1253,7 @@ fn test_force_in_applies_only_away_from_inner_fence() {
 
     // Threshold is 0.12 course widths.
     let target_speed_at = |runner: &mut Runner, lane: f64| {
-        runner.lane.current = lane;
+        runner.lane.current = CourseWidths(lane);
         runner.update_target_speed(state);
         runner.target_speed
     };
@@ -1275,7 +1275,7 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.phase = Phase::Early;
-    runner.lane.current = 0.5;
+    runner.lane.current = CourseWidths(0.5);
     let mut target_speed_with = |side_in: bool, side_out: bool| {
         runner.blocked.side_in = side_in;
         runner.blocked.side_out = side_out;
@@ -1294,18 +1294,18 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
 fn test_skill_target_lane_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let runner = &mut solver.runners[0];
-    runner.lane = crate::race::runner::LaneState::new(0.4);
-    runner.skill_modifiers.target_lane = Some(0.5);
+    runner.lane = crate::race::runner::LaneState::new(CourseWidths(0.4));
+    runner.skill_modifiers.target_lane = Some(CourseWidths(0.5));
     // Fixed mode.
     solver.update_blocking_status(DELTA_TIME);
-    assert_eq!(solver.runners[0].lane.target, 0.5);
+    assert_eq!(solver.runners[0].lane.target, CourseWidths(0.5));
 
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     for _ in 0..2000 {
         runner.update_lane(&state.course, DELTA_TIME);
     }
-    assert_close!(runner.lane.current, 0.5);
+    assert_close!(runner.lane.current.0, 0.5);
 }
 
 #[test]
@@ -1314,15 +1314,15 @@ fn test_move_lane_modifier_requires_lane_movement() {
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.skill_modifiers.lane_speed = 0.1;
-    runner.lane.current = 0.4;
-    runner.lane.target = 0.4;
+    runner.lane.current = CourseWidths(0.4);
+    runner.lane.target = CourseWidths(0.4);
 
     runner.update_lane(&state.course, DELTA_TIME);
     assert_eq!(runner.lane.speed, 0.0);
     runner.update_target_speed(state);
     let still_speed = runner.target_speed;
 
-    runner.lane.target = 0.7;
+    runner.lane.target = CourseWidths(0.7);
     runner.update_lane(&state.course, DELTA_TIME);
     assert!(runner.lane.speed > 0.0);
     runner.update_target_speed(state);
@@ -1335,23 +1335,23 @@ fn test_lane_speed_is_directional_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
-    runner.lane.current = 0.4;
+    runner.lane.current = CourseWidths(0.4);
     runner.skill_modifiers.lane_speed = 0.1;
 
     // Moving out: (current speed + skill modifier) course widths per second.
-    runner.lane.target = 0.7;
+    runner.lane.target = CourseWidths(0.7);
     runner.update_lane(&state.course, DELTA_TIME);
     let current_speed = runner.lane.current_speed;
     assert_close!(current_speed, 0.03 * DELTA_TIME);
     assert_close!(runner.lane.speed, current_speed + 0.1);
-    let moved = runner.lane.current - 0.4;
+    let moved = runner.lane.current.0 - 0.4;
     assert_close!(moved, runner.lane.speed * DELTA_TIME);
 
     // Moving in: faster the further out the runner is.
-    runner.lane.target = 0.0;
+    runner.lane.target = CourseWidths(0.0);
     let lane = runner.lane.current;
     runner.update_lane(&state.course, DELTA_TIME);
-    let direction_modifier = -(1.0 + lane);
+    let direction_modifier = -(1.0 + lane.0);
     let expected = (runner.lane.current_speed + 0.1) * direction_modifier;
     assert_close!(runner.lane.speed, expected);
 }
@@ -1361,12 +1361,12 @@ fn test_lane_change_reaching_target_resets_current_speed() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
-    runner.lane.current = 0.4;
-    runner.lane.target = 0.401;
+    runner.lane.current = CourseWidths(0.4);
+    runner.lane.target = CourseWidths(0.401);
     runner.lane.current_speed = 0.02;
 
     runner.update_lane(&state.course, DELTA_TIME);
-    assert_eq!(runner.lane.current, 0.401);
+    assert_eq!(runner.lane.current, CourseWidths(0.401));
     assert_eq!(runner.lane.current_speed, 0.0);
     // The runner still moved on this frame.
     assert!(runner.lane.speed > 0.0);
@@ -1380,20 +1380,20 @@ fn test_side_blocked_runner_keeps_accelerating_without_moving() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
-    runner.lane.current = 0.4;
-    runner.lane.target = 0.7;
+    runner.lane.current = CourseWidths(0.4);
+    runner.lane.target = CourseWidths(0.7);
     runner.blocked.side_out = true;
 
     runner.update_lane(&state.course, DELTA_TIME);
     runner.update_lane(&state.course, DELTA_TIME);
-    assert_eq!(runner.lane.current, 0.4);
+    assert_eq!(runner.lane.current, CourseWidths(0.4));
     assert_eq!(runner.lane.speed, 0.0);
     assert_close!(runner.lane.current_speed, 0.03 * 2.0 * DELTA_TIME);
 
     // Blocked only towards the outside, so moving in is still possible.
-    runner.lane.target = 0.0;
+    runner.lane.target = CourseWidths(0.0);
     runner.update_lane(&state.course, DELTA_TIME);
-    assert!(runner.lane.current < 0.4);
+    assert!(runner.lane.current < CourseWidths(0.4));
     assert!(runner.lane.speed < 0.0);
 }
 
@@ -1404,12 +1404,13 @@ fn test_normal_mode_lane_targets_in_course_widths() {
         solver.runners[0]
             .normal_mode_lane_decision(&solver.state.course, &solver.runners)
             .target
+            .0
     };
 
     // Move inward by 0.05 course widths in the early phase.
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Early;
-    runner.lane.current = 0.4;
+    runner.lane.current = CourseWidths(0.4);
     assert_close!(target(&solver), 0.35);
 
     // Pace down targets 0.18 course widths from the inner fence.
@@ -1426,10 +1427,13 @@ fn test_overlap_bumps_outer_runner_ahead() {
     );
     solver.resolve_overlaps();
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert_close!(ahead.lane.current, 0.19 + horse_lanes_to_course_widths(0.4));
+    assert_close!(
+        ahead.lane.current.0,
+        0.19 + CourseWidths::from_horse_lanes(0.4).0
+    );
     assert_eq!(ahead.lane.target, ahead.lane.current);
     assert!(ahead.should_update_target_lane());
-    assert_eq!(behind.lane.current, 0.19);
+    assert_eq!(behind.lane.current, CourseWidths(0.19));
 }
 
 #[test]
@@ -1440,10 +1444,10 @@ fn test_overlap_bumps_outer_runner_behind() {
     );
     solver.resolve_overlaps();
     let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert_eq!(ahead.lane.current, 0.19);
+    assert_eq!(ahead.lane.current, CourseWidths(0.19));
     assert_close!(
-        behind.lane.current,
-        0.19 + horse_lanes_to_course_widths(0.4)
+        behind.lane.current.0,
+        0.19 + CourseWidths::from_horse_lanes(0.4).0
     );
     assert_eq!(behind.lane.target, behind.lane.current);
     assert!(behind.should_update_target_lane());
@@ -1457,8 +1461,8 @@ fn test_no_bump_without_overlap() {
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
-    assert_eq!(solver.runners[0].lane.current, 0.2);
-    assert_eq!(solver.runners[1].lane.current, 0.19);
+    assert_eq!(solver.runners[0].lane.current, CourseWidths(0.2));
+    assert_eq!(solver.runners[1].lane.current, CourseWidths(0.19));
 
     // Too far apart laterally.
     let mut solver = struggle_solver(
@@ -1466,8 +1470,8 @@ fn test_no_bump_without_overlap() {
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
-    assert_eq!(solver.runners[0].lane.current, 0.215);
-    assert_eq!(solver.runners[1].lane.current, 0.19);
+    assert_eq!(solver.runners[0].lane.current, CourseWidths(0.215));
+    assert_eq!(solver.runners[1].lane.current, CourseWidths(0.19));
 }
 
 #[test]
@@ -1480,7 +1484,7 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
         runner.phase = Phase::Mid;
     }
     // Heading inward, right into the other runner.
-    solver.runners[0].lane.target = 0.0;
+    solver.runners[0].lane.target = CourseWidths(0.0);
 
     solver.resolve_overlaps();
     solver.update_blocking_status(DELTA_TIME);
@@ -1488,8 +1492,8 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     assert!(bumped.blocked.side_in);
     // Too close to the runner inside in mid-race, so she targets 2 horse lanes
     // away from her. Being on her target lane after the bump forces the update.
-    let expected = 0.19 + horse_lanes_to_course_widths(2.0);
-    assert_close!(bumped.lane.target, expected);
+    let expected = 0.19 + CourseWidths::from_horse_lanes(2.0).0;
+    assert_close!(bumped.lane.target.0, expected);
 }
 
 /// Mid-race solver with a runner 30m ahead of another in the same lane, slower
@@ -1564,7 +1568,7 @@ fn test_fov_bonus_narrows_field_of_view_at_a_given_distance() {
     // width there is 3.875 horse lanes, but not within a 40m one (2.4375).
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 210.0, horse_lanes_to_course_widths(3.0)),
+            (Style::Pace, 210.0, CourseWidths::from_horse_lanes(3.0).0),
             (Style::Pace, 200.0, 0.0),
         ],
         GameVersion::LATEST,
@@ -1956,7 +1960,7 @@ fn test_targets_runners_ahead_in_field_of_view() {
     // Runners 40m, 30m, 20m and 10m ahead of runner 4, all in the same lane.
     let mut solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (Style::Late, team)));
     for runner in &mut solver.runners {
-        runner.lane.current = 0.0;
+        runner.lane.current = CourseWidths(0.0);
     }
 
     // Within the base 20m field of view, nearest first; not runners behind.
@@ -1965,7 +1969,7 @@ fn test_targets_runners_ahead_in_field_of_view() {
     assert_eq!(targets(&solver, 4, in_fov(1)), [3]);
 
     // Out of the field of view once far enough to the side.
-    solver.runners[3].lane.current = horse_lanes_to_course_widths(5.0);
+    solver.runners[3].lane.current = CourseWidths::from_horse_lanes(5.0);
     assert_eq!(targets(&solver, 4, in_fov(5)), [2]);
 }
 
@@ -2141,7 +2145,7 @@ fn test_lane_and_duration_effects_set_skill_modifiers() {
     // Lane speed adds up, duration scaling multiplies.
     let mods = &solver.runners[0].skill_modifiers;
     assert_close!(mods.lane_speed, 0.05);
-    assert_eq!(mods.target_lane, Some(0.5));
+    assert_eq!(mods.target_lane, Some(CourseWidths(0.5)));
     assert_close!(mods.duration_scaling, 3.0);
 
     // Back to defaults once they expire.

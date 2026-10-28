@@ -41,7 +41,7 @@ fn test_skill_modifiers_from_effects() {
     assert_close!(mods.all_out_spurt_acceleration, 0.3);
     assert_close!(mods.lane_speed, 0.02);
     assert_close!(mods.visible_distance, -5.0);
-    assert_eq!(mods.target_lane, Some(0.5));
+    assert_eq!(mods.target_lane, Some(CourseWidths(0.5)));
     // Multiplicative.
     assert_close!(mods.duration_scaling, 3.0);
 }
