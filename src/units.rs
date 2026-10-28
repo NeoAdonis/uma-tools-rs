@@ -26,6 +26,24 @@ pub const HORSE_LANES_PER_COURSE_WIDTH: f64 = 18.0;
 /// Game formulas often use horse lanes instead (see
 /// [`HORSE_LANES_PER_COURSE_WIDTH`]); they're plain numbers, converted with
 /// [`CourseWidths::from_horse_lanes`], so that both units can't be mixed up.
+///
+/// # Examples
+///
+/// Check whether two runners are within a lane threshold that a game formula
+/// gives in horse lanes:
+///
+/// ```
+/// use uma_tools::units::CourseWidths;
+///
+/// let runner = CourseWidths(0.5);
+/// let other = CourseWidths(0.375);
+/// let max_lane_diff = CourseWidths::from_horse_lanes(3.0);
+///
+/// let gap = (runner - other).abs();
+/// assert!(gap <= max_lane_diff);
+/// assert_eq!(gap.horse_lanes(), 2.25);
+/// assert_eq!(gap.meters(), 1.40625);
+/// ```
 #[derive(
     Debug,
     Clone,
@@ -93,11 +111,30 @@ impl std::ops::Div for CourseWidths {
 pub const BASHIN_TO_METERS: f64 = 2.5;
 
 /// Convert bashin to meters.
+///
+/// Inverse of [`meters_to_bashin`], which has an example.
 pub fn bashin_to_meters(bashin: f64) -> f64 {
     bashin * BASHIN_TO_METERS
 }
 
 /// Convert meters to bashin.
+///
+/// # Examples
+///
+/// Evaluate the `bashin_diff_infront` skill condition variable, which counts
+/// whole bashin to the runner ahead:
+///
+/// ```
+/// use uma_tools::units::{bashin_to_meters, meters_to_bashin};
+///
+/// let runner = 1200.0;
+/// let runner_ahead = 1206.0;
+/// let bashin_diff_infront = meters_to_bashin(runner_ahead - runner).floor();
+/// assert_eq!(bashin_diff_infront, 2.0);
+///
+/// // `bashin_diff_infront<=1` holds until the gap reaches 2 bashin.
+/// assert_eq!(bashin_to_meters(2.0), 5.0);
+/// ```
 pub fn meters_to_bashin(meters: f64) -> f64 {
     meters / BASHIN_TO_METERS
 }
@@ -107,11 +144,28 @@ pub fn meters_to_bashin(meters: f64) -> f64 {
 pub const FURLONG_TO_METERS: f64 = 201.168;
 
 /// Convert furlongs to meters.
+///
+/// Inverse of [`meters_to_furlongs`], which has an example.
 pub fn furlongs_to_meters(furlongs: f64) -> f64 {
     furlongs * FURLONG_TO_METERS
 }
 
 /// Convert meters to furlongs.
+///
+/// # Examples
+///
+/// Evaluate the `furlong` skill condition variable, which counts whole
+/// furlongs covered from the official start line:
+///
+/// ```
+/// use uma_tools::units::{furlongs_to_meters, meters_to_furlongs};
+///
+/// let furlong = meters_to_furlongs(1500.0).floor();
+/// assert_eq!(furlong, 7.0);
+///
+/// // `furlong>=8` starts to hold about 1609 meters in.
+/// assert_eq!(furlongs_to_meters(8.0).round(), 1609.0);
+/// ```
 pub fn meters_to_furlongs(meters: f64) -> f64 {
     meters / FURLONG_TO_METERS
 }

@@ -21,6 +21,19 @@ pub enum Margin {
 
 impl Margin {
     /// Convert a margin in meters to its displayed category.
+    ///
+    /// # Examples
+    ///
+    /// Show the margins recorded by the solver as they appear in the race
+    /// results:
+    ///
+    /// ```
+    /// use uma_tools::race::margin::Margin;
+    ///
+    /// assert_eq!(Margin::from_meters(0.3), Margin::Head);
+    /// assert_eq!(Margin::from_meters(3.75), Margin::Bashin(1.5));
+    /// assert_eq!(Margin::from_meters(30.0), Margin::Distance);
+    /// ```
     pub fn from_meters(meters: f64) -> Self {
         let bashin = meters_to_bashin(meters);
         if meters < 0.2 {

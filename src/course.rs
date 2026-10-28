@@ -54,6 +54,23 @@ impl Phase {
     /// - Mid: sections 4-15.
     /// - Late: sections 16-19.
     /// - Last: sections 20-23, up to the goal.
+    ///
+    /// # Examples
+    ///
+    /// Find the stretch of the course where a skill with `phase==3` can
+    /// activate, and where one with `phase_firsthalf==3` can:
+    ///
+    /// ```
+    /// use uma_tools::course::{Course, Phase};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Tokyo, turf 2400m.
+    /// let course = Course::from_json_file("data/course_data.json", "10606")?;
+    /// assert_eq!(Phase::Last.boundaries(&course), (2000.0, 2400.0));
+    /// assert_eq!(Phase::Last.boundaries_first_half(&course), (2000.0, 2200.0));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn boundaries(&self, course: &Course) -> (f64, f64) {
         match self {
             Phase::RunUp => (0.0, course.run_up),
@@ -66,6 +83,8 @@ impl Phase {
 
     /// Get the boundaries `(start, end)` in meters for `self`'s first quarter on a
     /// given course.
+    ///
+    /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
         match self {
             Phase::RunUp => (0.0, course.run_up),
@@ -78,6 +97,8 @@ impl Phase {
 
     /// Get the boundaries `(start, end)` in meters for `self`'s first half
     /// on a given course.
+    ///
+    /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_first_half(&self, course: &Course) -> (f64, f64) {
         match self {
             Phase::RunUp => (0.0, course.run_up),
@@ -90,6 +111,8 @@ impl Phase {
 
     /// Get the boundaries `(start, end)` in meters for `self`'s second half
     /// on a given course.
+    ///
+    /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_second_half(&self, course: &Course) -> (f64, f64) {
         match self {
             Phase::RunUp => (0.0, course.run_up),
@@ -101,6 +124,23 @@ impl Phase {
     }
 
     /// Determine which phase a given position falls into.
+    ///
+    /// # Examples
+    ///
+    /// Positions are measured from the gate, so on a course with a run-up the
+    /// Early race starts after it, and `phase==0` doesn't hold before:
+    ///
+    /// ```
+    /// use uma_tools::course::{Course, Phase};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
+    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// assert_eq!(Phase::from_position(30.0, &course), Phase::RunUp);
+    /// assert_eq!(Phase::from_position(50.0, &course), Phase::Early);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_position(position: f64, course: &Course) -> Phase {
         if position < course.run_up {
             Phase::RunUp
@@ -269,12 +309,36 @@ impl Course {
 
     /// Get the distance in meters covered from the official start line at
     /// `position` (0 during the run-up).
+    ///
+    /// See [`Course::position_at_rate`] for an example.
     pub fn nominal_position(&self, position: f64) -> f64 {
         (position - self.run_up).max(0.0)
     }
 
     /// Get the position in meters where `rate` percent of the nominal distance
     /// has been covered.
+    ///
+    /// Inverse of [`Course::distance_rate`], but not rounded down.
+    ///
+    /// # Examples
+    ///
+    /// Find where a skill with `distance_rate>=50` can start to activate.
+    /// Positions are measured from the gate, so on a course with a run-up they
+    /// are ahead of the nominal distance covered:
+    ///
+    /// ```
+    /// use uma_tools::Course;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
+    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// let position = course.position_at_rate(50.0);
+    /// assert_eq!(position, 850.0);
+    /// assert_eq!(course.nominal_position(position), 800.0);
+    /// assert_eq!(course.distance_rate(position), 50.0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn position_at_rate(&self, rate: f64) -> f64 {
         self.run_up + rate / 100.0 * self.distance as f64
     }
@@ -288,6 +352,8 @@ impl Course {
 
     /// Get the start position in meters of section `section` (0-24, the latter
     /// being the goal).
+    ///
+    /// See [`Course::section_from_position`] for an example.
     pub fn section_start(&self, section: u8) -> f64 {
         debug_assert!(section <= 24, "section {section} is past the goal");
         self.run_up + self.section_length() * section as f64
@@ -312,6 +378,26 @@ impl Course {
     /// Corners are numbered backwards from the final corner, which is always the
     /// fourth. If the race goes through the same corner multiple times (i.e. more
     /// than one lap), its number is repeated.
+    ///
+    /// # Examples
+    ///
+    /// Find where a skill with `corner==3` can activate. On a course with more
+    /// than four corners, it's more than one corner:
+    ///
+    /// ```
+    /// use uma_tools::Course;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Tokyo, turf 3400m, with six corners.
+    /// let course = Course::from_json_file("data/course_data.json", "10608")?;
+    /// let starts: Vec<f64> = (0..course.corners.len())
+    ///     .filter(|&idx| course.corner_number(idx) == 3)
+    ///     .map(|idx| course.corners[idx].start)
+    ///     .collect();
+    /// assert_eq!(starts, [292.0, 2350.0]);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn corner_number(&self, idx: usize) -> u8 {
         debug_assert!(idx < self.corners.len(), "no corner at index {idx}");
         4 - ((self.corners.len() - 1 - idx) % 4) as u8
@@ -346,6 +432,8 @@ impl Course {
 
     /// Get the distance rate (percentage of the nominal distance completed) from
     /// a given position. It's 0 during the run-up.
+    ///
+    /// See [`Course::position_at_rate`] for an example.
     pub fn distance_rate(&self, position: f64) -> f64 {
         (self.nominal_position(position) / self.distance as f64 * 100.0).floor()
     }
@@ -353,6 +441,25 @@ impl Course {
     /// Get the section index (0-23) from a given position in meters.
     ///
     /// The run-up counts as section 0.
+    ///
+    /// # Examples
+    ///
+    /// Sections split the nominal distance, so on a course with a run-up they
+    /// are offset by it:
+    ///
+    /// ```
+    /// use uma_tools::Course;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
+    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// let section = course.section_from_position(1200.0);
+    /// assert_eq!(section, 17);
+    /// assert!(course.section_start(section) <= 1200.0);
+    /// assert!(course.section_start(section + 1) > 1200.0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn section_from_position(&self, position: f64) -> u8 {
         (self.nominal_position(position) / self.section_length()).floor() as u8
     }

@@ -302,6 +302,35 @@ impl Mood {
 impl Uma {
     /// Convert `self`, holding raw stats, to base stats using the mood
     /// multiplier.
+    ///
+    /// Base stats are the ones that race formulas and course set status checks
+    /// use. Stats above 1200 only count half of their excess.
+    ///
+    /// # Examples
+    ///
+    /// See how much 400 speed above 1200 is worth in a race, and how mood
+    /// changes it:
+    ///
+    /// ```
+    /// use uma_tools::course::ThresholdStat;
+    /// use uma_tools::{Aptitude, Mood, Style, Uma};
+    ///
+    /// let raw = Uma {
+    ///     speed: 1600,
+    ///     stamina: 800,
+    ///     power: 1000,
+    ///     guts: 600,
+    ///     wit: 1200,
+    ///     style: Style::Pace,
+    ///     distance_aptitude: Aptitude::A,
+    ///     track_aptitude: Aptitude::A,
+    ///     style_aptitude: Aptitude::A,
+    ///     fan_count: None,
+    /// };
+    /// assert_eq!(raw.to_base(Mood::Normal).speed, 1400);
+    /// assert_eq!(raw.to_base(Mood::Great).speed, 1456);
+    /// assert_eq!(raw.to_base(Mood::Awful).stat(ThresholdStat::Speed), 1344);
+    /// ```
     pub fn to_base(self, mood: Mood) -> Self {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
         // multiplier based on team rank. This is out of scope for this simulator.

@@ -54,6 +54,21 @@ pub struct Corner {
 
 impl Corner {
     /// Curvature in radians per meter, as if the corner turned evenly.
+    ///
+    /// # Examples
+    ///
+    /// Estimate the extra distance a runner covers by taking a corner further
+    /// out, which is its curvature times the lane offset over its length:
+    ///
+    /// ```
+    /// use uma_tools::course::geometry::Corner;
+    /// use uma_tools::units::CourseWidths;
+    ///
+    /// let corner = Corner { start: 500.0, length: 150.0, turn_angle: 90.0 };
+    /// let lane = CourseWidths(0.5);
+    /// let extra = corner.curvature() * lane.meters() * corner.length;
+    /// assert_eq!(extra.round(), 9.0);
+    /// ```
     pub fn curvature(&self) -> f64 {
         self.turn_angle.to_radians() / self.length
     }
