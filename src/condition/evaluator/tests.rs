@@ -5,6 +5,7 @@ use crate::race::all_out_spurt::AllOutSpurt;
 use crate::race::duel::Duel;
 use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
 use crate::race::parameters::*;
+use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::rush::RushState;
 use crate::race::solver::RaceSolver;
@@ -1282,7 +1283,14 @@ fn test_run_at_full_speed_random_follows_all_out_spurt() {
 fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
     let solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let state = solver.state;
-    let mut runner = UnreadyRunner::new(uma(Style::Late), 1, Mood::Good, &state, vec![]);
+    let mut runner = UnreadyRunner::new(
+        uma(Style::Late),
+        1,
+        Mood::Good,
+        &state,
+        vec![],
+        RngSeed::new(0),
+    );
     runner.base.speed = 1101;
     (state, runner)
 }

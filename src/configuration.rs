@@ -83,7 +83,8 @@ impl Roll {
     /// Resolve a check that succeeds with probability `p`.
     ///
     /// The RNG is consumed even if the outcome is forced, so that changing the
-    /// mode doesn't shift unrelated random outcomes for the same seed.
+    /// mode doesn't shift later draws of the same stream (e.g. a skill's trigger
+    /// rolls after its wit check) for the same seed.
     ///
     /// # Panics
     ///

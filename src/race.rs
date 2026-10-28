@@ -22,6 +22,7 @@ pub(crate) mod modifiers;
 pub mod parameters;
 pub mod popularity;
 pub(crate) mod proximity;
+pub(crate) mod rng;
 pub mod runner;
 pub mod rush;
 pub(crate) mod secure_lead;

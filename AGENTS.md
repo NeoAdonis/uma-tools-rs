@@ -53,6 +53,7 @@ Source code, relative to `src/`:
   - `race/hp.rs`: HP calculations.
   - `race/popularity.rs`: runner popularity calculations.
   - `race/transitions.rs`: calculations to detect transitions between race sections and course features.
+  - `race/rng.rs`: random number streams, derived per runner, mechanic and skill from the race seed.
   - Any other module in `race/` contains properties and calculations related to a specific race mechanic.
 - `trigger.rs`, `trigger/`: trigger system to activate skills based upon their conditions and variables. The `trigger` module docs give an overview of the whole skill activation system.
 - `skill.rs`: skill data structures and helpers.

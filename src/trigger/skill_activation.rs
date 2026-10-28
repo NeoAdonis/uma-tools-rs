@@ -272,6 +272,9 @@ pub(crate) struct PendingEffect {
     pub(crate) duration: f64,
     /// Wit limit break bonus of the caster.
     pub(crate) wit_bonus: f64,
+    /// Draw (from 0 to 1) to pick random targets, from the stream of the
+    /// caster's skill.
+    pub(crate) target_roll: f64,
 }
 
 /// Record of a skill activation during the race.

@@ -113,8 +113,15 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
-    for (runner, &(_, position)) in solver.runners.iter_mut().zip(runners) {
-        runner.position = position;
+    // Runners are readied in gate order, so give each position to a runner with
+    // its style (those with the same style are identical).
+    let mut unplaced: Vec<&mut Runner> = solver.runners.iter_mut().collect();
+    for &(style, position) in runners {
+        let i = unplaced
+            .iter()
+            .position(|runner| runner.adjusted.style == style)
+            .unwrap();
+        unplaced.swap_remove(i).position = position;
     }
     sort_by_position(&mut solver);
     solver
@@ -405,6 +412,8 @@ fn test_positioning_ends_after_first_ten_sections() {
 fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
     let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(rng_seed));
     solver.runners[0].start_delay = start_delay;
+    // Positioning (checked from the start delay on) would change HP consumption.
+    solver.runners[0].next_positioning_check = f64::INFINITY;
     solver
 }
 
@@ -1867,7 +1876,7 @@ fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
 
 /// Targets of a skill effect casted by runner `caster` (in position order).
 fn targets(solver: &RaceSolver<Runner>, caster: usize, target: SkillTarget) -> Vec<usize> {
-    solver.select_targets(caster, target)
+    solver.select_targets(caster, target, 0.0)
 }
 
 #[test]
@@ -1916,8 +1925,8 @@ fn test_random_team_member_targets_one_ally_or_oneself() {
         (Style::Late, 1),
     ]);
     let mut seen = [false; 4];
-    for _ in 0..100 {
-        let selected = targets(&solver, 2, SkillTarget::RandomAlly);
+    for roll in [0.0, 0.3, 0.5, 0.7, 0.999] {
+        let selected = solver.select_targets(2, SkillTarget::RandomAlly, roll);
         assert_eq!(selected.len(), 1);
         seen[selected[0]] = true;
     }
@@ -2049,6 +2058,7 @@ fn test_pending_effects_apply_to_targets() {
         },
         duration: 3.0,
         wit_bonus: 0.0,
+        target_roll: 0.0,
     });
     solver.apply_pending_effects();
 
@@ -2125,6 +2135,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
         },
         duration: 3.0,
         wit_bonus: 0.0,
+        target_roll: 0.0,
     }
 }
 
@@ -2729,7 +2740,8 @@ fn test_activate_random_gold_picks_skills_that_failed_the_wit_check() {
             0.0,
             OvertakeExtension::default(),
             0.0,
-            None,
+            // As if cast by the skill itself, whose stream picks it.
+            Some(0),
             state,
         );
     };
@@ -3389,16 +3401,10 @@ fn course_with_slopes(slopes: Vec<Slope>) -> Course {
 
 /// Move the first runner to `position` on `course`, applying slope effects.
 fn move_on_slopes(solver: &mut RaceSolver<Runner>, course: &Course, position: f64) {
-    let RaceSolver { runners, state, .. } = solver;
-    let runner = &mut runners[0];
+    let runner = &mut solver.runners[0];
     runner.position = position;
     let transitions = runner.segments.update(position, course);
-    runner.update_slope(
-        &course.slopes,
-        &transitions.slope,
-        DELTA_TIME,
-        &mut *state.rng.borrow_mut(),
-    );
+    runner.update_slope(&course.slopes, &transitions.slope, DELTA_TIME);
 }
 
 #[test]

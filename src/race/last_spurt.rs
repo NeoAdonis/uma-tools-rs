@@ -239,7 +239,7 @@ impl Runner {
         // Try each candidate from best to worst.
         candidates.sort_by(|a, b| a.time.total_cmp(&b.time));
         for candidate in &candidates {
-            if rng.random_bool(acceptance_chance) {
+            if rng.last_spurt.random_bool(acceptance_chance) {
                 return LastSpurt {
                     max_speed: candidate.speed,
                     target_distance: course.length() - candidate.distance,

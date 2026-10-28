@@ -1,4 +1,5 @@
 use super::*;
+use crate::race::rng::RngSeed;
 use crate::skill::{PopularityStat as Stat, Skill, SkillType};
 use crate::test_utils::{alternative, assert_close, synthetic_skill};
 use std::sync::Arc;
@@ -143,7 +144,7 @@ fn speed_bonus(skill: &Skill) -> f64 {
         guts: 1000,
         ..uma(Style::Pace)
     };
-    let runner = UnreadyRunner::new(uma, 1, Mood::Normal, &state, vec![]);
+    let runner = UnreadyRunner::new(uma, 1, Mood::Normal, &state, vec![], RngSeed::new(0));
     skill_bonus([skill], &runner, &state).speed
 }
 

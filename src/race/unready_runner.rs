@@ -59,7 +59,6 @@
 //! `UnreadyRunner::activate_sympathy`).
 
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use rand::RngExt;
@@ -79,6 +78,7 @@ use crate::race::modifiers::{
 };
 use crate::race::parameters::RaceParameters;
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
+use crate::race::rng::{RaceRng, RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
 use crate::race::solver::RaceState;
@@ -195,23 +195,29 @@ pub struct UnreadyRunner {
     /// [`Self::activate_sympathy`]).
     pub(crate) casts_sympathy: bool,
 
-    // === Random number generator ===
-    /// Shared RNG for this runner. It is cloned from the RaceSolver's RNG.
-    rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    // === Random number generation ===
+    /// Seed from which every random stream of the runner derives (see
+    /// [`crate::race::rng`]).
+    rng_seed: RngSeed,
+    /// Lottery stream of the out-of-gate skill being evaluated (see
+    /// [`Stream::Lottery`]).
+    lottery_rng: RefCell<RaceRng>,
 }
 
 impl UnreadyRunner {
     /// Create a new runner with initial values not yet ready for simulation.
+    ///
+    /// Its random streams derive from `rng_seed`.
     pub(crate) fn new(
         uma: Uma,
         gate_roll: u8,
         mood: Mood,
         state: &RaceState,
         skills: Vec<Arc<Skill>>,
+        rng_seed: RngSeed,
     ) -> Self {
         let course = &state.course;
         let params = &state.params;
-        let rng = Rc::clone(&state.rng);
 
         // Calculate base stats.
         let gate_block = Self::gate_bracket(gate_roll, params.gates);
@@ -222,19 +228,18 @@ impl UnreadyRunner {
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
         let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
             state.config.wit_checks.resolve(
-                &mut *rng.borrow_mut(),
+                &mut rng_seed.rng(Stream::WitCheck(skill.id)),
                 skill.activation_chance(base_uma.wit),
             )
         });
 
-        let trigger_scheduler =
-            TriggerScheduler::from_skills(&skills, course, &mut *rng.borrow_mut());
+        let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, rng_seed);
 
         // Calculate adjusted stats (before out-of-gate skills).
         let adjusted_uma = adjust_stats(&base_uma, course, params);
 
         // Determine start delay (0.0 to 0.1 seconds).
-        let start_delay = rng.borrow_mut().random_range(0.0..=0.1);
+        let start_delay = rng_seed.rng(Stream::StartDelay).random_range(0.0..=0.1);
 
         let mut runner = UnreadyRunner {
             base: base_uma,
@@ -252,7 +257,9 @@ impl UnreadyRunner {
                 team: 0,
             },
             start_delay,
-            rng,
+            rng_seed,
+            // Replaced when evaluating each out-of-gate skill.
+            lottery_rng: RefCell::new(rng_seed.rng(Stream::Lottery(0))),
             trigger_scheduler,
             skills,
             failed_skills,
@@ -399,6 +406,7 @@ impl UnreadyRunner {
             // Set the skill being evaluated (same_skill_horse_count, random_lot).
             self.evaluated_skill_id = skill.id;
             self.evaluated_skill_lot_draw.set(None);
+            self.lottery_rng = RefCell::new(self.rng_seed.rng(Stream::Lottery(skill.id)));
 
             // Satisfied if all comparisons of any OR branch are true.
             let holds = |condition: &Condition| {
@@ -424,7 +432,7 @@ impl UnreadyRunner {
 
     /// New lottery draw (from 0 to 100), used for `random_lot` conditions.
     pub(crate) fn roll_lot(&self) -> f64 {
-        self.rng.borrow_mut().random_range(0.0..100.0)
+        self.lottery_rng.borrow_mut().random_range(0.0..100.0)
     }
 
     /// Lottery draw (from 0 to 100) of the out-of-gate skill being evaluated, used
@@ -463,37 +471,6 @@ impl UnreadyRunner {
         // Convert stamina to HP using adjusted stats after out-of-gate boosts.
         let max_hp = calculate_max_hp(self.adjusted.style, self.adjusted.stamina, course);
 
-        // Set starting speed (done in the constructor).
-        // Determine whether and how the runner will rush.
-        let rush_chance = rush::chance(self.base.wit, self.rush_chance_modifier);
-        let can_rush = state
-            .config
-            .rushing
-            .resolve(&mut *self.rng.borrow_mut(), rush_chance / 100.0);
-        let rush_state =
-            can_rush.then(|| RushState::roll(self.adjusted.style, &mut *self.rng.borrow_mut()));
-
-        // Calculate section modifier for base speed adjustment.
-        let section_speed_modifier = roll_section_speed_modifier(
-            &mut self.rng.borrow_mut(),
-            self.adjusted.wit,
-            course.base_speed(),
-        );
-
-        // Calculate force-in modifier based on style and randomness.
-        let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
-            0.0
-        } else {
-            self.rng.borrow_mut().random_range(0.0..0.1)
-                + match self.adjusted.style {
-                    Style::Runaway | Style::Front => 0.02,
-                    Style::Pace | Style::Late => 0.01,
-                    Style::End => 0.03,
-                }
-        };
-
-        let stamina_keep = StaminaKeep::roll(game_version, &mut *self.rng.borrow_mut());
-
         // Skills that failed the wit check go last, so that the indices of those
         // that passed (used by the trigger logics) stay the same.
         let available_skill_count = self.skills.len();
@@ -503,6 +480,37 @@ impl UnreadyRunner {
             .iter()
             .map(|skill| vec![0.0; skill.alternatives.len()])
             .collect();
+        let mut rng = RunnerRng::new(self.rng_seed, skills.iter().map(|skill| skill.id));
+
+        // Set starting speed (done in the constructor).
+        // Determine whether and how the runner will rush.
+        let rush_chance = rush::chance(self.base.wit, self.rush_chance_modifier);
+        let can_rush = state
+            .config
+            .rushing
+            .resolve(&mut rng.rush, rush_chance / 100.0);
+        let rush_state = can_rush.then(|| RushState::roll(self.adjusted.style, &mut rng.rush));
+
+        // Calculate section modifier for base speed adjustment.
+        let section_speed_modifier = roll_section_speed_modifier(
+            &mut rng.keyed(Stream::SectionSpeed(0)),
+            self.adjusted.wit,
+            course.base_speed(),
+        );
+
+        // Calculate force-in modifier based on style and randomness.
+        let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
+            0.0
+        } else {
+            rng.keyed(Stream::ForceIn).random_range(0.0..0.1)
+                + match self.adjusted.style {
+                    Style::Runaway | Style::Front => 0.02,
+                    Style::Pace | Style::Late => 0.01,
+                    Style::End => 0.03,
+                }
+        };
+
+        let stamina_keep = StaminaKeep::roll(game_version, &mut rng.stamina_keep);
 
         // Initialize race state.
         Runner {
@@ -563,7 +571,7 @@ impl UnreadyRunner {
                 charge_up::charge_power(self.base.power, self.raw.power, self.power_skill_bonus),
                 game_version,
             ),
-            rng: self.rng,
+            rng: RefCell::new(rng),
             segments: SegmentState::default(),
             last_move: LastMove::default(),
             trigger_scheduler: self.trigger_scheduler,

@@ -3,6 +3,7 @@
 use super::*;
 use crate::condition::parser::{CompOp, Condition};
 use crate::course::geometry::*;
+use crate::race::rng::RngSeed;
 use crate::skill::*;
 use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
 use crate::trigger::system::TriggerScheduler;
@@ -293,9 +294,8 @@ fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) 
 
 /// Build a scheduler for the given skills on the test course.
 fn build_test_scheduler(skills: &[Arc<Skill>]) -> crate::trigger::system::TriggerScheduler {
-    use rand::SeedableRng;
-    let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    TriggerScheduler::from_skills(skills, &create_test_course(), &mut rng)
+    let rng_seed = RngSeed::new(0);
+    TriggerScheduler::from_skills(skills, &create_test_course(), rng_seed)
 }
 
 #[test]
@@ -564,8 +564,6 @@ fn test_skill_data_conditions_compile() {
 
 #[test]
 fn test_alternatives_share_random_rolls() {
-    use rand::SeedableRng;
-
     // The first alternative only adds a requirement to the second one, so both
     // must be checked at the same random point.
     let skill = Arc::new(synthetic_skill(vec![
@@ -573,11 +571,11 @@ fn test_alternatives_share_random_rolls() {
         alternative("phase_random==1", SkillType::TargetSpeed, 0.15),
     ]));
     for seed in 0..20 {
-        let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(seed);
+        let rng_seed = RngSeed::new(seed);
         let scheduler = TriggerScheduler::from_skills(
             std::slice::from_ref(&skill),
             &create_test_course(),
-            &mut rng,
+            rng_seed,
         );
         let logics = &scheduler.skill_logics;
         assert_eq!(logics.len(), 2);

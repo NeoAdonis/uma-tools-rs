@@ -4,12 +4,11 @@
 //! ensuring only one branch can activate per skill (mutual exclusion).
 
 use crate::condition::parser::Condition;
+use crate::race::rng::RngSeed;
 use crate::skill::SkillType;
 use crate::test_utils::{load_course, skill};
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::TriggerScheduler;
-use rand::SeedableRng;
-use rand_pcg::Pcg64Mcg;
 use std::str::FromStr;
 
 // ============================================================================
@@ -141,8 +140,8 @@ fn test_or_branch_skill_id_uniqueness() {
     );
 
     let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
 
     // Should create 3 skill logics (one per OR branch)
     assert_eq!(
@@ -181,8 +180,8 @@ fn test_or_branches_independent_activation_tracking() {
     );
 
     let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
 
     // Should create 2 skill logics
     assert_eq!(scheduler.skill_logics.len(), 2);

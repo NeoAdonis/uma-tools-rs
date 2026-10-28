@@ -21,8 +21,8 @@
 //! Alternatives whose condition or precondition can never be satisfied on the
 //! course are skipped.
 //!
-//! The RNG is consumed in skill order while building, so changing what gets
-//! rolled (or in which order) changes race results for a given seed.
+//! Each skill rolls from its own random stream (see [`Stream::TriggerRolls`]),
+//! so adding or removing a skill doesn't change the rolls of the others.
 //!
 //! ## Example
 //!
@@ -65,11 +65,11 @@
 use std::sync::Arc;
 
 use crate::course::Course;
+use crate::race::rng::{RngSeed, Stream};
 use crate::skill::*;
 use crate::trigger::random::RandomRolls;
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
-use rand::Rng;
 
 impl TriggerScheduler {
     /// Build a complete scheduler from a list of skills.
@@ -82,17 +82,21 @@ impl TriggerScheduler {
     ///    alternative.
     /// 4. Index triggers into scheduler queues.
     ///
+    /// Each skill rolls its random variables from its own stream, derived from
+    /// the runner's `rng_seed`.
+    ///
     /// Alternatives whose condition or precondition can never be satisfied on this
     /// course are skipped. So are out-of-gate alternatives: their condition is
     /// evaluated before the race, then they're activated by a race start logic
     /// (see [`Self::add_race_start_logic`]). Other alternatives of
     /// their skills (e.g. continuations) are compiled as usual.
-    pub(crate) fn from_skills(skills: &[Arc<Skill>], course: &Course, rng: &mut impl Rng) -> Self {
+    pub(crate) fn from_skills(skills: &[Arc<Skill>], course: &Course, rng_seed: RngSeed) -> Self {
         let mut scheduler = Self::default();
 
         for (skill_idx, skill) in skills.iter().enumerate() {
             // Random variables are rolled per skill, so that its alternatives share them.
             let mut rolls = RandomRolls::default();
+            let mut rng = rng_seed.rng(Stream::TriggerRolls(skill.id));
             for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
                 if alternative.is_out_of_gate() {
                     continue;
@@ -100,7 +104,7 @@ impl TriggerScheduler {
 
                 // One logic per OR branch, except the ones whose random roll failed.
                 let condition = &alternative.condition;
-                let rolled = rolls.roll(condition, course, rng);
+                let rolled = rolls.roll(condition, course, &mut rng);
                 let branches = compile_condition(condition, &rolled, course);
                 if branches.is_empty() {
                     // Condition can't be satisfied, skill never activates.

@@ -4,6 +4,7 @@
 //! skill_activation.rs by focusing on precondition-trigger interaction, edge
 //! cases and unlocking skills during a race.
 
+use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
@@ -14,8 +15,6 @@ use crate::test_utils::{
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
-use rand::SeedableRng;
-use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
 
 // ============================================================================
@@ -40,8 +39,8 @@ fn test_precondition_with_window_trigger() {
     });
 
     let course = load_course(10104); // 2000m course
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
 
     // Should create 1 skill logic
     let logics = activation_logics(&scheduler);
@@ -92,8 +91,8 @@ fn test_precondition_with_or_condition() {
     let skill = Arc::new(synthetic_skill(vec![alternative]));
 
     let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
 
     // Should create 3 branches (OR condition)
     let logics = activation_logics(&scheduler);
@@ -138,8 +137,8 @@ fn test_multiple_alternatives_precondition_independence() {
     let skill = Arc::new(synthetic_skill(alternatives));
 
     let course = load_course(10104);
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
 
     // Should have 3 skill logics (one per alternative)
     let logics = activation_logics(&scheduler);

@@ -2,6 +2,7 @@
 //! distance, and ranges made of monotonic comparisons).
 
 use crate::course::Phase;
+use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::solver::DELTA_TIME;
 use crate::test_utils::{load_course, negligible_skill, ready_solver, seeded_config, uma};
@@ -89,15 +90,13 @@ fn test_remain_distance_range_activates_within_range() {
 #[test]
 fn test_distance_windows_are_positions_in_order() {
     use crate::units::furlongs_to_meters;
-    use rand::SeedableRng;
-
     let skills = [
         negligible_skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
         negligible_skill("distance_rate>=50"),    // 1000m
         negligible_skill("furlong>=3"),           // 3 furlongs
     ];
-    let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let scheduler = TriggerScheduler::from_skills(&skills, &load_course(10104), &mut rng);
+    let rng_seed = RngSeed::new(0);
+    let scheduler = TriggerScheduler::from_skills(&skills, &load_course(10104), rng_seed);
 
     // Windows are queued by their start
     let order: Vec<(usize, f64)> = scheduler
@@ -117,13 +116,11 @@ fn test_distance_windows_are_positions_in_order() {
 
 #[test]
 fn test_reversed_remain_distance_window_range() {
-    use rand::SeedableRng;
-
-    let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
+    let rng_seed = RngSeed::new(0);
     let scheduler = TriggerScheduler::from_skills(
         &[negligible_skill("remain_distance>=350")],
         &load_course(10104),
-        &mut rng,
+        rng_seed,
     );
 
     assert_eq!(scheduler.position_windows.len(), 1);
@@ -134,15 +131,13 @@ fn test_reversed_remain_distance_window_range() {
 
 #[test]
 fn test_remain_distance_pair_window_range() {
-    use rand::SeedableRng;
-
-    let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
+    let rng_seed = RngSeed::new(0);
     let scheduler = TriggerScheduler::from_skills(
         &[negligible_skill(
             "remain_distance<=401&remain_distance>=399",
         )],
         &load_course(10104),
-        &mut rng,
+        rng_seed,
     );
 
     // A single window; both comparisons stay as guards

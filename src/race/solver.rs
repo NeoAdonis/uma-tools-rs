@@ -10,10 +10,8 @@
 //! effects that target other runners, and mechanics such as spot struggle,
 //! dueling, secure lead and compete before spurt.
 
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::vec;
 
@@ -26,6 +24,7 @@ use crate::race::duel;
 use crate::race::parameters::{MAX_GATES, RaceParameters};
 use crate::race::popularity::calculate_popularity;
 use crate::race::proximity;
+use crate::race::rng::{RngSeed, Stream};
 use crate::race::runner::{
     POSITIONING_END_SECTION, PositioningStrategy, Runner, SkillActivationFlags,
 };
@@ -56,9 +55,9 @@ pub struct RaceState {
     /// Runtime configuration. Shared by all runners so that they all follow the
     /// same game behavior.
     pub config: Configuration,
-    /// Random number generator shared by all runners.
-    /// It is initialized with a seed to ensure reproducibility.
-    pub(crate) rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    /// Seed from which every random number stream of the race derives (see
+    /// [`crate::race::rng`]).
+    pub(crate) seed: RngSeed,
     /// Elapsed time in seconds. This value is shared by all runners.
     pub elapsed_time: f64,
     /// Time when the first runner finished, in seconds. This might be different
@@ -96,8 +95,7 @@ pub struct RaceState {
 #[derive(Debug)]
 pub struct RaceSolver<T> {
     pub runners: Vec<Runner>,
-    // Ordered by gate so that runners are always built in the same order (which
-    // determines how the shared RNG is consumed).
+    // Ordered by gate, the order in which runners are readied.
     builders: BTreeMap<u8, UnreadyRunner>,
     pub state: RaceState,
     /// Time (s) each pair of runners has been close in a row, keyed by their gates
@@ -123,14 +121,13 @@ impl RaceSolver<UnreadyRunner> {
             (1..=MAX_GATES).contains(&gates),
             "Invalid gates {gates}: expected 1 to {MAX_GATES}"
         );
-        let seed = config.seed.unwrap_or_else(rand::random);
-        let rng = Rc::new(RefCell::new(rand_pcg::Pcg64Mcg::seed_from_u64(seed)));
+        let seed = RngSeed::new(config.seed.unwrap_or_else(rand::random));
 
         let state = RaceState {
             course,
             params,
             config,
-            rng,
+            seed,
             elapsed_time: 0.0,
             finish_time: None,
             team_count: 0,
@@ -209,20 +206,24 @@ impl RaceSolver<UnreadyRunner> {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
 
+        // Runners are identified by insertion order, so that their random streams
+        // don't depend on their skills.
+        let rng_seed = self
+            .state
+            .seed
+            .derive(Stream::Runner(self.builders.len() as u8));
+
         // Roll gate.
+        let mut gate_rng = rng_seed.rng(Stream::Gate);
         let gate_roll = loop {
-            let roll = self
-                .state
-                .rng
-                .borrow_mut()
-                .random_range(1..=self.state.params.gates);
+            let roll = gate_rng.random_range(1..=self.state.params.gates);
             if !self.builders.contains_key(&roll) {
                 break roll;
             }
         };
 
         // Create builder.
-        let mut builder = UnreadyRunner::new(uma, gate_roll, mood, &self.state, skills);
+        let mut builder = UnreadyRunner::new(uma, gate_roll, mood, &self.state, skills, rng_seed);
         builder.initial_state.team = team;
 
         // Update runnners-by-style count before moving builder.
@@ -296,7 +297,12 @@ impl RaceSolver<Runner> {
         let clamped = converted.clamp(min, max);
         if !(min..=max).contains(&converted) {
             // Add random offset between 0.0 and 1.0 seconds.
-            Some(clamped + self.state.rng.borrow_mut().random_range(0.0..1.0))
+            let offset = self
+                .state
+                .seed
+                .rng(Stream::Scoreboard)
+                .random_range(0.0..1.0);
+            Some(clamped + offset)
         } else {
             Some(converted)
         }
@@ -402,12 +408,7 @@ impl RaceSolver<Runner> {
                 &self.state.course,
                 self.state.config.game_version,
             );
-            runner.update_slope(
-                &self.state.course.slopes,
-                &transitions.slope,
-                delta_time,
-                &mut *self.state.rng.borrow_mut(),
-            );
+            runner.update_slope(&self.state.course.slopes, &transitions.slope, delta_time);
 
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, &self.state);
@@ -460,7 +461,8 @@ impl RaceSolver<Runner> {
         for caster in 0..self.runners.len() {
             let pending = std::mem::take(&mut self.runners[caster].pending_effects);
             for pending_effect in &pending {
-                for target in self.select_targets(caster, pending_effect.effect.target) {
+                let target = pending_effect.effect.target;
+                for target in self.select_targets(caster, target, pending_effect.target_roll) {
                     self.runners[target].receive_skill_effect(pending_effect, &self.state);
                 }
             }
@@ -473,8 +475,11 @@ impl RaceSolver<Runner> {
     /// Allies count towards the maximum number of targets, but they are excluded
     /// from debuffs afterwards. Runners that have finished are never targeted.
     ///
+    /// `target_roll` (from 0 to 1) picks random targets, like the one drawn for
+    /// each pending effect.
+    ///
     /// Runners must be sorted by position in descending order before calling this.
-    fn select_targets(&self, caster: usize, target: SkillTarget) -> Vec<usize> {
+    fn select_targets(&self, caster: usize, target: SkillTarget, target_roll: f64) -> Vec<usize> {
         let runners = &self.runners;
         let source = &runners[caster];
         // Finished runners are skipped before counting targets. Nearest runners first.
@@ -529,8 +534,8 @@ impl RaceSolver<Runner> {
                 let team: Vec<usize> = (0..runners.len())
                     .filter(|&i| is_running(&i) && !source.is_opponent(&runners[i]))
                     .collect();
-                let pick = self.state.rng.borrow_mut().random_range(0..team.len());
-                vec![team[pick]]
+                let pick = (target_roll * team.len() as f64) as usize;
+                vec![team[pick.min(team.len() - 1)]]
             }
         };
 

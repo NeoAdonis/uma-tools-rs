@@ -4,6 +4,7 @@
 //! the guards are checked, to the part of the race where all of them can be
 //! true.
 
+use crate::race::rng::RngSeed;
 use crate::skill::{Skill, SkillType};
 use crate::test_utils::{
     activation_logics, alternative_with_precondition, assert_close, load_course, skill,
@@ -11,14 +12,12 @@ use crate::test_utils::{
 };
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::TriggerScheduler;
-use rand::SeedableRng;
-use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
 
 /// Build a scheduler for a single skill.
 fn scheduler(skill: Arc<Skill>, course_id: u32) -> TriggerScheduler {
-    let mut rng = Pcg64Mcg::seed_from_u64(0);
-    TriggerScheduler::from_skills(&[skill], &load_course(course_id), &mut rng)
+    let rng_seed = RngSeed::new(0);
+    TriggerScheduler::from_skills(&[skill], &load_course(course_id), rng_seed)
 }
 
 /// Get the variable and `(min, max)` thresholds of a window trigger.

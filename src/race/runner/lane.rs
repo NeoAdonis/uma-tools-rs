@@ -7,6 +7,7 @@ use rand::prelude::*;
 use crate::configuration::GameVersion;
 use crate::course::*;
 use crate::race::proximity;
+use crate::race::rng::Stream;
 use crate::race::transitions::*;
 use crate::units::*;
 
@@ -310,7 +311,11 @@ impl Runner {
                 .is_some_and(|idx| Some(idx) == last)
         };
         if entered_final {
-            let offset = self.rng.borrow_mut().random_range(0.0..0.1);
+            let offset = self
+                .rng
+                .get_mut()
+                .keyed(Stream::FinalLane)
+                .random_range(0.0..0.1);
             let ratio = (self.lane.current / CourseWidths(0.1)).clamp(0.0, 1.0);
             self.extra_move_lane = Some(CourseWidths(ratio * 0.5 + offset));
         }

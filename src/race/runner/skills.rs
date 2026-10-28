@@ -463,7 +463,7 @@ impl Runner {
             if !effect.skill_type.is_pre_race_effect() {
                 // Scale the value with the runner's situation.
                 let scaled = SkillEffect {
-                    modifier: self.scaled_modifier(effect, state),
+                    modifier: self.scaled_modifier(effect, skill_index, state),
                     ..effect.clone()
                 };
                 if scaled.target == SkillTarget::Oneself {
@@ -480,6 +480,7 @@ impl Runner {
                         effect: scaled,
                         duration: scaled_duration,
                         wit_bonus,
+                        target_roll: self.rng.get_mut().skills[skill_index].random(),
                     });
                 }
             }
@@ -587,7 +588,7 @@ impl Runner {
 
     /// Value of an effect's modifier scaled with the runner's situation (see
     /// [`ValueScaling`]).
-    fn scaled_modifier(&self, effect: &SkillEffect, state: &RaceState) -> f64 {
+    fn scaled_modifier(&self, effect: &SkillEffect, skill_index: usize, state: &RaceState) -> f64 {
         use ValueScaling::*;
         let modifier = effect.modifier;
         match effect.value_scaling {
@@ -600,7 +601,7 @@ impl Runner {
             }
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {
-                let roll = self.rng.borrow_mut().random();
+                let roll = self.rng.borrow_mut().skills[skill_index].random();
                 modifier * skill_scaling::random_multiplier(roll)
             }
             Climax => modifier * skill_scaling::CLIMAX_MULTIPLIER,
@@ -724,8 +725,11 @@ impl Runner {
                 }
             }
             // Activate random gold skills (one per unit of modifier).
+            // ? Assume only the runner's own skills do it, as in the data.
             SkillType::ActivateRandomGold => {
-                self.activate_random_gold_skills(effect.modifier as usize, state);
+                if let Some(source) = source {
+                    self.activate_random_gold_skills(source, effect.modifier as usize, state);
+                }
             }
             // Activate unique skills again (one per unit of modifier).
             SkillType::ActivateUnique => {
@@ -753,7 +757,10 @@ impl Runner {
     /// The alternative that activated before is used, or the first one if the
     /// skill hasn't activated yet, so that later ones that continue it (see
     /// [`SkillAlternative::is_continuation`]) can still activate.
-    fn activate_random_gold_skills(&mut self, count: usize, state: &RaceState) {
+    ///
+    /// Skills are picked with the stream of `source`, the index of the skill that
+    /// activates them.
+    fn activate_random_gold_skills(&mut self, source: usize, count: usize, state: &RaceState) {
         let mut candidates: Vec<usize> = (0..self.skills.len())
             .filter(|&skill_index| {
                 let skill = &self.skills[skill_index];
@@ -766,7 +773,7 @@ impl Runner {
             if candidates.is_empty() {
                 break;
             }
-            let idx = self.rng.borrow_mut().random_range(0..candidates.len());
+            let idx = self.rng.get_mut().skills[source].random_range(0..candidates.len());
             let skill_index = candidates.swap_remove(idx);
             // ? Assume the first alternative is activated if none did, even when the
             // others are variants for other courses or running styles (e.g. "Piercing
@@ -921,10 +928,12 @@ impl Runner {
     /// have been false and therefore were removed when the runner was created.
     pub(super) fn schedule_all_out_spurt_triggers(&mut self, state: &RaceState) {
         let goal = state.course.length();
-        let mut rng = self.rng.borrow_mut();
-        for logic_idx in self.trigger_scheduler.all_out_spurt_triggers.drain(..) {
-            let start = random_segment(self.position, goal, &mut *rng);
-            self.trigger_scheduler.position_windows.push(WindowTrigger {
+        let rng = self.rng.get_mut();
+        let scheduler = &mut self.trigger_scheduler;
+        for logic_idx in scheduler.all_out_spurt_triggers.drain(..) {
+            let skill_index = scheduler.skill_logics[logic_idx].skill_index;
+            let start = random_segment(self.position, goal, &mut rng.skills[skill_index]);
+            scheduler.position_windows.push(WindowTrigger {
                 logic_idx,
                 min_threshold: start,
                 max_threshold: start + SEGMENT_LENGTH,
