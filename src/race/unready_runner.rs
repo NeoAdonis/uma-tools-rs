@@ -47,18 +47,17 @@
 //! alternative did.
 //!
 //! Lotteries (only used by out-of-gate skills) are evaluated here too:
-//! `random_lot==X` holds if a new draw (from 0 to 100) is below X, every time
-//! it's evaluated. `random_lot_shared==X` is the same, but with a single draw
-//! per skill, kept for every alternative, so that several alternatives don't
-//! improve its chances. In practice, both currently behave the same: skills
-//! using `random_lot` have a single alternative, or alternatives that exclude
-//! each other.
+//! `random_lot_shared==X` holds if the skill's draw (from 0 to 100) is below X.
+//! There's a single draw per skill, kept for every alternative, so that several
+//! alternatives don't improve its chances. `random_lot` should be drawn anew
+//! every time it's evaluated, but it uses the skill's draw too: skills using it
+//! have a single alternative, or alternatives that exclude each other, so it's
+//! never evaluated twice in practice.
 //!
 //! "Sympathy" activated by another runner bypasses its condition: a race start
 //! logic is added for it, unless it already activates (see
 //! `UnreadyRunner::activate_sympathy`).
 
-use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
 use rand::RngExt;
@@ -78,7 +77,7 @@ use crate::race::modifiers::{
 };
 use crate::race::parameters::RaceParameters;
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
-use crate::race::rng::{RaceRng, RngSeed, RunnerRng, Stream};
+use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
 use crate::race::solver::RaceState;
@@ -188,9 +187,9 @@ pub struct UnreadyRunner {
     /// conditions like `same_skill_horse_count` that need to know which skill
     /// they're checking.
     pub evaluated_skill_id: i32,
-    /// Temporary: lottery draw of the out-of-gate skill currently being evaluated,
-    /// if drawn yet (see [`Self::evaluated_skill_lot`]).
-    evaluated_skill_lot_draw: Cell<Option<f64>>,
+    /// Temporary: lottery draw (from 0 to 100) of the out-of-gate skill currently
+    /// being evaluated, used for `random_lot` and `random_lot_shared` conditions.
+    pub(crate) evaluated_skill_lot: f64,
     /// Whether an out-of-gate skill activated "Sympathy" for every runner (see
     /// [`Self::activate_sympathy`]).
     pub(crate) casts_sympathy: bool,
@@ -199,9 +198,6 @@ pub struct UnreadyRunner {
     /// Seed from which every random stream of the runner derives (see
     /// [`crate::race::rng`]).
     rng_seed: RngSeed,
-    /// Lottery stream of the out-of-gate skill being evaluated (see
-    /// [`Stream::Lottery`]).
-    lottery_rng: RefCell<RaceRng>,
 }
 
 impl UnreadyRunner {
@@ -258,14 +254,12 @@ impl UnreadyRunner {
             },
             start_delay,
             rng_seed,
-            // Replaced when evaluating each out-of-gate skill.
-            lottery_rng: RefCell::new(rng_seed.rng(Stream::Lottery(0))),
             trigger_scheduler,
             skills,
             failed_skills,
             popularity_bonus: SkillPopularity::default(),
             evaluated_skill_id: 0,
-            evaluated_skill_lot_draw: Cell::new(None),
+            evaluated_skill_lot: 0.0,
             casts_sympathy: false,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
@@ -405,8 +399,10 @@ impl UnreadyRunner {
             }
             // Set the skill being evaluated (same_skill_horse_count, random_lot).
             self.evaluated_skill_id = skill.id;
-            self.evaluated_skill_lot_draw.set(None);
-            self.lottery_rng = RefCell::new(self.rng_seed.rng(Stream::Lottery(skill.id)));
+            self.evaluated_skill_lot = self
+                .rng_seed
+                .rng(Stream::Lottery(skill.id))
+                .random_range(0.0..100.0);
 
             // Satisfied if all comparisons of any OR branch are true.
             let holds = |condition: &Condition| {
@@ -428,25 +424,6 @@ impl UnreadyRunner {
                 self.activate_out_of_gate_skill(skill_index, alt_index);
             }
         }
-    }
-
-    /// New lottery draw (from 0 to 100), used for `random_lot` conditions.
-    pub(crate) fn roll_lot(&self) -> f64 {
-        self.lottery_rng.borrow_mut().random_range(0.0..100.0)
-    }
-
-    /// Lottery draw (from 0 to 100) of the out-of-gate skill being evaluated, used
-    /// for `random_lot_shared` conditions.
-    ///
-    /// Drawn on first use, then kept for every alternative of the skill, so that
-    /// several alternatives don't improve its chances.
-    pub(crate) fn evaluated_skill_lot(&self) -> f64 {
-        if let Some(draw) = self.evaluated_skill_lot_draw.get() {
-            return draw;
-        }
-        let draw = self.roll_lot();
-        self.evaluated_skill_lot_draw.set(Some(draw));
-        draw
     }
 
     /// Activate "Sympathy" if the runner has it, bypassing its condition

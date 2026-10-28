@@ -612,16 +612,13 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
 }
 
 #[test]
-fn test_random_lot_is_rolled_by_each_alternative() {
-    // The 2nd alternative can activate after the lottery of the first one failed.
-    assert_eq!(lottery_speed_gains("random_lot"), [0, 40, 100].into());
-}
-
-#[test]
-fn test_random_lot_shared_draw_is_shared_by_alternatives() {
+fn test_lottery_draw_is_shared_by_alternatives() {
     // With a single draw per skill, the second alternative can't activate after the
-    // lottery of the first one failed.
-    assert_eq!(lottery_speed_gains("random_lot_shared"), [0, 100].into());
+    // lottery of the first one failed. `random_lot` is never evaluated twice for
+    // the same skill in practice, so it shares the draw too.
+    for lottery in ["random_lot", "random_lot_shared"] {
+        assert_eq!(lottery_speed_gains(lottery), [0, 100].into(), "{lottery}");
+    }
 }
 
 /// Out-of-gate skill alternative with a precondition.

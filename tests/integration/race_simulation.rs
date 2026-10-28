@@ -143,10 +143,10 @@ fn test_solvers_are_send() {
     assert_send::<RaceSolver<Runner>>();
 }
 
-/// Ready solvers can be shared between threads, e.g. to analyze results in
-/// parallel.
+/// Solvers can be shared between threads, e.g. to analyze results in parallel.
 #[test]
-fn test_ready_solvers_are_sync() {
+fn test_solvers_are_sync() {
     fn assert_sync<T: Sync>() {}
+    assert_sync::<RaceSolver<UnreadyRunner>>();
     assert_sync::<RaceSolver<Runner>>();
 }

@@ -395,12 +395,12 @@ pub fn variable_value_out_of_gate<'a>(
         RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
         RunningStyle(style_var) => Int(running_style_value(style_var, state, builder.base.style)),
         Lineup(lineup_var) => lineup_value(lineup_var, state, builder.evaluated_skill_id),
-        // "random_lot==X" means X% chance, drawn every time it's read. Only
-        // out-of-gate skills with a single condition use it, which is evaluated
-        // once, so it's never drawn twice in practice.
-        Random(RandomVar::RandomLot) => lot_hits(builder.roll_lot()),
-        // Like `random_lot`, but drawn once per skill.
-        Random(RandomVar::RandomLotShared) => lot_hits(builder.evaluated_skill_lot()),
+        // "random_lot==X" means X% chance. It should be drawn every time it's
+        // read, but it's never read twice for the same skill in practice, so it
+        // uses the skill's draw, like `random_lot_shared`.
+        Random(RandomVar::RandomLot | RandomVar::RandomLotShared) => {
+            lot_hits(builder.evaluated_skill_lot)
+        }
         // Always returns 1 (true).
         Always => Int(1),
         // Not applicable in out-of-gate contexts.
