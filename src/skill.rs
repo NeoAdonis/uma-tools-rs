@@ -719,6 +719,11 @@ impl Skill {
     /// # Errors
     ///
     /// Returns an error if the file can't be read or the JSON is invalid.
+    ///
+    /// Skills are shared through [`Arc`], so that every runner with the same
+    /// skill can hold it without copying its data. See
+    /// [`UmaData::resolve_skills`](crate::uma::UmaData::resolve_skills) for an
+    /// example.
     pub fn load_all_from_json_file(
         json_path: impl AsRef<Path>,
     ) -> Result<HashMap<i32, Arc<Skill>>, Box<dyn std::error::Error + Send + Sync>> {

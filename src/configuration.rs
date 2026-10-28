@@ -139,6 +139,23 @@ impl Configuration {
     /// # Errors
     ///
     /// Returns an error if the JSON is invalid.
+    ///
+    /// # Examples
+    ///
+    /// Make every wit check pass, e.g. to measure the best case of a skill,
+    /// while keeping the defaults for everything else:
+    ///
+    /// ```
+    /// use uma_tools::configuration::{Configuration, Roll};
+    ///
+    /// # fn main() -> Result<(), serde_json::Error> {
+    /// let json = r#"{ "seed": 564, "witChecks": "Always" }"#;
+    /// let config = Configuration::from_json(json)?;
+    /// assert_eq!(config.wit_checks, Roll::Always);
+    /// assert_eq!(config.rushing, Roll::Random);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
@@ -148,6 +165,8 @@ impl Configuration {
     /// # Errors
     ///
     /// Returns an error if the file can't be read or the JSON is invalid.
+    ///
+    /// See [`Configuration::from_json`] for an example.
     pub fn from_json_file(
         path: impl AsRef<Path>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {

@@ -134,6 +134,8 @@ impl RaceParametersData {
     /// # Errors
     ///
     /// Returns an error if the JSON is invalid.
+    ///
+    /// See the [crate-level example](crate) for an example.
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
@@ -143,6 +145,8 @@ impl RaceParametersData {
     /// # Errors
     ///
     /// Returns an error if the file can't be read or the JSON is invalid.
+    ///
+    /// See the [crate-level example](crate) for an example.
     pub fn from_json_file(
         path: impl AsRef<Path>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {

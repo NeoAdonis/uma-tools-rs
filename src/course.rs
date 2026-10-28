@@ -524,6 +524,8 @@ impl Course {
     ///
     /// Returns an error if the file can't be read, the JSON is invalid, or the
     /// course ID isn't found or isn't a valid number.
+    ///
+    /// See [`Course::from_json`] for an example.
     pub fn from_json_file(
         json_path: impl AsRef<Path>,
         course_id: &str,
@@ -539,6 +541,26 @@ impl Course {
     ///
     /// Returns an error if the JSON is invalid, or the course ID isn't found or
     /// isn't a valid number.
+    ///
+    /// # Examples
+    ///
+    /// Load several courses while reading the course data only once, e.g. to
+    /// compare a runner across distances:
+    ///
+    /// ```
+    /// use uma_tools::Course;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// let data = std::fs::read_to_string("data/course_data.json")?;
+    /// // Tokyo, turf 2000m and 2400m.
+    /// let courses = ["10604", "10606"]
+    ///     .into_iter()
+    ///     .map(|id| Course::from_json(&data, id))
+    ///     .collect::<Result<Vec<_>, _>>()?;
+    /// assert_eq!(courses[1].distance - courses[0].distance, 400);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn from_json(
         json_str: &str,
         course_id: &str,

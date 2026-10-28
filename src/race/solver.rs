@@ -92,6 +92,65 @@ pub struct RaceState {
 ///    added, but their stats are not calculated yet.
 /// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are
 ///    calculated and out-of-gate skills are applied. The simulation can begin.
+///
+/// # Examples
+///
+/// The [crate-level example](crate) simulates a single race. Since every skill
+/// draws from its own random streams, races with the same seed stay paired
+/// when a skill is added, so running the same seeds with and without it
+/// measures how much time it saves:
+///
+/// ```
+/// use std::sync::Arc;
+/// use uma_tools::{
+///     Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData,
+/// };
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+/// let parameters = RaceParametersData::from_json(
+///     r#"{
+///         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+///         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+///     }"#,
+/// )?;
+/// let uma = UmaData::from_json(
+///     r#"{
+///         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+///         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+///         "surfaceAptitude": "A", "strategyAptitude": "A",
+///         "motivation": "Great", "skills": [200331]
+///     }"#,
+/// )?;
+/// let path = "data/course_data.json";
+/// let course = Course::from_json_file(path, &parameters.course_id)?;
+/// let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+/// let skills = uma.resolve_skills(&all_skills)?;
+///
+/// let finish_time = |seed, skills: &[Arc<Skill>]| {
+///     let config = Configuration {
+///         seed: Some(seed),
+///         ..Configuration::default()
+///     };
+///     let course = course.clone();
+///     let mut solver = RaceSolver::new(course, parameters.race, config);
+///     solver.add_runner(uma.uma, uma.mood, skills.to_vec());
+///     let mut solver = solver.ready_runners();
+///     solver.run();
+///     solver.runners()[0].finish_time
+/// };
+///
+/// let seeds = 20;
+/// let saved: f64 = (0..seeds)
+///     .filter_map(|seed| {
+///         Some(finish_time(seed, &[])? - finish_time(seed, &skills)?)
+///     })
+///     .sum();
+/// // Professor of Curvature saves about 0.24 seconds on average, wit check
+/// // failures included.
+/// assert!(saved / seeds as f64 > 0.1);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct RaceSolver<T> {
     /// Runners of the current phase (see [`Self::runners`]).
@@ -164,6 +223,7 @@ impl RaceSolver<UnreadyRunner> {
     /// Add an individual runner to the race BEFORE it starts.
     ///
     /// The runner gets a team of its own, so every other runner is an opponent.
+    /// See [`RaceSolver::add_team`] to add allies instead.
     ///
     /// # Panics
     ///
@@ -180,6 +240,49 @@ impl RaceSolver<UnreadyRunner> {
     /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
     ///
     /// Members are allies of each other and opponents of everyone else.
+    ///
+    /// # Examples
+    ///
+    /// Race a team of three, as in Team Trials or Champions Meeting, against a
+    /// single rival. Skills that target opponents never affect allies:
+    ///
+    /// ```
+    /// # use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver};
+    /// # use uma_tools::{Skill, UmaData};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let uma = UmaData::from_json(
+    /// #     r#"{
+    /// #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    /// #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+    /// #         "surfaceAptitude": "A", "strategyAptitude": "A",
+    /// #         "motivation": "Great", "skills": [200331]
+    /// #     }"#,
+    /// # )?;
+    /// # let path = "data/course_data.json";
+    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// let config = Configuration::default();
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// solver.add_team(vec![(uma.uma, uma.mood, skills.clone()); 3]);
+    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// let solver = solver.ready_runners();
+    ///
+    /// let runners = solver.runners();
+    /// for runner in runners {
+    ///     let opponents = runners.iter().filter(|o| runner.is_opponent(o));
+    ///     let expected = if runner.initial_state.team == 0 { 1 } else { 3 };
+    ///     assert_eq!(opponents.count(), expected);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Panics
     ///
@@ -248,6 +351,47 @@ impl RaceSolver<UnreadyRunner> {
     /// skills.
     ///
     /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
+    ///
+    /// # Examples
+    ///
+    /// Inspect the runners before the race, e.g. to see which skills failed
+    /// their wit check and can't activate:
+    ///
+    /// ```
+    /// # use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver};
+    /// # use uma_tools::{Skill, UmaData};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let uma = UmaData::from_json(
+    /// #     r#"{
+    /// #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    /// #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+    /// #         "surfaceAptitude": "A", "strategyAptitude": "A",
+    /// #         "motivation": "Great", "skills": [200331]
+    /// #     }"#,
+    /// # )?;
+    /// # let path = "data/course_data.json";
+    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// let config = Configuration::default();
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// let solver = solver.ready_runners();
+    ///
+    /// let runner = &solver.runners()[0];
+    /// assert_eq!(runner.initial_state.popularity_rank, 1);
+    /// for skill in runner.failed_skills() {
+    ///     println!("Skill {} failed its wit check", skill.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn ready_runners(self) -> RaceSolver<Runner> {
         // Ready runners by gate, which settles ties (e.g. between popularity marks).
         let mut builders = self.runners;
@@ -293,6 +437,50 @@ impl RaceSolver<UnreadyRunner> {
 /// out-of-gate skills have been applied...).
 impl RaceSolver<Runner> {
     /// Get the time as displayed on the scoreboard after a race finishes.
+    ///
+    /// Simulated times are scaled to match displayed ones, and clamped to the
+    /// course's range (see [`Course::finish_time_min`]), so this is the time
+    /// to compare with in-game results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver};
+    /// # use uma_tools::{Skill, UmaData};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let uma = UmaData::from_json(
+    /// #     r#"{
+    /// #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    /// #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+    /// #         "surfaceAptitude": "A", "strategyAptitude": "A",
+    /// #         "motivation": "Great", "skills": [200331]
+    /// #     }"#,
+    /// # )?;
+    /// # let path = "data/course_data.json";
+    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// let config = Configuration::default();
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// let mut solver = solver.ready_runners();
+    /// solver.run();
+    ///
+    /// if let (Some(simulated), Some(displayed)) =
+    ///     (solver.state.finish_time, solver.scoreboard_time())
+    /// {
+    ///     println!("Simulated {simulated:.2}s, displayed {displayed:.2}s");
+    ///     assert!(displayed > simulated);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn scoreboard_time(&self) -> Option<f64> {
         let converted = self.state.finish_time? * FINISH_TIME_SCALE;
         let min = self.state.course.finish_time_min;

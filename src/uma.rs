@@ -241,6 +241,8 @@ impl UmaData {
     ///
     /// Returns an error if the file can't be read, the JSON is invalid, or a
     /// stat is zero.
+    ///
+    /// See [`UmaData::from_json`] for an example.
     pub fn from_json_file(
         path: impl AsRef<Path>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -254,6 +256,30 @@ impl UmaData {
     ///
     /// Returns an [`UnknownSkill`] error with the first ID that isn't in
     /// `all_skills`.
+    ///
+    /// # Examples
+    ///
+    /// Report a skill that's missing from the skill data, e.g. one added by a
+    /// game update that the data doesn't include yet:
+    ///
+    /// ```
+    /// use uma_tools::{Skill, UmaData, UnknownSkill};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// let uma = UmaData::from_json(
+    ///     r#"{
+    ///         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    ///         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+    ///         "surfaceAptitude": "A", "strategyAptitude": "A",
+    ///         "motivation": "Great", "skills": [200331, 999999]
+    ///     }"#,
+    /// )?;
+    /// let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// let error = uma.resolve_skills(&all_skills).err();
+    /// assert_eq!(error, Some(UnknownSkill(999999)));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn resolve_skills(
         &self,
         all_skills: &HashMap<i32, Arc<Skill>>,
