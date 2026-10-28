@@ -188,9 +188,14 @@ fn test_error_cases() {
                 "is_popularity_top_character_activate_advantage_skill==-2".into(),
             ),
         ),
+        // Unimplemented variables are rejected with any comparison.
         (
-            "is_exist_chara_id<=1001",
-            UnsupportedComparison("is_exist_chara_id<=1001".into()),
+            "is_exist_chara_id==1001",
+            UnsupportedComparison("is_exist_chara_id==1001".into()),
+        ),
+        (
+            "remain_distance_viewer_id<=850",
+            UnsupportedComparison("remain_distance_viewer_id<=850".into()),
         ),
         // Random points only support `==`.
         (

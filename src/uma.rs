@@ -3,7 +3,7 @@
 //! This module includes data structures for stats, aptitudes, running styles
 //! and mood, as well as functions to convert raw stats into base stats.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error};
 
 use crate::course::ThresholdStat;
 use crate::skill::Skill;
@@ -129,10 +129,13 @@ pub enum Mood {
 #[serde(rename_all = "camelCase")]
 pub struct Uma {
     /// Stat that affects max speed.
+    #[serde(deserialize_with = "deserialize_stat")]
     pub speed: u16,
     /// Stat that affects max HP.
+    #[serde(deserialize_with = "deserialize_stat")]
     pub stamina: u16,
     /// Stat that affects acceleration and lateral movement.
+    #[serde(deserialize_with = "deserialize_stat")]
     pub power: u16,
     /// Stat that affects performance during struggles and last stride.
     ///
@@ -140,13 +143,14 @@ pub struct Uma {
     /// acceleration during duels and spot struggles. Moreover, it affects HP
     /// consumption late-race and last spurt performance; the higher
     /// the Guts, the better the performance on the final stretch.
+    #[serde(deserialize_with = "deserialize_stat")]
     pub guts: u16,
     /// Wit, also known as wisdom or wiz. Stat that affects skill activation rate
     /// and decision-making.
     ///
     /// Specifically, it affects skill activation rate, chance of avoiding getting
     /// rushed, position keeping, last spurt planning, and more.
-    #[serde(rename = "wisdom")]
+    #[serde(rename = "wisdom", deserialize_with = "deserialize_stat")]
     pub wit: u16,
     /// Running style or strategy. Affects mainly positioning strategy.
     #[serde(rename = "strategy")]
@@ -172,6 +176,19 @@ pub struct Uma {
     pub fan_count: Option<u32>,
 }
 
+/// Deserialize a stat, rejecting zero.
+///
+/// Stats are at least 1 in the game. There's no upper bound, as the cap keeps
+/// rising with game updates.
+fn deserialize_stat<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+    let stat = u16::deserialize(deserializer)?;
+    if stat >= 1 {
+        Ok(stat)
+    } else {
+        Err(D::Error::custom("invalid stat 0: expected at least 1"))
+    }
+}
+
 /// Helper struct for deserializing [`Uma`] with mood and skills from JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -190,7 +207,7 @@ impl UmaData {
     ///
     /// # Errors
     ///
-    /// Returns an error if the JSON is invalid.
+    /// Returns an error if the JSON is invalid, or if a stat is zero.
     ///
     /// # Examples
     ///
@@ -222,7 +239,8 @@ impl UmaData {
     ///
     /// # Errors
     ///
-    /// Returns an error if the file can't be read or the JSON is invalid.
+    /// Returns an error if the file can't be read, the JSON is invalid, or a
+    /// stat is zero.
     pub fn from_json_file(
         path: impl AsRef<Path>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -441,6 +459,9 @@ mod tests {
         assert!(UmaData::from_json(&uma_json("Front")).is_err());
         // Missing field.
         let json = uma_json("Nige").replace(r#""motivation": "Bad","#, "");
+        assert!(UmaData::from_json(&json).is_err());
+        // Zero stat.
+        let json = uma_json("Nige").replace(r#""guts": 704"#, r#""guts": 0"#);
         assert!(UmaData::from_json(&json).is_err());
         // Malformed.
         assert!(UmaData::from_json("{").is_err());

@@ -74,8 +74,9 @@
 //! ## Unimplemented Variables
 //!
 //! There are variables that are not implemented at all as they are only used in
-//! non-PvP contexts, which is out of scope for this simulator. The evaluator
-//! will panic if these are encountered:
+//! non-PvP contexts, which is out of scope for this simulator. The parser
+//! rejects any comparison on them, and the evaluator panics if one is built by
+//! other means:
 //!
 //! - `is_exist_chara_id`
 //! - `remain_distance_viewer_id`

@@ -327,7 +327,7 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
 /// Assign marks to top 5 runners for a single judge's scores.
 fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, PopularityMark> {
     // Sort by score (descending).
-    scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scores.sort_by(|a, b| b.1.total_cmp(&a.1));
 
     let mut marks = HashMap::new();
 
@@ -432,7 +432,7 @@ pub fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeScores)>
     }
 
     // Sort by total points (descending) to determine ranks.
-    popularity_data.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    popularity_data.sort_by(|a, b| b.1.total_cmp(&a.1));
 
     // Assign ranks (1-indexed, ties get same rank).
     let mut ranks = vec![0u8; n];

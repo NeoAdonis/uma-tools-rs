@@ -123,7 +123,7 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
 fn sort_by_position(solver: &mut RaceSolver<Runner>) {
     solver
         .runners
-        .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+        .sort_by(|a, b| b.position.total_cmp(&a.position));
 }
 
 fn runner_with_style(solver: &mut RaceSolver<Runner>, style: Style) -> &mut Runner {
@@ -550,7 +550,7 @@ fn test_all_runners_finish_with_margins() {
     solver.update_finish_margins();
 
     let mut runners: Vec<&Runner> = solver.runners.iter().collect();
-    runners.sort_by(|a, b| a.finish_time.partial_cmp(&b.finish_time).unwrap());
+    runners.sort_by(|a, b| a.finish_time.unwrap().total_cmp(&b.finish_time.unwrap()));
     assert_eq!(runners[0].finish_margin, None);
     for pair in runners.windows(2) {
         let expected = (pair[1].finish_time.unwrap() - pair[0].finish_time.unwrap()) * 1.18 * 15.0;

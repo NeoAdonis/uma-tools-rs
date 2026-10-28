@@ -408,7 +408,7 @@ impl Runner {
             .chain(self.extra_lane_candidate(&targets, all_runners))
             .filter(|&lane| self.has_lane_space_to(lane))
             .map(|lane| (lane, self.overtake_lane_score(lane)))
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .min_by(|a, b| a.1.total_cmp(&b.1))
             .map_or(self.lane.current, |(lane, _)| lane);
 
         // Move to the extra move lane instead if it's outside and reachable.
@@ -497,7 +497,7 @@ impl Runner {
         let furthest_target_position = targets
             .iter()
             .map(|r| r.position)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(f64::total_cmp)
             .unwrap_or(self.position);
 
         let one_lane = CourseWidths::from_horse_lanes(1.0);
@@ -573,7 +573,7 @@ impl Runner {
         all_runners
             .iter()
             .filter(|r| r.position > self.position && self.is_visible(r))
-            .max_by(|a, b| a.position.partial_cmp(&b.position).unwrap())
+            .max_by(|a, b| a.position.total_cmp(&b.position))
             .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
 
@@ -591,7 +591,7 @@ impl Runner {
             })
             .filter(|&(_, lane_diff)| lane_diff <= 3.0)
             // First on ties.
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .min_by(|a, b| a.1.total_cmp(&b.1))
     }
 }
 

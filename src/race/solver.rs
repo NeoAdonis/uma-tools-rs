@@ -318,7 +318,7 @@ impl RaceSolver<Runner> {
     fn update_finish_margins(&mut self) {
         // Order must come from finish times.
         let mut by_finish: Vec<&mut Runner> = self.runners.iter_mut().collect();
-        by_finish.sort_by(|a, b| a.finish_time.partial_cmp(&b.finish_time).unwrap());
+        by_finish.sort_by(|a, b| a.finish_time.unwrap().total_cmp(&b.finish_time.unwrap()));
 
         let mut prev_time = None;
         for runner in by_finish {
@@ -416,7 +416,7 @@ impl RaceSolver<Runner> {
         }
 
         self.runners
-            .sort_by(|a, b| b.position.partial_cmp(&a.position).unwrap());
+            .sort_by(|a, b| b.position.total_cmp(&a.position));
 
         self.update_order_values();
         self.resolve_overlaps();

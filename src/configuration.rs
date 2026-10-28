@@ -84,6 +84,10 @@ impl Roll {
     ///
     /// The RNG is consumed even if the outcome is forced, so that changing the
     /// mode doesn't shift unrelated random outcomes for the same seed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `p` is not in `[0, 1]`, whatever the mode.
     pub fn resolve<R: Rng + ?Sized>(self, rng: &mut R, p: f64) -> bool {
         let roll = rng.random_bool(p);
         match self {

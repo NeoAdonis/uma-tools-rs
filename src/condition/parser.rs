@@ -26,9 +26,12 @@
 //! A few variables are sets of values, whose comparisons test membership (e.g.
 //! `is_used_skill_id==202051` checks whether skill 202051 has been activated),
 //! and some are flags. They only support some operators or values; any other
-//! comparison is rejected with [`ParseError::UnsupportedComparison`].
+//! comparison is rejected with [`ParseError::UnsupportedComparison`], as is any
+//! comparison on a variable that isn't implemented.
 
-use crate::condition::variables::{ActivationQueryVar, LineupVar, RandomSpatialVar, VarType};
+use crate::condition::variables::{
+    ActivationQueryVar, LineupVar, RandomSpatialVar, SpatialVar, VarType,
+};
 use crate::skill::SkillType;
 use std::fmt;
 use std::str::FromStr;
@@ -124,7 +127,8 @@ pub enum ParseError {
     UnknownVariable(String),
     InvalidValue(String),
     /// A comparison the evaluator can't evaluate, such as a skill ID check
-    /// with an operator other than `==` or `!=`.
+    /// with an operator other than `==` or `!=`, or one on a variable that
+    /// isn't implemented.
     UnsupportedComparison(String),
 }
 
@@ -184,9 +188,7 @@ impl Comparison {
             ActivationQuery(
                 ActivationQueryVar::IsUsedSkillId | ActivationQueryVar::IsUsedSkillIdWithDetailOne,
             )
-            | Lineup(LineupVar::IsExistSkillId | LineupVar::IsExistCharaId) => {
-                is_equal || self.op == CompOp::NotEqual
-            }
+            | Lineup(LineupVar::IsExistSkillId) => is_equal || self.op == CompOp::NotEqual,
             // The value is the type of the activated buff.
             ActivationQuery(ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill) => {
                 is_equal && SkillType::from_id(self.value).is_some()
@@ -203,6 +205,10 @@ impl Comparison {
             }
             // The value selects where the random point is (e.g. which phase).
             RandomSpatial(_) | RandomPhase(_) => is_equal,
+            // Not implemented, as they're only used outside PvP races.
+            Spatial(SpatialVar::RemainDistanceViewerId) | Lineup(LineupVar::IsExistCharaId) => {
+                false
+            }
             _ => true,
         }
     }

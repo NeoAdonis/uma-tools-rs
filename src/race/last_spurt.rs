@@ -237,7 +237,7 @@ impl Runner {
         let mut rng = self.rng.borrow_mut();
 
         // Try each candidate from best to worst.
-        candidates.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        candidates.sort_by(|a, b| a.time.total_cmp(&b.time));
         for candidate in &candidates {
             if rng.random_bool(acceptance_chance) {
                 return LastSpurt {

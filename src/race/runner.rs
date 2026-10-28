@@ -151,6 +151,7 @@ impl Default for OrderState {
 /// nearest (half up): e.g. 50% in a 9-runner race is 4.5, rounded to 5th
 /// place, and so are 50% to 61%.
 pub fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
+    debug_assert!(runner_count > 0, "no runners");
     let (order, runner_count) = (order as i32, runner_count as i32);
     // `(runner_count * rate + 50) / 100 == order` holds for
     // `100 * order - 50 <= runner_count * rate < 100 * order + 50`.

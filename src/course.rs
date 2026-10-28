@@ -289,6 +289,7 @@ impl Course {
     /// Get the start position in meters of section `section` (0-24, the latter
     /// being the goal).
     pub fn section_start(&self, section: u8) -> f64 {
+        debug_assert!(section <= 24, "section {section} is past the goal");
         self.run_up + self.section_length() * section as f64
     }
 
@@ -312,6 +313,7 @@ impl Course {
     /// fourth. If the race goes through the same corner multiple times (i.e. more
     /// than one lap), its number is repeated.
     pub fn corner_number(&self, idx: usize) -> u8 {
+        debug_assert!(idx < self.corners.len(), "no corner at index {idx}");
         4 - ((self.corners.len() - 1 - idx) % 4) as u8
     }
 
