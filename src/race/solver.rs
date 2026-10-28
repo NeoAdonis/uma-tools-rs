@@ -9,6 +9,8 @@
 //! several runners: order, blocking and overlaps, positioning strategy, skill
 //! effects that target other runners, and mechanics such as spot struggle,
 //! dueling, secure lead and compete before spurt.
+//!
+//! See [`RaceSolver`] for examples.
 
 use std::collections::HashMap;
 use std::sync::Arc;

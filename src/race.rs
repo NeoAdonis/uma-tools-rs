@@ -10,6 +10,8 @@
 //! The remaining modules each implement a race mechanic (HP, rushing, dueling,
 //! last spurt, etc.) or a helper shared by several of them, such as stat
 //! modifiers and proximity checks between runners.
+//!
+//! See [`RaceSolver`](solver::RaceSolver) for examples.
 
 pub mod all_out_spurt;
 pub mod charge_up;

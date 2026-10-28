@@ -7,6 +7,37 @@
 //!
 //! See the [`trigger`](crate::trigger) module for an overview of how
 //! conditions decide when skills activate.
+//!
+//! # Examples
+//!
+//! Find the skills whose conditions use a given variable, e.g. every skill
+//! that activates at a random point of a corner:
+//!
+//! ```
+//! use uma_tools::Skill;
+//! use uma_tools::condition::variables::VarType;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let var = VarType::parse("all_corner_random").ok_or("unknown variable")?;
+//! let uses_var = |skill: &Skill| {
+//!     skill
+//!         .alternatives
+//!         .iter()
+//!         .flat_map(|alternative| &alternative.condition.branches)
+//!         .flatten()
+//!         .any(|comparison| comparison.var == var)
+//! };
+//! let corner_skills: Vec<i32> = all_skills
+//!     .values()
+//!     .filter(|skill| uses_var(skill))
+//!     .map(|skill| skill.id)
+//!     .collect();
+//! // Professor of Curvature.
+//! assert!(corner_skills.contains(&200331));
+//! # Ok(())
+//! # }
+//! ```
 
 pub mod evaluator;
 pub mod parser;

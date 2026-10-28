@@ -2,6 +2,34 @@
 //!
 //! This module includes data structures for stats, aptitudes, running styles
 //! and mood, as well as functions to convert raw stats into base stats.
+//!
+//! # Examples
+//!
+//! Build Umas in code rather than from JSON, e.g. to sweep a stat and race
+//! each variant. Stats above 1200 only count half, so the base speed grows
+//! half as fast past that point:
+//!
+//! ```
+//! use uma_tools::{Aptitude, Mood, Style, Uma};
+//!
+//! let uma = Uma {
+//!     speed: 1000,
+//!     stamina: 800,
+//!     power: 1000,
+//!     guts: 600,
+//!     wit: 1200,
+//!     style: Style::Pace,
+//!     distance_aptitude: Aptitude::A,
+//!     track_aptitude: Aptitude::A,
+//!     style_aptitude: Aptitude::A,
+//!     fan_count: None,
+//! };
+//! let base_speeds: Vec<u16> = (1000..=1500)
+//!     .step_by(100)
+//!     .map(|speed| Uma { speed, ..uma }.to_base(Mood::Normal).speed)
+//!     .collect();
+//! assert_eq!(base_speeds, [1000, 1100, 1200, 1250, 1300, 1350]);
+//! ```
 
 use serde::{Deserialize, Deserializer, de::Error};
 

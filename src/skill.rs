@@ -1,4 +1,27 @@
 //! Skill-related data structures and logic for race simulation.
+//!
+//! # Examples
+//!
+//! Compare a gold skill with its white version, e.g. to judge whether the
+//! upgrade is worth its cost:
+//!
+//! ```
+//! use uma_tools::Skill;
+//! use uma_tools::skill::SkillType;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let target_speed = |id| {
+//!     let skill = all_skills.get(&id)?;
+//!     let effect = skill.alternatives.first()?.effects.first()?;
+//!     (effect.skill_type == SkillType::TargetSpeed).then_some(effect.modifier)
+//! };
+//! // Professor of Curvature and Corner Adept ○, in m/s.
+//! assert_eq!(target_speed(200331), Some(0.35));
+//! assert_eq!(target_speed(200332), Some(0.15));
+//! # Ok(())
+//! # }
+//! ```
 
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};

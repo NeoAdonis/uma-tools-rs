@@ -28,6 +28,25 @@
 //! and some are flags. They only support some operators or values; any other
 //! comparison is rejected with [`ParseError::UnsupportedComparison`], as is any
 //! comparison on a variable that isn't implemented.
+//!
+//! ## Examples
+//!
+//! Check a hand-written condition, e.g. for a custom skill, before running
+//! races with it:
+//!
+//! ```
+//! use uma_tools::ParseError;
+//! use uma_tools::condition::parser::Condition;
+//!
+//! # fn main() -> Result<(), ParseError> {
+//! let condition: Condition = "phase>=2&order<=3@is_overtake==1".parse()?;
+//! assert_eq!(condition.branches.len(), 2);
+//!
+//! let typo = "phase>=2&oder<=3".parse::<Condition>();
+//! assert_eq!(typo, Err(ParseError::UnknownVariable("oder".into())));
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::condition::variables::{
     ActivationQueryVar, LineupVar, RandomSpatialVar, SpatialVar, VarType,

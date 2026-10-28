@@ -31,6 +31,8 @@
 //!   that comparisons on it can be evaluated once before the race starts.
 //! - [`VarType::is_popularity_guard`]: whether an unmet comparison on it
 //!   prevents a skill from adding popularity points.
+//!
+//! See the [`condition`](super) module for an example.
 
 use std::fmt;
 

@@ -1,5 +1,26 @@
 //! Configuration for the simulation behavior, game mechanics and language
 //! settings.
+//!
+//! # Examples
+//!
+//! Simulate races as they ran before a game update, e.g. to measure how much
+//! the 5th Anniversary changed a runner's times. Versions are ordered, so
+//! later ones include the changes of earlier ones:
+//!
+//! ```
+//! use uma_tools::configuration::{Configuration, GameVersion};
+//!
+//! let before = Configuration {
+//!     game_version: GameVersion::MechaUmaUpdate,
+//!     seed: Some(564),
+//!     ..Configuration::default()
+//! };
+//! let after = Configuration {
+//!     game_version: GameVersion::FifthAnniversary,
+//!     ..before
+//! };
+//! assert!(before.game_version < after.game_version);
+//! ```
 
 use rand::{Rng, RngExt};
 use serde::Deserialize;

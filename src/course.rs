@@ -4,6 +4,28 @@
 //! their attributes. It also provides functions for calculating various
 //! properties of the course, such as section lengths, phase boundaries
 //! and lane widths. Additionally, it handles special cases for certain tracks.
+//!
+//! # Examples
+//!
+//! Look up a course's layout, e.g. to see how long its final straight is
+//! before picking skills for it:
+//!
+//! ```
+//! use uma_tools::Course;
+//! use uma_tools::configuration::Language;
+//! use uma_tools::course::DistanceType;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! // Tokyo, turf 2400m.
+//! let course = Course::from_json_file("data/course_data.json", "10606")?;
+//! assert_eq!(course.track_name(Language::English), Some("Tokyo"));
+//! assert_eq!(course.distance_type(), DistanceType::Medium);
+//!
+//! let final_straight = course.straights.last().ok_or("no straights")?;
+//! assert_eq!(course.length() - final_straight.start, 525.0);
+//! # Ok(())
+//! # }
+//! ```
 
 include!("course/track_names.rs");
 

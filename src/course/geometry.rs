@@ -3,6 +3,28 @@
 //! Each kind of segment is deserialized from the course data and implements
 //! [`Segment`], which gives a common way to check the range it spans along the
 //! course.
+//!
+//! # Examples
+//!
+//! Check which segments a position falls in, e.g. whether a runner is already
+//! on the uphill of the final straight:
+//!
+//! ```
+//! use uma_tools::Course;
+//! use uma_tools::course::geometry::Segment;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! // Tokyo, turf 2400m.
+//! let course = Course::from_json_file("data/course_data.json", "10606")?;
+//! let position = 2000.0;
+//!
+//! let straight = course.straights.iter().find(|s| s.contains(position));
+//! assert_eq!(straight, course.straights.last());
+//! let slope = course.slopes.iter().find(|s| s.contains(position));
+//! assert!(slope.is_some_and(|slope| slope.is_uphill()));
+//! # Ok(())
+//! # }
+//! ```
 
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};

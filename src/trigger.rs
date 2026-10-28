@@ -59,6 +59,68 @@
 //! 4. **Every frame** ([`RaceSolver`]): every runner checks her skills
 //!    (`Runner::check_skills`), then the race state is updated.
 //!
+//! ## Examples
+//!
+//! Find where a skill tends to activate over many races, from the activation
+//! records of each runner. Professor of Curvature activates at a random point
+//! of any corner:
+//!
+//! ```
+//! use uma_tools::course::geometry::Segment;
+//! use uma_tools::{Configuration, RaceSolver};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! # use uma_tools::{Course, RaceParametersData, Skill, UmaData};
+//! # let parameters = RaceParametersData::from_json(
+//! #     r#"{
+//! #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+//! #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+//! #     }"#,
+//! # )?;
+//! # let uma = UmaData::from_json(
+//! #     r#"{
+//! #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+//! #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+//! #         "surfaceAptitude": "A", "strategyAptitude": "A",
+//! #         "motivation": "Great", "skills": [200331]
+//! #     }"#,
+//! # )?;
+//! # let path = "data/course_data.json";
+//! # let course = Course::from_json_file(path, &parameters.course_id)?;
+//! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! # let skills = uma.resolve_skills(&all_skills)?;
+//! let mut positions = Vec::new();
+//! for seed in 0..20 {
+//!     let config = Configuration {
+//!         seed: Some(seed),
+//!         ..Configuration::default()
+//!     };
+//!     let course = course.clone();
+//!     let mut solver = RaceSolver::new(course, parameters.race, config);
+//!     solver.add_runner(uma.uma, uma.mood, skills.clone());
+//!     let mut solver = solver.ready_runners();
+//!     solver.run();
+//!     let activations = &solver.runners()[0].activated_skills;
+//!     positions.extend(
+//!         activations
+//!             .iter()
+//!             .filter(|activation| activation.skill_id == 200331)
+//!             .map(|activation| activation.distance),
+//!     );
+//! }
+//!
+//! let final_corner = course.corners.last().ok_or("no corners")?;
+//! let on_final_corner =
+//!     positions.iter().filter(|&&d| final_corner.contains(d));
+//! println!(
+//!     "{} of {} activations on the final corner",
+//!     on_final_corner.count(),
+//!     positions.len()
+//! );
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! [`condition::parser`]: crate::condition::parser
 //! [`condition::variables`]: crate::condition::variables
 //! [`condition::evaluator`]: crate::condition::evaluator

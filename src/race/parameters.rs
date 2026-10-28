@@ -1,4 +1,30 @@
 //! Race parameters that define the conditions of a race.
+//!
+//! # Examples
+//!
+//! Set up the same race in different conditions, e.g. to see how much a
+//! runner loses on heavy ground (see [`RaceSolver`] for how to compare
+//! races):
+//!
+//! ```
+//! use uma_tools::race::parameters::*;
+//!
+//! let firm = RaceParameters {
+//!     track_condition: TrackCondition::Firm,
+//!     weather: Weather::Sunny,
+//!     season: Season::Spring,
+//!     time: Time::Noon,
+//!     grade: Grade::G1,
+//!     gates: 18,
+//! };
+//! let heavy = RaceParameters {
+//!     track_condition: TrackCondition::Heavy,
+//!     weather: Weather::Rainy,
+//!     ..firm
+//! };
+//! ```
+//!
+//! [`RaceSolver`]: crate::race::solver::RaceSolver
 
 use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;

@@ -14,6 +14,58 @@
 //! - `skills`: skill trigger checks, activation and active effects.
 //!
 //! Submodules are private; their public items are re-exported from here.
+//!
+//! # Examples
+//!
+//! Show the race results, with each runner's finish margin as displayed in
+//! the game:
+//!
+//! ```
+//! use uma_tools::race::margin::Margin;
+//! use uma_tools::{Configuration, RaceSolver, Runner, Uma};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! # use uma_tools::{Course, RaceParametersData, Skill, UmaData};
+//! # let parameters = RaceParametersData::from_json(
+//! #     r#"{
+//! #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+//! #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+//! #     }"#,
+//! # )?;
+//! # let uma = UmaData::from_json(
+//! #     r#"{
+//! #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+//! #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+//! #         "surfaceAptitude": "A", "strategyAptitude": "A",
+//! #         "motivation": "Great", "skills": [200331]
+//! #     }"#,
+//! # )?;
+//! # let path = "data/course_data.json";
+//! # let course = Course::from_json_file(path, &parameters.course_id)?;
+//! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! # let skills = uma.resolve_skills(&all_skills)?;
+//! let config = Configuration::default();
+//! let mut solver = RaceSolver::new(course, parameters.race, config);
+//! for speed in [1300, 1400, 1500] {
+//!     let variant = Uma { speed, ..uma.uma };
+//!     solver.add_runner(variant, uma.mood, skills.clone());
+//! }
+//! let mut solver = solver.ready_runners();
+//! solver.run();
+//!
+//! let finish_time =
+//!     |runner: &Runner| runner.finish_time.unwrap_or(f64::INFINITY);
+//! let mut runners = solver.into_runners();
+//! runners.sort_by(|a, b| finish_time(a).total_cmp(&finish_time(b)));
+//! for runner in &runners {
+//!     let margin = runner.finish_margin.map(Margin::from_meters);
+//!     println!("Speed {}: {:?}", runner.raw.speed, margin);
+//! }
+//! // The winner has no runner ahead.
+//! assert_eq!(runners[0].finish_margin, None);
+//! # Ok(())
+//! # }
+//! ```
 
 use std::ops::RangeInclusive;
 use std::sync::Arc;
