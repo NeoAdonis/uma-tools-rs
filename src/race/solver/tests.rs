@@ -2624,7 +2624,14 @@ fn gold_skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) ->
 /// Sorted IDs of the skills activated by the only runner after a whole race,
 /// with "Adventure of 564"-like skill activating `modifier` random gold
 /// skills in the second half of the race.
-fn random_gold_activations(modifier: f64, mut skills: Vec<Arc<Skill>>) -> Vec<i32> {
+fn random_gold_activations(modifier: f64, skills: Vec<Arc<Skill>>) -> Vec<i32> {
+    let mut ids = random_gold_activation_order(modifier, skills);
+    ids.sort();
+    ids
+}
+
+/// Like [`random_gold_activations`], but in activation order.
+fn random_gold_activation_order(modifier: f64, mut skills: Vec<Arc<Skill>>) -> Vec<i32> {
     let adventure = skill(
         3,
         "distance_rate>=50",
@@ -2634,10 +2641,7 @@ fn random_gold_activations(modifier: f64, mut skills: Vec<Arc<Skill>>) -> Vec<i3
     skills.push(adventure);
     let mut solver = ready_solver(10101, uma(Style::Pace), skills, seeded_config(0));
     solver.run();
-
-    let mut ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
-    ids.sort();
-    ids
+    activations(&solver).into_iter().map(|(id, _)| id).collect()
 }
 
 /// Gold skill that never activates on its own (there are no heals).
@@ -2669,6 +2673,12 @@ fn test_activate_random_gold_activates_one_skill_per_unit() {
 fn test_activate_random_gold_bypasses_conditions() {
     let ids = random_gold_activations(1.0, vec![forced_gold_skill(15)]);
     assert_eq!(ids, vec![3, 15]);
+}
+
+#[test]
+fn test_activate_random_gold_records_the_source_skill_first() {
+    let ids = random_gold_activation_order(1.0, vec![forced_gold_skill(1)]);
+    assert_eq!(ids, vec![3, 1]);
 }
 
 #[test]
@@ -2818,6 +2828,25 @@ fn test_activate_unique_fires_the_unique_again() {
     assert_eq!(sorted_activation_ids(&runner), vec![4, 34, 34]);
     // Both activations' effects stack.
     assert_eq!(active_effect_count(&runner, SkillType::TargetSpeed), 2);
+}
+
+#[test]
+fn test_activate_unique_records_the_source_skill_first() {
+    let unique = unique_skill(
+        34,
+        vec![alternative(
+            "distance_rate>=10",
+            SkillType::TargetSpeed,
+            0.35,
+        )],
+    );
+    let runner = unique_reactivation_runner(1.0, vec![unique]);
+    let ids: Vec<_> = runner
+        .activated_skills
+        .iter()
+        .map(|record| record.skill_id)
+        .collect();
+    assert_eq!(ids, vec![34, 4, 34]);
 }
 
 #[test]

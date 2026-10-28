@@ -24,6 +24,8 @@
 //!
 //! - Triggers the additional effects of the skills already active that apply
 //!   on any skill activation (see [`AdditionalActivation`]).
+//! - Records the activation for reporting ([`Runner::activated_skills`]),
+//!   before the effects, so that skills they activate are recorded after it.
 //! - Applies each effect targeting the runner herself. **Timed effects**
 //!   (speed, acceleration...) are stored with an expiration time (base duration
 //!   scaled by the runner's situation, the course distance and active
@@ -47,7 +49,8 @@
 //!   The exception are continuations, alternatives using
 //!   `is_activate_other_skill_detail`, which can only activate after another
 //!   alternative did.
-//! - Records the activation (for activation counts and reporting).
+//! - Updates the activation counts, after the effects, so that effects
+//!   scaled by them don't count their own skill.
 //! - Sets this frame's activation flags, which fire any-skill and heal
 //!   activation triggers.
 //!
@@ -428,6 +431,13 @@ impl Runner {
         let skill_id = self.skills[skill_index].id;
         let alternative = self.skills[skill_index].alternatives[alternative_index].clone();
 
+        // Record the activation before applying the effects, so that skills
+        // activated by them are recorded after this one.
+        self.activated_skills.push(SkillActivationRecord {
+            skill_id,
+            distance: self.position,
+        });
+
         // Scale with the runner's situation, distance and effects. Effects lasting
         // until the end of the race have an infinite base duration, which stays
         // infinite.
@@ -499,10 +509,6 @@ impl Runner {
 
         // Track skill activation.
         self.activated_alternatives[skill_index] |= 1 << alternative_index;
-        self.activated_skills.push(SkillActivationRecord {
-            skill_id,
-            distance: self.position,
-        });
 
         // Increment activation counts for condition evaluation.
         self.trigger_scheduler.activation_counts.increment(
