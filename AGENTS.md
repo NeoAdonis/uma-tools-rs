@@ -28,7 +28,7 @@ The following deviations from the Rust API Guidelines are known and currently ac
 - `CompEvaluator` isn't sealed ([C-SEALED](https://rust-lang.github.io/api-guidelines/future-proofing.html#c-sealed)), since its docs invite other crates to implement it.
 - Some types are built from a number with named constructors (`from_meters`, `from_delay`) rather than `From` impls ([C-CONV-TRAITS](https://rust-lang.github.io/api-guidelines/interoperability.html#c-conv-traits)), because a bare number doesn't say what it measures.
 - Types don't derive `Serialize` ([C-SERDE](https://rust-lang.github.io/api-guidelines/interoperability.html#c-serde)). Add it only when results need to be exported.
-- `RaceSolver` and `Runner` aren't `Send` ([C-SEND-SYNC](https://rust-lang.github.io/api-guidelines/interoperability.html#c-send-sync)), because they share the random number generator through `Rc<RefCell<…>>`.
+- `RaceSolver` and `Runner` are `Send` but not `Sync` ([C-SEND-SYNC](https://rust-lang.github.io/api-guidelines/interoperability.html#c-send-sync)), because runners draw random numbers through `RefCell` and `Cell` in methods that take `&self`.
 - Some public enums derive `TryFrom` through `num_enum`, which exposes its `TryFromPrimitiveError` in the public API ([C-STABLE](https://rust-lang.github.io/api-guidelines/necessities.html#c-stable)).
 
 ## Commits

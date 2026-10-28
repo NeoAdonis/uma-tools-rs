@@ -5,7 +5,9 @@
 use crate::common::{load_course, race_params, seeded_config, uma};
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::race::parameters::*;
+use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
+use uma_tools::race::unready_runner::UnreadyRunner;
 use uma_tools::uma::*;
 
 #[test]
@@ -131,4 +133,12 @@ fn test_same_seed_gives_same_race() {
     for seed in 0..5 {
         assert_eq!(race(seed), race(seed), "seed {seed}");
     }
+}
+
+/// Solvers can be moved to other threads, e.g. to simulate races in parallel.
+#[test]
+fn test_solvers_are_send() {
+    fn assert_send<T: Send>() {}
+    assert_send::<RaceSolver<UnreadyRunner>>();
+    assert_send::<RaceSolver<Runner>>();
 }
