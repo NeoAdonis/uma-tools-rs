@@ -11,7 +11,7 @@ use crate::units::CourseWidths;
 /// distance and lane difference.
 ///
 /// When front-blocked, the runner's speed is capped.
-pub fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
     if !(0.0..2.0).contains(&distance) {
         return false;
     }
@@ -25,7 +25,7 @@ pub fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
 /// and lane difference.
 ///
 /// When side-blocked, the runner cannot change lanes.
-pub fn check_side_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn check_side_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 1.05, 2.0)
 }
 
@@ -37,7 +37,7 @@ pub fn check_side_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
 /// (1.5m and 1.5 lanes).
 ///
 /// This is checked by certain skills (`near_count`).
-pub fn is_near(distance: f64, lane_diff: CourseWidths, game_version: GameVersion) -> bool {
+pub(crate) fn is_near(distance: f64, lane_diff: CourseWidths, game_version: GameVersion) -> bool {
     let threshold = if game_version >= GameVersion::FirstAnniversary {
         3.0
     } else {
@@ -50,7 +50,7 @@ pub fn is_near(distance: f64, lane_diff: CourseWidths, game_version: GameVersion
 /// distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_near_same_lane(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_near_same_lane(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 2.5, 1.0)
 }
 
@@ -58,7 +58,7 @@ pub fn is_near_same_lane(distance: f64, lane_diff: CourseWidths) -> bool {
 /// lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_near_behind_set1(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_near_behind_set1(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 5.0, 2.7)
 }
 
@@ -67,7 +67,7 @@ pub fn is_near_behind_set1(distance: f64, lane_diff: CourseWidths) -> bool {
 /// distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_front_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_front_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 3.0, 1.5)
 }
 
@@ -75,19 +75,19 @@ pub fn is_front_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
 /// from the side based on distance and lane difference.
 ///
 /// This is checked by certain skills.
-pub fn is_side_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_side_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 1.5, 3.0)
 }
 
 /// Distance (m) below which two runners may overlap.
-pub const OVERLAP_DISTANCE: f64 = 0.4;
+pub(crate) const OVERLAP_DISTANCE: f64 = 0.4;
 /// Lane difference (in horse lanes) below which two runners may overlap. An
 /// overlapping runner is bumped to exactly this far from the other one.
-pub const OVERLAP_LANE_GAP: f64 = 0.4;
+pub(crate) const OVERLAP_LANE_GAP: f64 = 0.4;
 
 /// Check if a runner is overlapping with another runner based on position and
 /// lane difference.
-pub fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, OVERLAP_DISTANCE, OVERLAP_LANE_GAP)
 }
 
@@ -96,7 +96,7 @@ pub fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
 ///
 /// `distance` and `max_distance` are in meters, `lane_diff` is in course widths
 /// and `max_lane_diff` is in horse lanes.
-pub fn is_near_by(
+pub(crate) fn is_near_by(
     distance: f64,
     lane_diff: CourseWidths,
     max_distance: f64,

@@ -9,20 +9,20 @@ use crate::course::{Course, DistanceType};
 use crate::uma::Style;
 
 /// Charge power that must be exceeded to be eligible.
-pub const POWER_THRESHOLD: f64 = 1200.0;
+pub(crate) const POWER_THRESHOLD: f64 = 1200.0;
 /// Time in seconds after leaving a blocking state before power can be conserved
 /// again.
-pub const COOLDOWN: f64 = 1.5;
+pub(crate) const COOLDOWN: f64 = 1.5;
 /// Minimum release duration in seconds. Shorter releases don't happen at all.
-pub const MIN_DURATION: f64 = 0.2;
+pub(crate) const MIN_DURATION: f64 = 0.2;
 /// Conserved power multiplier upon entering a spot struggle.
-pub const STRUGGLE_PENALTY: f64 = 0.95;
+pub(crate) const STRUGGLE_PENALTY: f64 = 0.95;
 /// Conserved power multiplier upon entering rush.
-pub const RUSH_PENALTY: f64 = 0.8;
+pub(crate) const RUSH_PENALTY: f64 = 0.8;
 /// Activity coefficient factor if the runner entered a spot struggle.
-pub const STRUGGLE_ACTIVITY: f64 = 0.98;
+pub(crate) const STRUGGLE_ACTIVITY: f64 = 0.98;
 /// Activity coefficient factor if the runner rushed.
-pub const RUSH_ACTIVITY: f64 = 0.8;
+pub(crate) const RUSH_ACTIVITY: f64 = 0.8;
 
 /// Charge Up state. It is kept after the race as a record of the mechanic.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,7 +32,7 @@ pub struct ChargeUp {
     /// Power conserved so far.
     pub conserved: f64,
     /// Power can't be conserved before this time, in seconds.
-    pub cooldown_until: f64,
+    pub(crate) cooldown_until: f64,
     /// Whether the conserved power has been released.
     pub outcome: ChargeUpOutcome,
 }
@@ -67,7 +67,7 @@ pub struct ChargeUpRelease {
 
 impl ChargeUp {
     /// Create the Charge Up state, or `None` if the runner is not eligible.
-    pub fn new(power: f64, game_version: GameVersion) -> Option<Self> {
+    pub(crate) fn new(power: f64, game_version: GameVersion) -> Option<Self> {
         if game_version < GameVersion::SecondAnniversary || power <= POWER_THRESHOLD {
             return None;
         }
@@ -82,7 +82,13 @@ impl ChargeUp {
     /// Conserve power at `rate` for `delta_time` seconds, unless `blocked` or
     /// within the cooldown at `elapsed_time`. Being blocked restarts the
     /// cooldown.
-    pub fn conserve(&mut self, rate: f64, blocked: bool, delta_time: f64, elapsed_time: f64) {
+    pub(crate) fn conserve(
+        &mut self,
+        rate: f64,
+        blocked: bool,
+        delta_time: f64,
+        elapsed_time: f64,
+    ) {
         if blocked {
             self.cooldown_until = elapsed_time + COOLDOWN;
         } else if elapsed_time >= self.cooldown_until {
@@ -91,7 +97,7 @@ impl ChargeUp {
     }
 
     /// Multiply the conserved power by `penalty` (e.g. [`RUSH_PENALTY`]).
-    pub fn penalize(&mut self, penalty: f64) {
+    pub(crate) fn penalize(&mut self, penalty: f64) {
         self.conserved *= penalty;
     }
 
@@ -102,7 +108,7 @@ impl ChargeUp {
     /// It happens only once; nothing changes if the outcome is already known.
     ///
     /// `activity` is the [`activity_coefficient`] of the runner.
-    pub fn release(
+    pub(crate) fn release(
         &mut self,
         style: Style,
         course: &Course,
@@ -134,7 +140,7 @@ impl ChargeUp {
     }
 
     /// Acceleration bonus at the given time in m/s² (zero if not active).
-    pub fn acceleration(&self, elapsed_time: f64) -> f64 {
+    pub(crate) fn acceleration(&self, elapsed_time: f64) -> f64 {
         match &self.outcome {
             ChargeUpOutcome::Released(release)
                 if (release.start_time..release.expires_at).contains(&elapsed_time) =>
@@ -151,13 +157,13 @@ impl ChargeUp {
 /// Unlike the regular base stat, only the part up to 1200 is affected by mood:
 /// `base_power` is the halved stat after mood multiplier, and the halved
 /// excess of `raw_power` over 1200 is added back without it.
-pub fn charge_power(base_power: u16, raw_power: u16, skill_bonus: i32) -> f64 {
+pub(crate) fn charge_power(base_power: u16, raw_power: u16, skill_bonus: i32) -> f64 {
     base_power as f64 + 0.5 * (raw_power as f64 - POWER_THRESHOLD).max(0.0) + skill_bonus as f64
 }
 
 /// Conservation rate per second, depending on whether the runner is in pace
 /// down mode and her style.
-pub fn conservation_rate(pace_down: bool, style: Style) -> f64 {
+pub(crate) fn conservation_rate(pace_down: bool, style: Style) -> f64 {
     position_keep_coefficient(pace_down) * style_coefficient(style)
 }
 
@@ -208,7 +214,7 @@ fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
 
 /// Activity coefficient of the release acceleration. Penalties stack
 /// multiplicatively.
-pub fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
+pub(crate) fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
     let mut coefficient = 1.0;
     if struggled {
         coefficient *= STRUGGLE_ACTIVITY;
@@ -220,7 +226,7 @@ pub fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
 }
 
 /// Release acceleration bonus in m/s².
-pub fn release_acceleration(
+pub(crate) fn release_acceleration(
     power: f64,
     style: Style,
     distance_type: DistanceType,
@@ -233,7 +239,11 @@ pub fn release_acceleration(
 }
 
 /// Release duration in seconds.
-pub fn release_duration(conserved: f64, course_distance: i32, distance_type: DistanceType) -> f64 {
+pub(crate) fn release_duration(
+    conserved: f64,
+    course_distance: i32,
+    distance_type: DistanceType,
+) -> f64 {
     conserved * (course_distance as f64).sqrt() * distance_type_coefficient(distance_type) / 1450.0
 }
 

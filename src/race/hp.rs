@@ -29,7 +29,7 @@ pub struct HpState {
 
 impl HpState {
     /// Create a new HP state with given maximum HP.
-    pub fn new(maximum: f64) -> Self {
+    pub(crate) fn new(maximum: f64) -> Self {
         Self {
             current: maximum,
             maximum,
@@ -63,7 +63,7 @@ impl HpState {
     }
 
     /// Consume HP by a given amount, recording whether it has been emptied.
-    pub fn consume(&mut self, amount: f64) {
+    pub(crate) fn consume(&mut self, amount: f64) {
         self.current -= amount;
         if self.is_empty() {
             self.has_emptied = true;
@@ -71,7 +71,7 @@ impl HpState {
     }
 
     /// Recover HP by a given amount, clamped to maximum.
-    pub fn recover(&mut self, amount: f64) {
+    pub(crate) fn recover(&mut self, amount: f64) {
         self.current = (self.current + amount).min(self.maximum);
     }
 
@@ -121,7 +121,7 @@ fn hp_style_multiplier(style: Style) -> f64 {
 /// Calculate maximum HP from the stamina stat, running style and course.
 ///
 /// Stats should already include any adjustments applied before the race starts.
-pub fn calculate_max_hp(style: Style, stamina_stat: u16, course: &Course) -> f64 {
+pub(crate) fn calculate_max_hp(style: Style, stamina_stat: u16, course: &Course) -> f64 {
     0.8 * hp_style_multiplier(style) * stamina_stat as f64 + course.distance as f64
 }
 
@@ -131,7 +131,7 @@ pub fn calculate_max_hp(style: Style, stamina_stat: u16, course: &Course) -> f64
 /// (e.g., rushed, pace-down, downhill). Should be 1.0 if no modifiers apply.
 ///
 /// Returns the HP consumed per second traveled at the given speed.
-pub fn calculate_hp_per_second(
+pub(crate) fn calculate_hp_per_second(
     current_speed: f64,
     course: &Course,
     track_condition: TrackCondition,
@@ -158,7 +158,7 @@ pub fn calculate_hp_per_second(
 /// distances based on available HP.
 ///
 /// Returns the HP consumed per meter traveled at the given speed.
-pub fn estimate_hp_per_meter_last_spurt(
+pub(crate) fn estimate_hp_per_meter_last_spurt(
     speed: f64,
     course: &Course,
     track_condition: TrackCondition,
@@ -179,7 +179,7 @@ pub fn estimate_hp_per_meter_last_spurt(
 /// Estimate HP consumption at a given speed over a distance during last spurt.
 ///
 /// Returns the HP consumed during last spurt.
-pub fn estimate_hp_last_spurt(
+pub(crate) fn estimate_hp_last_spurt(
     speed: f64,
     course: &Course,
     track_condition: TrackCondition,

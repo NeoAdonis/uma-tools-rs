@@ -12,16 +12,16 @@ use rand::prelude::*;
 use crate::uma::Style;
 
 /// Sections (0-indexed) in which a runner may start rushing.
-pub const SECTIONS: RangeInclusive<u8> = 1..=8;
+pub(crate) const SECTIONS: RangeInclusive<u8> = 1..=8;
 /// Time in seconds after which a rushed runner may snap out of it, either since
 /// she started rushing or since her last failed attempt.
-pub const CHECK_INTERVAL: f64 = 3.0;
+pub(crate) const CHECK_INTERVAL: f64 = 3.0;
 /// Chance of snapping out of the rush on each check.
-pub const SNAP_OUT_CHANCE: f64 = 0.55;
+pub(crate) const SNAP_OUT_CHANCE: f64 = 0.55;
 /// Maximum time in seconds a runner stays rushed, before skill effects.
-pub const MAX_DURATION: f64 = 12.0;
+pub(crate) const MAX_DURATION: f64 = 12.0;
 /// HP consumption multiplier while rushed.
-pub const HP_MULTIPLIER: f64 = 1.5;
+pub(crate) const HP_MULTIPLIER: f64 = 1.5;
 
 /// Rush state of a runner bound to rush.
 #[derive(Clone, Debug, PartialEq)]
@@ -43,7 +43,7 @@ pub struct RushState {
 
 impl RushState {
     /// Roll when and how a runner with `style` will rush.
-    pub fn roll(style: Style, rng: &mut impl Rng) -> Self {
+    pub(crate) fn roll(style: Style, rng: &mut impl Rng) -> Self {
         let style = roll_style(style, rng);
         let section = rng.random_range(SECTIONS);
         RushState {
@@ -62,14 +62,14 @@ impl RushState {
     }
 
     /// Start rushing at `elapsed_time`.
-    pub fn start(&mut self, elapsed_time: f64) {
+    pub(crate) fn start(&mut self, elapsed_time: f64) {
         self.is_rushed = true;
         self.start_time = elapsed_time;
         self.end_time = elapsed_time + CHECK_INTERVAL;
     }
 
     /// Stop rushing at `elapsed_time`.
-    pub fn end(&mut self, elapsed_time: f64) {
+    pub(crate) fn end(&mut self, elapsed_time: f64) {
         self.is_rushed = false;
         self.end_time = elapsed_time;
     }
@@ -77,7 +77,7 @@ impl RushState {
     /// Check if the rush should end at `elapsed_time`, either because it reached
     /// its maximum duration or because the runner snapped out of it. A failed snap
     /// out check extends the rush until the next one.
-    pub fn should_end(&mut self, elapsed_time: f64, rng: &mut impl Rng) -> bool {
+    pub(crate) fn should_end(&mut self, elapsed_time: f64, rng: &mut impl Rng) -> bool {
         if elapsed_time >= self.start_time + self.max_duration {
             return true;
         }
@@ -97,7 +97,7 @@ impl RushState {
 ///
 /// The game rolls integer percentages, so it's rounded up. Very low wit and
 /// rush chance effects can push it out of range, so it's clamped.
-pub fn chance(wit: u16, modifier: f64) -> f64 {
+pub(crate) fn chance(wit: u16, modifier: f64) -> f64 {
     ((6.5 / (0.1 * wit as f64 + 1.0).log10()).powf(2.0) + modifier)
         .ceil()
         .clamp(0.0, 100.0)

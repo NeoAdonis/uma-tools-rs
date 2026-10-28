@@ -37,7 +37,7 @@ use crate::uma::*;
 use crate::units::CourseWidths;
 
 /// Scale applied to raw finish times to get displayed times.
-pub const FINISH_TIME_SCALE: f64 = 1.18;
+pub(crate) const FINISH_TIME_SCALE: f64 = 1.18;
 
 /// Duration of a single frame in seconds (race state is updated 15 times per
 /// second).
@@ -58,7 +58,7 @@ pub struct RaceState {
     pub config: Configuration,
     /// Random number generator shared by all runners.
     /// It is initialized with a seed to ensure reproducibility.
-    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    pub(crate) rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Elapsed time in seconds. This value is shared by all runners.
     pub elapsed_time: f64,
     /// Time when the first runner finished, in seconds. This might be different

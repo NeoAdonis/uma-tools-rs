@@ -25,9 +25,9 @@
 //! skill activate when it shouldn't.
 //!
 //! Each OR branch of an alternative's condition becomes a
-//! [`SkillActivationLogic`](skill_activation::SkillActivationLogic): the unit
-//! the scheduler works with, holding the trigger, the guards and what to do
-//! when they pass. Triggers reference logics by index.
+//! [`SkillActivationLogic`]: the unit the scheduler works with, holding the
+//! trigger, the guards and what to do when they pass. Triggers reference logics
+//! by index.
 //!
 //! ## Where Things Live
 //!
@@ -35,11 +35,11 @@
 //! - [`condition::variables`]: variable types, and whether they can change
 //!   during a race.
 //! - [`condition::evaluator`]: evaluate comparisons against the race state.
-//! - [`random`]: roll random variables (`phase_random`...) into 10m segments.
-//! - [`skill_activation`]: compile conditions and preconditions into triggers
+//! - `random`: roll random variables (`phase_random`...) into 10m segments.
+//! - `skill_activation`: compile conditions and preconditions into triggers
 //!   and guards.
-//! - [`builder`]: build the [`TriggerScheduler`] of a runner's skills.
-//! - [`system`]: scheduler data structures (window queues, event lists).
+//! - `builder`: build the `TriggerScheduler` of a runner's skills.
+//! - `system`: scheduler data structures (window queues, event lists).
 //! - [`unready_runner`]: wit checks and out-of-gate skills, before the race.
 //! - [`runner`]: check triggers each frame, evaluate guards, activate skills.
 //! - [`solver`]: frame loop, i.e. the order in which everything above is
@@ -48,7 +48,7 @@
 //! ## Lifecycle
 //!
 //! 1. **Runner setup** ([`UnreadyRunner`]): skills that pass the wit check are
-//!    kept, and the [`TriggerScheduler`] is built for them. Out-of-gate
+//!    kept, and the `TriggerScheduler` is built for them. Out-of-gate
 //!    alternatives are skipped: their condition is evaluated before the race
 //!    instead.
 //! 2. **Out-of-gate skills**: before the race, their pre-race effects are
@@ -57,7 +57,7 @@
 //! 3. **Runner creation** ([`Runner`]): guards that can't change during a race
 //!    are resolved, once every value they read is final.
 //! 4. **Every frame** ([`RaceSolver`]): every runner checks her skills
-//!    ([`Runner::check_skills`]), then the race state is updated.
+//!    (`Runner::check_skills`), then the race state is updated.
 //!
 //! [`condition::parser`]: crate::condition::parser
 //! [`condition::variables`]: crate::condition::variables
@@ -65,13 +65,16 @@
 //! [`unready_runner`]: crate::race::unready_runner
 //! [`runner`]: crate::race::runner
 //! [`solver`]: crate::race::solver
-//! [`TriggerScheduler`]: system::TriggerScheduler
 //! [`UnreadyRunner`]: crate::race::unready_runner::UnreadyRunner
 //! [`Runner`]: crate::race::runner::Runner
-//! [`Runner::check_skills`]: crate::race::runner::Runner::check_skills
 //! [`RaceSolver`]: crate::race::solver::RaceSolver
 
-pub mod builder;
-pub mod random;
-pub mod skill_activation;
-pub mod system;
+pub(crate) mod builder;
+pub(crate) mod random;
+pub(crate) mod skill_activation;
+pub(crate) mod system;
+
+pub use skill_activation::{SkillActivationLogic, SkillActivationRecord};
+
+#[cfg(test)]
+mod tests;

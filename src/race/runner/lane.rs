@@ -32,7 +32,7 @@ pub struct LaneState {
 }
 
 impl LaneState {
-    pub fn new(lane: CourseWidths) -> Self {
+    pub(crate) fn new(lane: CourseWidths) -> Self {
         Self {
             current: lane,
             target: lane,
@@ -46,14 +46,14 @@ impl LaneState {
 ///
 /// Both fields hold the runner's current values when unchanged.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LaneDecision {
-    pub target: CourseWidths,
-    pub extra_move_lane: Option<CourseWidths>,
+pub(crate) struct LaneDecision {
+    pub(crate) target: CourseWidths,
+    pub(crate) extra_move_lane: Option<CourseWidths>,
 }
 
 /// Overtake mode state including persistence timer.
 #[derive(Debug, Default, Clone)]
-pub struct OvertakeState {
+pub(crate) struct OvertakeState {
     /// Ordered map of overtake targets by gate_roll.
     ///
     /// Lane candidates are always considered in the same order.
@@ -64,7 +64,7 @@ pub struct OvertakeState {
 
 /// Information about an overtake target ahead of this runner.
 #[derive(Debug, Default, Clone)]
-pub struct OvertakeTarget {
+pub(crate) struct OvertakeTarget {
     /// Whether this target has been checked in the current update cycle.
     is_checked: bool,
     /// Time spent being an overtake target in seconds.
@@ -75,7 +75,7 @@ pub struct OvertakeTarget {
 
 impl Runner {
     /// Update lane position towards target lane.
-    pub fn update_lane(&mut self, course: &Course, delta_time: f64) {
+    pub(crate) fn update_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.02 * 1.5;
         const MAX_SPEED: f64 = 0.6;
 
@@ -145,7 +145,7 @@ impl Runner {
     }
 
     /// Uncheck all overtake targets at the start of an update cycle.
-    pub fn reset_overtake_checks(&mut self) {
+    pub(crate) fn reset_overtake_checks(&mut self) {
         if let Some(state) = &mut self.overtake_state {
             for target in state.targets.values_mut() {
                 target.is_checked = false;
@@ -156,7 +156,7 @@ impl Runner {
     /// Check if another runner qualifies as an overtake target and update tracking.
     ///
     /// Returns true if the target was added or updated.
-    pub fn check_overtake_target(&mut self, target: &Runner, delta_time: f64) -> bool {
+    pub(crate) fn check_overtake_target(&mut self, target: &Runner, delta_time: f64) -> bool {
         let distance = target.position - self.position;
 
         // Must be at least 1m ahead. The maximum distance is given by the field of
@@ -188,7 +188,7 @@ impl Runner {
     ///
     /// Must be called once every runner ahead has been checked. Returns her gate
     /// roll if she wasn't already a target in this update cycle.
-    pub fn track_front_blocker_target(&mut self, delta_time: f64) -> Option<u8> {
+    pub(crate) fn track_front_blocker_target(&mut self, delta_time: f64) -> Option<u8> {
         let gate_roll = self.blocked.front_blocker?;
         let state = self.overtake_state.get_or_insert_default();
         let entry = state.targets.entry(gate_roll).or_default();
@@ -204,7 +204,7 @@ impl Runner {
     /// Finalize overtake state after all targets have been checked.
     ///
     /// Handles cleanup of unchecked targets and persistence timer.
-    pub fn finalize_overtake_state(&mut self, delta_time: f64, elapsed_time: f64) {
+    pub(crate) fn finalize_overtake_state(&mut self, delta_time: f64, elapsed_time: f64) {
         if let Some(state) = &mut self.overtake_state {
             // Remove unchecked targets.
             state.targets.retain(|_, target| target.is_checked);
@@ -230,7 +230,7 @@ impl Runner {
 
     /// Check if the runner is in overtake mode (has targets or in persistence
     /// period).
-    pub fn is_in_overtake_mode(&self) -> bool {
+    pub(crate) fn is_in_overtake_mode(&self) -> bool {
         self.overtake_state.is_some()
     }
 
@@ -243,7 +243,7 @@ impl Runner {
     /// 2. Normal mode, if not in overtake mode, or during the Early and Mid race
     ///    up to 200m before the move lane point.
     /// 3. Overtake mode.
-    pub fn target_lane_decision(
+    pub(crate) fn target_lane_decision(
         &self,
         course: &Course,
         all_runners: &[Runner],
@@ -274,14 +274,14 @@ impl Runner {
 
     /// Check if the target lane should be updated: when the runner is less than
     /// 0.5 horse lanes from it, or blocked on the side she's moving towards.
-    pub fn should_update_target_lane(&self) -> bool {
+    pub(crate) fn should_update_target_lane(&self) -> bool {
         (self.lane.target - self.lane.current).abs() < CourseWidths::from_horse_lanes(0.5)
             || !self.has_lane_space_to(self.lane.target)
     }
 
     /// Target lane in fixed mode, used while a skill effect sets the target
     /// lane, unless the runner is blocked from moving towards it.
-    pub fn fixed_mode_lane_target(&self) -> Option<CourseWidths> {
+    pub(crate) fn fixed_mode_lane_target(&self) -> Option<CourseWidths> {
         self.skill_modifiers
             .target_lane
             .filter(|&lane| self.has_lane_space_to(lane))
@@ -290,7 +290,7 @@ impl Runner {
     /// Set the extra move lane upon entering the final corner, based on the
     /// current lane. Before the 1st Anniv., it was set upon entering the final
     /// straight instead.
-    pub fn update_final_extra_move_lane(
+    pub(crate) fn update_final_extra_move_lane(
         &mut self,
         transitions: &Transitions,
         course: &Course,
@@ -317,7 +317,7 @@ impl Runner {
     }
 
     /// Calculate lane target when in normal mode (not overtaking).
-    pub fn normal_mode_lane_decision(
+    pub(crate) fn normal_mode_lane_decision(
         &self,
         course: &Course,
         all_runners: &[Runner],
@@ -381,7 +381,11 @@ impl Runner {
     /// Calculate target lane when in overtake mode.
     ///
     /// This should be called every frame after overtake state is finalized.
-    pub fn overtake_lane_decision(&self, course: &Course, all_runners: &[Runner]) -> LaneDecision {
+    pub(crate) fn overtake_lane_decision(
+        &self,
+        course: &Course,
+        all_runners: &[Runner],
+    ) -> LaneDecision {
         let mut decision = LaneDecision {
             target: self.lane.target,
             extra_move_lane: self.extra_move_lane,

@@ -61,7 +61,7 @@ use rand::prelude::*;
 /// share a random variable (e.g. `phase_laterhalf_random==1`, where one of them
 /// adds requirements), and must get the same points, or the same failure.
 #[derive(Debug, Default, Clone)]
-pub struct RandomRolls<'a> {
+pub(crate) struct RandomRolls<'a> {
     rolled: Vec<(&'a Comparison, Option<Vec<f64>>)>,
 }
 
@@ -77,7 +77,7 @@ impl<'a> RandomRolls<'a> {
     /// the same one (e.g. `phase_random==1` in
     /// `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`)
     /// share its points, or its failure.
-    pub fn roll(
+    pub(crate) fn roll(
         &mut self,
         condition: &'a Condition,
         course: &Course,
@@ -392,7 +392,7 @@ fn intersect_intervals(a: (f64, f64), b: (f64, f64)) -> Option<(f64, f64)> {
 }
 
 /// Length in meters of the segments picked by random conditions.
-pub const SEGMENT_LENGTH: f64 = 10.0;
+pub(crate) const SEGMENT_LENGTH: f64 = 10.0;
 
 /// Pick a random 10m segment within `[start, end]` and return its start. The
 /// start is uniform in `[start, end - 10]`, so the segment always fits.
@@ -400,7 +400,7 @@ pub const SEGMENT_LENGTH: f64 = 10.0;
 ///
 /// The skill can activate anywhere in the segment, as long as the other
 /// conditions are met.
-pub fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
+pub(crate) fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
     let latest_start = end - SEGMENT_LENGTH;
     if latest_start <= start {
         start

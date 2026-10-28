@@ -3,14 +3,14 @@
 //! These tests verify that OR branches properly isolate from each other,
 //! ensuring only one branch can activate per skill (mutual exclusion).
 
-use crate::common::{load_course, skill};
+use crate::condition::parser::Condition;
+use crate::skill::SkillType;
+use crate::test_utils::{load_course, skill};
+use crate::trigger::skill_activation::*;
+use crate::trigger::system::TriggerScheduler;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use std::str::FromStr;
-use uma_tools::condition::parser::Condition;
-use uma_tools::skill::SkillType;
-use uma_tools::trigger::skill_activation::*;
-use uma_tools::trigger::system::TriggerScheduler;
 
 // ============================================================================
 // MUTUAL EXCLUSION VERIFICATION
@@ -146,15 +146,15 @@ fn test_or_branch_skill_id_uniqueness() {
 
     // Should create 3 skill logics (one per OR branch)
     assert_eq!(
-        scheduler.skill_logics().len(),
+        scheduler.skill_logics.len(),
         3,
         "Should create 3 separate skill logics for OR branches"
     );
 
     // Each OR branch becomes a separate SkillActivationLogic entry
-    let logic_0 = &scheduler.skill_logics()[0];
-    let logic_1 = &scheduler.skill_logics()[1];
-    let logic_2 = &scheduler.skill_logics()[2];
+    let logic_0 = &scheduler.skill_logics[0];
+    let logic_1 = &scheduler.skill_logics[1];
+    let logic_2 = &scheduler.skill_logics[2];
 
     // All should have the same skill_index (same base skill)
     assert_eq!(logic_0.skill_index, logic_1.skill_index);
@@ -185,17 +185,17 @@ fn test_or_branches_independent_activation_tracking() {
     let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics
-    assert_eq!(scheduler.skill_logics().len(), 2);
+    assert_eq!(scheduler.skill_logics.len(), 2);
 
     // They are distinct entries in skill_logics, but share the same skill_index
     // and alternative_index, and thus the same cooldown.
     assert_eq!(
-        scheduler.skill_logics()[0].skill_index,
-        scheduler.skill_logics()[1].skill_index
+        scheduler.skill_logics[0].skill_index,
+        scheduler.skill_logics[1].skill_index
     );
     assert_eq!(
-        scheduler.skill_logics()[0].alternative_index,
-        scheduler.skill_logics()[1].alternative_index
+        scheduler.skill_logics[0].alternative_index,
+        scheduler.skill_logics[1].alternative_index
     );
 }
 

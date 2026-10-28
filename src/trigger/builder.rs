@@ -87,7 +87,7 @@ impl TriggerScheduler {
     /// evaluated before the race, then they're activated by a race start logic
     /// (see [`Self::add_race_start_logic`]). Other alternatives of
     /// their skills (e.g. continuations) are compiled as usual.
-    pub fn from_skills(skills: &[Arc<Skill>], course: &Course, rng: &mut impl Rng) -> Self {
+    pub(crate) fn from_skills(skills: &[Arc<Skill>], course: &Course, rng: &mut impl Rng) -> Self {
         let mut scheduler = Self::default();
 
         for (skill_idx, skill) in skills.iter().enumerate() {
@@ -151,7 +151,7 @@ impl TriggerScheduler {
     ///
     /// Its condition was already satisfied before the race, so it has no
     /// guards.
-    pub fn add_race_start_logic(
+    pub(crate) fn add_race_start_logic(
         &mut self,
         skill_idx: usize,
         alt_idx: usize,

@@ -13,25 +13,25 @@ use crate::units::CourseWidths;
 
 /// Strategies that can struggle. Runners only struggle against others with
 /// the same strategy.
-pub const STYLES: [Style; 2] = [Style::Runaway, Style::Front];
+pub(crate) const STYLES: [Style; 2] = [Style::Runaway, Style::Front];
 /// Distance (m) any runner (not necessarily one of the strugglers) must have
 /// run before a spot struggle can start.
-pub const MIN_POSITION: f64 = 150.0;
+pub(crate) const MIN_POSITION: f64 = 150.0;
 /// Sections (0-indexed) in which a spot struggle can start. At least one of
 /// the leader and the runner struggling with her must be in them.
-pub const SECTIONS: RangeInclusive<u8> = 0..=5;
+pub(crate) const SECTIONS: RangeInclusive<u8> = 0..=5;
 /// Section (0-indexed) upon whose entry any ongoing spot struggle stops.
-pub const END_SECTION: u8 = 9;
+pub(crate) const END_SECTION: u8 = 9;
 /// Maximum distance (m) from the leader to start struggling with her.
-pub const TRIGGER_DISTANCE: f64 = 3.75;
+pub(crate) const TRIGGER_DISTANCE: f64 = 3.75;
 /// Maximum lane gap (in course widths) from the leader to start struggling
 /// with her.
-pub const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.165);
+pub(crate) const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.165);
 /// Distance (m) behind every other struggler above which a runner exits.
-pub const EXIT_DISTANCE: f64 = 5.0;
+pub(crate) const EXIT_DISTANCE: f64 = 5.0;
 /// Lane gap (in course widths) from every other struggler above which a
 /// runner exits.
-pub const EXIT_LANE_GAP: CourseWidths = CourseWidths(0.416);
+pub(crate) const EXIT_LANE_GAP: CourseWidths = CourseWidths(0.416);
 
 /// Spot struggle state.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,7 +48,7 @@ pub enum SpotStruggle {
 
 impl SpotStruggle {
     /// Start the spot struggle at `elapsed_time`.
-    pub fn start(guts: u16, style_aptitude: Aptitude, elapsed_time: f64) -> Self {
+    pub(crate) fn start(guts: u16, style_aptitude: Aptitude, elapsed_time: f64) -> Self {
         SpotStruggle::Active {
             speed_bonus: target_speed_bonus(guts),
             expires_at: elapsed_time + duration(guts, style_aptitude),
@@ -72,7 +72,7 @@ impl SpotStruggle {
     }
 
     /// Target speed increase (m/s) at `elapsed_time` (zero if not active).
-    pub fn speed_bonus(&self, elapsed_time: f64) -> f64 {
+    pub(crate) fn speed_bonus(&self, elapsed_time: f64) -> f64 {
         match self {
             SpotStruggle::Active {
                 speed_bonus,
@@ -83,7 +83,7 @@ impl SpotStruggle {
     }
 
     /// Stop the spot struggle, if it was started.
-    pub fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         if self.has_struggled() {
             *self = SpotStruggle::Ended;
         }
@@ -92,7 +92,7 @@ impl SpotStruggle {
 
 /// Check if a runner `distance` meters and `lane_diff` course widths away from
 /// the frontmost runner of her strategy is close enough to struggle with her.
-pub fn is_close_to_leader(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_close_to_leader(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 
@@ -101,17 +101,17 @@ pub fn is_close_to_leader(distance: f64, lane_diff: CourseWidths) -> bool {
 /// widths from the other.
 ///
 /// Only falling behind counts; getting ahead doesn't.
-pub fn is_too_far(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_too_far(distance: f64, lane_diff: CourseWidths) -> bool {
     distance < -EXIT_DISTANCE || lane_diff.abs() > EXIT_LANE_GAP
 }
 
 /// Target speed increase (m/s) during the spot struggle.
-pub fn target_speed_bonus(guts: u16) -> f64 {
+pub(crate) fn target_speed_bonus(guts: u16) -> f64 {
     (500.0 * guts as f64).powf(0.6) * 0.0001
 }
 
 /// Duration of the spot struggle in seconds.
-pub fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
+pub(crate) fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
     (700.0 * guts as f64).sqrt() * 0.012 * strategy_proficiency_multiplier(style_aptitude)
 }
 
@@ -121,7 +121,7 @@ pub fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
 ///
 /// Panics if `style` is neither [`Style::Runaway`] nor [`Style::Front`], the
 /// only styles that take part in spot struggles.
-pub fn hp_multiplier(style: Style, rushed: bool) -> f64 {
+pub(crate) fn hp_multiplier(style: Style, rushed: bool) -> f64 {
     match (style, rushed) {
         (Style::Runaway, true) => 7.7,
         (Style::Runaway, false) => 3.5,

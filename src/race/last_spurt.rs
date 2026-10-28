@@ -89,7 +89,7 @@ impl Runner {
     /// speed, plus the HP needed for a last spurt at max speed (as estimated by
     /// [`Self::calculate_last_spurt`]).
     // ? Assumed to be "required amount to finish the race" as used by Stamina Keep.
-    pub fn hp_required_to_finish(&self, state: &RaceState) -> f64 {
+    pub(crate) fn hp_required_to_finish(&self, state: &RaceState) -> f64 {
         let course = &state.course;
         let mid_distance = (Phase::Late.boundaries(course).0 - self.position).max(0.0);
         let mid_speed = base_target_speed(
@@ -125,7 +125,7 @@ impl Runner {
     /// race. A candidate is picked based on a probability influenced by the
     /// runner's wit stat. A higher wit increases the chance of picking a
     /// higher speed.
-    pub fn calculate_last_spurt(&self, state: &RaceState) -> LastSpurt {
+    pub(crate) fn calculate_last_spurt(&self, state: &RaceState) -> LastSpurt {
         let course = &state.course;
         let track_condition = state.params.track_condition;
         let max_last_spurt_speed = last_spurt_speed_max(self, state);

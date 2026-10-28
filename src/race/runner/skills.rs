@@ -94,23 +94,23 @@ use super::{EPSILON, Runner};
 
 /// Skill modifiers that are applied during race calculations.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SkillModifiers {
+pub(crate) struct SkillModifiers {
     /// Modifies target speed. Positive values increase it.
-    pub target_speed: f64,
+    pub(crate) target_speed: f64,
     /// Modifies current speed directly. Positive values increase it.
-    pub current_speed: f64,
+    pub(crate) current_speed: f64,
     /// Modifies acceleration. Positive values increase it.
-    pub acceleration: f64,
+    pub(crate) acceleration: f64,
     /// Modifies all-out spurt acceleration (listed value, before scaling).
-    pub all_out_spurt_acceleration: f64,
+    pub(crate) all_out_spurt_acceleration: f64,
     /// Modifies lane movement speed. Positive values increase lane change speed.
-    pub lane_speed: f64,
+    pub(crate) lane_speed: f64,
     /// Modifies visible distance. Positive values increase it.
-    pub visible_distance: f64,
+    pub(crate) visible_distance: f64,
     /// Sets the target lane directly, or `None` if no change.
-    pub target_lane: Option<CourseWidths>,
+    pub(crate) target_lane: Option<CourseWidths>,
     /// Affects duration of timed effects. Multiplicative - 1.0 means no change.
-    pub duration_scaling: f64,
+    pub(crate) duration_scaling: f64,
 }
 
 impl Default for SkillModifiers {
@@ -131,12 +131,12 @@ impl Default for SkillModifiers {
 impl SkillModifiers {
     /// Check if skills are modifying target or current speed, in either
     /// direction.
-    pub fn has_speed_effects(&self) -> bool {
+    pub(crate) fn has_speed_effects(&self) -> bool {
         self.current_speed.abs() >= 0.0001 || self.target_speed.abs() >= 0.0001
     }
 
     /// Sum up the modifiers of the active timed `effects`.
-    pub fn from_effects(effects: &[ActiveTimedEffect]) -> Self {
+    pub(crate) fn from_effects(effects: &[ActiveTimedEffect]) -> Self {
         use SkillType::*;
         let mut mods = SkillModifiers::default();
         for timed in effects {
@@ -226,7 +226,7 @@ impl Runner {
     /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
     /// the activations of every runner, so they're checked afterwards (see
     /// [`Self::check_advantage_triggers`]).
-    pub fn check_skills(&mut self, state: &mut RaceState) {
+    pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
         // Out-of-gate skills activate on the first frame the runner moves; their
         // pre-race effects were already applied before the race. Taken, so that
@@ -254,7 +254,7 @@ impl Runner {
     ///
     /// For that, she needs to move during the step (i.e. she has left the gate by
     /// then) and hasn't finished yet.
-    pub fn can_activate_skills(&self, step_end_time: f64) -> bool {
+    pub(crate) fn can_activate_skills(&self, step_end_time: f64) -> bool {
         self.start_delay <= step_end_time && !self.has_finished()
     }
 
@@ -334,7 +334,7 @@ impl Runner {
     ///
     /// Other runners' activations are only known once every runner has checked
     /// her skills, so this is called by the solver afterwards.
-    pub fn check_advantage_triggers(&mut self, state: &RaceState) {
+    pub(crate) fn check_advantage_triggers(&mut self, state: &RaceState) {
         let buff_activation = self.trigger_scheduler.buff_activation_triggers.to_vec();
         self.try_activate_all(buff_activation, state);
     }
@@ -408,7 +408,7 @@ impl Runner {
     }
 
     /// Activate a skill by its index and alternative index.
-    pub fn activate_skill(
+    pub(crate) fn activate_skill(
         &mut self,
         skill_index: usize,
         alternative_index: usize,
@@ -671,7 +671,7 @@ impl Runner {
     ///
     /// `source` is the index of the runner's own skill that applies the effect, or
     /// `None` if it was cast by another runner.
-    pub fn apply_skill_effect(
+    pub(crate) fn apply_skill_effect(
         &mut self,
         effect: &SkillEffect,
         scaled_duration: f64,
@@ -814,7 +814,7 @@ impl Runner {
     }
 
     /// Apply a skill effect casted by another runner.
-    pub fn receive_skill_effect(&mut self, pending: &PendingEffect, state: &RaceState) {
+    pub(crate) fn receive_skill_effect(&mut self, pending: &PendingEffect, state: &RaceState) {
         // Overtakes only extend the caster's own effects.
         self.apply_skill_effect(
             &pending.effect,
@@ -849,7 +849,7 @@ impl Runner {
     }
 
     /// Update skill durations and remove expired effects.
-    pub fn update_skill_durations(&mut self, elapsed_time: f64) {
+    pub(crate) fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
 
         // Remove expired effects. Expiring CurrentSpeedWithNaturalDeceleration

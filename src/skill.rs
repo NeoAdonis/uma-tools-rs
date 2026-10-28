@@ -80,7 +80,7 @@ pub struct SkillTypeSet(u64);
 
 impl SkillTypeSet {
     /// Add `skill_type` to the set.
-    pub fn insert(&mut self, skill_type: SkillType) {
+    pub(crate) fn insert(&mut self, skill_type: SkillType) {
         self.0 |= Self::bit(skill_type);
     }
 
@@ -114,7 +114,7 @@ impl SkillType {
     }
 
     /// Check if this effect type is a stat boost (applied permanently).
-    pub fn is_stat_boost(self) -> bool {
+    pub(crate) fn is_stat_boost(self) -> bool {
         use SkillType::*;
         matches!(
             self,
@@ -123,7 +123,7 @@ impl SkillType {
     }
 
     /// Check if this effect type is a start delay modification.
-    pub fn is_start_delay_modification(self) -> bool {
+    pub(crate) fn is_start_delay_modification(self) -> bool {
         matches!(
             self,
             SkillType::MultiplyStartDelay | SkillType::AddStartDelay
@@ -132,7 +132,7 @@ impl SkillType {
 
     /// Returns the running style this effect type changes to, or `None` if it isn't
     /// a style change.
-    pub fn style_change(self) -> Option<Style> {
+    pub(crate) fn style_change(self) -> Option<Style> {
         match self {
             SkillType::ChangeStyleRunaway => Some(Style::Runaway),
             _ => None,
@@ -140,13 +140,13 @@ impl SkillType {
     }
 
     /// Check if this effect type is a rush chance effect.
-    pub fn is_rush_chance_effect(self) -> bool {
+    pub(crate) fn is_rush_chance_effect(self) -> bool {
         matches!(self, SkillType::RushChanceUp)
     }
 
     /// Check if this effect type modifies a parameter that is needed before the
     /// race starts (stats, start delay, running style, rush chance, etc.).
-    pub fn is_pre_race_effect(self) -> bool {
+    pub(crate) fn is_pre_race_effect(self) -> bool {
         self.is_stat_boost()
             || self.is_start_delay_modification()
             || self.style_change().is_some()
@@ -158,7 +158,7 @@ impl SkillType {
     }
 
     /// Check if this effect type is a timed effect.
-    pub fn is_timed_effect(self) -> bool {
+    pub(crate) fn is_timed_effect(self) -> bool {
         use SkillType::*;
         matches!(
             self,
@@ -298,7 +298,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 }
 
 /// Represents how the value of a skill effect scales with the runner's
-/// situation when the skill activates (see [`crate::race::skill_scaling`]).
+/// situation when the skill activates (see `race::skill_scaling`).
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
@@ -437,7 +437,7 @@ pub struct SkillEffect {
 
 impl SkillEffect {
     /// Determine whether `self` is positive or negative.
-    pub fn is_positive(&self) -> bool {
+    pub(crate) fn is_positive(&self) -> bool {
         match self.skill_type {
             // Purely positive effects.
             SkillType::ActivateRandomGold
@@ -473,14 +473,14 @@ pub const DEFAULT_COOLDOWN: f64 = 500.0;
 
 /// ID of the "Sympathy" skill, which skills with an
 /// [`SkillType::ActivateSympathy`] effect activate for every runner.
-pub const SYMPATHY_ID: i32 = 201631;
+pub(crate) const SYMPATHY_ID: i32 = 201631;
 
 fn default_cooldown() -> f64 {
     DEFAULT_COOLDOWN
 }
 
 /// Represents how the duration of a skill scales with the runner's situation
-/// when the skill activates (see [`crate::race::skill_scaling`]).
+/// when the skill activates (see `race::skill_scaling`).
 ///
 /// The scaling is applied on top of the course distance scaling.
 ///
@@ -547,7 +547,7 @@ impl SkillAlternative {
     ///
     /// Unlike other alternatives, a continuation can still activate after another
     /// alternative did.
-    pub fn is_continuation(&self) -> bool {
+    pub(crate) fn is_continuation(&self) -> bool {
         let requires_other = |condition: &Condition| {
             condition.branches.iter().flatten().any(|comp| {
                 comp.var == VarType::Activation(ActivationVar::IsActivateOtherSkillDetail)
@@ -561,7 +561,7 @@ impl SkillAlternative {
     /// That is, if any of its effects modifies a parameter that is needed before
     /// the race starts (see [`SkillType::is_pre_race_effect`]). Other alternatives
     /// of the same skill (e.g. continuations) activate during the race.
-    pub fn is_out_of_gate(&self) -> bool {
+    pub(crate) fn is_out_of_gate(&self) -> bool {
         self.effects
             .iter()
             .any(|effect| effect.skill_type.is_pre_race_effect())
@@ -680,7 +680,7 @@ impl Skill {
     ///
     /// Only unique, evolved and gold skills are affected. Inherited uniques
     /// are stored as white skills, so they are excluded as well.
-    pub fn is_wit_limit_break_eligible(&self) -> bool {
+    pub(crate) fn is_wit_limit_break_eligible(&self) -> bool {
         !matches!(self.rarity, SkillRarity::White)
     }
 
@@ -688,7 +688,7 @@ impl Skill {
     ///
     /// Skills that don't require a wit check always pass; otherwise the chance
     /// depends on the runner's base wit (minimum 20%).
-    pub fn activation_chance(&self, base_wit: u16) -> f64 {
+    pub(crate) fn activation_chance(&self, base_wit: u16) -> f64 {
         if !self.wit_check {
             return 1.0;
         }
@@ -699,7 +699,7 @@ impl Skill {
     ///
     /// That is, if any of its alternatives does (see
     /// [`SkillAlternative::is_out_of_gate`]).
-    pub fn should_activate_out_of_gate(&self) -> bool {
+    pub(crate) fn should_activate_out_of_gate(&self) -> bool {
         self.alternatives
             .iter()
             .any(SkillAlternative::is_out_of_gate)
@@ -707,7 +707,7 @@ impl Skill {
 
     /// Check if any alternative of this skill satisfies every popularity
     /// requirement (see [`SkillType::IgnorePopularity`]).
-    pub fn ignores_popularity(&self) -> bool {
+    pub(crate) fn ignores_popularity(&self) -> bool {
         self.alternatives
             .iter()
             .flat_map(|alternative| &alternative.effects)

@@ -130,31 +130,31 @@ pub struct SkillActivationLogic {
     pub alternative_index: usize,
 
     /// Trigger that determines WHEN to check this logic.
-    pub trigger: TriggerCondition,
+    pub(crate) trigger: TriggerCondition,
 
     /// Guards that must ALL be true AT activation time.
     ///
     /// An empty list means no guard checks needed (always activates when trigger
     /// fires).
-    pub guards: ComparisonList,
+    pub(crate) guards: ComparisonList,
 
     /// Precondition to satisfy before this logic can succeed, as an index into
     /// `scheduler.precondition_satisfied`.
     ///
     /// Enables event-based activation (e.g., "activate after overtaking someone").
-    pub precondition: Option<usize>,
+    pub(crate) precondition: Option<usize>,
 
     /// What happens when the trigger fires and the guards pass.
-    pub action: LogicAction,
+    pub(crate) action: LogicAction,
 
     /// Whether the alternative is a continuation of another one (see
     /// [`crate::skill::SkillAlternative::is_continuation`]).
-    pub is_continuation: bool,
+    pub(crate) is_continuation: bool,
 }
 
 /// What a [`SkillActivationLogic`] does when it succeeds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LogicAction {
+pub(crate) enum LogicAction {
     /// Activate the skill alternative.
     Activate,
     /// Mark the given precondition as satisfied.
@@ -163,7 +163,7 @@ pub enum LogicAction {
 
 /// Variables that window triggers can be based on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum WindowVariable {
+pub(crate) enum WindowVariable {
     /// Position (meters from start).
     Position,
     /// Time elapsed since race start (seconds).
@@ -174,7 +174,7 @@ pub enum WindowVariable {
 
 /// A trigger condition that determines WHEN to check a skill.
 #[derive(Clone, Debug, PartialEq)]
-pub enum TriggerCondition {
+pub(crate) enum TriggerCondition {
     /// Checked every frame while the position is within any of the `(min, max)`
     /// ranges (in meters). Used for random segments, trimmed to the positions where
     /// the rest of the branch can be true.
@@ -216,28 +216,28 @@ pub enum TriggerCondition {
 
 /// A timed skill effect that is currently active.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ActiveTimedEffect {
+pub(crate) struct ActiveTimedEffect {
     /// Skill effect being applied.
-    pub effect: SkillEffect,
+    pub(crate) effect: SkillEffect,
     /// Final modifier value, including any activation-time bonus such as the wit
     /// limit break buff.
-    pub value: f64,
+    pub(crate) value: f64,
     /// Race time in seconds when effect expires.
-    pub expires_at: f64,
+    pub(crate) expires_at: f64,
     /// Extension of the effect when overtaking while it's active.
-    pub overtake_extension: OvertakeExtension,
+    pub(crate) overtake_extension: OvertakeExtension,
     /// Number of times an additional effect has been triggered (see
     /// [`AdditionalActivation`]). Unused for regular effects.
-    pub additional_triggers: u8,
+    pub(crate) additional_triggers: u8,
     /// Index of the runner's own skill that applied the effect, or `None` if it
     /// was cast by another runner.
-    pub source: Option<usize>,
+    pub(crate) source: Option<usize>,
 }
 
 impl ActiveTimedEffect {
     /// Value currently applied by the effect. An additional effect applies its
     /// value once per trigger, so nothing until triggered.
-    pub fn current_value(&self) -> f64 {
+    pub(crate) fn current_value(&self) -> f64 {
         if self.effect.additional == AdditionalActivation::Regular {
             self.value
         } else {
@@ -253,11 +253,11 @@ impl ActiveTimedEffect {
 ///
 /// [increment]: crate::skill::DurationScaling::IncrementOrderUp
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct OvertakeExtension {
+pub(crate) struct OvertakeExtension {
     /// Duration in seconds added for each overtake, already scaled.
-    pub duration: f64,
+    pub(crate) duration: f64,
     /// Number of extensions left.
-    pub remaining: u8,
+    pub(crate) remaining: u8,
 }
 
 /// A skill effect that targets other runners, waiting to be applied to them.
@@ -265,13 +265,13 @@ pub struct OvertakeExtension {
 /// Values that depend on the caster (duration, wit limit break bonus) are fixed
 /// at activation time.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PendingEffect {
+pub(crate) struct PendingEffect {
     /// Skill effect to apply to each target.
-    pub effect: SkillEffect,
+    pub(crate) effect: SkillEffect,
     /// Duration in seconds, already scaled.
-    pub duration: f64,
+    pub(crate) duration: f64,
     /// Wit limit break bonus of the caster.
-    pub wit_bonus: f64,
+    pub(crate) wit_bonus: f64,
 }
 
 /// Record of a skill activation during the race.
@@ -285,11 +285,11 @@ pub struct SkillActivationRecord {
 
 /// One OR branch of a compiled condition.
 #[derive(Clone, Debug, PartialEq)]
-pub struct CompiledBranch {
+pub(crate) struct CompiledBranch {
     /// When to check the branch.
-    pub trigger: TriggerCondition,
+    pub(crate) trigger: TriggerCondition,
     /// Comparisons that must all be true when checked.
-    pub guards: ComparisonList,
+    pub(crate) guards: ComparisonList,
 }
 
 /// Compile a condition into one [`CompiledBranch`] per OR branch.
@@ -313,7 +313,7 @@ pub struct CompiledBranch {
 /// - Branch 1: trigger `Segments` (rolled segment), guards `[hp_per>=20]`.
 /// - Branch 2: trigger `Window` (corner 2), guards
 ///   `[corner==2, ground_type==1]`.
-pub fn compile_condition(
+pub(crate) fn compile_condition(
     condition: &Condition,
     rolls: &[Option<Vec<f64>>],
     course: &Course,

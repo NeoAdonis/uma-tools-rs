@@ -9,11 +9,11 @@
 use crate::configuration::GameVersion;
 
 /// Adjusted speed stat that must be exceeded to be eligible.
-pub const SPEED_THRESHOLD: u16 = 2000;
+pub(crate) const SPEED_THRESHOLD: u16 = 2000;
 /// Fraction of the listed value of all-out spurt acceleration skills (type 48)
 /// that is actually applied.
 // ? Observed to be close to 10%; the reason is unknown.
-pub const SKILL_SCALE: f64 = 0.1;
+pub(crate) const SKILL_SCALE: f64 = 0.1;
 
 /// All-out spurt state.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,7 +33,7 @@ impl AllOutSpurt {
     }
 
     /// Target speed gained so far in m/s (zero if not active).
-    pub fn speed_bonus(&self) -> f64 {
+    pub(crate) fn speed_bonus(&self) -> f64 {
         match self {
             AllOutSpurt::Active { speed_bonus } => *speed_bonus,
             _ => 0.0,
@@ -48,7 +48,7 @@ impl AllOutSpurt {
 // ? Empirical formula; exact values are under investigation.
 // ? The maximum gain should scale with speed, but it seems to never be reached,
 // ? so it is not modeled (the global max speed still applies).
-pub fn base_acceleration(
+pub(crate) fn base_acceleration(
     speed: u16,
     power: u16,
     course_distance: i32,

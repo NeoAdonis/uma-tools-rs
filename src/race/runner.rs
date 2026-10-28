@@ -52,19 +52,21 @@ mod positioning;
 mod skills;
 mod surroundings;
 
-pub use lane::{LaneDecision, LaneState, OvertakeState, OvertakeTarget};
-pub use positioning::{POSITIONING_END_SECTION, PositioningStrategy};
-pub use skills::{SkillActivationFlags, SkillModifiers};
-pub use surroundings::{BlockedState, NearbyState, SurroundState};
+pub use lane::LaneState;
+pub(crate) use lane::OvertakeState;
+pub(crate) use positioning::{POSITIONING_END_SECTION, PositioningStrategy};
+pub use skills::SkillActivationFlags;
+pub(crate) use skills::SkillModifiers;
+pub(crate) use surroundings::{BlockedState, NearbyState, SurroundState};
 
 /// Maximum target speed a runner can reach in m/s.
-pub const MAX_TARGET_SPEED: f64 = 30.0;
+pub(crate) const MAX_TARGET_SPEED: f64 = 30.0;
 
 /// Distance from the inner fence above which the force-in modifier applies.
-pub const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
+pub(crate) const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
 
 /// Time (s) after which the best and worst orders of a runner are tracked.
-pub const ORDER_RANGE_START_TIME: f64 = 5.0;
+pub(crate) const ORDER_RANGE_START_TIME: f64 = 5.0;
 
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
@@ -100,7 +102,7 @@ pub struct OrderState {
     pub runner_count: u8,
     /// Current order rate (percentile; "you are in the top X%"), rounded up.
     pub rate: u8,
-    /// Order rates that round to the current order (see [`rates_at_order`]).
+    /// Order rates that round to the current order (see `rates_at_order`).
     pub rates: RangeInclusive<i32>,
     /// Best (lowest) order reached so far.
     /// N.B. This value is tracked only after 5 seconds into the race.
@@ -108,9 +110,9 @@ pub struct OrderState {
     /// Worst (highest) order reached so far.
     /// N.B. This value is tracked only after 5 seconds into the race.
     pub worst: u8,
-    /// Order rates that round to the best order (see [`rates_at_order`]).
+    /// Order rates that round to the best order (see `rates_at_order`).
     pub best_rates: RangeInclusive<i32>,
-    /// Order rates that round to the worst order (see [`rates_at_order`]).
+    /// Order rates that round to the worst order (see `rates_at_order`).
     pub worst_rates: RangeInclusive<i32>,
     /// Change in order since last update.
     pub delta: i8,
@@ -150,7 +152,7 @@ impl Default for OrderState {
 /// Order rate conditions convert their rate into an order, rounding to the
 /// nearest (half up): e.g. 50% in a 9-runner race is 4.5, rounded to 5th
 /// place, and so are 50% to 61%.
-pub fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
+pub(crate) fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32> {
     debug_assert!(runner_count > 0, "no runners");
     let (order, runner_count) = (order as i32, runner_count as i32);
     // `(runner_count * rate + 50) / 100 == order` holds for
@@ -179,15 +181,15 @@ pub struct PositionDiff {
 
 /// Rush counters.
 #[derive(Debug, Default, Clone)]
-pub struct RushCounter {
+pub(crate) struct RushCounter {
     /// Number of runners currently in rush state ahead.
-    pub ahead: u8,
+    pub(crate) ahead: u8,
     /// Number of runners currently in rush state behind.
-    pub behind: u8,
+    pub(crate) behind: u8,
     /// Number of opponents currently in rush state ahead.
-    pub opponents_ahead: u8,
+    pub(crate) opponents_ahead: u8,
     /// Number of opponents currently in rush state behind.
-    pub opponents_behind: u8,
+    pub(crate) opponents_behind: u8,
 }
 
 /// An Uma with additional data related to racing, that is, an Uma who is
@@ -225,24 +227,24 @@ pub struct Runner {
     /// Current HP state.
     pub hp: HpState,
     /// Minimum speed in m/s. It is based on course base speed and guts stat.
-    pub min_speed: f64,
+    pub(crate) min_speed: f64,
     /// Target speed in m/s.
     pub target_speed: f64,
     /// Speed modifier applied early in the race when away from the inner fence and
     /// blocked on the inside.
     ///
     /// Its value is rolled before the race begins based on running style.
-    pub force_in_modifier: f64,
+    pub(crate) force_in_modifier: f64,
     /// Lane state including current and target lane positions in course widths.
     pub lane: LaneState,
     /// Speed modifier for the current section in m/s.
-    pub section_speed_modifier: f64,
+    pub(crate) section_speed_modifier: f64,
     /// List of skills of the runner: those that passed the wit check first, then
     /// those that failed it (see [`Self::available_skills`] and
     /// [`Self::failed_skills`]).
     pub skills: Vec<Arc<Skill>>,
     /// Number of skills that passed the wit check, at the start of `skills`.
-    pub available_skill_count: usize,
+    pub(crate) available_skill_count: usize,
     /// Elapsed time when the runner finished the race, in seconds.
     pub finish_time: Option<f64>,
     /// Distance in meters behind the runner that placed immediately ahead.
@@ -255,15 +257,15 @@ pub struct Runner {
     pub activated_alternatives: Vec<u8>,
     /// Race time (in seconds) until which each alternative of each skill in
     /// `skills` can't activate again, shared by all its OR branches.
-    pub cooldown_until: Vec<Vec<f64>>,
+    pub(crate) cooldown_until: Vec<Vec<f64>>,
     /// Modifiers from skills applied to this runner's stats.
-    pub skill_modifiers: SkillModifiers,
+    pub(crate) skill_modifiers: SkillModifiers,
     /// Effects from skills that are currently active for a limited duration.
-    pub active_timed_effects: Vec<ActiveTimedEffect>,
+    pub(crate) active_timed_effects: Vec<ActiveTimedEffect>,
     /// Effects from this runner's skills that target other runners, applied by the
     /// solver once every runner has checked its skills.
-    pub pending_effects: Vec<PendingEffect>,
-    /// Chance of rushing as a percentage (see [`rush::chance`]).
+    pub(crate) pending_effects: Vec<PendingEffect>,
+    /// Chance of rushing as a percentage (see `rush::chance`).
     ///
     /// This is determined at the start of the race along with deciding whether the
     /// runner will rush or not.
@@ -287,44 +289,44 @@ pub struct Runner {
     /// State related to Stamina Keep (持久力温存).
     pub stamina_keep: StaminaKeep,
     /// Overtake targets being tracked. If `None`, no overtake mode active.
-    pub overtake_state: Option<OvertakeState>,
+    pub(crate) overtake_state: Option<OvertakeState>,
     /// Time spent having at least one overtake target in seconds.
-    pub overtake_target_time: f64,
+    pub(crate) overtake_target_time: f64,
     /// Time spent being an overtake target of someone else in seconds.
-    pub being_overtake_target_time: f64,
+    pub(crate) being_overtake_target_time: f64,
     /// Extra move lane position.
     ///
     /// It's set during early/mid phase based on furthest visible runner. Used as
     /// fallback in overtake mode lane selection.
-    pub extra_move_lane: Option<CourseWidths>,
+    pub(crate) extra_move_lane: Option<CourseWidths>,
     /// State related to order (rank) in the race.
     pub order: OrderState,
     /// Distance differences between this runner and others.
     pub position_diff: PositionDiff,
     /// Number of visible runners in this runner's field of view.
-    pub visible_count: u8,
+    pub(crate) visible_count: u8,
     /// Information about nearby runners.
-    pub nearby: NearbyState,
+    pub(crate) nearby: NearbyState,
     /// Blocking state information.
-    pub blocked: BlockedState,
+    pub(crate) blocked: BlockedState,
     /// Surrounding state information.
-    pub surrounded: SurroundState,
+    pub(crate) surrounded: SurroundState,
     /// Number of runners ahead and behind currently rushing.
-    pub rush_counter: RushCounter,
+    pub(crate) rush_counter: RushCounter,
     /// Current positioning strategy during the first 10 sections of the race.
-    pub positioning_strategy: PositioningStrategy,
+    pub(crate) positioning_strategy: PositioningStrategy,
     /// Next time to check positioning strategy conditions, in seconds.
-    pub next_positioning_check: f64,
+    pub(crate) next_positioning_check: f64,
     /// Current slope target speed modifier in m/s, if any.
     ///
     /// Positive in downhill mode, negative when going uphill.
-    pub slope_speed_modifier: Option<f64>,
+    pub(crate) slope_speed_modifier: Option<f64>,
     /// Time since the last downhill mode check in seconds.
     ///
     /// Downhill mode is checked upon entering a downhill and then every second.
-    pub downhill_check_timer: f64,
+    pub(crate) downhill_check_timer: f64,
     /// Number of uphills climbed to the end.
-    pub uphills_climbed: u8,
+    pub(crate) uphills_climbed: u8,
     /// Current section index (0-23).
     pub section: u8,
     /// Current race phase.
@@ -337,7 +339,7 @@ pub struct Runner {
     /// Stamina Limit Break (スタミナ勝負) buff before its random factor, in m/s.
     ///
     /// Calculated before race begins; zero if the runner is not eligible.
-    pub stamina_limit_break_base: f64,
+    pub(crate) stamina_limit_break_base: f64,
     /// Active Stamina Limit Break target speed buff in m/s.
     ///
     /// It's set once the runner reaches its last spurt speed and lasts until the
@@ -346,7 +348,7 @@ pub struct Runner {
     /// All-out spurt (全開スパート) acceleration in m/s² before skill modifiers.
     ///
     /// Calculated before race begins; zero if the runner is not eligible.
-    pub all_out_spurt_base: f64,
+    pub(crate) all_out_spurt_base: f64,
     /// All-out spurt (全開スパート) state.
     ///
     /// It is activated once the runner reaches its last spurt speed, and keeps
@@ -359,15 +361,15 @@ pub struct Runner {
     pub charge_up: Option<ChargeUp>,
     /// Reference to a [`RaceSolver`](crate::race::solver::RaceSolver)'s RNG,
     /// shared with other runners.
-    pub rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
+    pub(crate) rng: Rc<RefCell<rand_pcg::Pcg64Mcg>>,
     /// Course segments (corners, straights and slopes) the runner is in.
-    pub segments: SegmentState,
+    pub(crate) segments: SegmentState,
     /// Last move, which slows down the next one if it covered more world
     /// distance than course distance (see [`world_distance`]).
-    pub last_move: LastMove,
+    pub(crate) last_move: LastMove,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
-    pub trigger_scheduler: TriggerScheduler,
+    pub(crate) trigger_scheduler: TriggerScheduler,
     /// Skill activation flags for the current update cycle.
     pub activation_flags: SkillActivationFlags,
 }
@@ -435,7 +437,7 @@ impl Runner {
     }
 
     /// Update acceleration based on current speed and target speed.
-    pub fn update_acceleration(&mut self, elapsed_time: f64) {
+    pub(crate) fn update_acceleration(&mut self, elapsed_time: f64) {
         if self.speed < self.target_speed {
             self.accelerate(elapsed_time);
         } else {
@@ -513,7 +515,7 @@ impl Runner {
     }
 
     /// Update the runner's speed based on acceleration and constraints.
-    pub fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
+    pub(crate) fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
         // Update speed based on acceleration.
         self.speed += self.acceleration * delta_time;
 
@@ -551,7 +553,7 @@ impl Runner {
     }
 
     /// Update target speed based on various factors.
-    pub fn update_target_speed(&mut self, state: &RaceState) {
+    pub(crate) fn update_target_speed(&mut self, state: &RaceState) {
         let game_version = state.config.game_version;
         let target_speed = if self.hp.is_empty() {
             self.min_speed
@@ -627,7 +629,7 @@ impl Runner {
     }
 
     /// Update the runner's position based on effective current speed.
-    pub fn update_position(&mut self, delta_time: f64, state: &RaceState) {
+    pub(crate) fn update_position(&mut self, delta_time: f64, state: &RaceState) {
         // Runner only moves for the part of the frame after her start delay.
         // The start delay may span several frames, so it's measured from the race
         // start. Clamped to avoid negative values from float drift in elapsed time.
@@ -680,7 +682,7 @@ impl Runner {
     }
 
     /// Update the current section and phase based on position.
-    pub fn update_phase(&mut self, state: &mut RaceState) {
+    pub(crate) fn update_phase(&mut self, state: &mut RaceState) {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
         if self.section != prev_section {
@@ -743,7 +745,7 @@ impl Runner {
     ///
     /// Power is conserved while keeping position calmly. Speeding up, rushing or
     /// struggling for the lead prevent it, and impose a cooldown upon exit.
-    pub fn update_charge_up(&mut self, delta_time: f64, elapsed_time: f64) {
+    pub(crate) fn update_charge_up(&mut self, delta_time: f64, elapsed_time: f64) {
         if self.section >= POSITIONING_END_SECTION {
             return;
         }
@@ -763,7 +765,7 @@ impl Runner {
     }
 
     /// Update HP based on current speed, phase, and modifiers.
-    pub fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
+    pub(crate) fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
         let mut multiplier = if self.spot_struggle.is_active(state.elapsed_time) {
             spot_struggle::hp_multiplier(self.adjusted.style, self.is_rushed())
         } else if self.is_rushed() {
@@ -838,7 +840,7 @@ impl Runner {
     }
 
     /// End rush once it reaches its maximum duration or the runner snaps out of it.
-    pub fn update_rush_state(&mut self, state: &mut RaceState) {
+    pub(crate) fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
             && rush_state.should_end(state.elapsed_time, &mut *self.rng.borrow_mut())
@@ -858,7 +860,7 @@ impl Runner {
     }
 
     /// Start a spot struggle (位置取り争い), unless the runner already struggled.
-    pub fn start_spot_struggle(&mut self, elapsed_time: f64) {
+    pub(crate) fn start_spot_struggle(&mut self, elapsed_time: f64) {
         if self.spot_struggle.has_struggled() {
             return;
         }
@@ -873,7 +875,7 @@ impl Runner {
     }
 
     /// Check if the runner should check whether to secure the lead on this frame.
-    pub fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
+    pub(crate) fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
         self.adjusted.style != Style::End
             && self.is_boost_check_due(&self.secure_lead, &secure_lead::SECTIONS, state)
     }
@@ -885,7 +887,12 @@ impl Runner {
     /// the cost of HP, followed by a cooldown.
     ///
     /// `is_alone` is whether no other runner with the same style is within 10m.
-    pub fn try_secure_lead(&mut self, lead_insufficient: bool, is_alone: bool, state: &RaceState) {
+    pub(crate) fn try_secure_lead(
+        &mut self,
+        lead_insufficient: bool,
+        is_alone: bool,
+        state: &RaceState,
+    ) {
         let elapsed_time = state.elapsed_time;
         if !lead_insufficient || !self.rng.borrow_mut().random_bool(secure_lead::CHANCE) {
             self.secure_lead = TimedBoost::Idle {
@@ -913,7 +920,7 @@ impl Runner {
 
     /// Returns true if `self` should check whether to compete before spurt (位置取り調整)
     /// on this frame.
-    pub fn is_compete_check_due(&self, state: &RaceState) -> bool {
+    pub(crate) fn is_compete_check_due(&self, state: &RaceState) -> bool {
         self.is_boost_check_due(
             &self.compete_before_spurt,
             &compete_before_spurt::SECTIONS,
@@ -945,7 +952,7 @@ impl Runner {
     ///
     /// `is_alone` is whether no other runner with the same style is within
     /// `compete_before_spurt::ALONE_DISTANCE`.
-    pub fn try_compete_before_spurt(
+    pub(crate) fn try_compete_before_spurt(
         &mut self,
         far_from_lead: bool,
         is_alone: bool,
@@ -990,7 +997,7 @@ impl Runner {
     }
 
     /// Start dueling (追い比べ), unless the runner already is.
-    pub fn start_duel(&mut self) {
+    pub(crate) fn start_duel(&mut self) {
         if self.duel.is_dueling() {
             return;
         }
@@ -1003,7 +1010,7 @@ impl Runner {
     /// Uphills reduce the runner's target speed while on them. On downhills, the
     /// runner may enter downhill mode (Wit * 0.04% chance) or exit it (20% chance)
     /// upon entering them and then every second.
-    pub fn update_slope(
+    pub(crate) fn update_slope(
         &mut self,
         slopes: &[Slope],
         transition: &Transition,
@@ -1058,7 +1065,7 @@ impl Runner {
     ///
     /// The order change is negative when overtaking, and positive when being
     /// overtaken.
-    pub fn update_order(&mut self, current_order: u8, course: &Course) {
+    pub(crate) fn update_order(&mut self, current_order: u8, course: &Course) {
         let prev_order = self.order.order;
         self.order.delta = current_order as i8 - prev_order as i8;
         self.order.order = current_order;
@@ -1089,7 +1096,7 @@ impl Runner {
     ///
     /// After the first [`ORDER_RANGE_START_TIME`] seconds (`elapsed_time`),
     /// also update the best/worst orders.
-    pub fn update_order_rate(&mut self, total_runners: u8, elapsed_time: f64) {
+    pub(crate) fn update_order_rate(&mut self, total_runners: u8, elapsed_time: f64) {
         let order = self.order.order;
         self.order.runner_count = total_runners;
         self.order.rate = ((order as f64 / total_runners as f64) * 100.0).ceil() as u8;
@@ -1107,7 +1114,7 @@ impl Runner {
     /// `position_first`: position of the first-place runner.
     /// `position_next`: position of the next runner ahead.
     /// `position_range`: distance between first and last place.
-    pub fn update_diff_from_ahead(
+    pub(crate) fn update_diff_from_ahead(
         &mut self,
         position_first: f64,
         position_next: f64,
@@ -1122,7 +1129,7 @@ impl Runner {
     /// taken before the Late race.
     ///
     /// The order must be updated first.
-    pub fn update_diff_from_behind(&mut self, position_prev: f64) {
+    pub(crate) fn update_diff_from_behind(&mut self, position_prev: f64) {
         self.position_diff.from_prev = self.position - position_prev;
         if self.order.order == 1 && self.phase < Phase::Late {
             self.position_diff.max_lead = self

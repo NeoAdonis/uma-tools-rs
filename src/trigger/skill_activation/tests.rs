@@ -1,8 +1,8 @@
 //! Tests for compiling conditions into triggers and guards.
 
 use super::*;
+use crate::condition::parser::{CompOp, Condition};
 use crate::course::geometry::*;
-use crate::parser::{CompOp, Condition};
 use crate::skill::*;
 use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
 use crate::trigger::system::TriggerScheduler;

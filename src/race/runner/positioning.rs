@@ -10,7 +10,7 @@ use crate::uma::*;
 use super::Runner;
 
 /// First section where positioning strategies no longer apply.
-pub const POSITIONING_END_SECTION: u8 = 10;
+pub(crate) const POSITIONING_END_SECTION: u8 = 10;
 
 /// Positioning strategy during the first 10 sections (5/12) of the race.
 ///
@@ -18,7 +18,7 @@ pub const POSITIONING_END_SECTION: u8 = 10;
 /// up. For non-front-runners, it determines the pacing behavior to keep their
 /// distance from the pacemaker.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PositioningStrategy {
+pub(crate) enum PositioningStrategy {
     /// Run at regular pace.
     Normal,
     /// *(Front-runners only.)*
@@ -43,7 +43,7 @@ pub enum PositioningStrategy {
 
 impl PositioningStrategy {
     /// Base target speed multiplier while following this strategy.
-    pub fn speed_multiplier(self, phase: Phase, game_version: GameVersion) -> f64 {
+    pub(crate) fn speed_multiplier(self, phase: Phase, game_version: GameVersion) -> f64 {
         match self {
             PositioningStrategy::Normal => 1.0,
             PositioningStrategy::FrontSpeedUp => 1.04,
@@ -63,12 +63,12 @@ impl PositioningStrategy {
 
 impl Runner {
     /// Check if the runner is currently in position keep pace down mode.
-    pub fn is_pace_down(&self) -> bool {
+    pub(crate) fn is_pace_down(&self) -> bool {
         matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_))
     }
 
     /// Get the current style used for positioning strategy decisions.
-    pub fn positioning_style(&self) -> Style {
+    pub(crate) fn positioning_style(&self) -> Style {
         if self.is_rushed() {
             self.rush_state.as_ref().unwrap().style
         } else {
@@ -103,7 +103,7 @@ impl Runner {
     /// overall, or `None` otherwise. `strategy_lead` is the distance to the next
     /// runner with the same strategy if this runner is first among them, or `None`
     /// otherwise. Both are infinite if there's no such runner behind.
-    pub fn update_positioning_front(
+    pub(crate) fn update_positioning_front(
         &mut self,
         lead: Option<f64>,
         strategy_lead: Option<f64>,
@@ -173,7 +173,7 @@ impl Runner {
     ///
     /// `distance_behind` is the distance from the pacemaker in meters (0 if we are
     /// the pacemaker).
-    pub fn update_positioning_non_front(&mut self, distance_behind: f64, state: &RaceState) {
+    pub(crate) fn update_positioning_non_front(&mut self, distance_behind: f64, state: &RaceState) {
         let elapsed_time = state.elapsed_time;
         let course_length = state.course.distance as f64;
         match self.positioning_strategy {
@@ -266,7 +266,7 @@ impl Runner {
     ///
     /// `passive_ahead` tells whether any runner ahead has a style that should
     /// position her behind this runner.
-    pub fn update_pace_up_ex(
+    pub(crate) fn update_pace_up_ex(
         &mut self,
         passive_ahead: bool,
         pacemaker_style: Style,

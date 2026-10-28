@@ -19,11 +19,11 @@ use crate::units::CourseWidths;
 
 /// Course distance and starting lane of a runner's last move.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct LastMove {
+pub(crate) struct LastMove {
     /// Course distance covered in meters.
-    pub distance: f64,
+    pub(crate) distance: f64,
     /// Lane at the start of the move.
-    pub lane: CourseWidths,
+    pub(crate) lane: CourseWidths,
 }
 
 /// Ratio of world distance to course distance of a move, at least 1.
@@ -31,7 +31,7 @@ pub struct LastMove {
 /// The move covers `distance` meters along the course from `start_lane` to
 /// `end_lane`, on a stretch with `curvature` in radians per
 /// meter (0 outside corners).
-pub fn ratio(
+pub(crate) fn ratio(
     distance: f64,
     start_lane: CourseWidths,
     end_lane: CourseWidths,

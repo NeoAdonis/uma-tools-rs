@@ -10,29 +10,7 @@ use uma_tools::race::parameters::*;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
-use uma_tools::trigger::skill_activation::{LogicAction, SkillActivationLogic};
-use uma_tools::trigger::system::TriggerScheduler;
 use uma_tools::uma::*;
-
-/// Assert that two floats are equal, or within `1e-9` of each other.
-///
-/// Takes an optional `tolerance = ...` and an optional format string with
-/// arguments, which is prepended to the failure message as context.
-macro_rules! assert_close {
-    ($actual:expr, $expected:expr, tolerance = $tolerance:expr $(, $($arg:tt)+)?) => {{
-        let (actual, expected): (f64, f64) = ($actual, $expected);
-        let message = format!("expected {expected}, got {actual}");
-        $(let message = format!("{}: {message}", format_args!($($arg)+));)?
-        assert!(
-            actual == expected || (actual - expected).abs() < $tolerance,
-            "{message}"
-        );
-    }};
-    ($actual:expr, $expected:expr $(, $($arg:tt)+)?) => {
-        $crate::common::assert_close!($actual, $expected, tolerance = 1e-9 $(, $($arg)+)?)
-    };
-}
-pub(crate) use assert_close;
 
 /// Load a course from `data/course_data.json`.
 pub fn load_course(course_id: u32) -> Course {
@@ -116,19 +94,6 @@ pub fn alternative(condition: &str, skill_type: SkillType, modifier: f64) -> Ski
     }
 }
 
-/// [`alternative`] that is locked until `precondition` is satisfied.
-pub fn alternative_with_precondition(
-    precondition: &str,
-    condition: &str,
-    skill_type: SkillType,
-    modifier: f64,
-) -> SkillAlternative {
-    SkillAlternative {
-        precondition: Some(precondition.parse().unwrap()),
-        ..alternative(condition, skill_type, modifier)
-    }
-}
-
 /// White skill with ID 0, without popularity data or wit check, so it's
 /// always available.
 ///
@@ -155,13 +120,4 @@ pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> 
 /// race.
 pub fn negligible_skill(condition: &str) -> Arc<Skill> {
     skill(999999, condition, SkillType::TargetSpeed, 0.0001)
-}
-
-/// Logics that activate skills (excluding the ones that unlock preconditions).
-pub fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
-    scheduler
-        .skill_logics()
-        .iter()
-        .filter(|logic| logic.action == LogicAction::Activate)
-        .collect()
 }

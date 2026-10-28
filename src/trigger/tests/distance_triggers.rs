@@ -1,13 +1,13 @@
 //! Runtime tests for distance-based triggers (random points, remaining
 //! distance, and ranges made of monotonic comparisons).
 
-use crate::common::{load_course, negligible_skill, ready_solver, seeded_config, uma};
-use uma_tools::course::Phase;
-use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::DELTA_TIME;
-use uma_tools::trigger::skill_activation::TriggerCondition;
-use uma_tools::trigger::system::TriggerScheduler;
-use uma_tools::uma::*;
+use crate::course::Phase;
+use crate::race::runner::Runner;
+use crate::race::solver::DELTA_TIME;
+use crate::test_utils::{load_course, negligible_skill, ready_solver, seeded_config, uma};
+use crate::trigger::skill_activation::TriggerCondition;
+use crate::trigger::system::TriggerScheduler;
+use crate::uma::*;
 
 /// Length of the test course (10104) in meters.
 const COURSE_DISTANCE: f64 = 2000.0;
@@ -88,8 +88,8 @@ fn test_remain_distance_range_activates_within_range() {
 
 #[test]
 fn test_distance_windows_are_positions_in_order() {
+    use crate::units::furlongs_to_meters;
     use rand::SeedableRng;
-    use uma_tools::units::furlongs_to_meters;
 
     let skills = [
         negligible_skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
@@ -101,7 +101,7 @@ fn test_distance_windows_are_positions_in_order() {
 
     // Windows are queued by their start
     let order: Vec<(usize, f64)> = scheduler
-        .position_windows()
+        .position_windows
         .iter()
         .map(|window| (window.logic_idx, window.min_threshold))
         .collect();
@@ -126,8 +126,8 @@ fn test_reversed_remain_distance_window_range() {
         &mut rng,
     );
 
-    assert_eq!(scheduler.position_windows().len(), 1);
-    let window = scheduler.position_windows().iter().next().unwrap();
+    assert_eq!(scheduler.position_windows.len(), 1);
+    let window = scheduler.position_windows.iter().next().unwrap();
     assert_eq!(window.min_threshold, 0.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 350.0);
 }
@@ -146,9 +146,9 @@ fn test_remain_distance_pair_window_range() {
     );
 
     // A single window; both comparisons stay as guards
-    assert_eq!(scheduler.skill_logics()[0].guards.len(), 2);
-    assert_eq!(scheduler.position_windows().len(), 1);
-    let window = scheduler.position_windows().iter().next().unwrap();
+    assert_eq!(scheduler.skill_logics[0].guards.len(), 2);
+    assert_eq!(scheduler.position_windows.len(), 1);
+    let window = scheduler.position_windows.iter().next().unwrap();
     assert_eq!(window.min_threshold, COURSE_DISTANCE - 402.0);
     assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }
@@ -183,7 +183,7 @@ fn test_random_segment_activates_within_segment() {
 
         // The rolled segment is 10m long
         let TriggerCondition::Segments { ranges } =
-            &runner.trigger_scheduler.skill_logics()[0].trigger
+            &runner.trigger_scheduler.skill_logics[0].trigger
         else {
             panic!("seed {seed}: expected segments");
         };

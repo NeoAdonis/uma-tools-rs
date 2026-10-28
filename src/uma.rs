@@ -281,7 +281,7 @@ impl std::error::Error for UnknownSkill {}
 /// Calculate base stat and apply mood multiplier.
 ///
 /// Any stat above 1200 has its excess halved before applying multiplier.
-pub fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
+pub(crate) fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
     let mut computed = stat;
     if computed > 1200 {
         computed = 1200 + (computed - 1200) / 2;
@@ -294,7 +294,7 @@ impl Mood {
     ///
     /// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2
     /// (awful) to +2 (great).
-    pub fn multiplier(self) -> f64 {
+    pub(crate) fn multiplier(self) -> f64 {
         1.0 + (self as i8 as f64) * 0.02
     }
 }

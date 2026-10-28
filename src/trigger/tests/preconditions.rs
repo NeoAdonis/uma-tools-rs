@@ -4,19 +4,19 @@
 //! skill_activation.rs by focusing on precondition-trigger interaction, edge
 //! cases and unlocking skills during a race.
 
-use crate::common::{
+use crate::race::runner::Runner;
+use crate::race::solver::RaceSolver;
+use crate::skill::*;
+use crate::test_utils::{
     activation_logics, alternative, alternative_with_precondition, load_course, ready_solver,
     seeded_config, skill, synthetic_skill, uma,
 };
+use crate::trigger::skill_activation::*;
+use crate::trigger::system::TriggerScheduler;
+use crate::uma::*;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
-use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::RaceSolver;
-use uma_tools::skill::*;
-use uma_tools::trigger::skill_activation::*;
-use uma_tools::trigger::system::TriggerScheduler;
-use uma_tools::uma::*;
 
 // ============================================================================
 // PRECONDITION-TRIGGER INTERACTION (BUILD-TIME)
@@ -72,7 +72,7 @@ fn test_precondition_with_window_trigger() {
 
     // Verify precondition_satisfied array is initialized correctly
     assert_eq!(
-        scheduler.precondition_satisfied(),
+        scheduler.precondition_satisfied,
         vec![false],
         "Skill with precondition should start locked"
     );
@@ -114,7 +114,7 @@ fn test_precondition_with_or_condition() {
     }
 
     // A single precondition, locked at the start
-    assert_eq!(scheduler.precondition_satisfied(), vec![false]);
+    assert_eq!(scheduler.precondition_satisfied, vec![false]);
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn test_multiple_alternatives_precondition_independence() {
 
     // Both preconditions start locked
     assert_eq!(
-        scheduler.precondition_satisfied(),
+        scheduler.precondition_satisfied,
         vec![false, false],
         "Precondition states should match alternative requirements"
     );
@@ -295,9 +295,9 @@ fn test_static_preconditions_resolved_at_race_start() {
 
     // True static comparisons are removed; unsatisfiable windows are dropped
     let windows: Vec<_> = scheduler
-        .precondition_windows()
+        .precondition_windows
         .iter()
-        .map(|window| &scheduler.skill_logics()[window.logic_idx])
+        .map(|window| &scheduler.skill_logics[window.logic_idx])
         .collect();
     assert_eq!(windows.len(), 2);
     assert_eq!(windows[0].skill_index, 0);

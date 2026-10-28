@@ -1,7 +1,7 @@
-use crate::common::{load_course, race_params, seeded_config, uma};
-use uma_tools::race::runner::Runner;
-use uma_tools::race::solver::{DELTA_TIME, RaceSolver};
-use uma_tools::uma::*;
+use crate::race::runner::Runner;
+use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::test_utils::{load_course, race_params, seeded_config, uma};
+use crate::uma::*;
 
 fn ready_runners(count: usize) -> Vec<Runner> {
     let course = load_course(10101);

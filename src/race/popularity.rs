@@ -348,7 +348,7 @@ fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, Popul
 
 /// Calculate the popularity rank (1-indexed, with ties sharing a rank) and
 /// judge scores of every runner, in the same order as `runners`.
-pub fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeScores)> {
+pub(crate) fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeScores)> {
     let n = runners.len();
 
     // Calculate adjusted stats for each runner.

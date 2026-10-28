@@ -1,6 +1,7 @@
 use super::*;
 use crate::configuration::{Configuration, Roll};
 use crate::race::solver::RaceSolver;
+use crate::skill::SkillAlternative;
 use crate::test_utils::*;
 use std::sync::Arc;
 

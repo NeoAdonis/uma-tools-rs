@@ -177,7 +177,7 @@ pub enum LaneType {
 
 impl LaneType {
     /// Lane type of a runner at `lane`, in course widths from the inner fence.
-    pub fn from_lane(lane: CourseWidths) -> Self {
+    pub(crate) fn from_lane(lane: CourseWidths) -> Self {
         if lane <= CourseWidths(0.2) {
             LaneType::Inner
         } else if lane <= CourseWidths(0.4) {
@@ -335,7 +335,7 @@ impl Course {
     /// Get the base speed for this course in m/s.
     ///
     /// The longer the distance, the lower the speed an Uma should run at.
-    pub fn base_speed(&self) -> f64 {
+    pub(crate) fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
@@ -358,7 +358,7 @@ impl Course {
     }
 
     /// Get the starting lane position in course widths based on the gate roll.
-    pub fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
+    pub(crate) fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
         let adjustor = match self.race_track_id {
             TRACK_ID_OOI => 0.0,
             TRACK_ID_LONGCHAMP => {

@@ -1,12 +1,7 @@
 use std::path::PathBuf;
 
-use uma_tools::configuration::Configuration;
-use uma_tools::course::*;
 use uma_tools::race::charge_up::ChargeUpOutcome;
-use uma_tools::race::parameters::*;
-use uma_tools::race::solver::*;
-use uma_tools::skill::*;
-use uma_tools::uma::*;
+use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData};
 
 fn main() {
     let mut config_path = PathBuf::from("config.json");

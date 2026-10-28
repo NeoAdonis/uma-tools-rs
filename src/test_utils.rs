@@ -6,6 +6,8 @@ use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
+use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
+use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use crate::units::CourseWidths;
 use std::sync::Arc;
@@ -139,6 +141,19 @@ pub(crate) fn alternative(
     }
 }
 
+/// [`alternative`] that is locked until `precondition` is satisfied.
+pub(crate) fn alternative_with_precondition(
+    precondition: &str,
+    condition: &str,
+    skill_type: SkillType,
+    modifier: f64,
+) -> SkillAlternative {
+    SkillAlternative {
+        precondition: Some(precondition.parse().unwrap()),
+        ..alternative(condition, skill_type, modifier)
+    }
+}
+
 /// White skill with ID 0, without popularity data or wit check, so it's
 /// always available.
 ///
@@ -159,4 +174,19 @@ pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f
         id,
         ..synthetic_skill(vec![alternative(condition, skill_type, modifier)])
     })
+}
+
+/// Always available skill whose target speed effect is too small to change the
+/// race.
+pub(crate) fn negligible_skill(condition: &str) -> Arc<Skill> {
+    skill(999999, condition, SkillType::TargetSpeed, 0.0001)
+}
+
+/// Logics that activate skills (excluding the ones that unlock preconditions).
+pub(crate) fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
+    scheduler
+        .skill_logics
+        .iter()
+        .filter(|logic| logic.action == LogicAction::Activate)
+        .collect()
 }

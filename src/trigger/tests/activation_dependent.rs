@@ -3,16 +3,16 @@
 //! These tests verify that skills with conditions depending on other skill
 //! activations are properly detected and configured at build-time.
 
-use crate::common::{
+use crate::skill::{Skill, SkillType};
+use crate::test_utils::{
     activation_logics, alternative, alternative_with_precondition, assert_close, load_course,
     skill, synthetic_skill,
 };
+use crate::trigger::skill_activation::*;
+use crate::trigger::system::TriggerScheduler;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
-use uma_tools::skill::{Skill, SkillType};
-use uma_tools::trigger::skill_activation::*;
-use uma_tools::trigger::system::TriggerScheduler;
 
 /// Get the variable and `(min, max)` thresholds of a window trigger.
 fn window(logic: &SkillActivationLogic) -> (WindowVariable, f64, f64) {
@@ -53,10 +53,10 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
     let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics (one per alternative)
-    assert_eq!(scheduler.skill_logics().len(), 2);
+    assert_eq!(scheduler.skill_logics.len(), 2);
 
     // Alternative 2 (index 1) has activation dependency
-    let logic_alt2 = &scheduler.skill_logics()[1];
+    let logic_alt2 = &scheduler.skill_logics[1];
 
     // Checked during Last phase (from 20/24 of the 2000m course)
     let (variable, min, max) = window(logic_alt2);
@@ -117,13 +117,13 @@ fn test_heal_skill_activation_dependency() {
             idx
         );
     }
-    assert_eq!(scheduler.precondition_satisfied(), vec![false, false]);
+    assert_eq!(scheduler.precondition_satisfied, vec![false, false]);
 
     // Key behavior: is_activate_heal_skill==1 is detected in precondition
     // It's checked when a heal skill activates instead of every frame
     // Only heal skills set this flag, not general skill activations
-    assert_eq!(scheduler.heal_activation_triggers().len(), 2);
-    assert!(scheduler.precondition_windows().is_empty());
+    assert_eq!(scheduler.heal_activation_triggers.len(), 2);
+    assert!(scheduler.precondition_windows.is_empty());
 }
 
 #[test]
@@ -157,11 +157,11 @@ fn test_activation_dependent_or_branches() {
     // Alternative 1: 1 branch
     // Alternative 2: 2 branches (OR condition)
     // Total: 3 skill logics
-    assert_eq!(scheduler.skill_logics().len(), 3);
+    assert_eq!(scheduler.skill_logics.len(), 3);
 
     // Alt 2, Branch 1 and Branch 2 both have activation dependency.
     for idx in 1..=2 {
-        let logic = &scheduler.skill_logics()[idx];
+        let logic = &scheduler.skill_logics[idx];
         assert_eq!(1, 1, "Each OR branch should have 1 branch");
 
         // Checked after the final corner (ends at 1734m), until the goal (phase>=2)
@@ -217,11 +217,11 @@ fn test_alternative_with_and_without_dependency() {
     // Alt 1: 2 branches (OR condition)
     // Alt 2: 1 branch
     // Total: 3 skill logics
-    assert_eq!(scheduler.skill_logics().len(), 3);
+    assert_eq!(scheduler.skill_logics.len(), 3);
 
     // Alternative 1 (indices 0-1): No activation dependency
     for idx in 0..=1 {
-        let logic = &scheduler.skill_logics()[idx];
+        let logic = &scheduler.skill_logics[idx];
         // distance_rate<=50 holds until 51% (floored)
         assert_eq!(
             window(logic),
@@ -234,7 +234,7 @@ fn test_alternative_with_and_without_dependency() {
     }
 
     // Alternative 2 (index 2): Has activation dependency
-    let logic_alt2 = &scheduler.skill_logics()[2];
+    let logic_alt2 = &scheduler.skill_logics[2];
     // 45-60% (until 61%, floored); corner==0 doesn't narrow it down
     assert_eq!(
         window(logic_alt2),
@@ -272,10 +272,10 @@ fn test_other_character_skill_activation() {
     let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 4 branches (4-way OR)
-    assert_eq!(scheduler.skill_logics().len(), 4);
+    assert_eq!(scheduler.skill_logics.len(), 4);
 
     // All branches have is_other_character_activate_advantage_skill dependency
-    for (idx, logic) in scheduler.skill_logics().iter().enumerate() {
+    for (idx, logic) in scheduler.skill_logics.iter().enumerate() {
         // Checked when other runners activate advantage skills; the final corner
         // and phase comparisons are checked as guards then.
         assert!(
@@ -316,8 +316,8 @@ fn test_activation_dependency_variable_detection() {
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
-        assert_eq!(scheduler.skill_logics().len(), 1);
-        let logic = &scheduler.skill_logics()[0];
+        assert_eq!(scheduler.skill_logics.len(), 1);
+        let logic = &scheduler.skill_logics[0];
         assert_eq!(
             window(logic),
             (WindowVariable::Position, 0.0, f64::INFINITY),
@@ -337,8 +337,8 @@ fn test_activation_dependency_variable_detection() {
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
-        assert_eq!(scheduler.skill_logics().len(), 1);
-        let logic = &scheduler.skill_logics()[0];
+        assert_eq!(scheduler.skill_logics.len(), 1);
+        let logic = &scheduler.skill_logics[0];
         assert!(
             matches!(logic.trigger, TriggerCondition::HealSkillActivation),
             "is_activate_heal_skill should create HealSkillActivation trigger"
@@ -363,8 +363,8 @@ fn test_activation_dependency_variable_detection() {
         let mut rng = Pcg64Mcg::seed_from_u64(0);
         let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
-        assert_eq!(scheduler.skill_logics().len(), 1);
-        let logic = &scheduler.skill_logics()[0];
+        assert_eq!(scheduler.skill_logics.len(), 1);
+        let logic = &scheduler.skill_logics[0];
         assert!(
             matches!(logic.trigger, TriggerCondition::BuffSkillActivation),
             "is_other_character_activate_advantage_skill should create BuffSkillActivation trigger"
@@ -407,7 +407,7 @@ fn test_activation_dependency_with_precondition() {
 
     // Should start locked
     assert_eq!(
-        scheduler.precondition_satisfied(),
+        scheduler.precondition_satisfied,
         vec![false],
         "Should start with precondition locked"
     );

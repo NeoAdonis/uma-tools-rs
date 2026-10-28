@@ -67,7 +67,7 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 /// This scheduler stores [`SkillActivationLogic`] which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
 #[derive(Debug, Default, Clone)]
-pub struct TriggerScheduler {
+pub(crate) struct TriggerScheduler {
     pub(crate) skill_logics: Vec<SkillActivationLogic>,
 
     // Precondition tracking - one-time unlocks, indexed by the precondition ID
@@ -104,34 +104,8 @@ pub struct TriggerScheduler {
 }
 
 impl TriggerScheduler {
-    /// Get the activation logics of every skill alternative, indexed by the
-    /// logic indices that triggers store.
-    pub fn skill_logics(&self) -> &[SkillActivationLogic] {
-        &self.skill_logics
-    }
-
-    /// Get whether each precondition is satisfied, indexed by precondition ID.
-    pub fn precondition_satisfied(&self) -> &[bool] {
-        &self.precondition_satisfied
-    }
-
-    /// Get the position windows of precondition logics.
-    pub fn precondition_windows(&self) -> &WindowQueue {
-        &self.precondition_windows
-    }
-
-    /// Get the position windows of regular triggers.
-    pub fn position_windows(&self) -> &WindowQueue {
-        &self.position_windows
-    }
-
-    /// Get the logics triggered by heal skill activations.
-    pub fn heal_activation_triggers(&self) -> &[usize] {
-        &self.heal_activation_triggers
-    }
-
     /// Remove every trigger of the given logics, so they're never checked.
-    pub fn remove_triggers(&mut self, logic_indices: &[usize]) {
+    pub(crate) fn remove_triggers(&mut self, logic_indices: &[usize]) {
         if logic_indices.is_empty() {
             return;
         }
@@ -165,10 +139,10 @@ impl TriggerScheduler {
 /// The variable is implied by the collection holding the trigger (see
 /// [`TriggerScheduler`]).
 #[derive(Clone, Debug, PartialEq)]
-pub struct WindowTrigger {
-    pub logic_idx: usize,
-    pub min_threshold: f64,
-    pub max_threshold: f64,
+pub(crate) struct WindowTrigger {
+    pub(crate) logic_idx: usize,
+    pub(crate) min_threshold: f64,
+    pub(crate) max_threshold: f64,
 }
 
 /// Window triggers over a variable that never decreases (position, time).
@@ -177,7 +151,7 @@ pub struct WindowTrigger {
 /// inside it, and are dropped once the value moves past their range. This way,
 /// windows are only looked at while they matter.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct WindowQueue {
+pub(crate) struct WindowQueue {
     /// Windows that haven't started yet, sorted by `min_threshold` in descending
     /// order (the next window to start is last).
     pending: Vec<WindowTrigger>,
@@ -188,7 +162,7 @@ pub struct WindowQueue {
 impl WindowQueue {
     /// Add a window, at build time or during the race (e.g. random segments rolled
     /// once the all-out spurt starts).
-    pub fn push(&mut self, trigger: WindowTrigger) {
+    pub(crate) fn push(&mut self, trigger: WindowTrigger) {
         let idx = self
             .pending
             .partition_point(|t| t.min_threshold > trigger.min_threshold);
@@ -198,7 +172,7 @@ impl WindowQueue {
     /// Advance the queue to `value` and return the logic indices whose window
     /// contains it. Windows left behind are dropped. Bounds are widened by
     /// `epsilon`.
-    pub fn advance(&mut self, value: f64, epsilon: f64) -> Vec<usize> {
+    pub(crate) fn advance(&mut self, value: f64, epsilon: f64) -> Vec<usize> {
         while self
             .pending
             .last()
@@ -212,21 +186,26 @@ impl WindowQueue {
     }
 
     /// Remove every window matching `predicate`.
-    pub fn remove_if(&mut self, predicate: impl Fn(&WindowTrigger) -> bool) {
+    pub(crate) fn remove_if(&mut self, predicate: impl Fn(&WindowTrigger) -> bool) {
         self.pending.retain(|t| !predicate(t));
         self.active.retain(|t| !predicate(t));
     }
 
     /// Iterate over all windows still in the queue.
-    pub fn iter(&self) -> impl Iterator<Item = &WindowTrigger> {
+    #[cfg(test)]
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &WindowTrigger> {
         self.active.iter().chain(self.pending.iter().rev())
     }
 
-    pub fn len(&self) -> usize {
+    /// Get the number of windows still in the queue.
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
         self.pending.len() + self.active.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    /// Check if no window is left in the queue.
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
     }
 }
@@ -234,25 +213,25 @@ impl WindowQueue {
 // ========== ACTIVATION TRACKING ==========
 
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct ActivationCounts {
-    pub all: usize,
+pub(crate) struct ActivationCounts {
+    pub(crate) all: usize,
     // Phase::RunUp + Phase::Early (sections 0-4).
-    pub start: usize,
+    pub(crate) start: usize,
     // Phase::Mid (sections 4-16).
-    pub middle: usize,
+    pub(crate) middle: usize,
     // After half course (section 12-24).
-    pub later_half: usize,
+    pub(crate) later_half: usize,
     // Phase::Late + Phase::Last (sections 16-24).
-    pub end_after: usize,
-    pub heal: usize,
+    pub(crate) end_after: usize,
+    pub(crate) heal: usize,
     // Green (stat boost) skills.
-    pub green: usize,
+    pub(crate) green: usize,
 }
 
 impl ActivationCounts {
     /// Increment activation counts based on current phase and position, given
     /// the course's `halfway` point.
-    pub fn increment(&mut self, phase: Phase, position: f64, halfway: f64) {
+    pub(crate) fn increment(&mut self, phase: Phase, position: f64, halfway: f64) {
         self.all += 1;
 
         match phase {
@@ -273,7 +252,7 @@ impl ActivationCounts {
     }
 
     /// Increment heal skill count.
-    pub fn increment_heal(&mut self) {
+    pub(crate) fn increment_heal(&mut self) {
         self.heal += 1;
     }
 }

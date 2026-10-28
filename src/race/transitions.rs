@@ -15,15 +15,15 @@ use crate::course::geometry::Segment;
 
 /// Segment indices exited and entered during a [`SegmentManager::update`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
-pub struct Transition {
-    pub exited: Option<usize>,
-    pub entered: Option<usize>,
+pub(crate) struct Transition {
+    pub(crate) exited: Option<usize>,
+    pub(crate) entered: Option<usize>,
 }
 
 /// Structure used for segment entry/exit operations, tracking which segment of
 /// a kind (e.g. corners) a runner is in.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SegmentManager {
+pub(crate) struct SegmentManager {
     current: Option<usize>,
 }
 
@@ -32,7 +32,7 @@ impl SegmentManager {
     ///
     /// The current segment is exited before looking for a new one, so that a
     /// segment right after another one is entered in the same update.
-    pub fn update<S: Segment>(&mut self, position: f64, segments: &[S]) -> Transition {
+    pub(crate) fn update<S: Segment>(&mut self, position: f64, segments: &[S]) -> Transition {
         let exited = self.current.filter(|&idx| position >= segments[idx].end());
         if exited.is_some() {
             self.current = None;
@@ -52,22 +52,22 @@ impl SegmentManager {
     }
 
     /// Get the current segment index if in a segment.
-    pub fn current(&self) -> Option<usize> {
+    pub(crate) fn current(&self) -> Option<usize> {
         self.current
     }
 }
 
 /// Transitions of each kind of segment during a [`SegmentState::update`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
-pub struct Transitions {
-    pub corner: Transition,
-    pub straight: Transition,
-    pub slope: Transition,
+pub(crate) struct Transitions {
+    pub(crate) corner: Transition,
+    pub(crate) straight: Transition,
+    pub(crate) slope: Transition,
 }
 
 /// Course segments a runner is currently in.
 #[derive(Debug, Default, Clone)]
-pub struct SegmentState {
+pub(crate) struct SegmentState {
     corner: SegmentManager,
     straight: SegmentManager,
     slope: SegmentManager,
@@ -80,7 +80,7 @@ pub struct SegmentState {
 
 impl SegmentState {
     /// Update the current segments for `position`, returning the transitions.
-    pub fn update(&mut self, position: f64, course: &Course) -> Transitions {
+    pub(crate) fn update(&mut self, position: f64, course: &Course) -> Transitions {
         let transitions = Transitions {
             corner: self.corner.update(position, &course.corners),
             straight: self.straight.update(position, &course.straights),
@@ -93,28 +93,28 @@ impl SegmentState {
     }
 
     /// Get the current corner index if in a corner.
-    pub fn corner(&self) -> Option<usize> {
+    pub(crate) fn corner(&self) -> Option<usize> {
         self.corner.current()
     }
 
     /// Get the current straight index if on a straight.
-    pub fn straight(&self) -> Option<usize> {
+    pub(crate) fn straight(&self) -> Option<usize> {
         self.straight.current()
     }
 
     /// Get the current slope index if on a slope.
-    pub fn slope(&self) -> Option<usize> {
+    pub(crate) fn slope(&self) -> Option<usize> {
         self.slope.current()
     }
 
     /// Check if currently on the final straight.
-    pub fn is_on_final_straight(&self, course: &Course) -> bool {
+    pub(crate) fn is_on_final_straight(&self, course: &Course) -> bool {
         self.straight()
             .is_some_and(|idx| idx + 1 == course.straights.len())
     }
 
     /// Take the straight entered since the last call, if any.
-    pub fn take_entered_straight(&mut self) -> Option<usize> {
+    pub(crate) fn take_entered_straight(&mut self) -> Option<usize> {
         self.entered_straight.take()
     }
 }

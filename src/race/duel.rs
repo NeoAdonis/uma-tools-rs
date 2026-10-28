@@ -8,24 +8,24 @@
 use crate::units::CourseWidths;
 
 /// Maximum distance (m) between two runners to count as close.
-pub const TRIGGER_DISTANCE: f64 = 3.0;
+pub(crate) const TRIGGER_DISTANCE: f64 = 3.0;
 /// Maximum lane gap (in course widths) between two runners to count as close.
-pub const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
+pub(crate) const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
 /// Time (s) two runners must stay close in a row before they can start dueling,
 /// counted from the first frame they're close.
-pub const TRIGGER_TIME: f64 = 2.0;
+pub(crate) const TRIGGER_TIME: f64 = 2.0;
 /// Maximum speed difference (m/s) between two runners to start dueling.
-pub const MAX_SPEED_DIFF: f64 = 0.6;
+pub(crate) const MAX_SPEED_DIFF: f64 = 0.6;
 /// Maximum order rate (top X%) at least one of the runners must be at to start
 /// dueling.
-pub const MAX_ORDER_RATE: u8 = 50;
+pub(crate) const MAX_ORDER_RATE: u8 = 50;
 /// Minimum HP percentage both runners must have to start dueling.
-pub const MIN_START_HP_PERCENT: f64 = 15.0;
+pub(crate) const MIN_START_HP_PERCENT: f64 = 15.0;
 /// HP percentage below which a duelist exits.
-pub const EXIT_HP_PERCENT: f64 = 5.0;
+pub(crate) const EXIT_HP_PERCENT: f64 = 5.0;
 /// Distance (m) from every other duelist, ahead or behind, at which a duelist
 /// exits.
-pub const EXIT_DISTANCE: f64 = 5.0;
+pub(crate) const EXIT_DISTANCE: f64 = 5.0;
 
 /// Tolerance for floating-point rounding errors in the trigger checks, so that
 /// e.g. 30 frames at 15 FPS reach `TRIGGER_TIME`, and a speed difference a hair
@@ -49,7 +49,7 @@ pub enum Duel {
 
 impl Duel {
     /// Start dueling.
-    pub fn start(guts: u16) -> Self {
+    pub(crate) fn start(guts: u16) -> Self {
         Duel::Active {
             speed_bonus: target_speed_bonus(guts),
             acceleration_bonus: acceleration_bonus(guts),
@@ -72,7 +72,7 @@ impl Duel {
     }
 
     /// Target speed increase (m/s), zero if not dueling.
-    pub fn speed_bonus(&self) -> f64 {
+    pub(crate) fn speed_bonus(&self) -> f64 {
         match self {
             Duel::Active { speed_bonus, .. } => *speed_bonus,
             _ => 0.0,
@@ -80,7 +80,7 @@ impl Duel {
     }
 
     /// Acceleration increase (m/s²), zero if not dueling.
-    pub fn acceleration_bonus(&self) -> f64 {
+    pub(crate) fn acceleration_bonus(&self) -> f64 {
         match self {
             Duel::Active {
                 acceleration_bonus, ..
@@ -90,7 +90,7 @@ impl Duel {
     }
 
     /// Leave the duel, if dueling.
-    pub fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         if self.is_dueling() {
             *self = Duel::Ended;
         }
@@ -99,24 +99,24 @@ impl Duel {
 
 /// Check if two runners `distance` meters and `lane_diff` course widths apart
 /// are close enough to start counting towards a duel.
-pub fn is_close(distance: f64, lane_diff: CourseWidths) -> bool {
+pub(crate) fn is_close(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 
 /// Check if two runners have been close for long enough to start dueling,
 /// given how long (in seconds) they have been close in a row.
-pub fn is_close_long_enough(close_time: f64) -> bool {
+pub(crate) fn is_close_long_enough(close_time: f64) -> bool {
     close_time >= TRIGGER_TIME - TOLERANCE
 }
 
 /// Check if two runners' speeds (m/s) are similar enough to start dueling.
-pub fn are_speeds_similar(speed: f64, other_speed: f64) -> bool {
+pub(crate) fn are_speeds_similar(speed: f64, other_speed: f64) -> bool {
     (speed - other_speed).abs() <= MAX_SPEED_DIFF + TOLERANCE
 }
 
 /// Check if a duelist `distance` meters away from another duelist is
 /// separated from her, either ahead or behind.
-pub fn is_separated(distance: f64) -> bool {
+pub(crate) fn is_separated(distance: f64) -> bool {
     distance.abs() >= EXIT_DISTANCE
 }
 

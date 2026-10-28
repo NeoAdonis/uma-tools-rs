@@ -20,8 +20,9 @@
 //! the repository:
 //!
 //! ```
-//! use uma_tools::configuration::Configuration;
-//! use uma_tools::{Course, RaceParametersData, RaceSolver, Skill, UmaData};
+//! use uma_tools::{
+//!     Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData,
+//! };
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! let parameters = RaceParametersData::from_json(
@@ -78,10 +79,13 @@ pub mod units;
 #[cfg(test)]
 mod test_utils;
 
-// Re-export commonly used types for convenience.
-pub use condition::*;
-pub use course::*;
-pub use race::parameters::*;
-pub use race::solver::*;
-pub use skill::*;
-pub use uma::*;
+// Re-export the types needed to load data, build a race, run it and read its
+// results.
+pub use condition::parser::ParseError;
+pub use configuration::Configuration;
+pub use course::Course;
+pub use race::parameters::{RaceParameters, RaceParametersData};
+pub use race::runner::Runner;
+pub use race::solver::RaceSolver;
+pub use skill::Skill;
+pub use uma::{Aptitude, Mood, Style, Uma, UmaData, UnknownSkill};

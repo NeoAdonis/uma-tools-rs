@@ -949,7 +949,7 @@ fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> 
 /// Returns true if all popularity guards pass in at least one OR branch (see
 /// [`VarType::is_popularity_guard`]). Comparisons on any other variable are
 /// assumed to be satisfiable.
-pub fn check_popularity_guards(
+pub(crate) fn check_popularity_guards(
     condition: &Condition,
     state: &RaceState,
     runner: &UnreadyRunner,

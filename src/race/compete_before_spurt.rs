@@ -14,21 +14,21 @@ use crate::race::secure_lead;
 use crate::uma::Style;
 
 /// Sections (0-indexed) in which the runner can compete before spurt.
-pub const SECTIONS: RangeInclusive<u8> = 10..=14;
+pub(crate) const SECTIONS: RangeInclusive<u8> = 10..=14;
 /// Interval between checks in seconds.
-pub const CHECK_INTERVAL: f64 = 2.0;
+pub(crate) const CHECK_INTERVAL: f64 = 2.0;
 /// Duration of the speed boost in seconds.
-pub const DURATION: f64 = 2.0;
+pub(crate) const DURATION: f64 = 2.0;
 /// Cooldown after the speed boost ends in seconds.
-pub const COOLDOWN: f64 = 1.0;
+pub(crate) const COOLDOWN: f64 = 1.0;
 /// HP cost factor added when competing only because of nearby runners.
-pub const NEAR_FACTOR: f64 = 0.5;
+pub(crate) const NEAR_FACTOR: f64 = 0.5;
 /// Distance (m) within which another runner with the same style prevents the
 /// front-runner bonus.
-pub const ALONE_DISTANCE: f64 = 10.0;
+pub(crate) const ALONE_DISTANCE: f64 = 10.0;
 /// Range of the ratio of HP required to finish the race that the runner tries
 /// to keep. Rolled once per race.
-pub const STAMINA_KEEP_RATIO: RangeInclusive<f64> = 1.035..=1.04;
+pub(crate) const STAMINA_KEEP_RATIO: RangeInclusive<f64> = 1.035..=1.04;
 
 /// Stamina Keep (持久力温存) state (2.5 Anniv. onward).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,7 +43,7 @@ pub struct StaminaKeep {
 
 impl StaminaKeep {
     /// Roll the HP ratio the runner tries to keep (see [`STAMINA_KEEP_RATIO`]).
-    pub fn roll(game_version: GameVersion, rng: &mut impl Rng) -> Self {
+    pub(crate) fn roll(game_version: GameVersion, rng: &mut impl Rng) -> Self {
         let ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
             0.0
         } else {
@@ -60,7 +60,7 @@ impl StaminaKeep {
 /// far from the lead.
 // ? Threshold should scale with course distance, but the formula is unknown.
 // ? The distance term of secure lead is assumed.
-pub fn lead_threshold(style: Style, course_distance: f64) -> f64 {
+pub(crate) fn lead_threshold(style: Style, course_distance: f64) -> f64 {
     let coef = match style {
         Style::Runaway | Style::Front => 0.0,
         Style::Pace => 2.5,
@@ -75,7 +75,7 @@ pub fn lead_threshold(style: Style, course_distance: f64) -> f64 {
 /// `is_alone` is whether no other runner with the same style is within
 /// `ALONE_DISTANCE`. It only has an effect on front-like runners.
 // ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
-pub fn target_speed_bonus(style: Style, power: u16, guts: u16, is_alone: bool) -> f64 {
+pub(crate) fn target_speed_bonus(style: Style, power: u16, guts: u16, is_alone: bool) -> f64 {
     let style_coef = match style {
         Style::Runaway => 0.2,
         Style::Front => 0.8,
@@ -96,7 +96,7 @@ pub fn target_speed_bonus(style: Style, power: u16, guts: u16, is_alone: bool) -
 ///
 /// `far_from_lead` is whether the runner competes because she is too far from
 /// the lead. Otherwise, she competes only because of nearby runners.
-pub fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -> f64 {
+pub(crate) fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -> f64 {
     let style_coef = match style {
         Style::Runaway => 1.5,
         Style::Front => 1.2,
@@ -108,7 +108,7 @@ pub fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -> f64 {
 
 /// Chance of noticing the lack of HP and entering Stamina Keep on each check.
 // ? Highly speculative.
-pub fn stamina_keep_chance(wit: u16) -> f64 {
+pub(crate) fn stamina_keep_chance(wit: u16) -> f64 {
     let wit = wit as f64;
     (0.3 * (wit / 1000.0 + wit.powf(0.03))).min(1.0)
 }

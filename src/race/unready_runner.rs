@@ -11,30 +11,30 @@
 //! 1. **Wit check**: each skill is kept with a probability based on the
 //!    runner's wit (skills without a wit check are always kept). Skills that
 //!    fail it can't activate, but still count towards the runner's skills.
-//! 2. **Scheduler**: the [`TriggerScheduler`] is built for the kept skills (see
-//!    [`TriggerScheduler::from_skills`]). Logics refer to skills by their
+//! 2. **Scheduler**: the `TriggerScheduler` is built for the kept skills (see
+//!    `TriggerScheduler::from_skills`). Logics refer to skills by their
 //!    index in this list. Out-of-gate alternatives are skipped.
 //!
 //! ## Out-of-Gate Skills
 //!
 //! Out-of-gate skills apply before the race starts: they're the skills with any
 //! alternative that has an effect modifying a parameter needed before the race
-//! ([`SkillType::is_pre_race_effect`]), i.e. stats, start delay, running style,
+//! (`SkillType::is_pre_race_effect`), i.e. stats, start delay, running style,
 //! rush chance, popularity requirements, or "Sympathy" activation.
 //!
 //! The conditions of those alternatives only use values known before the race,
 //! so they aren't compiled into triggers. Instead,
-//! [`UnreadyRunner::apply_out_of_gate_skills`] chooses the first of them whose
+//! `UnreadyRunner::apply_out_of_gate_skills` chooses the first of them whose
 //! precondition (if any) and condition both hold, evaluated with
 //! [`EvaluatorOutOfGate`]; if none holds, the skill doesn't activate before the
 //! race. Before the race, a precondition is just another requirement (e.g.
 //! `distance_type==3 @ distance_type==4` for a skill whose condition is
 //! `base_stamina>=1200`). Skills that ignore popularity requirements
-//! ([`Skill::ignores_popularity`]) are applied first, so that every other skill
+//! (`Skill::ignores_popularity`) are applied first, so that every other skill
 //! sees it. Then:
 //!
 //! 1. Its pre-race effects are applied before the [`Runner`] is built.
-//! 2. A logic with a [`RaceStart`] trigger is added for it, so the skill
+//! 2. A logic with a `RaceStart` trigger is added for it, so the skill
 //!    activates on the first frame the runner moves. The logic has no guards
 //!    nor precondition, since both were already satisfied. From there, it's
 //!    handled like any other skill: its other effects (e.g. acceleration) apply
@@ -56,9 +56,7 @@
 //!
 //! "Sympathy" activated by another runner bypasses its condition: a race start
 //! logic is added for it, unless it already activates (see
-//! [`UnreadyRunner::activate_sympathy`]).
-//!
-//! [`RaceStart`]: crate::trigger::skill_activation::TriggerCondition::RaceStart
+//! `UnreadyRunner::activate_sympathy`).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -66,9 +64,10 @@ use std::sync::Arc;
 
 use rand::RngExt;
 
+use crate::condition::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::condition::parser::Condition;
 use crate::configuration::GameVersion;
-use crate::evaluator::{CompEvaluator, EvaluatorOutOfGate};
+use crate::course::{Course, Phase};
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp};
 use crate::race::compete_before_spurt::StaminaKeep;
@@ -78,15 +77,18 @@ use crate::race::modifiers::{
     calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wit,
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
+use crate::race::parameters::RaceParameters;
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
+use crate::race::solver::RaceState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::world_distance::LastMove;
+use crate::skill::{SYMPATHY_ID, Skill, SkillType};
 use crate::trigger::system::*;
-use crate::*;
+use crate::uma::{Mood, Style, Uma};
 
 /// Adjust base stats according to course and race parameters.
 fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
@@ -172,7 +174,7 @@ pub struct UnreadyRunner {
     /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
     /// Skills that passed the wit check. Out-of-gate skills among them are
-    /// evaluated before the race (see [`Self::apply_out_of_gate_skills`]).
+    /// evaluated before the race (see `Self::apply_out_of_gate_skills`).
     pub skills: Vec<Arc<Skill>>,
     /// Skills that failed the wit check. They can't activate on their own, but
     /// they still count towards the runner's skills (e.g. for popularity or skill
@@ -383,7 +385,7 @@ impl UnreadyRunner {
 
     /// Activate every out-of-gate skill whose condition is satisfied (see
     /// `activate_out_of_gate_skill`).
-    pub fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
+    pub(crate) fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         // Skills that ignore popularity requirements go first, so that every other
         // skill sees it, whatever order the skills were given in.
         let mut order: Vec<usize> = (0..self.skills.len()).collect();
@@ -444,7 +446,7 @@ impl UnreadyRunner {
     ///
     /// This must be called after out-of-gate skills have been applied, so that it
     /// doesn't activate twice when its condition is also satisfied.
-    pub fn activate_sympathy(&mut self) {
+    pub(crate) fn activate_sympathy(&mut self) {
         let Some(skill_index) = self.skills.iter().position(|skill| skill.id == SYMPATHY_ID) else {
             return;
         };

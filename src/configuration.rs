@@ -88,7 +88,7 @@ impl Roll {
     /// # Panics
     ///
     /// Panics if `p` is not in `[0, 1]`, whatever the mode.
-    pub fn resolve<R: Rng + ?Sized>(self, rng: &mut R, p: f64) -> bool {
+    pub(crate) fn resolve<R: Rng + ?Sized>(self, rng: &mut R, p: f64) -> bool {
         let roll = rng.random_bool(p);
         match self {
             Roll::Random => roll,
