@@ -3575,3 +3575,27 @@ fn test_additional_effects_apply_on_other_skill_activations() {
         0.25 + 0.05 * 3.0 + 0.25 + 0.05 * 2.0
     );
 }
+
+#[test]
+fn test_front_blocker_limits_speed() {
+    // Two blockers ahead in the same lane; the closest one (1m ahead) sets the
+    // limit, at 99.4% of her speed.
+    let mut solver = struggle_solver(
+        &[
+            (Style::Pace, 201.5, 0.2),
+            (Style::Pace, 201.0, 0.2),
+            (Style::Pace, 200.0, 0.2),
+        ],
+        GameVersion::LATEST,
+    );
+    for (runner, speed) in solver.runners.iter_mut().zip([15.0, 16.0, 20.0]) {
+        runner.speed = speed;
+        runner.target_speed = speed;
+    }
+
+    solver.update_blocking_status(DELTA_TIME);
+    let behind = &mut solver.runners[2];
+    assert_close!(behind.blocked.speed_limit.unwrap(), 0.994 * 16.0);
+    behind.update_speed(DELTA_TIME, solver.state.course.base_speed());
+    assert_close!(behind.speed, 0.994 * 16.0);
+}

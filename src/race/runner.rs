@@ -578,6 +578,11 @@ impl Runner {
         // Cap speed along with target speed to avoid overshooting due to acceleration.
         // ? Is overshooting allowed? Cap it for now to avoid spikes.
         self.speed = self.speed.min(MAX_TARGET_SPEED);
+        // Front blocking caps speed, even below the minimum speed.
+        // ? Unknown whether the minimum speed takes precedence.
+        if let Some(speed_limit) = self.blocked.speed_limit {
+            self.speed = self.speed.min(speed_limit);
+        }
 
         // The all-out spurt keeps increasing target speed.
         // It ignores the usual acceleration formula and acceleration skills.

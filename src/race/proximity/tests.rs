@@ -30,8 +30,20 @@ fn test_is_near() {
 #[test]
 fn test_check_front_blocked_lane_side() {
     let lane = CourseWidths::from_horse_lanes;
-    assert!(check_front_blocked(0.0, lane(0.7)));
-    assert!(check_front_blocked(0.0, -lane(0.7)));
-    assert!(!check_front_blocked(0.0, lane(0.8)));
-    assert!(!check_front_blocked(0.0, -lane(0.8)));
+    assert!(check_front_blocked(0.01, lane(0.7)));
+    assert!(check_front_blocked(0.01, -lane(0.7)));
+    assert!(!check_front_blocked(0.01, lane(0.8)));
+    assert!(!check_front_blocked(0.01, -lane(0.8)));
+}
+
+#[test]
+fn test_check_front_blocked_distance() {
+    let lane = CourseWidths::from_horse_lanes;
+    // Lane threshold shrinks from 0.75 lanes (touching) to 0.3 lanes (2m).
+    assert!(check_front_blocked(1.0, lane(0.52)));
+    assert!(!check_front_blocked(1.0, lane(0.53)));
+    assert!(check_front_blocked(1.99, lane(0.3)));
+    // Only strictly between 0m and 2m.
+    assert!(!check_front_blocked(0.0, CourseWidths(0.0)));
+    assert!(!check_front_blocked(2.0, CourseWidths(0.0)));
 }

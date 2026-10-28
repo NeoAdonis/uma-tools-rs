@@ -10,9 +10,10 @@ use crate::units::CourseWidths;
 /// Check if a runner is blocked by another runner from the front based on
 /// distance and lane difference.
 ///
-/// When front-blocked, the runner's speed is capped.
+/// When front-blocked, the runner's speed is capped. Runners at the same
+/// position (e.g. at the start) don't block each other.
 pub(crate) fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
-    if !(0.0..2.0).contains(&distance) {
+    if !(distance > 0.0 && distance < 2.0) {
         return false;
     }
     // Lane difference threshold decreases linearly with distance between runners.

@@ -89,13 +89,13 @@ impl Runner {
     }
 
     /// Mark this runner as blocked from the front by `ahead`, limiting her speed
-    /// based on the distance to `ahead` and her speed.
+    /// to 98.8% of `ahead`'s speed when touching, up to 100% at 2m.
     ///
     /// Runners ahead must be checked from the furthest to the closest, so that
     /// the closest one prevails.
     pub(crate) fn update_front_blocked_by(&mut self, ahead: &Self) {
         let distance = (ahead.position - self.position).abs();
-        self.blocked.speed_limit = Some((0.988 + 0.012 * distance) * ahead.speed);
+        self.blocked.speed_limit = Some((0.988 + 0.012 * distance / 2.0) * ahead.speed);
         self.blocked.front_blocker = Some(ahead.gate_roll);
     }
 
