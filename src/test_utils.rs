@@ -165,6 +165,8 @@ pub(crate) fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
         alternatives,
         popularity: None,
         wit_check: false,
+        group: 0,
+        group_rate: 1,
     }
 }
 

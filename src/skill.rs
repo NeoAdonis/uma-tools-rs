@@ -665,6 +665,14 @@ pub struct Skill {
     /// Whether this skill requires a wit check to activate.
     #[serde_as(as = "BoolFromInt")]
     pub wit_check: bool,
+    /// Group of skills that are versions of the same skill (e.g. Right-Handed
+    /// ×, ○, ◎ and its gold version). A runner can only have one skill of each
+    /// group.
+    pub group: i32,
+    /// Tier of this skill within its group: higher tiers are upgrades of lower
+    /// ones (e.g. ○ is 1, ◎ is 2 and the gold version is 3). Negative for
+    /// negative skills (×).
+    pub group_rate: i8,
 }
 
 impl Skill {
@@ -1103,7 +1111,10 @@ mod tests {
     fn test_skill_ids_must_be_numeric() {
         let path = std::env::temp_dir().join(format!("skills-{}.json", std::process::id()));
         let load = |id: &str| {
-            let json = format!(r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0}}}}"#);
+            let json = format!(
+                r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0,
+                    "group": 1, "groupRate": 1}}}}"#
+            );
             std::fs::write(&path, json).unwrap();
             let result = Skill::load_all_from_json_file(&path);
             std::fs::remove_file(&path).unwrap();

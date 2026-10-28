@@ -282,8 +282,10 @@ impl UmaData {
     ///
     /// # Errors
     ///
-    /// Returns an [`UnknownSkill`] error with the first ID that isn't in
-    /// `all_skills`.
+    /// Returns [`ResolveSkillsError::UnknownSkill`] with the first ID that isn't
+    /// in `all_skills`, or [`ResolveSkillsError::SameGroup`] with the first two
+    /// skills of the same group (see [`Skill::group`]), as a runner can only
+    /// have one of them.
     ///
     /// # Examples
     ///
@@ -291,7 +293,7 @@ impl UmaData {
     /// game update that the data doesn't include yet:
     ///
     /// ```
-    /// use uma_tools::{Skill, UmaData, UnknownSkill};
+    /// use uma_tools::{ResolveSkillsError, Skill, UmaData};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// let uma = UmaData::from_json(
@@ -304,33 +306,55 @@ impl UmaData {
     /// )?;
     /// let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
     /// let error = uma.resolve_skills(&all_skills).err();
-    /// assert_eq!(error, Some(UnknownSkill(999999)));
+    /// assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(999999)));
     /// # Ok(())
     /// # }
     /// ```
     pub fn resolve_skills(
         &self,
         all_skills: &HashMap<i32, Arc<Skill>>,
-    ) -> Result<Vec<Arc<Skill>>, UnknownSkill> {
-        self.skills
+    ) -> Result<Vec<Arc<Skill>>, ResolveSkillsError> {
+        let skills = self
+            .skills
             .iter()
-            .map(|&id| all_skills.get(&id).cloned().ok_or(UnknownSkill(id)))
-            .collect()
+            .map(|&id| {
+                all_skills
+                    .get(&id)
+                    .cloned()
+                    .ok_or(ResolveSkillsError::UnknownSkill(id))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for (i, skill) in skills.iter().enumerate() {
+            if let Some(other) = skills[..i].iter().find(|other| other.group == skill.group) {
+                return Err(ResolveSkillsError::SameGroup(other.id, skill.id));
+            }
+        }
+        Ok(skills)
     }
 }
 
-/// Error resolving the skills of an Uma, holding the ID of a skill that isn't
-/// in the skill data.
+/// Error resolving the skills of an Uma.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct UnknownSkill(pub i32);
+pub enum ResolveSkillsError {
+    /// A skill ID isn't in the skill data.
+    UnknownSkill(i32),
+    /// Two skills (by ID) are versions of the same skill, e.g. a gold skill and
+    /// its white version, or the same skill twice.
+    SameGroup(i32, i32),
+}
 
-impl fmt::Display for UnknownSkill {
+impl fmt::Display for ResolveSkillsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "unknown skill ID {}", self.0)
+        match self {
+            ResolveSkillsError::UnknownSkill(id) => write!(f, "unknown skill ID {id}"),
+            ResolveSkillsError::SameGroup(first, second) => {
+                write!(f, "skills {first} and {second} are from the same group")
+            }
+        }
     }
 }
 
-impl std::error::Error for UnknownSkill {}
+impl std::error::Error for ResolveSkillsError {}
 
 /// Calculate base stat and apply mood multiplier.
 ///
@@ -581,6 +605,7 @@ mod tests {
                     id,
                     Arc::new(Skill {
                         id,
+                        group: id,
                         ..synthetic_skill(vec![])
                     }),
                 )
@@ -598,7 +623,33 @@ mod tests {
     fn test_resolve_skills_fails_on_unknown_id() {
         let all_skills = HashMap::from([(1, Arc::new(synthetic_skill(vec![])))]);
         let result = uma_with_skills(vec![1, 42, 43]).resolve_skills(&all_skills);
-        assert_eq!(result, Err(UnknownSkill(42)));
-        assert_eq!(UnknownSkill(42).to_string(), "unknown skill ID 42");
+        let error = ResolveSkillsError::UnknownSkill(42);
+        assert_eq!(result, Err(error));
+        assert_eq!(error.to_string(), "unknown skill ID 42");
+    }
+
+    #[test]
+    fn test_resolve_skills_fails_on_same_group() {
+        let all_skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
+        let resolve = |skills| uma_with_skills(skills).resolve_skills(&all_skills);
+        // Right-Handed ×, ○ and its gold version, with Corner Adept ○.
+        let (bad, white, gold, other) = (200013, 200012, 200014, 200332);
+        assert!(resolve(vec![white, other]).is_ok());
+        assert!(resolve(vec![gold, other]).is_ok());
+        let error = ResolveSkillsError::SameGroup(white, gold);
+        assert_eq!(resolve(vec![white, other, gold]), Err(error));
+        assert_eq!(
+            error.to_string(),
+            "skills 200012 and 200014 are from the same group"
+        );
+        assert_eq!(
+            resolve(vec![bad, white]),
+            Err(ResolveSkillsError::SameGroup(bad, white))
+        );
+        // The same skill twice.
+        assert_eq!(
+            resolve(vec![other, other]),
+            Err(ResolveSkillsError::SameGroup(other, other))
+        );
     }
 }

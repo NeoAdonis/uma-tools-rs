@@ -83,7 +83,9 @@ while ( my $row = $select->fetchrow_hashref ) {
         rarity       => $row->{rarity},
         witCheck     => $row->{activate_lot},
         alternatives => \@triggers,
-        popularity   => \@popularity
+        popularity   => \@popularity,
+        group        => $row->{group_id},
+        groupRate    => $row->{group_rate}
     };
 }
 

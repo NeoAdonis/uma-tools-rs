@@ -84,7 +84,10 @@ fn test_skill_popularity_reads_data() {
 #[test]
 fn test_skill_popularity_deserialization() {
     let parse = |popularity: &str| {
-        let json = format!(r#"{{"rarity": 1, "alternatives": [], {popularity} "witCheck": 1}}"#);
+        let json = format!(
+            r#"{{"rarity": 1, "alternatives": [], {popularity} "witCheck": 1,
+            "group": 1, "groupRate": 1}}"#
+        );
         serde_json::from_str::<Skill>(&json)
             .expect("Failed to parse skill data")
             .popularity
