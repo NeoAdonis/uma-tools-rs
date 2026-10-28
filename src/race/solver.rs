@@ -10,8 +10,7 @@
 //! effects that target other runners, and mechanics such as spot struggle,
 //! dueling, secure lead and compete before spurt.
 
-use std::collections::{BTreeMap, HashMap};
-use std::marker::PhantomData;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
@@ -94,15 +93,29 @@ pub struct RaceState {
 ///    calculated and out-of-gate skills are applied. The simulation can begin.
 #[derive(Debug)]
 pub struct RaceSolver<T> {
-    pub runners: Vec<Runner>,
-    // Ordered by gate, the order in which runners are readied.
-    builders: BTreeMap<u8, UnreadyRunner>,
+    /// Runners of the current phase (see [`Self::runners`]).
+    pub(crate) runners: Vec<T>,
     pub state: RaceState,
     /// Time (s) each pair of runners has been close in a row, keyed by their gates
     /// (lowest first). Only pairs that may still start a duel are tracked.
     duel_close_times: HashMap<(u8, u8), f64>,
-    /// Marker to indicate whether the solver is in the "unready" or "ready" phase.
-    _marker: PhantomData<T>,
+}
+
+/// Methods available in both phases.
+impl<T> RaceSolver<T> {
+    /// Runners of the race.
+    ///
+    /// Before they're ready, they're in the order they were added. Once ready,
+    /// they're ordered by gate, then by position (leader first) after every
+    /// frame of the race.
+    pub fn runners(&self) -> &[T] {
+        &self.runners
+    }
+
+    /// Take the runners out of the solver, in the order of [`Self::runners`].
+    pub fn into_runners(self) -> Vec<T> {
+        self.runners
+    }
 }
 
 /// Methods available BEFORE runners are ready (before stats have been
@@ -141,11 +154,9 @@ impl RaceSolver<UnreadyRunner> {
         };
 
         RaceSolver {
-            runners: vec![],
-            builders: BTreeMap::new(),
+            runners: Vec::new(),
             state,
             duel_close_times: HashMap::new(),
-            _marker: PhantomData,
         }
     }
 
@@ -157,7 +168,7 @@ impl RaceSolver<UnreadyRunner> {
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
     pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>) {
-        if self.builders.len() >= self.state.params.gates as usize {
+        if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
@@ -179,7 +190,7 @@ impl RaceSolver<UnreadyRunner> {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
         // Check the whole team up front so that it is never added partially.
-        if self.builders.len() + members.len() > self.state.params.gates as usize {
+        if self.runners.len() + members.len() > self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
@@ -211,13 +222,13 @@ impl RaceSolver<UnreadyRunner> {
         let rng_seed = self
             .state
             .seed
-            .derive(Stream::Runner(self.builders.len() as u8));
+            .derive(Stream::Runner(self.runners.len() as u8));
 
         // Roll gate.
         let mut gate_rng = rng_seed.rng(Stream::Gate);
         let gate_roll = loop {
             let roll = gate_rng.random_range(1..=self.state.params.gates);
-            if !self.builders.contains_key(&roll) {
+            if !self.runners.iter().any(|runner| runner.gate_roll == roll) {
                 break roll;
             }
         };
@@ -233,8 +244,7 @@ impl RaceSolver<UnreadyRunner> {
             .entry(builder.base.style.base_style())
             .or_insert(0) += 1;
 
-        // Add to builders list.
-        self.builders.insert(gate_roll, builder);
+        self.runners.push(builder);
     }
 
     /// Get all runners ready by calculating their stats and activating out-of-gate
@@ -242,8 +252,9 @@ impl RaceSolver<UnreadyRunner> {
     ///
     /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
     pub fn ready_runners(self) -> RaceSolver<Runner> {
-        // Collect all UnreadyRunners and move state out.
-        let mut builders: Vec<UnreadyRunner> = self.builders.into_values().collect();
+        // Ready runners by gate, which settles ties (e.g. between popularity marks).
+        let mut builders = self.runners;
+        builders.sort_by_key(|builder| builder.gate_roll);
         let mut state = self.state;
 
         // Calculate popularity for all runners.
@@ -269,19 +280,14 @@ impl RaceSolver<UnreadyRunner> {
             }
         }
 
-        // Build final runners.
-        let mut runners: Vec<Runner> = Vec::new();
-        for builder in builders {
-            let runner = Runner::new(builder, &state);
-            runners.push(runner);
-        }
-
+        let runners = builders
+            .into_iter()
+            .map(|builder| Runner::new(builder, &state))
+            .collect();
         RaceSolver {
             runners,
-            builders: BTreeMap::new(),
             state,
             duel_close_times: HashMap::new(),
-            _marker: PhantomData,
         }
     }
 }

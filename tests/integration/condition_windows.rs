@@ -15,7 +15,7 @@ fn activation_positions(course_id: u32, condition: &str) -> Vec<Vec<f64>> {
             let skills = vec![negligible_skill(condition)];
             let mut solver = ready_solver(course_id, uma, skills, seeded_config(seed));
             solver.run();
-            solver.runners[0]
+            solver.runners()[0]
                 .activated_skills
                 .iter()
                 .map(|record| record.distance)

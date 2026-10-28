@@ -27,7 +27,7 @@ fn run_race(condition: &str, rng_seed: u64) -> Runner {
     let skills = vec![negligible_skill(condition)];
     let mut solver = ready_solver(COURSE_ID, uma, skills, seeded_config(rng_seed));
     solver.run();
-    solver.runners.remove(0)
+    solver.into_runners().swap_remove(0)
 }
 
 /// Assert that the skill activates exactly once within `[min, max]` meters.

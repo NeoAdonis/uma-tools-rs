@@ -32,7 +32,7 @@ fn run(condition: &str, base_cooldown: f64) -> Runner {
     let skills = vec![skill(condition, base_cooldown)];
     let mut solver = ready_solver(COURSE_ID, uma, skills, seeded_config(0));
     solver.run();
-    solver.runners.swap_remove(0)
+    solver.into_runners().swap_remove(0)
 }
 
 #[test]

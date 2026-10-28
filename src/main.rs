@@ -86,7 +86,7 @@ fn main() {
     let mut solver = solver.ready_runners();
 
     {
-        let runner = &solver.runners[0];
+        let runner = &solver.runners()[0];
 
         println!("\nRace initialized successfully!");
         println!("Initial HP: {:.2}", runner.hp.maximum());
@@ -107,7 +107,7 @@ fn main() {
     solver.run();
 
     {
-        let runner = &solver.runners[0];
+        let runner = &solver.runners()[0];
 
         println!("\nRace finished!");
         println!(

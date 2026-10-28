@@ -122,7 +122,7 @@ fn test_same_seed_gives_same_race() {
         solver.run();
 
         let mut runners: Vec<_> = solver
-            .runners
+            .runners()
             .iter()
             .map(|runner| (runner.gate_roll, runner.position))
             .collect();
@@ -143,9 +143,10 @@ fn test_solvers_are_send() {
     assert_send::<RaceSolver<Runner>>();
 }
 
-/// Runners can be shared between threads, e.g. to analyze results in parallel.
+/// Ready solvers can be shared between threads, e.g. to analyze results in
+/// parallel.
 #[test]
-fn test_runners_are_sync() {
+fn test_ready_solvers_are_sync() {
     fn assert_sync<T: Sync>() {}
-    assert_sync::<Runner>();
+    assert_sync::<RaceSolver<Runner>>();
 }
