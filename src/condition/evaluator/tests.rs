@@ -634,7 +634,7 @@ fn test_distance_location_values() {
         SpatialVar::RemainDistance,
     ]
     .map(|var| location_value(&var, &course, runner));
-    // 1500m are 7.46 furlongs.
+    // 1500m are 7.5 furlongs.
     assert_eq!(actual, [75, 7, 500]);
 }
 

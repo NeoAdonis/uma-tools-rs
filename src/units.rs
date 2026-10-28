@@ -139,9 +139,9 @@ pub fn meters_to_bashin(meters: f64) -> f64 {
     meters / BASHIN_TO_METERS
 }
 
-/// Furlong to meters conversion unit. 1 furlong = 201.168 meters.
-// ? The standard definition of furlong is presumably used.
-pub const FURLONG_TO_METERS: f64 = 201.168;
+/// Furlong to meters conversion unit. 1 furlong = 200 meters, as the game
+/// rounds it, rather than the standard 201.168 meters.
+pub const FURLONG_TO_METERS: f64 = 200.0;
 
 /// Convert furlongs to meters.
 ///
@@ -163,8 +163,8 @@ pub fn furlongs_to_meters(furlongs: f64) -> f64 {
 /// let furlong = meters_to_furlongs(1500.0).floor();
 /// assert_eq!(furlong, 7.0);
 ///
-/// // `furlong>=8` starts to hold about 1609 meters in.
-/// assert_eq!(furlongs_to_meters(8.0).round(), 1609.0);
+/// // `furlong>=8` starts to hold 1600 meters in.
+/// assert_eq!(furlongs_to_meters(8.0), 1600.0);
 /// ```
 pub fn meters_to_furlongs(meters: f64) -> f64 {
     meters / FURLONG_TO_METERS
@@ -192,8 +192,8 @@ mod tests {
 
     #[test]
     fn test_furlong_conversion() {
-        assert_close!(furlongs_to_meters(1.0), 201.168, tolerance = 0.001);
-        assert_close!(meters_to_furlongs(201.168), 1.0, tolerance = 0.001);
+        assert_eq!(furlongs_to_meters(1.0), 200.0);
+        assert_eq!(meters_to_furlongs(200.0), 1.0);
     }
 
     #[test]
