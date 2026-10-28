@@ -15,7 +15,6 @@
 //!
 //! Submodules are private; their public items are re-exported from here.
 
-use std::cell::RefCell;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -360,7 +359,7 @@ pub struct Runner {
     /// upon entering the last spurt. `None` if the runner is not eligible.
     pub charge_up: Option<ChargeUp>,
     /// Random number streams of the runner (see [`crate::race::rng`]).
-    pub(crate) rng: RefCell<RunnerRng>,
+    pub(crate) rng: RunnerRng,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
     /// Last move, which slows down the next one if it covered more world
@@ -579,7 +578,7 @@ impl Runner {
             && self.has_reached_last_spurt_speed()
         {
             self.stamina_limit_break = self.stamina_limit_break_base
-                * stamina_limit_break_random_factor(&mut self.rng.get_mut().last_spurt);
+                * stamina_limit_break_random_factor(&mut self.rng.last_spurt);
         }
 
         // All-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
@@ -687,7 +686,7 @@ impl Runner {
         if self.section != prev_section {
             // Update section speed modifier.
             self.section_speed_modifier = roll_section_speed_modifier(
-                &mut self.rng.get_mut().keyed(Stream::SectionSpeed(self.section)),
+                &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
                 self.adjusted.wit,
                 state.course.base_speed(),
             );
@@ -842,7 +841,7 @@ impl Runner {
     pub(crate) fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
-            && rush_state.should_end(state.elapsed_time, &mut self.rng.get_mut().rush)
+            && rush_state.should_end(state.elapsed_time, &mut self.rng.rush)
         {
             self.end_rush(state);
         }
@@ -893,13 +892,7 @@ impl Runner {
         state: &RaceState,
     ) {
         let elapsed_time = state.elapsed_time;
-        if !lead_insufficient
-            || !self
-                .rng
-                .get_mut()
-                .secure_lead
-                .random_bool(secure_lead::CHANCE)
-        {
+        if !lead_insufficient || !self.rng.secure_lead.random_bool(secure_lead::CHANCE) {
             self.secure_lead = TimedBoost::Idle {
                 next_check: elapsed_time + secure_lead::CHECK_INTERVAL,
             };
@@ -968,7 +961,6 @@ impl Runner {
             && self.hp.current() < self.hp_required_to_finish(state) * self.stamina_keep.ratio
             && self
                 .rng
-                .get_mut()
                 .stamina_keep
                 .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wit))
         {
@@ -1047,7 +1039,7 @@ impl Runner {
 
         if transition.entered.is_some() {
             self.downhill_check_timer = 0.0;
-            let rng = self.rng.get_mut();
+            let rng = &mut self.rng;
             rng.slope = rng.keyed(Stream::Slope(slope_idx));
         } else {
             self.downhill_check_timer += delta_time;
@@ -1059,7 +1051,7 @@ impl Runner {
         }
 
         let in_downhill_mode = self.is_in_downhill_mode();
-        let rng = &mut self.rng.get_mut().slope;
+        let rng = &mut self.rng.slope;
         if in_downhill_mode {
             if rng.random_bool(0.2) {
                 self.slope_speed_modifier = None;

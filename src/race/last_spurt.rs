@@ -125,7 +125,7 @@ impl Runner {
     /// race. A candidate is picked based on a probability influenced by the
     /// runner's wit stat. A higher wit increases the chance of picking a
     /// higher speed.
-    pub(crate) fn calculate_last_spurt(&self, state: &RaceState) -> LastSpurt {
+    pub(crate) fn calculate_last_spurt(&mut self, state: &RaceState) -> LastSpurt {
         let course = &state.course;
         let track_condition = state.params.track_condition;
         let max_last_spurt_speed = last_spurt_speed_max(self, state);
@@ -234,7 +234,7 @@ impl Runner {
         }
 
         let acceptance_chance = (0.15 + 0.0005 * self.adjusted.wit as f64).min(1.0);
-        let mut rng = self.rng.borrow_mut();
+        let rng = &mut self.rng;
 
         // Try each candidate from best to worst.
         candidates.sort_by(|a, b| a.time.total_cmp(&b.time));

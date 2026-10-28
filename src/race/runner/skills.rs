@@ -480,7 +480,7 @@ impl Runner {
                         effect: scaled,
                         duration: scaled_duration,
                         wit_bonus,
-                        target_roll: self.rng.get_mut().skills[skill_index].random(),
+                        target_roll: self.rng.skills[skill_index].random(),
                     });
                 }
             }
@@ -588,7 +588,12 @@ impl Runner {
 
     /// Value of an effect's modifier scaled with the runner's situation (see
     /// [`ValueScaling`]).
-    fn scaled_modifier(&self, effect: &SkillEffect, skill_index: usize, state: &RaceState) -> f64 {
+    fn scaled_modifier(
+        &mut self,
+        effect: &SkillEffect,
+        skill_index: usize,
+        state: &RaceState,
+    ) -> f64 {
         use ValueScaling::*;
         let modifier = effect.modifier;
         match effect.value_scaling {
@@ -601,7 +606,7 @@ impl Runner {
             }
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {
-                let roll = self.rng.borrow_mut().skills[skill_index].random();
+                let roll = self.rng.skills[skill_index].random();
                 modifier * skill_scaling::random_multiplier(roll)
             }
             Climax => modifier * skill_scaling::CLIMAX_MULTIPLIER,
@@ -773,7 +778,7 @@ impl Runner {
             if candidates.is_empty() {
                 break;
             }
-            let idx = self.rng.get_mut().skills[source].random_range(0..candidates.len());
+            let idx = self.rng.skills[source].random_range(0..candidates.len());
             let skill_index = candidates.swap_remove(idx);
             // ? Assume the first alternative is activated if none did, even when the
             // others are variants for other courses or running styles (e.g. "Piercing
@@ -928,7 +933,7 @@ impl Runner {
     /// have been false and therefore were removed when the runner was created.
     pub(super) fn schedule_all_out_spurt_triggers(&mut self, state: &RaceState) {
         let goal = state.course.length();
-        let rng = self.rng.get_mut();
+        let rng = &mut self.rng;
         let scheduler = &mut self.trigger_scheduler;
         for logic_idx in scheduler.all_out_spurt_triggers.drain(..) {
             let skill_index = scheduler.skill_logics[logic_idx].skill_index;

@@ -260,7 +260,7 @@ fn test_slowest_candidate_when_every_check_fails() {
             .take_while(|&step| max - 0.1 * step as f64 >= base)
             .count();
         let chance = 0.15 + 0.0005 * runner.adjusted.wit as f64;
-        let mut rng = runner.rng.borrow().last_spurt.clone();
+        let mut rng = runner.rng.last_spurt.clone();
         if (0..candidates).any(|_| rng.random_bool(chance)) {
             continue;
         }

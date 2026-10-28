@@ -571,7 +571,7 @@ impl UnreadyRunner {
                 charge_up::charge_power(self.base.power, self.raw.power, self.power_skill_bonus),
                 game_version,
             ),
-            rng: RefCell::new(rng),
+            rng,
             segments: SegmentState::default(),
             last_move: LastMove::default(),
             trigger_scheduler: self.trigger_scheduler,

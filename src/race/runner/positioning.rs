@@ -202,7 +202,7 @@ impl Runner {
                         return;
                     }
 
-                    let threshold = self.rng.get_mut().positioning.random_range(range);
+                    let threshold = self.rng.positioning.random_range(range);
                     self.positioning_strategy = PositioningStrategy::PaceUp(threshold);
                 } else if distance_behind < range.start && !self.skill_modifiers.has_speed_effects()
                 {
@@ -217,9 +217,9 @@ impl Runner {
                         let max = range.end;
                         let mid = (min + max) / 2.0;
                         let adjusted_range = min..mid;
-                        self.rng.get_mut().positioning.random_range(adjusted_range)
+                        self.rng.positioning.random_range(adjusted_range)
                     } else {
-                        self.rng.get_mut().positioning.random_range(range)
+                        self.rng.positioning.random_range(range)
                     };
                     self.positioning_strategy = PositioningStrategy::PaceDown(threshold);
                 }
@@ -254,9 +254,9 @@ impl Runner {
 
     /// Roll a wit check to change positioning strategy, with a chance of
     /// `coef * log10(wit * 0.1)`.
-    fn roll_positioning_wit_check(&self, coef: f64) -> bool {
+    fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
         let chance = coef * (self.adjusted.wit as f64 * 0.1).log10();
-        self.rng.borrow_mut().positioning.random_bool(chance)
+        self.rng.positioning.random_bool(chance)
     }
 
     /// Enter or exit [`PositioningStrategy::PaceUpEx`] (1.5 anniversary and later).

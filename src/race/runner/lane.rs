@@ -311,11 +311,7 @@ impl Runner {
                 .is_some_and(|idx| Some(idx) == last)
         };
         if entered_final {
-            let offset = self
-                .rng
-                .get_mut()
-                .keyed(Stream::FinalLane)
-                .random_range(0.0..0.1);
+            let offset = self.rng.keyed(Stream::FinalLane).random_range(0.0..0.1);
             let ratio = (self.lane.current / CourseWidths(0.1)).clamp(0.0, 1.0);
             self.extra_move_lane = Some(CourseWidths(ratio * 0.5 + offset));
         }

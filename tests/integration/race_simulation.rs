@@ -142,3 +142,10 @@ fn test_solvers_are_send() {
     assert_send::<RaceSolver<UnreadyRunner>>();
     assert_send::<RaceSolver<Runner>>();
 }
+
+/// Runners can be shared between threads, e.g. to analyze results in parallel.
+#[test]
+fn test_runners_are_sync() {
+    fn assert_sync<T: Sync>() {}
+    assert_sync::<Runner>();
+}
