@@ -66,7 +66,7 @@ pub(crate) struct Transitions {
 }
 
 /// Course segments a runner is currently in.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct SegmentState {
     corner: SegmentManager,
     straight: SegmentManager,

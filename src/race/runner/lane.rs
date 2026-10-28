@@ -52,7 +52,7 @@ pub(crate) struct LaneDecision {
 }
 
 /// Overtake mode state including persistence timer.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct OvertakeState {
     /// Ordered map of overtake targets by gate_roll.
     ///
@@ -63,7 +63,7 @@ pub(crate) struct OvertakeState {
 }
 
 /// Information about an overtake target ahead of this runner.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct OvertakeTarget {
     /// Whether this target has been checked in the current update cycle.
     is_checked: bool,

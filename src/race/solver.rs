@@ -49,7 +49,7 @@ const MARGIN_SPEED: f64 = 15.0;
 /// Maximum number of runners in a single team.
 pub const MAX_TEAM_SIZE: usize = 3;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RaceState {
     pub course: Course,
     pub params: RaceParameters,

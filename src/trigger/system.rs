@@ -66,7 +66,7 @@ use crate::trigger::skill_activation::SkillActivationLogic;
 ///
 /// This scheduler stores [`SkillActivationLogic`] which separates triggers
 /// from guards. When a trigger fires, we evaluate only the guard conditions.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct TriggerScheduler {
     pub(crate) skill_logics: Vec<SkillActivationLogic>,
 

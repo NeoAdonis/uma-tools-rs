@@ -71,7 +71,7 @@ pub(crate) const ORDER_RANGE_START_TIME: f64 = 5.0;
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InitialState {
     /// Runner mood level. It affects initial stat adjustments and is also used to
     /// evaluate some skill conditions.
@@ -94,7 +94,7 @@ pub struct InitialState {
 }
 
 /// State related to order (rank) in the race.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OrderState {
     /// Current order (rank), 1-based.
     pub order: u8,
@@ -163,7 +163,7 @@ pub(crate) fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32>
 }
 
 /// Distance differences from other runners.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
     pub from_first: f64,
@@ -180,7 +180,7 @@ pub struct PositionDiff {
 }
 
 /// Rush counters.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct RushCounter {
     /// Number of runners currently in rush state ahead.
     pub(crate) ahead: u8,
@@ -200,7 +200,7 @@ pub(crate) struct RushCounter {
 ///
 /// [`UnreadyRunner`]: crate::race::unready_runner::UnreadyRunner
 /// [`RaceSolver`]: crate::race::solver::RaceSolver
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Runner {
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.
@@ -428,7 +428,7 @@ impl Runner {
 
     /// Determine the lane type based on the current lane position.
     pub fn lane_type(&self) -> LaneType {
-        LaneType::from_lane(self.lane.current)
+        LaneType::from(self.lane.current)
     }
 
     /// Determine the type of start (see [`StartType::from_delay`]).

@@ -175,9 +175,9 @@ pub enum LaneType {
     Outside,
 }
 
-impl LaneType {
+impl From<CourseWidths> for LaneType {
     /// Lane type of a runner at `lane`, in course widths from the inner fence.
-    pub(crate) fn from_lane(lane: CourseWidths) -> Self {
+    fn from(lane: CourseWidths) -> Self {
         if lane <= CourseWidths(0.2) {
             LaneType::Inner
         } else if lane <= CourseWidths(0.4) {
@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lane_type_from_lane() {
+    fn test_lane_type_from_course_widths() {
         // Thresholds are in course widths, regardless of the course's total width.
         let cases = [
             (0.0, LaneType::Inner),
@@ -743,11 +743,7 @@ mod tests {
             (0.61, LaneType::Outside),
         ];
         for (lane, expected) in cases {
-            assert_eq!(
-                LaneType::from_lane(CourseWidths(lane)),
-                expected,
-                "lane {lane}"
-            );
+            assert_eq!(LaneType::from(CourseWidths(lane)), expected, "lane {lane}");
         }
     }
 }
