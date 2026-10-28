@@ -1185,7 +1185,13 @@ impl Runner {
     ) {
         self.position_diff.from_first = position_first - self.position;
         self.position_diff.from_next = position_next - self.position;
-        self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
+        // No skill checks the rate where the field can still be level, so
+        // the value of a level field only matters for a single runner.
+        self.position_diff.rate_from_first = if position_range > 0.0 {
+            self.position_diff.from_first / position_range * 100.0
+        } else {
+            0.0
+        };
     }
 
     /// Update position difference from the runner behind (`position_prev`, or

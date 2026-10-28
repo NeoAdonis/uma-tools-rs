@@ -3630,3 +3630,19 @@ fn test_lone_runner_has_no_lead() {
     solver.update_order_values();
     assert_eq!(solver.runners[0].position_diff.max_lead, 0.0);
 }
+
+#[test]
+fn test_level_field_has_zero_distance_rate() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for _ in 0..2 {
+        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+    for runner in &mut solver.runners {
+        runner.position = 0.0;
+    }
+    solver.update_order_values();
+    for runner in &solver.runners {
+        assert_eq!(runner.position_diff.rate_from_first, 0.0);
+    }
+}
