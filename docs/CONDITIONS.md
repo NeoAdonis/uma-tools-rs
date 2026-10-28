@@ -140,6 +140,8 @@ Your wit stat.
 
 Horse lengths between you and the closest uma behind you.
 
+*Note:* If there's nobody behind you, the distance is treated as infinite.
+
 *Example:* `bashin_diff_behind<=1`
 
 *Meaning:* There's another uma at most one horse length behind you.
@@ -147,6 +149,8 @@ Horse lengths between you and the closest uma behind you.
 ## bashin_diff_infront
 
 Horse lengths between you and the closest uma ahead of you.
+
+*Note:* If there's nobody ahead of you, the distance is treated as infinite.
 
 *Example:* `bashin_diff_infront<=1`
 

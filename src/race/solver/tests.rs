@@ -3599,3 +3599,34 @@ fn test_front_blocker_limits_speed() {
     behind.update_speed(DELTA_TIME, solver.state.course.base_speed());
     assert_close!(behind.speed, 0.994 * 16.0);
 }
+
+#[test]
+fn test_edge_gaps_are_infinite() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for _ in 0..3 {
+        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    }
+    let mut solver = solver.ready_runners();
+    for (runner, position) in solver.runners.iter_mut().zip([300.0, 200.0, 100.0]) {
+        runner.position = position;
+    }
+    solver.update_order_values();
+
+    let gaps = solver
+        .runners
+        .iter()
+        .map(|r| (r.position_diff.from_next, r.position_diff.from_prev))
+        .collect::<Vec<_>>();
+    let inf = f64::INFINITY;
+    assert_eq!(gaps, [(inf, 100.0), (100.0, 100.0), (100.0, inf)]);
+}
+
+#[test]
+fn test_lone_runner_has_no_lead() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(uma(Style::Front), Mood::Normal, vec![]);
+    let mut solver = solver.ready_runners();
+    solver.runners[0].position = 100.0;
+    solver.update_order_values();
+    assert_eq!(solver.runners[0].position_diff.max_lead, 0.0);
+}

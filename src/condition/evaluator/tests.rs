@@ -674,6 +674,22 @@ fn test_distance_values() {
 }
 
 #[test]
+fn test_bashin_diff_without_runner_is_max() {
+    let mut solver = create_test_race_solver(vec![]);
+    let diff = &mut solver.runners[0].position_diff;
+    diff.from_prev = f64::INFINITY;
+    diff.from_next = f64::INFINITY;
+
+    let runner = &solver.runners[0];
+    let actual = [
+        DistanceVar::BashinDiffBehind,
+        DistanceVar::BashinDiffInfront,
+    ]
+    .map(|var| distance_value(&var, runner));
+    assert_eq!(actual, [i32::MAX, i32::MAX]);
+}
+
+#[test]
 fn test_rank_values() {
     let mut solver = create_test_race_solver(vec![]);
     let order = &mut solver.runners[0].order;

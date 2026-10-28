@@ -218,15 +218,17 @@ pub(crate) fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32>
 pub struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
     pub from_first: f64,
-    /// Distance difference from the next runner ahead in meters.
+    /// Distance difference from the next runner ahead in meters, or infinity
+    /// if there's nobody ahead.
     pub from_next: f64,
-    /// Distance difference from the previous runner behind in meters.
+    /// Distance difference from the previous runner behind in meters, or
+    /// infinity if there's nobody behind.
     pub from_prev: f64,
     /// Distance difference rate from the first-place runner relative to the
     /// distance between first and last place, in percent.
     pub rate_from_first: f64,
     /// Largest lead over the second-place runner taken before the Late race, in
-    /// meters.
+    /// meters. A runner with nobody behind has no lead.
     pub max_lead: f64,
 }
 
@@ -1172,7 +1174,8 @@ impl Runner {
     /// Update position differences from other runners ahead.
     ///
     /// `position_first`: position of the first-place runner.
-    /// `position_next`: position of the next runner ahead.
+    /// `position_next`: position of the next runner ahead, or infinity if
+    /// there's nobody ahead.
     /// `position_range`: distance between first and last place.
     pub(crate) fn update_diff_from_ahead(
         &mut self,
@@ -1185,13 +1188,17 @@ impl Runner {
         self.position_diff.rate_from_first = self.position_diff.from_first / position_range * 100.0;
     }
 
-    /// Update position difference from the runner behind, and the largest lead
-    /// taken before the Late race.
+    /// Update position difference from the runner behind (`position_prev`, or
+    /// negative infinity if there's nobody behind), and the largest lead taken
+    /// before the Late race.
     ///
     /// The order must be updated first.
     pub(crate) fn update_diff_from_behind(&mut self, position_prev: f64) {
         self.position_diff.from_prev = self.position - position_prev;
-        if self.order.order == 1 && self.phase < Phase::Late {
+        if self.order.order == 1
+            && self.phase < Phase::Late
+            && self.position_diff.from_prev.is_finite()
+        {
             self.position_diff.max_lead = self
                 .position_diff
                 .max_lead

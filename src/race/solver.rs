@@ -760,7 +760,11 @@ impl RaceSolver<Runner> {
         let position_first = self.runners.first().unwrap().position;
         let position_last = self.runners.last().unwrap().position;
         let position_range = position_first - position_last;
-        let mut position_next = position_first;
+        // Nobody ahead of the leader or behind the last runner counts as an infinite
+        // gap, so that skills meant to break away from the pack (`bashin_diff_*<=1`)
+        // don't fire for them.
+        // ? Might require verification in game.
+        let mut position_next = f64::INFINITY;
         // Rushed runners counted so far, in total and by team.
         let mut rushed = 0;
         let mut rushed_by_team = vec![0; self.state.team_count as usize];
@@ -784,7 +788,7 @@ impl RaceSolver<Runner> {
         }
 
         // From last to first, update distance differences from runners behind.
-        let mut position_prev = position_last;
+        let mut position_prev = f64::NEG_INFINITY;
         rushed = 0;
         rushed_by_team.fill(0);
         for runner in self.runners.iter_mut().rev() {
