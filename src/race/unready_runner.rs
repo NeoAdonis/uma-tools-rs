@@ -12,8 +12,8 @@
 //!    runner's wit (skills without a wit check are always kept). Skills that
 //!    fail it can't activate, but still count towards the runner's skills.
 //! 2. **Scheduler**: the [`TriggerScheduler`] is built for the kept skills (see
-//!    [`build_trigger_scheduler`]). Logics refer to skills by their index in
-//!    this list. Out-of-gate alternatives are skipped.
+//!    [`TriggerScheduler::from_skills`]). Logics refer to skills by their
+//!    index in this list. Out-of-gate alternatives are skipped.
 //!
 //! ## Out-of-Gate Skills
 //!
@@ -85,7 +85,6 @@ use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::world_distance::LastMove;
-use crate::trigger::builder::*;
 use crate::trigger::system::*;
 use crate::*;
 
@@ -226,7 +225,8 @@ impl UnreadyRunner {
             )
         });
 
-        let trigger_scheduler = build_trigger_scheduler(&skills, course, &mut *rng.borrow_mut());
+        let trigger_scheduler =
+            TriggerScheduler::from_skills(&skills, course, &mut *rng.borrow_mut());
 
         // Calculate adjusted stats (before out-of-gate skills).
         let adjusted_uma = adjust_stats(&base_uma, course, params);

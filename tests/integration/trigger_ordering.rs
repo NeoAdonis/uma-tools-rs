@@ -12,14 +12,13 @@ use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
 use uma_tools::skill::{Skill, SkillType};
-use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
 use uma_tools::trigger::system::TriggerScheduler;
 
 /// Build a scheduler for a single skill.
 fn scheduler(skill: Arc<Skill>, course_id: u32) -> TriggerScheduler {
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    build_trigger_scheduler(&[skill], &load_course(course_id), &mut rng)
+    TriggerScheduler::from_skills(&[skill], &load_course(course_id), &mut rng)
 }
 
 /// Get the variable and `(min, max)` thresholds of a window trigger.

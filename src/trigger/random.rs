@@ -6,10 +6,10 @@
 //! Random variables don't pick a single point: they pick a random **10m
 //! segment** ([`SEGMENT_LENGTH`]) inside the area they describe (a phase, a
 //! corner, the last straight...), and the skill can activate anywhere in it, as
-//! long as its guards hold. [`roll_condition`] returns the segment starts for
-//! each OR branch (usually one; up to 4 for `all_corner_random`), or `None` if
-//! the roll failed (a `random_lot` miss, or no matching feature on the course,
-//! e.g. `corner_random==4` without a 4th corner).
+//! long as its guards hold. [`RandomRolls::roll`] returns the segment starts
+//! for each OR branch (usually one; up to 4 for `all_corner_random`), or `None`
+//! if the roll failed (a `random_lot` miss, or no matching feature on the
+//! course, e.g. `corner_random==4` without a 4th corner).
 //!
 //! ## Shared Rolls
 //!
@@ -65,54 +65,56 @@ pub struct RandomRolls<'a> {
     rolled: Vec<(&'a Comparison, Option<Vec<f64>>)>,
 }
 
-/// Roll the random variables of every OR branch of a condition.
-///
-/// Returns one entry per branch (in the order of
-/// [`Condition::branches`]), holding the points where the branch should
-/// be checked, or `None` if a roll failed and the branch can never be
-/// satisfied.
-///
-/// Each distinct comparison is rolled once per `rolls`: branches containing the
-/// same one (e.g. `phase_random==1` in
-/// `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`) share
-/// its points, or its failure.
-pub fn roll_condition<'a>(
-    condition: &'a Condition,
-    course: &Course,
-    rolls: &mut RandomRolls<'a>,
-    rng: &mut impl Rng,
-) -> Vec<Option<Vec<f64>>> {
-    condition
-        .branches
-        .iter()
-        .map(|comps| roll_branch(comps, course, rolls, rng))
-        .collect()
-}
-
-/// Roll the random variables of an AND chain, reusing the results in `rolls`
-/// for comparisons already rolled by another branch.
-///
-/// Returns the points where the branch should be checked, or `None` if a roll
-/// failed (e.g. a random lot, or no corners for `corner_random`).
-fn roll_branch<'a>(
-    comps: &'a [Comparison],
-    course: &Course,
-    rolls: &mut RandomRolls<'a>,
-    rng: &mut impl Rng,
-) -> Option<Vec<f64>> {
-    let mut points = Vec::new();
-    for comp in comps {
-        let result = match rolls.rolled.iter().find(|(prev, _)| *prev == comp) {
-            Some((_, result)) => result.clone(),
-            None => {
-                let result = process_random_comp(comp, course, rng);
-                rolls.rolled.push((comp, result.clone()));
-                result
-            }
-        };
-        points.extend(result?);
+impl<'a> RandomRolls<'a> {
+    /// Roll the random variables of every OR branch of a condition.
+    ///
+    /// Returns one entry per branch (in the order of
+    /// [`Condition::branches`]), holding the points where the branch should
+    /// be checked, or `None` if a roll failed and the branch can never be
+    /// satisfied.
+    ///
+    /// Each distinct comparison is rolled once per `self`: branches containing
+    /// the same one (e.g. `phase_random==1` in
+    /// `distance_type==3&phase_random==1 @ distance_type==4&phase_random==1`)
+    /// share its points, or its failure.
+    pub fn roll(
+        &mut self,
+        condition: &'a Condition,
+        course: &Course,
+        rng: &mut impl Rng,
+    ) -> Vec<Option<Vec<f64>>> {
+        condition
+            .branches
+            .iter()
+            .map(|comps| self.roll_branch(comps, course, rng))
+            .collect()
     }
-    Some(points)
+
+    /// Roll the random variables of an AND chain, reusing the results of
+    /// comparisons already rolled by another branch.
+    ///
+    /// Returns the points where the branch should be checked, or `None` if a
+    /// roll failed (e.g. a random lot, or no corners for `corner_random`).
+    fn roll_branch(
+        &mut self,
+        comps: &'a [Comparison],
+        course: &Course,
+        rng: &mut impl Rng,
+    ) -> Option<Vec<f64>> {
+        let mut points = Vec::new();
+        for comp in comps {
+            let result = match self.rolled.iter().find(|(prev, _)| *prev == comp) {
+                Some((_, result)) => result.clone(),
+                None => {
+                    let result = process_random_comp(comp, course, rng);
+                    self.rolled.push((comp, result.clone()));
+                    result
+                }
+            };
+            points.extend(result?);
+        }
+        Some(points)
+    }
 }
 
 /// Process a single comparison that might contain a random variable.

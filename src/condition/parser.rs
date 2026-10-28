@@ -145,22 +145,6 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// Parse a condition string, such as `phase>=2&order<=3@is_overtake==1`.
-///
-/// Whitespace is allowed around variables and values.
-///
-/// # Errors
-///
-/// Returns a [`ParseError`] if any comparison lacks an operator, uses an
-/// unknown variable or an invalid value, or can't be evaluated.
-pub fn parse_condition(input: &str) -> Result<Condition, ParseError> {
-    let branches = input
-        .split('@')
-        .map(|branch| branch.split('&').map(parse_comparison).collect())
-        .collect::<Result<_, _>>()?;
-    Ok(Condition { branches })
-}
-
 /// Parse a single comparison, such as `order<=3`.
 fn parse_comparison(input: &str) -> Result<Comparison, ParseError> {
     let expected_operator = || ParseError::ExpectedOperator(input.into());
@@ -227,8 +211,20 @@ impl Comparison {
 impl FromStr for Condition {
     type Err = ParseError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_condition(s)
+    /// Parse a condition string, such as `phase>=2&order<=3@is_overtake==1`.
+    ///
+    /// Whitespace is allowed around variables and values.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ParseError`] if any comparison lacks an operator, uses an
+    /// unknown variable or an invalid value, or can't be evaluated.
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let branches = input
+            .split('@')
+            .map(|branch| branch.split('&').map(parse_comparison).collect())
+            .collect::<Result<_, _>>()?;
+        Ok(Condition { branches })
     }
 }
 

@@ -6,6 +6,7 @@ use uma_tools::course::Phase;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::DELTA_TIME;
 use uma_tools::trigger::skill_activation::TriggerCondition;
+use uma_tools::trigger::system::TriggerScheduler;
 use uma_tools::uma::*;
 
 /// Length of the test course (10104) in meters.
@@ -88,7 +89,6 @@ fn test_remain_distance_range_activates_within_range() {
 #[test]
 fn test_distance_windows_are_positions_in_order() {
     use rand::SeedableRng;
-    use uma_tools::trigger::builder::build_trigger_scheduler;
     use uma_tools::units::furlongs_to_meters;
 
     let skills = [
@@ -97,7 +97,7 @@ fn test_distance_windows_are_positions_in_order() {
         negligible_skill("furlong>=3"),           // 3 furlongs
     ];
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&skills, &load_course(10104), &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&skills, &load_course(10104), &mut rng);
 
     // Windows are queued by their start
     let order: Vec<(usize, f64)> = scheduler
@@ -118,10 +118,9 @@ fn test_distance_windows_are_positions_in_order() {
 #[test]
 fn test_reversed_remain_distance_window_range() {
     use rand::SeedableRng;
-    use uma_tools::trigger::builder::build_trigger_scheduler;
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(
+    let scheduler = TriggerScheduler::from_skills(
         &[negligible_skill("remain_distance>=350")],
         &load_course(10104),
         &mut rng,
@@ -136,10 +135,9 @@ fn test_reversed_remain_distance_window_range() {
 #[test]
 fn test_remain_distance_pair_window_range() {
     use rand::SeedableRng;
-    use uma_tools::trigger::builder::build_trigger_scheduler;
 
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(
+    let scheduler = TriggerScheduler::from_skills(
         &[negligible_skill(
             "remain_distance<=401&remain_distance>=399",
         )],

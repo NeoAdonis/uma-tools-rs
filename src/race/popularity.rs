@@ -346,8 +346,9 @@ fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, Popul
     marks
 }
 
-/// Calculate popularity rankings for all runners.
-pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
+/// Calculate the popularity rank (1-indexed, with ties sharing a rank) and
+/// judge scores of every runner, in the same order as `runners`.
+pub fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeScores)> {
     let n = runners.len();
 
     // Calculate adjusted stats for each runner.
@@ -404,7 +405,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
     let center_marks = assign_marks_for_judge(center_scores);
     let right_marks = assign_marks_for_judge(right_scores);
 
-    // Calculate total popularity points and update runners.
+    // Calculate total popularity points.
     let mut popularity_data: Vec<(usize, f64, JudgeScores)> = Vec::with_capacity(n);
 
     for i in 0..n {
@@ -435,6 +436,7 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
 
     // Assign ranks (1-indexed, ties get same rank).
     let mut ranks = vec![0u8; n];
+    let mut scores = vec![JudgeScores::default(); n];
     let mut current_rank = 1u8;
     let mut prev_points = f64::MAX;
 
@@ -445,11 +447,11 @@ pub fn calculate_popularity(runners: &mut [UnreadyRunner]) -> Vec<u8> {
         }
 
         ranks[runner_idx] = current_rank;
-        runners[runner_idx].initial_state.judge_scores = judge_scores;
+        scores[runner_idx] = judge_scores;
         prev_points = points;
     }
 
-    ranks
+    ranks.into_iter().zip(scores).collect()
 }
 
 #[cfg(test)]

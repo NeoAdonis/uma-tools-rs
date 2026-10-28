@@ -143,7 +143,7 @@ fn test_candidate_speeds_are_steps_from_max() {
         set_hp_above_base(&mut solver);
         let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
         let base = late_base_target_speed(&solver);
-        let last_spurt = calculate_last_spurt(&mut solver.runners[0], &solver.state);
+        let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
 
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
         assert!(last_spurt.max_speed >= base && last_spurt.max_speed <= max);
@@ -166,7 +166,7 @@ fn test_high_wit_always_accepts_best_candidate() {
             let mut solver = solver(2000, GameVersion::LATEST, rng_seed);
             move_to_section(&mut solver, 16);
             set_hp_above_base(&mut solver);
-            let last_spurt = calculate_last_spurt(&mut solver.runners[0], &solver.state);
+            let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
             assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
             (last_spurt.max_speed, last_spurt.target_distance)
         })
@@ -266,7 +266,7 @@ fn test_slowest_candidate_when_every_check_fails() {
         }
 
         // The slowest candidate takes the longest, so it's the last one.
-        let last_spurt = calculate_last_spurt(&mut solver.runners[0], &solver.state);
+        let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
         let slowest = max - 0.1 * (candidates - 1) as f64;
         assert_close!(last_spurt.max_speed, slowest, "seed {rng_seed}");

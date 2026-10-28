@@ -14,8 +14,8 @@ use std::sync::Arc;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
-use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
+use uma_tools::trigger::system::TriggerScheduler;
 use uma_tools::uma::*;
 
 // ============================================================================
@@ -41,7 +41,7 @@ fn test_precondition_with_window_trigger() {
 
     let course = load_course(10104); // 2000m course
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 1 skill logic
     let logics = activation_logics(&scheduler);
@@ -93,7 +93,7 @@ fn test_precondition_with_or_condition() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 3 branches (OR condition)
     let logics = activation_logics(&scheduler);
@@ -139,7 +139,7 @@ fn test_multiple_alternatives_precondition_independence() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should have 3 skill logics (one per alternative)
     let logics = activation_logics(&scheduler);

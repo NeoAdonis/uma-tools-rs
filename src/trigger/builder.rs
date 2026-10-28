@@ -66,90 +66,86 @@ use std::sync::Arc;
 
 use crate::course::Course;
 use crate::skill::*;
-use crate::trigger::random::{RandomRolls, roll_condition};
+use crate::trigger::random::RandomRolls;
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
 use rand::Rng;
 
-/// Build a complete TriggerScheduler from a list of skills.
-///
-/// For each skill alternative:
-///
-/// 1. Pre-roll random triggers (once per skill, shared by its alternatives).
-/// 2. Compile the condition into one logic per OR branch.
-/// 3. Compile the precondition (if present) into logics that unlock the
-///    alternative.
-/// 4. Index triggers into scheduler queues.
-///
-/// Alternatives whose condition or precondition can never be satisfied on this
-/// course are skipped. So are out-of-gate alternatives: their condition is
-/// evaluated before the race, then they're activated by a race start logic
-/// (see [`TriggerScheduler::add_race_start_logic`]). Other alternatives of
-/// their skills (e.g. continuations) are compiled as usual.
-pub fn build_trigger_scheduler(
-    skills: &[Arc<Skill>],
-    course: &Course,
-    rng: &mut impl Rng,
-) -> TriggerScheduler {
-    let mut scheduler = TriggerScheduler::default();
+impl TriggerScheduler {
+    /// Build a complete scheduler from a list of skills.
+    ///
+    /// For each skill alternative:
+    ///
+    /// 1. Pre-roll random triggers (once per skill, shared by its alternatives).
+    /// 2. Compile the condition into one logic per OR branch.
+    /// 3. Compile the precondition (if present) into logics that unlock the
+    ///    alternative.
+    /// 4. Index triggers into scheduler queues.
+    ///
+    /// Alternatives whose condition or precondition can never be satisfied on this
+    /// course are skipped. So are out-of-gate alternatives: their condition is
+    /// evaluated before the race, then they're activated by a race start logic
+    /// (see [`Self::add_race_start_logic`]). Other alternatives of
+    /// their skills (e.g. continuations) are compiled as usual.
+    pub fn from_skills(skills: &[Arc<Skill>], course: &Course, rng: &mut impl Rng) -> Self {
+        let mut scheduler = Self::default();
 
-    for (skill_idx, skill) in skills.iter().enumerate() {
-        // Random variables are rolled per skill, so that its alternatives share them.
-        let mut rolls = RandomRolls::default();
-        for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
-            if alternative.is_out_of_gate() {
-                continue;
-            }
-
-            // One logic per OR branch, except the ones whose random roll failed.
-            let condition = &alternative.condition;
-            let rolled = roll_condition(condition, course, &mut rolls, rng);
-            let branches = compile_condition(condition, &rolled, course);
-            if branches.is_empty() {
-                // Condition can't be satisfied, skill never activates.
-                continue;
-            }
-
-            // Compile precondition (if any).
-            let is_continuation = alternative.is_continuation();
-            let precondition = if let Some(parsed) = &alternative.precondition {
-                let branches = compile_condition(parsed, &[], course);
-                if branches.is_empty() {
-                    // Precondition can't be satisfied, skill never activates.
+        for (skill_idx, skill) in skills.iter().enumerate() {
+            // Random variables are rolled per skill, so that its alternatives share them.
+            let mut rolls = RandomRolls::default();
+            for (alt_idx, alternative) in skill.alternatives.iter().enumerate() {
+                if alternative.is_out_of_gate() {
                     continue;
                 }
-                Some(add_precondition(
-                    branches,
-                    skill_idx,
-                    alt_idx,
-                    is_continuation,
-                    &mut scheduler,
-                ))
-            } else {
-                None
-            };
 
-            for branch in branches {
-                add_logic(
-                    SkillActivationLogic::new(
+                // One logic per OR branch, except the ones whose random roll failed.
+                let condition = &alternative.condition;
+                let rolled = rolls.roll(condition, course, rng);
+                let branches = compile_condition(condition, &rolled, course);
+                if branches.is_empty() {
+                    // Condition can't be satisfied, skill never activates.
+                    continue;
+                }
+
+                // Compile precondition (if any).
+                let is_continuation = alternative.is_continuation();
+                let precondition = if let Some(parsed) = &alternative.precondition {
+                    let branches = compile_condition(parsed, &[], course);
+                    if branches.is_empty() {
+                        // Precondition can't be satisfied, skill never activates.
+                        continue;
+                    }
+                    Some(add_precondition(
+                        branches,
                         skill_idx,
                         alt_idx,
-                        branch.trigger,
-                        branch.guards,
-                        precondition,
-                        LogicAction::Activate,
                         is_continuation,
-                    ),
-                    &mut scheduler,
-                );
+                        &mut scheduler,
+                    ))
+                } else {
+                    None
+                };
+
+                for branch in branches {
+                    add_logic(
+                        SkillActivationLogic::new(
+                            skill_idx,
+                            alt_idx,
+                            branch.trigger,
+                            branch.guards,
+                            precondition,
+                            LogicAction::Activate,
+                            is_continuation,
+                        ),
+                        &mut scheduler,
+                    );
+                }
             }
         }
+
+        scheduler
     }
 
-    scheduler
-}
-
-impl TriggerScheduler {
     /// Add the logic activating an out-of-gate skill alternative on the first
     /// frame the runner moves.
     ///

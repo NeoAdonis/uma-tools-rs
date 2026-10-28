@@ -3,7 +3,7 @@ use crate::condition::variables::*;
 
 /// Branches of a parsed condition, with each comparison as a string.
 fn branches(input: &str) -> Vec<Vec<String>> {
-    let condition = parse_condition(input).unwrap();
+    let condition = Condition::from_str(input).unwrap();
     condition
         .branches
         .iter()
@@ -13,7 +13,7 @@ fn branches(input: &str) -> Vec<Vec<String>> {
 
 #[test]
 fn test_simple_condition() {
-    let condition = parse_condition("hp_per==100").unwrap();
+    let condition = Condition::from_str("hp_per==100").unwrap();
     let [branch] = condition.branches.as_slice() else {
         panic!("expected a single branch: {condition:?}");
     };
@@ -59,7 +59,7 @@ fn test_branches() {
 #[test]
 fn test_all_comparison_operators() {
     for op in CompOp::ALL {
-        let condition = parse_condition(&format!("hp_per{op}5")).unwrap();
+        let condition = Condition::from_str(&format!("hp_per{op}5")).unwrap();
         assert_eq!(condition.branches[0][0].op, op);
     }
 }
@@ -68,7 +68,7 @@ fn test_all_comparison_operators() {
 fn test_numbers() {
     for (input, expected) in [("hp_per>-10", -10), ("hp_per>0", 0), ("hp_per>+7", 7)] {
         assert_eq!(
-            parse_condition(input).unwrap().branches[0][0].value,
+            Condition::from_str(input).unwrap().branches[0][0].value,
             expected
         );
     }
@@ -76,12 +76,12 @@ fn test_numbers() {
 
 #[test]
 fn test_whitespace_handling() {
-    let expected = parse_condition("hp_per==100&order<=3@phase!=2").unwrap();
+    let expected = Condition::from_str("hp_per==100&order<=3@phase!=2").unwrap();
     for input in [
         "hp_per == 100 & order <= 3 @ phase != 2",
         "  hp_per  ==  100  &order<= 3@  phase!=2  ",
     ] {
-        assert_eq!(parse_condition(input).unwrap(), expected, "{input:?}");
+        assert_eq!(Condition::from_str(input).unwrap(), expected, "{input:?}");
     }
 }
 
@@ -108,7 +108,7 @@ fn test_display() {
         ),
     ];
     for (input, expected) in cases {
-        let condition = parse_condition(input).unwrap();
+        let condition = Condition::from_str(input).unwrap();
         assert_eq!(condition.to_string(), expected, "{input}");
     }
 }
@@ -228,7 +228,11 @@ fn test_error_cases() {
         ("always>=1", UnsupportedComparison("always>=1".into())),
     ];
     for (input, expected) in cases {
-        assert_eq!(parse_condition(input).unwrap_err(), expected, "{input:?}");
+        assert_eq!(
+            Condition::from_str(input).unwrap_err(),
+            expected,
+            "{input:?}"
+        );
     }
 }
 
@@ -244,13 +248,20 @@ fn test_error_display() {
         ),
     ];
     for (input, expected) in cases {
-        assert_eq!(parse_condition(input).unwrap_err().to_string(), expected);
+        assert_eq!(
+            Condition::from_str(input).unwrap_err().to_string(),
+            expected
+        );
     }
 }
 
 #[test]
 fn test_known_variables() {
-    let var = |input: &str| parse_condition(input).unwrap().branches[0][0].var.clone();
+    let var = |input: &str| {
+        Condition::from_str(input).unwrap().branches[0][0]
+            .var
+            .clone()
+    };
     assert!(matches!(var("always==1"), VarType::Always));
     assert!(matches!(var("random_lot==30"), VarType::Random(_)));
 }
@@ -271,7 +282,7 @@ fn test_all_skill_conditions() {
             if input.is_empty() {
                 continue;
             }
-            let condition = parse_condition(input).unwrap_or_else(|e| panic!("{input}: {e}"));
+            let condition = Condition::from_str(input).unwrap_or_else(|e| panic!("{input}: {e}"));
             assert_eq!(condition.to_string().replace(' ', ""), input);
         }
     }

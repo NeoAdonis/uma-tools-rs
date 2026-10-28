@@ -2,6 +2,7 @@ use super::*;
 use crate::course::geometry::*;
 use crate::course::*;
 use crate::test_utils::synthetic_course;
+use std::str::FromStr;
 
 fn create_test_course() -> Course {
     create_test_course_with(
@@ -53,7 +54,7 @@ fn create_test_course_with(
 
 /// Roll a single-branch condition.
 fn roll(condition: &Condition, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
-    let mut rolls = roll_condition(condition, course, &mut RandomRolls::default(), rng);
+    let mut rolls = RandomRolls::default().roll(condition, course, rng);
     assert_eq!(rolls.len(), 1, "expected a single-branch condition");
     rolls.remove(0)
 }
@@ -62,7 +63,7 @@ fn roll(condition: &Condition, course: &Course, rng: &mut impl Rng) -> Option<Ve
 fn test_random_lot_success() {
     let course = create_test_course();
     // 100% chance.
-    let condition = parse_condition("random_lot==100").unwrap();
+    let condition = Condition::from_str("random_lot==100").unwrap();
 
     let mut rng = rand::rng();
     let result = roll(&condition, &course, &mut rng);
@@ -74,7 +75,7 @@ fn test_random_lot_success() {
 fn test_phase_random() {
     let course = create_test_course();
     // Mid phase.
-    let condition = parse_condition("phase_random==1").unwrap();
+    let condition = Condition::from_str("phase_random==1").unwrap();
 
     let mut rng = rand::rng();
     let result = roll(&condition, &course, &mut rng);
@@ -91,7 +92,7 @@ fn test_phase_random() {
 /// Roll a single-branch `condition` many times and return the first points
 /// rolled.
 fn rolled_points(condition: &str, course: &Course) -> Vec<f64> {
-    let condition = parse_condition(condition).unwrap();
+    let condition = Condition::from_str(condition).unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     (0..500)
         .map(|_| roll(&condition, course, &mut rng).unwrap()[0])
@@ -163,7 +164,7 @@ fn test_corner_random() {
     // First and second corners, and invalid corner numbers fail the roll.
     let mut rng = rand::rng();
     for value in [0, 1, 2, 5] {
-        let condition = parse_condition(&format!("corner_random=={value}")).unwrap();
+        let condition = Condition::from_str(&format!("corner_random=={value}")).unwrap();
         assert!(
             roll(&condition, &course, &mut rng).is_none(),
             "corner_random=={value}"
@@ -200,11 +201,11 @@ fn test_corner_random_last_lap() {
 fn test_corner_random_per_branch() {
     let course = create_test_course();
     let condition =
-        parse_condition("corner_random==1@corner_random==2@corner_random==3@corner_random==4")
+        Condition::from_str("corner_random==1@corner_random==2@corner_random==3@corner_random==4")
             .unwrap();
 
     let mut rng = rand::rng();
-    let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
+    let rolls = RandomRolls::default().roll(&condition, &course, &mut rng);
 
     // Corners 1 and 2 don't exist, so only the last two branches roll successfully,
     // each with its own point.
@@ -257,7 +258,7 @@ fn test_phase_corner_random() {
     //   Corner 2: 500m-650m (fully in Mid).
 
     // Mid phase.
-    let condition = parse_condition("phase_corner_random==1").unwrap();
+    let condition = Condition::from_str("phase_corner_random==1").unwrap();
     let mut rng = rand::rng();
 
     // Run multiple times to ensure it's in valid range.
@@ -292,7 +293,7 @@ fn test_phase_straight_random() {
     // Straight [0-100] fully overlaps with Early.
 
     // Early phase.
-    let condition = parse_condition("phase_straight_random==0").unwrap();
+    let condition = Condition::from_str("phase_straight_random==0").unwrap();
     let mut rng = rand::rng();
 
     for _ in 0..20 {
@@ -338,7 +339,7 @@ fn test_phase_first_half_straight_random() {
     ]);
 
     // Late phase.
-    let condition = parse_condition("phase_first_half_straight_random==2").unwrap();
+    let condition = Condition::from_str("phase_first_half_straight_random==2").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let (mut hit_first, mut hit_second) = (false, false);
 
@@ -364,7 +365,7 @@ fn test_phase_first_half_straight_random_no_straight() {
     // Only straight is [0-100], which doesn't overlap with Late first half
     // (1600-1800).
     let course = create_test_course();
-    let condition = parse_condition("phase_first_half_straight_random==2").unwrap();
+    let condition = Condition::from_str("phase_first_half_straight_random==2").unwrap();
     let mut rng = rand::rng();
 
     assert!(roll(&condition, &course, &mut rng).is_none());
@@ -381,7 +382,7 @@ fn test_phase_random_invalid_phase() {
         "phase_first_half_straight_random",
         "phase_latter_half_straight_random",
     ] {
-        let condition = parse_condition(&format!("{var}==4")).unwrap();
+        let condition = Condition::from_str(&format!("{var}==4")).unwrap();
         assert!(roll(&condition, &course, &mut rng).is_none(), "{var}");
     }
 }
@@ -433,7 +434,7 @@ fn test_phase_subdivision_random_all_phases() {
 
     for (var, ranges) in cases {
         for (phase, (start, end)) in ranges.into_iter().enumerate() {
-            let condition = parse_condition(&format!("{var}=={phase}")).unwrap();
+            let condition = Condition::from_str(&format!("{var}=={phase}")).unwrap();
             for _ in 0..50 {
                 let dist = roll(&condition, &course, &mut rng).unwrap()[0];
                 assert!(
@@ -444,7 +445,7 @@ fn test_phase_subdivision_random_all_phases() {
         }
 
         // Invalid phase fails the roll.
-        let condition = parse_condition(&format!("{var}==4")).unwrap();
+        let condition = Condition::from_str(&format!("{var}==4")).unwrap();
         assert!(roll(&condition, &course, &mut rng).is_none(), "{var}==4");
     }
 }
@@ -464,7 +465,7 @@ fn test_phase_corner_random_partial_overlap() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for (phase, (start, end)) in [(0, (300.0, 400.0)), (1, (400.0, 700.0))] {
-        let condition = parse_condition(&format!("phase_corner_random=={phase}")).unwrap();
+        let condition = Condition::from_str(&format!("phase_corner_random=={phase}")).unwrap();
         for _ in 0..50 {
             let dist = roll(&condition, &course, &mut rng).unwrap()[0];
             assert!(
@@ -475,7 +476,7 @@ fn test_phase_corner_random_partial_overlap() {
     }
 
     // No corner in Late phase fails the roll.
-    let condition = parse_condition("phase_corner_random==2").unwrap();
+    let condition = Condition::from_str("phase_corner_random==2").unwrap();
     assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
@@ -495,7 +496,7 @@ fn test_phase_straight_random_multiple_straights() {
             front_type: FrontType::Opposite,
         },
     ]);
-    let condition = parse_condition("phase_straight_random==1").unwrap();
+    let condition = Condition::from_str("phase_straight_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let (mut hit_first, mut hit_second) = (false, false);
 
@@ -512,7 +513,7 @@ fn test_phase_straight_random_multiple_straights() {
     assert!(hit_first && hit_second);
 
     // No straight in Last phase fails the roll.
-    let condition = parse_condition("phase_straight_random==3").unwrap();
+    let condition = Condition::from_str("phase_straight_random==3").unwrap();
     assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
@@ -533,7 +534,7 @@ fn test_phase_latter_half_straight_random() {
             front_type: FrontType::Opposite,
         },
     ]);
-    let condition = parse_condition("phase_latter_half_straight_random==1").unwrap();
+    let condition = Condition::from_str("phase_latter_half_straight_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let (mut hit_first, mut hit_second) = (false, false);
 
@@ -551,7 +552,7 @@ fn test_phase_latter_half_straight_random() {
 
     // Only straight in Early is [0-100], which isn't in its second half (200-400).
     let course = create_test_course();
-    let condition = parse_condition("phase_latter_half_straight_random==0").unwrap();
+    let condition = Condition::from_str("phase_latter_half_straight_random==0").unwrap();
     assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
@@ -563,7 +564,7 @@ fn test_up_slope_random() {
         Slope::new(1000.0, 200.0, -0.05),
         Slope::new(1500.0, 50.0, 0.02),
     ]);
-    let condition = parse_condition("up_slope_random==1").unwrap();
+    let condition = Condition::from_str("up_slope_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let (mut hit_first, mut hit_second) = (false, false);
 
@@ -596,7 +597,7 @@ fn test_up_slope_random_later_half() {
         Slope::new(1800.0, 100.0, 0.05),
         Slope::new(2000.0, 100.0, -0.05),
     ]);
-    let condition = parse_condition("up_slope_random_later_half==1").unwrap();
+    let condition = Condition::from_str("up_slope_random_later_half==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let (mut hit_crossing, mut hit_late) = (false, false);
 
@@ -650,7 +651,7 @@ fn test_phase_corner_random_stitched_segments() {
 fn test_all_corner_random() {
     // Corners [100-300] and [500-650].
     let course = create_test_course();
-    let condition = parse_condition("all_corner_random==1").unwrap();
+    let condition = Condition::from_str("all_corner_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let mut counts = [0; 5];
 
@@ -684,7 +685,7 @@ fn test_all_corner_random() {
 #[test]
 fn test_all_corner_random_short_corners() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-    let condition = parse_condition("all_corner_random==1").unwrap();
+    let condition = Condition::from_str("all_corner_random==1").unwrap();
 
     // A 10m corner only fits one segment.
     let course = create_test_course_with(
@@ -732,7 +733,7 @@ fn test_all_corner_random_short_corners() {
 #[test]
 fn test_all_corner_random_no_corners() {
     let course = create_test_course_with(vec![], vec![], vec![]);
-    let condition = parse_condition("all_corner_random==1").unwrap();
+    let condition = Condition::from_str("all_corner_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
 
@@ -740,14 +741,14 @@ fn test_all_corner_random_no_corners() {
 fn test_all_corner_random_shared_between_branches() {
     // Both branches share the same segments, never more than 4.
     let course = create_test_course();
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "distance_type==1&all_corner_random==1@distance_type==2&all_corner_random==1",
     )
     .unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for _ in 0..100 {
-        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
+        let rolls = RandomRolls::default().roll(&condition, &course, &mut rng);
         assert_eq!(rolls.len(), 2);
         let points = rolls[0].as_ref().unwrap();
         assert!((1..=4).contains(&points.len()));
@@ -759,12 +760,12 @@ fn test_all_corner_random_shared_between_branches() {
 fn test_phase_random_shared_between_branches() {
     let course = create_test_course();
     let condition =
-        parse_condition("distance_type==3&phase_random==1@distance_type==4&phase_random==1")
+        Condition::from_str("distance_type==3&phase_random==1@distance_type==4&phase_random==1")
             .unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for _ in 0..100 {
-        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
+        let rolls = RandomRolls::default().roll(&condition, &course, &mut rng);
         assert_eq!(rolls.len(), 2);
         assert_eq!(rolls[0].as_ref().unwrap().len(), 1);
         assert_eq!(rolls[0], rolls[1]);
@@ -777,13 +778,14 @@ fn test_random_lot_shared_between_branches() {
     // together, with the lot's chance (not 1 - 0.5^2 = 75%).
     let course = create_test_course();
     let condition =
-        parse_condition("random_lot==50&distance_type==1@random_lot==50&distance_type==2").unwrap();
+        Condition::from_str("random_lot==50&distance_type==1@random_lot==50&distance_type==2")
+            .unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     let tries = 2000;
     let mut hits = 0;
     for _ in 0..tries {
-        let rolls = roll_condition(&condition, &course, &mut RandomRolls::default(), &mut rng);
+        let rolls = RandomRolls::default().roll(&condition, &course, &mut rng);
         assert_eq!(rolls[0].is_some(), rolls[1].is_some());
         hits += rolls[0].is_some() as usize;
     }
@@ -794,11 +796,10 @@ fn test_random_lot_shared_between_branches() {
 #[test]
 fn test_different_random_comparisons_roll_separately() {
     let course = create_test_course();
-    let condition = parse_condition("phase_random==1@phase_random==2").unwrap();
-    let rolls = roll_condition(
+    let condition = Condition::from_str("phase_random==1@phase_random==2").unwrap();
+    let rolls = RandomRolls::default().roll(
         &condition,
         &course,
-        &mut RandomRolls::default(),
         &mut rand::rngs::StdRng::seed_from_u64(0),
     );
 
@@ -812,7 +813,7 @@ fn test_different_random_comparisons_roll_separately() {
 #[test]
 fn test_random_lot_has_no_points() {
     let course = create_test_course();
-    let condition = parse_condition("random_lot==100&phase_random==1").unwrap();
+    let condition = Condition::from_str("random_lot==100&phase_random==1").unwrap();
     let points = roll(&condition, &course, &mut rand::rng()).unwrap();
 
     // Only the phase point, nothing for the random lot.
@@ -823,13 +824,13 @@ fn test_random_lot_has_no_points() {
 #[test]
 fn test_shared_rolls_apply_across_conditions() {
     let course = create_test_course();
-    let first = parse_condition("phase_random==1&order<=3").unwrap();
-    let second = parse_condition("phase_random==1").unwrap();
+    let first = Condition::from_str("phase_random==1&order<=3").unwrap();
+    let second = Condition::from_str("phase_random==1").unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     for _ in 0..20 {
         let mut rolls = RandomRolls::default();
-        let first_points = roll_condition(&first, &course, &mut rolls, &mut rng);
-        let second_points = roll_condition(&second, &course, &mut rolls, &mut rng);
+        let first_points = rolls.roll(&first, &course, &mut rng);
+        let second_points = rolls.roll(&second, &course, &mut rng);
         assert_eq!(first_points, second_points);
     }
 }
@@ -843,7 +844,7 @@ fn test_is_finalcorner_random() {
 
     // No corners on course fails the roll.
     let course = create_test_course_with(vec![], vec![], course.straights.clone());
-    let condition = parse_condition("is_finalcorner_random==1").unwrap();
+    let condition = Condition::from_str("is_finalcorner_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
 
@@ -873,7 +874,7 @@ fn test_down_slope_random() {
 
     // Only uphills on course fails the roll.
     let course = create_test_course_with_slopes(vec![Slope::new(1000.0, 200.0, 0.05)]);
-    let condition = parse_condition("down_slope_random==1").unwrap();
+    let condition = Condition::from_str("down_slope_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
 
@@ -897,6 +898,6 @@ fn test_last_straight_random() {
 
     // No straights on course fails the roll.
     let course = create_test_course_with_straights(vec![]);
-    let condition = parse_condition("last_straight_random==1").unwrap();
+    let condition = Condition::from_str("last_straight_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }

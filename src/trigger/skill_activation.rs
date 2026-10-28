@@ -319,7 +319,7 @@ pub struct CompiledBranch {
 ///
 /// `rolls` holds the segment starts rolled for the random variables of each
 /// branch, or `None` if its roll failed (see
-/// [`roll_condition`](crate::trigger::random::roll_condition)). Branches
+/// [`RandomRolls::roll`](crate::trigger::random::RandomRolls::roll)). Branches
 /// without an entry (e.g. preconditions, which aren't rolled) have no random
 /// points.
 ///

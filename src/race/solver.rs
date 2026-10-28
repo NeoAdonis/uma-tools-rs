@@ -24,6 +24,7 @@ use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
 use crate::race::parameters::{MAX_GATES, RaceParameters};
+use crate::race::popularity::calculate_popularity;
 use crate::race::proximity;
 use crate::race::runner::{
     POSITIONING_END_SECTION, PositioningStrategy, Runner, SkillActivationFlags,
@@ -245,11 +246,12 @@ impl RaceSolver<UnreadyRunner> {
         let mut state = self.state;
 
         // Calculate popularity for all runners.
-        let popularity_ranks = crate::race::popularity::calculate_popularity(&mut builders);
+        let popularity = calculate_popularity(&builders);
 
-        // Assign popularity ranks to each runner.
-        for (i, builder) in builders.iter_mut().enumerate() {
-            builder.initial_state.popularity_rank = popularity_ranks[i];
+        // Assign popularity to each runner.
+        for (builder, (rank, judge_scores)) in builders.iter_mut().zip(popularity) {
+            builder.initial_state.popularity_rank = rank;
+            builder.initial_state.judge_scores = judge_scores;
             if builder.initial_state.popularity_rank == 1 {
                 state.style_most_popular = builder.base.style.base_style();
             }

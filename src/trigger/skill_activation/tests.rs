@@ -2,10 +2,11 @@
 
 use super::*;
 use crate::course::geometry::*;
-use crate::parser::{CompOp, parse_condition};
+use crate::parser::{CompOp, Condition};
 use crate::skill::*;
 use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
-use crate::trigger::builder::build_trigger_scheduler;
+use crate::trigger::system::TriggerScheduler;
+use std::str::FromStr;
 use std::sync::Arc;
 
 /// Create a simple test course for testing spatial triggers.
@@ -49,7 +50,7 @@ fn create_test_course() -> Course {
 /// Compile a condition on the test course, with a single random point at 1000m.
 /// for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
-    let condition = parse_condition(condition).unwrap();
+    let condition = Condition::from_str(condition).unwrap();
     let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
     compile_condition(&condition, &rolls, &create_test_course())
 }
@@ -294,7 +295,7 @@ fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) 
 fn build_test_scheduler(skills: &[Arc<Skill>]) -> crate::trigger::system::TriggerScheduler {
     use rand::SeedableRng;
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(0);
-    build_trigger_scheduler(skills, &create_test_course(), &mut rng)
+    TriggerScheduler::from_skills(skills, &create_test_course(), &mut rng)
 }
 
 #[test]
@@ -457,7 +458,7 @@ fn test_precondition_event_is_indexed_before_skill() {
 
 #[test]
 fn test_branches_use_their_own_rolls() {
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "distance_type==1&all_corner_random==1@distance_type==2&all_corner_random==1",
     )
     .unwrap();
@@ -489,14 +490,14 @@ fn test_branches_use_their_own_rolls() {
 #[should_panic(expected = "random variables in a condition without rolls")]
 fn test_random_variables_need_rolls() {
     // Preconditions aren't rolled.
-    let condition = parse_condition("random_lot==50").unwrap();
+    let condition = Condition::from_str("random_lot==50").unwrap();
     compile_condition(&condition, &[], &create_test_course());
 }
 
 #[test]
 fn test_segments_are_trimmed_to_the_branch() {
     // Corner 3 of the test course is [500-700].
-    let condition = parse_condition("all_corner_random==1&corner==3").unwrap();
+    let condition = Condition::from_str("all_corner_random==1&corner==3").unwrap();
     let course = create_test_course();
 
     // Segments outside the corner are dropped, and the ones crossing its edges
@@ -573,7 +574,7 @@ fn test_alternatives_share_random_rolls() {
     ]));
     for seed in 0..20 {
         let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(seed);
-        let scheduler = build_trigger_scheduler(
+        let scheduler = TriggerScheduler::from_skills(
             std::slice::from_ref(&skill),
             &create_test_course(),
             &mut rng,

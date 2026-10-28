@@ -6,10 +6,11 @@
 use crate::common::{load_course, skill};
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
-use uma_tools::condition::parser::parse_condition;
+use std::str::FromStr;
+use uma_tools::condition::parser::Condition;
 use uma_tools::skill::SkillType;
-use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
+use uma_tools::trigger::system::TriggerScheduler;
 
 // ============================================================================
 // MUTUAL EXCLUSION VERIFICATION
@@ -22,7 +23,7 @@ fn test_position_based_or_mutual_exclusion() {
     // Branch 2: order>=3&order_rate<=50&remain_distance<=200&bashin_diff_behind<=1
     // Tests: Mutually exclusive positioning (can't be both in front and behind)
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "order>=3&order_rate<=50&remain_distance<=200&bashin_diff_infront<=1@order>=3&order_rate<=50&remain_distance<=200&bashin_diff_behind<=1"
     ).unwrap();
     let course = load_course(10104);
@@ -47,7 +48,7 @@ fn test_order_based_or_mutual_exclusion() {
     // Branch 2: distance_rate>=50&order==2&is_overtake==1
     // Tests: Mutually exclusive order positions (can't be both 1st and 2nd)
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "distance_rate>=50&order==1&bashin_diff_behind<=1@distance_rate>=50&order==2&is_overtake==1"
     )
     .unwrap();
@@ -86,7 +87,7 @@ fn test_complex_three_branch_distance_ranges() {
     // Branch 3: course_distance>=2400&course_distance<=2500
     // Tests: Distance-based mutual exclusivity (disjoint ranges)
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "running_style==2&course_distance<2400&phase_firsthalf_random==2&order_rate<=50@running_style==2&course_distance>2500&phase_firsthalf_random==2&order_rate<=50@running_style==2&course_distance>=2400&course_distance<=2500&phase_firsthalf_random==2&order_rate<=50&base_stamina<1000"
     ).unwrap();
     let course = load_course(10104); // 2000m course
@@ -141,7 +142,7 @@ fn test_or_branch_skill_id_uniqueness() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 3 skill logics (one per OR branch)
     assert_eq!(
@@ -181,7 +182,7 @@ fn test_or_branches_independent_activation_tracking() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics
     assert_eq!(scheduler.skill_logics().len(), 2);
@@ -211,7 +212,7 @@ fn test_three_branch_or_mutual_exclusion() {
     // Tests: Three mutually exclusive states (simplest case)
 
     let condition =
-        parse_condition("ground_condition==2@ground_condition==3@ground_condition==4").unwrap();
+        Condition::from_str("ground_condition==2@ground_condition==3@ground_condition==4").unwrap();
     let course = load_course(10104);
     let branches = compile_condition(&condition, &[], &course);
 
@@ -254,7 +255,7 @@ fn test_four_branch_evaluation_priority() {
     // Branch 4: is_last_straight_onetime==1&change_order_up_middle>=3
     // Tests: Multiple branches with overlapping ranges (first match wins)
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "is_last_straight_onetime==1&change_order_up_end_after>=3@is_last_straight_onetime==1&change_order_up_end_after>=2&change_order_up_middle>=1@is_last_straight_onetime==1&change_order_up_end_after>=1&change_order_up_middle>=2@is_last_straight_onetime==1&change_order_up_middle>=3"
     ).unwrap();
     let course = load_course(10104);
@@ -293,7 +294,7 @@ fn test_similar_conditions_or_branches() {
     // Branch 2: is_last_straight==1&order_rate<=40&is_overtake==1
     // Tests: Branches differing only in subtle conditions
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "is_last_straight==1&order_rate<=40&overtake_target_time>=1@is_last_straight==1&order_rate<=40&is_overtake==1"
     ).unwrap();
     let course = load_course(10104);
@@ -332,7 +333,7 @@ fn test_or_branches_with_shared_base_conditions() {
     // Test: OR branches sharing common base conditions
     // Tests: Common conditions don't break mutual exclusion
 
-    let condition = parse_condition(
+    let condition = Condition::from_str(
         "distance_rate>=50&ground_type==1&order==1@distance_rate>=50&ground_type==1&order==2@distance_rate>=50&ground_type==1&order>=3"
     ).unwrap();
     let course = load_course(10104);

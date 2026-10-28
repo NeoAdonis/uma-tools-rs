@@ -11,8 +11,8 @@ use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
 use std::sync::Arc;
 use uma_tools::skill::{Skill, SkillType};
-use uma_tools::trigger::builder::build_trigger_scheduler;
 use uma_tools::trigger::skill_activation::*;
+use uma_tools::trigger::system::TriggerScheduler;
 
 /// Get the variable and `(min, max)` thresholds of a window trigger.
 fn window(logic: &SkillActivationLogic) -> (WindowVariable, f64, f64) {
@@ -50,7 +50,7 @@ fn test_skill_activation_flag_triggers_dependent_skill() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics (one per alternative)
     assert_eq!(scheduler.skill_logics().len(), 2);
@@ -102,7 +102,7 @@ fn test_heal_skill_activation_dependency() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 2 skill logics (one per alternative)
     let logics = activation_logics(&scheduler);
@@ -152,7 +152,7 @@ fn test_activation_dependent_or_branches() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Alternative 1: 1 branch
     // Alternative 2: 2 branches (OR condition)
@@ -212,7 +212,7 @@ fn test_alternative_with_and_without_dependency() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Alt 1: 2 branches (OR condition)
     // Alt 2: 1 branch
@@ -269,7 +269,7 @@ fn test_other_character_skill_activation() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     // Should create 4 branches (4-way OR)
     assert_eq!(scheduler.skill_logics().len(), 4);
@@ -314,7 +314,7 @@ fn test_activation_dependency_variable_detection() {
         );
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
-        let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+        let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
         assert_eq!(scheduler.skill_logics().len(), 1);
         let logic = &scheduler.skill_logics()[0];
@@ -335,7 +335,7 @@ fn test_activation_dependency_variable_detection() {
         let skill = skill(2, "is_activate_heal_skill==1", SkillType::TargetSpeed, 0.4);
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
-        let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+        let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
         assert_eq!(scheduler.skill_logics().len(), 1);
         let logic = &scheduler.skill_logics()[0];
@@ -361,7 +361,7 @@ fn test_activation_dependency_variable_detection() {
         );
         let course = load_course(10104);
         let mut rng = Pcg64Mcg::seed_from_u64(0);
-        let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+        let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
         assert_eq!(scheduler.skill_logics().len(), 1);
         let logic = &scheduler.skill_logics()[0];
@@ -392,7 +392,7 @@ fn test_activation_dependency_with_precondition() {
 
     let course = load_course(10104);
     let mut rng = Pcg64Mcg::seed_from_u64(0);
-    let scheduler = build_trigger_scheduler(&[skill], &course, &mut rng);
+    let scheduler = TriggerScheduler::from_skills(&[skill], &course, &mut rng);
 
     let logics = activation_logics(&scheduler);
     assert_eq!(logics.len(), 1);

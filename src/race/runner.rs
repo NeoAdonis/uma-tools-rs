@@ -706,7 +706,7 @@ impl Runner {
             let prev_phase = self.phase;
             self.phase = Phase::from_position(self.position, &state.course);
             if prev_phase != self.phase && self.phase >= Phase::Late && self.last_spurt.is_none() {
-                self.last_spurt = Some(calculate_last_spurt(self, state));
+                self.last_spurt = Some(self.calculate_last_spurt(state));
             }
         }
 
@@ -949,7 +949,7 @@ impl Runner {
     ) {
         let elapsed_time = state.elapsed_time;
         if !self.stamina_keep.is_active
-            && self.hp.current() < hp_required_to_finish(self, state) * self.stamina_keep.ratio
+            && self.hp.current() < self.hp_required_to_finish(state) * self.stamina_keep.ratio
             && self
                 .rng
                 .borrow_mut()

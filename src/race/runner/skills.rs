@@ -81,7 +81,6 @@ use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_compari
 use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::*;
-use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
 use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
@@ -722,7 +721,7 @@ impl Runner {
                     if state.config.game_version >= GameVersion::FirstAnniversary
                         && self.phase >= Phase::Late
                     {
-                        self.last_spurt = Some(calculate_last_spurt(self, state));
+                        self.last_spurt = Some(self.calculate_last_spurt(state));
                     }
                 }
             }
@@ -917,11 +916,11 @@ impl Runner {
     /// current position and the goal, and checked like any other position window.
     ///
     /// N.B. Unlike other random variables (see
-    /// [`roll_condition`](crate::trigger::random::roll_condition)), it's rolled
-    /// once per branch, not once per condition. In practice, at least for this
-    /// variable, only one branch is left for evaluation; other branches would have
-    /// contained a non-overlapping static guard that would have been false and
-    /// therefore were removed when the runner was created.
+    /// [`RandomRolls::roll`](crate::trigger::random::RandomRolls::roll)),
+    /// it's rolled once per branch, not once per condition. In practice, at
+    /// least for this variable, only one branch is left for evaluation; other
+    /// branches would have contained a non-overlapping static guard that would
+    /// have been false and therefore were removed when the runner was created.
     pub(super) fn schedule_all_out_spurt_triggers(&mut self, state: &RaceState) {
         let goal = state.course.length();
         let mut rng = self.rng.borrow_mut();
