@@ -75,10 +75,12 @@ Data, relative to `data/`:
 
 - `skill_data.json`: skill information (duration, targets, effects, conditions, etc.).
 - `skillnames.json`: skill names in Japanese and English, keyed by skill ID.
+- `character_names.json`: character names (outfit and Uma) in Japanese and English, keyed by card ID.
 - `course_data.json`: course information (distance, corners, straights, slopes, etc.), keyed by course ID.
 
 Scripts, relative to `scripts/`:
 
 - `make_skill_data.pl`: generates `skill_data.json` from the game's master database (`master.mdb`).
 - `make_skillnames.pl`: updates `skillnames.json` from the game's master database (`master.mdb`).
+- `make_character_names.pl`: updates `character_names.json` from the game's master database (`master.mdb`).
 - `check_comment_width.pl`: reports comment lines longer than 80 characters in Rust files (`src/` and `tests/` by default), as `file:line`.
