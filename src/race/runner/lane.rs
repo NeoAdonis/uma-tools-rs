@@ -1,11 +1,13 @@
 //! Lane movement, overtake target tracking and target lane decisions.
 
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use rand::prelude::*;
 
 use crate::configuration::GameVersion;
 use crate::course::*;
+use crate::race::parameters::MAX_GATES;
 use crate::race::proximity;
 use crate::race::rng::Stream;
 use crate::race::transitions::*;
@@ -72,6 +74,21 @@ pub(crate) struct OvertakeTarget {
     engagement_time: f64,
     /// Whether this target is the closest blocker.
     is_closest_blocker: bool,
+}
+
+/// Runners that a runner can see ahead (see [`Runner::visible_ahead`]), stored
+/// in place rather than on the heap, since there can't be more than the gates.
+pub(crate) struct VisibleAhead<'a> {
+    runners: [&'a Runner; MAX_GATES as usize],
+    len: usize,
+}
+
+impl<'a> Deref for VisibleAhead<'a> {
+    type Target = [&'a Runner];
+
+    fn deref(&self) -> &Self::Target {
+        &self.runners[..self.len]
+    }
 }
 
 impl Runner {
@@ -404,15 +421,15 @@ impl Runner {
         // Candidates from each target (in gate order), then the extra one.
         // The best (lowest score, first on ties) with lane space is accepted,
         // or the current lane if there's none.
-        let targets: Vec<&Runner> = state
-            .targets
-            .keys()
-            .filter_map(|&gate| all_runners.iter().find(|r| r.gate_roll == gate))
-            .collect();
-        let best_lane = targets
-            .iter()
+        let targets = || {
+            state
+                .targets
+                .keys()
+                .filter_map(|&gate| all_runners.iter().find(|r| r.gate_roll == gate))
+        };
+        let best_lane = targets()
             .flat_map(|target| self.target_lane_candidates(target, all_runners, &visible_ahead))
-            .chain(self.extra_lane_candidate(&targets, &visible_ahead))
+            .chain(self.extra_lane_candidate(targets(), &visible_ahead))
             .filter(|&lane| self.has_lane_space_to(lane))
             .map(|lane| (lane, self.overtake_lane_score(lane)))
             .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -428,17 +445,29 @@ impl Runner {
     }
 
     /// Runners in `all_runners` other than this one.
+    ///
+    /// She's recognized as the same reference (address) rather than by reading
+    /// her fields (e.g. her gate), which saves loading another cache line of
+    /// every runner. A copy of her in `all_runners` would count as another.
     fn others<'a>(&self, all_runners: &'a [Runner]) -> impl Iterator<Item = &'a Runner> {
-        let gate_roll = self.gate_roll;
-        all_runners.iter().filter(move |r| r.gate_roll != gate_roll)
+        all_runners.iter().filter(move |r| !std::ptr::eq(*r, self))
     }
 
     /// Runners in `all_runners` that this one can see, ahead of her or level
     /// with her.
-    fn visible_ahead<'a>(&self, all_runners: &'a [Runner]) -> Vec<&'a Runner> {
-        self.others(all_runners)
-            .filter(|other| other.position >= self.position && self.is_visible(other))
-            .collect()
+    fn visible_ahead<'a>(&'a self, all_runners: &'a [Runner]) -> VisibleAhead<'a> {
+        let mut visible = VisibleAhead {
+            runners: [self; MAX_GATES as usize],
+            len: 0,
+        };
+        let others = self.others(all_runners);
+        for other in
+            others.filter(|other| other.position >= self.position && self.is_visible(other))
+        {
+            visible.runners[visible.len] = other;
+            visible.len += 1;
+        }
+        visible
     }
 
     /// Find the innermost and outermost umas in a target's crowd (the target
@@ -451,7 +480,7 @@ impl Runner {
     ) -> (&'a Runner, &'a Runner) {
         self.others(all_runners)
             .filter(|other| {
-                other.gate_roll != target.gate_roll
+                !std::ptr::eq(*other, target)
                     && proximity::is_near_by(
                         other.position - target.position,
                         (other.lane.current - target.lane.current).abs(),
@@ -509,15 +538,15 @@ impl Runner {
     ///
     /// `visible_ahead` must hold the runners this one can see ahead (see
     /// [`Self::visible_ahead`]).
-    fn extra_lane_candidate(
+    fn extra_lane_candidate<'a>(
         &self,
-        targets: &[&Runner],
+        targets: impl IntoIterator<Item = &'a Runner>,
         visible_ahead: &[&Runner],
     ) -> Option<CourseWidths> {
         // ? Without targets (while overtake mode persists), measured from the
         // runner herself.
         let furthest_target_position = targets
-            .iter()
+            .into_iter()
             .map(|r| r.position)
             .max_by(f64::total_cmp)
             .unwrap_or(self.position);

@@ -36,7 +36,7 @@ fn test_extra_lane_candidate_window() {
             vec![]
         };
         let runner = &solver.runners[0];
-        runner.extra_lane_candidate(&targets, &runner.visible_ahead(&solver.runners))
+        runner.extra_lane_candidate(targets, &runner.visible_ahead(&solver.runners))
     };
     assert_eq!(extra(&solver, true), None);
     solver.runners[2].position = 108.1;
