@@ -103,15 +103,15 @@ impl<'a> RandomRolls<'a> {
     ) -> Option<Vec<f64>> {
         let mut points = Vec::new();
         for comp in comps {
-            let result = match self.rolled.iter().find(|(prev, _)| *prev == comp) {
-                Some((_, result)) => result.clone(),
+            let index = match self.rolled.iter().position(|(prev, _)| *prev == comp) {
+                Some(index) => index,
                 None => {
                     let result = process_random_comp(comp, course, rng);
-                    self.rolled.push((comp, result.clone()));
-                    result
+                    self.rolled.push((comp, result));
+                    self.rolled.len() - 1
                 }
             };
-            points.extend(result?);
+            points.extend_from_slice(self.rolled[index].1.as_deref()?);
         }
         Some(points)
     }

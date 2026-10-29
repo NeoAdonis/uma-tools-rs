@@ -77,6 +77,8 @@
 //! [`Activate`]: crate::trigger::skill_activation::LogicAction::Activate
 //! [`Unlock`]: crate::trigger::skill_activation::LogicAction::Unlock
 
+use std::sync::Arc;
+
 use rand::prelude::*;
 
 use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_comparison_list};
@@ -444,9 +446,10 @@ impl Runner {
             1,
         );
 
-        // Clone the skill data we need to avoid borrow checker issues.
-        let skill_id = self.skills[skill_index].id;
-        let alternative = self.skills[skill_index].alternatives[alternative_index].clone();
+        // Shared rather than borrowed from the runner, which is modified below.
+        let skill = Arc::clone(&self.skills[skill_index]);
+        let skill_id = skill.id;
+        let alternative = &skill.alternatives[alternative_index];
 
         // Record the activation before applying the effects, so that skills
         // activated by them are recorded after this one.
@@ -460,7 +463,7 @@ impl Runner {
         // infinite.
         let duration_factor =
             state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling;
-        let scaled_duration = self.situational_base_duration(&alternative) * duration_factor;
+        let scaled_duration = self.situational_base_duration(alternative) * duration_factor;
         // Extensions from overtaking scale like the base duration.
         let overtake_extension =
             if alternative.duration_scaling == DurationScaling::IncrementOrderUp {
@@ -843,15 +846,17 @@ impl Runner {
     /// N.B. Out-of-gate skills are skipped, as their effects are only applied
     /// before the race.
     fn activate_unique_skills(&mut self, count: usize, state: &RaceState) {
-        let unique_indices: Vec<usize> = self
-            .available_skills()
-            .iter()
-            .enumerate()
-            .filter(|(_, skill)| skill.is_unique() && !skill.should_activate_out_of_gate())
-            .map(|(i, _)| i)
-            .take(count)
-            .collect();
-        for skill_index in unique_indices {
+        let mut remaining = count;
+        // By index, since activating a skill needs the whole runner.
+        for skill_index in 0..self.available_skills().len() {
+            if remaining == 0 {
+                break;
+            }
+            let skill = &self.available_skills()[skill_index];
+            if !skill.is_unique() || skill.should_activate_out_of_gate() {
+                continue;
+            }
+            remaining -= 1;
             let alternative_index = self.forced_alternative(skill_index);
             self.activate_skill(skill_index, alternative_index, state);
         }

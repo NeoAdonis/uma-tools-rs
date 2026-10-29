@@ -730,11 +730,13 @@ impl RaceSolver<Runner> {
             // Not used by any skill.
             SkillTarget::UmaId { .. } => Vec::new(),
             SkillTarget::RandomAlly => {
-                let team: Vec<usize> = (0..runners.len())
-                    .filter(|&i| is_running(&i) && !source.is_opponent(&runners[i]))
-                    .collect();
-                let pick = (target_roll * team.len() as f64) as usize;
-                vec![team[pick.min(team.len() - 1)]]
+                let team = || {
+                    (0..runners.len())
+                        .filter(|&i| is_running(&i) && !source.is_opponent(&runners[i]))
+                };
+                let team_size = team().count();
+                let pick = (target_roll * team_size as f64) as usize;
+                team().nth(pick.min(team_size - 1)).into_iter().collect()
             }
         };
 
@@ -773,7 +775,8 @@ impl RaceSolver<Runner> {
         let mut position_next = f64::INFINITY;
         // Rushed runners counted so far, in total and by team.
         let mut rushed = 0;
-        let mut rushed_by_team = vec![0; self.state.team_count as usize];
+        // There can't be more teams than gates.
+        let mut rushed_by_team = [0; MAX_GATES as usize];
 
         // From first to last, update order and distance differences from runners ahead.
         for (index, runner) in self.runners.iter_mut().enumerate() {
