@@ -37,9 +37,11 @@
 //! included) and skill-activation events retry every time they fire, until the
 //! logic succeeds; afterwards, an activated logic waits for the cooldown of
 //! its skill alternative (kept by the runner) to end, and an unlocking logic
-//! is never checked again. A segment that is crossed in a single frame is
-//! still checked, as long as the runner lands inside it; one that is jumped
-//! over entirely is missed.
+//! is never checked again. Activated logics whose cooldown outlasts the race
+//! are never checked again either, nor those of the other alternatives of
+//! their skill, unless they're continuations. A segment that is crossed in a
+//! single frame is still checked, as long as the runner lands inside it; one
+//! that is jumped over entirely is missed.
 //!
 //! [`TriggerCondition`]: crate::trigger::skill_activation::TriggerCondition
 //! [`Segments`]:
@@ -60,7 +62,7 @@
 //!     crate::trigger::skill_activation::TriggerCondition::BuffSkillActivation
 
 use crate::course::Phase;
-use crate::trigger::skill_activation::SkillActivationLogic;
+use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
 
 /// Main scheduler coordinating all trigger types.
 ///
@@ -110,18 +112,41 @@ pub(crate) struct TriggerScheduler {
 impl TriggerScheduler {
     /// Remove every trigger of the given logics, so they're never checked.
     pub(crate) fn remove_triggers(&mut self, logic_indices: &[usize]) {
-        if logic_indices.is_empty() {
-            return;
+        if !logic_indices.is_empty() {
+            self.remove_triggers_if(|logic_idx| logic_indices.contains(&logic_idx));
         }
-        let removed = |logic_idx: &usize| logic_indices.contains(logic_idx);
+    }
 
+    /// Remove the triggers of the logics that can no longer activate a skill once
+    /// one of its alternatives activated with a cooldown outlasting the race:
+    /// those of the alternative itself, and those of the other alternatives
+    /// except continuations, which can't activate after another alternative did.
+    pub(crate) fn remove_activated_skill_triggers(
+        &mut self,
+        skill_index: usize,
+        alternative_index: usize,
+    ) {
+        // Taken, since the triggers to remove depend on their logics.
+        let logics = std::mem::take(&mut self.skill_logics);
+        self.remove_triggers_if(|logic_idx| {
+            let logic = &logics[logic_idx];
+            logic.skill_index == skill_index
+                && logic.action == LogicAction::Activate
+                && (logic.alternative_index == alternative_index || !logic.is_continuation)
+        });
+        self.skill_logics = logics;
+    }
+
+    /// Remove every trigger of the logics matching `removed`, given the logic
+    /// index.
+    fn remove_triggers_if(&mut self, removed: impl Fn(usize) -> bool) {
         self.precondition_windows
-            .remove_if(|window| removed(&window.logic_idx));
+            .remove_if(|window| removed(window.logic_idx));
         self.position_windows
-            .remove_if(|window| removed(&window.logic_idx));
+            .remove_if(|window| removed(window.logic_idx));
         self.time_windows
-            .remove_if(|window| removed(&window.logic_idx));
-        self.hp_windows.retain(|window| !removed(&window.logic_idx));
+            .remove_if(|window| removed(window.logic_idx));
+        self.hp_windows.retain(|window| !removed(window.logic_idx));
         for list in [
             &mut self.last_straight_triggers,
             &mut self.race_start_triggers,
@@ -130,7 +155,7 @@ impl TriggerScheduler {
             &mut self.buff_activation_triggers,
             &mut self.heal_activation_triggers,
         ] {
-            list.retain(|logic_idx| !removed(logic_idx));
+            list.retain(|&logic_idx| !removed(logic_idx));
         }
     }
 }

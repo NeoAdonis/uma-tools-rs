@@ -40,7 +40,8 @@
 //!   applies the effects to them.
 //! - Starts the cooldown of the activated alternative (all its OR branches).
 //!   Timed effects record the skill that applied them, so that its effects
-//!   being active can be checked as well.
+//!   being active can be checked as well. If the cooldown outlasts the race,
+//!   the logics that can no longer activate the skill stop being checked.
 //! - Records the alternative in the skill's mask of activated alternatives
 //!   ([`Runner::activated_alternatives`]), used for `is_used_skill_id`,
 //!   `is_activate_other_skill_detail`, forced activations and value scaling.
@@ -547,10 +548,18 @@ impl Runner {
     ///
     /// The base cooldown scales with the course distance by a factor of *course
     /// distance / 1000*.
+    ///
+    /// A base cooldown of [`DEFAULT_COOLDOWN`] or more is meant to outlast any
+    /// race, so the logics that can no longer activate the skill stop being checked
+    /// (see [`TriggerScheduler::remove_activated_skill_triggers`]).
     fn start_cooldown(&mut self, skill_index: usize, alternative_index: usize, state: &RaceState) {
         let base_cooldown = self.skills[skill_index].alternatives[alternative_index].base_cooldown;
         let cooldown = base_cooldown * state.course.distance as f64 / 1000.0;
         self.cooldown_until[skill_index][alternative_index] = state.elapsed_time + cooldown;
+        if base_cooldown >= DEFAULT_COOLDOWN {
+            self.trigger_scheduler
+                .remove_activated_skill_triggers(skill_index, alternative_index);
+        }
     }
 
     /// Check if a skill alternative is waiting for its cooldown to end.

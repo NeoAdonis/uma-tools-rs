@@ -2466,6 +2466,42 @@ fn test_forced_activation_disables_other_alternatives() {
     assert_eq!(solver.runners[0].activated_alternatives[0], 0b01);
 }
 
+#[test]
+fn test_activation_outlasting_race_removes_triggers_that_cant_succeed() {
+    let once_per_race = vec![
+        alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15),
+        alternative("accumulatetime>=10", SkillType::TargetSpeed, 0.15),
+        alternative(
+            "is_activate_other_skill_detail==1&accumulatetime>=999",
+            SkillType::TargetSpeed,
+            0.15,
+        ),
+    ];
+    let short_cooldown = SkillAlternative {
+        base_cooldown: 30.0,
+        ..alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15)
+    };
+    let skills = vec![
+        Arc::new(synthetic_skill(once_per_race)),
+        Arc::new(synthetic_skill(vec![short_cooldown])),
+    ];
+    let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+    solver.run();
+
+    // Only the continuation and the skill that can activate again are left.
+    let scheduler = &solver.runners[0].trigger_scheduler;
+    let mut left: Vec<_> = scheduler
+        .time_windows
+        .iter()
+        .map(|window| {
+            let logic = &scheduler.skill_logics[window.logic_idx];
+            (logic.skill_index, logic.alternative_index)
+        })
+        .collect();
+    left.sort_unstable();
+    assert_eq!(left, [(0, 2), (1, 0)]);
+}
+
 /// Out-of-gate skill with the given effects on oneself, whose condition is
 /// always satisfied.
 fn out_of_gate_skill(id: i32, base_duration: f64, effects: &[(SkillType, f64)]) -> Arc<Skill> {
