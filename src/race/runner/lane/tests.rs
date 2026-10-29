@@ -35,7 +35,8 @@ fn test_extra_lane_candidate_window() {
         } else {
             vec![]
         };
-        solver.runners[0].extra_lane_candidate(&targets, &solver.runners)
+        let runner = &solver.runners[0];
+        runner.extra_lane_candidate(&targets, &runner.visible_ahead(&solver.runners))
     };
     assert_eq!(extra(&solver, true), None);
     solver.runners[2].position = 108.1;
@@ -62,8 +63,9 @@ fn test_target_lane_candidates_use_boundary_uma_distance() {
         (107.8, outer + LANE),
     ]);
     let runner = &solver.runners[0];
+    let visible_ahead = runner.visible_ahead(&solver.runners);
     let candidates: Vec<CourseWidths> = runner
-        .target_lane_candidates(&solver.runners[1], &solver.runners)
+        .target_lane_candidates(&solver.runners[1], &solver.runners, &visible_ahead)
         .collect();
     // 1 horse lane inside the outer boundary is blocked by the target herself.
     let expected = [CourseWidths(0.4 - LANE), CourseWidths(0.4 + LANE)];
@@ -75,7 +77,12 @@ fn test_only_visible_runners_block_lane_candidates() {
     // At 1m, the field of view is less than 1.3 horse lanes wide to each side.
     let mut solver = lane_solver(&[(100.0, 0.3), (101.0, 0.3 + 3.0 * LANE)]);
     let is_valid = |solver: &RaceSolver<Runner>, lane| {
-        solver.runners[0].is_lane_candidate_valid(CourseWidths(lane), 5.0, &solver.runners)
+        let runner = &solver.runners[0];
+        runner.is_lane_candidate_valid(
+            CourseWidths(lane),
+            5.0,
+            &runner.visible_ahead(&solver.runners),
+        )
     };
     assert!(is_valid(&solver, 0.3 + 3.0 * LANE));
     solver.runners[1].lane.current = CourseWidths(0.3 + LANE);
@@ -249,12 +256,14 @@ fn test_extra_move_lane_kept_after_mid_race() {
     let runner = &mut solver.runners[0];
     runner.extra_move_lane = Some(CourseWidths(0.35));
     runner.phase = Phase::Late;
-    let next = solver.runners[0].next_extra_move_lane(&solver.runners);
+    let runner = &solver.runners[0];
+    let next = runner.next_extra_move_lane(&runner.visible_ahead(&solver.runners));
     assert_eq!(next, Some(CourseWidths(0.35)));
 
     // Furthest visible runner ahead during the Mid race.
     solver.runners[0].phase = Phase::Mid;
-    let next = solver.runners[0].next_extra_move_lane(&solver.runners);
+    let runner = &solver.runners[0];
+    let next = runner.next_extra_move_lane(&runner.visible_ahead(&solver.runners));
     assert_eq!(next, Some(CourseWidths(0.4)));
 }
 

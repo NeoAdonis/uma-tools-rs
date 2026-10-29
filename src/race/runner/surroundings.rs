@@ -84,8 +84,8 @@ impl Runner {
         // A runner without field of view sees nothing.
         visible_distance > 0.0
             && distance <= visible_distance
-            && (self.lane.current - other.lane.current).abs()
-                <= CourseWidths::from_horse_lanes((distance / visible_distance) * 11.5 + 2.0) / 2.0
+            && (self.lane.current - other.lane.current).horse_lanes().abs() * 2.0
+                <= (distance / visible_distance) * 11.5 + 2.0
     }
 
     /// Mark this runner as blocked from the front by `ahead`, limiting her speed

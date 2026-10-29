@@ -397,7 +397,9 @@ impl Runner {
             return decision;
         };
 
-        decision.extra_move_lane = self.next_extra_move_lane(all_runners);
+        // Visibility doesn't depend on the candidate lane, so it's checked once.
+        let visible_ahead = self.visible_ahead(all_runners);
+        decision.extra_move_lane = self.next_extra_move_lane(&visible_ahead);
 
         // Candidates from each target (in gate order), then the extra one.
         // The best (lowest score, first on ties) with lane space is accepted,
@@ -409,8 +411,8 @@ impl Runner {
             .collect();
         let best_lane = targets
             .iter()
-            .flat_map(|target| self.target_lane_candidates(target, all_runners))
-            .chain(self.extra_lane_candidate(&targets, all_runners))
+            .flat_map(|target| self.target_lane_candidates(target, all_runners, &visible_ahead))
+            .chain(self.extra_lane_candidate(&targets, &visible_ahead))
             .filter(|&lane| self.has_lane_space_to(lane))
             .map(|lane| (lane, self.overtake_lane_score(lane)))
             .min_by(|a, b| a.1.total_cmp(&b.1))
@@ -429,6 +431,14 @@ impl Runner {
     fn others<'a>(&self, all_runners: &'a [Runner]) -> impl Iterator<Item = &'a Runner> {
         let gate_roll = self.gate_roll;
         all_runners.iter().filter(move |r| r.gate_roll != gate_roll)
+    }
+
+    /// Runners in `all_runners` that this one can see, ahead of her or level
+    /// with her.
+    fn visible_ahead<'a>(&self, all_runners: &'a [Runner]) -> Vec<&'a Runner> {
+        self.others(all_runners)
+            .filter(|other| other.position >= self.position && self.is_visible(other))
+            .collect()
     }
 
     /// Find the innermost and outermost umas in a target's crowd (the target
@@ -467,10 +477,14 @@ impl Runner {
     /// Candidate lanes to overtake `target`: 1 horse lane inside and outside
     /// each boundary uma of her crowd, unless a visible uma is in the spot up to
     /// 0.5m past that boundary uma.
+    ///
+    /// `visible_ahead` must hold the runners this one can see ahead (see
+    /// [`Self::visible_ahead`]).
     fn target_lane_candidates<'a>(
         &'a self,
         target: &'a Runner,
         all_runners: &'a [Runner],
+        visible_ahead: &'a [&'a Runner],
     ) -> impl Iterator<Item = CourseWidths> + 'a {
         let (inner, outer) = self.find_crowd_boundaries(target, all_runners);
         let offset = CourseWidths::from_horse_lanes(1.0);
@@ -484,7 +498,7 @@ impl Runner {
         .filter_map(move |(boundary, offset)| {
             let lane = boundary.lane.current + offset;
             let max_distance = boundary.position - self.position + 0.5;
-            self.is_lane_candidate_valid(lane, max_distance, all_runners)
+            self.is_lane_candidate_valid(lane, max_distance, visible_ahead)
                 .then_some(lane)
         })
     }
@@ -492,10 +506,13 @@ impl Runner {
     /// Candidate lane unrelated to the overtake `targets`: 1 horse lane inward
     /// during the Early and Mid race (if possible), or straight otherwise,
     /// unless a visible uma is in the spot up to 3m past the furthest target.
+    ///
+    /// `visible_ahead` must hold the runners this one can see ahead (see
+    /// [`Self::visible_ahead`]).
     fn extra_lane_candidate(
         &self,
         targets: &[&Runner],
-        all_runners: &[Runner],
+        visible_ahead: &[&Runner],
     ) -> Option<CourseWidths> {
         // ? Without targets (while overtake mode persists), measured from the
         // runner herself.
@@ -513,26 +530,26 @@ impl Runner {
         };
 
         let max_distance = furthest_target_position - self.position + 3.0;
-        self.is_lane_candidate_valid(lane, max_distance, all_runners)
+        self.is_lane_candidate_valid(lane, max_distance, visible_ahead)
             .then_some(lane)
     }
 
-    /// Check if a candidate lane is valid: no visible runner ahead within
-    /// `max_distance` meters and 0.8 horse lanes of the candidate.
+    /// Check if a candidate lane is valid: no runner in `visible_ahead` (see
+    /// [`Self::visible_ahead`]) within `max_distance` meters and 0.8 horse lanes
+    /// of the candidate.
     fn is_lane_candidate_valid(
         &self,
         candidate_lane: CourseWidths,
         max_distance: f64,
-        all_runners: &[Runner],
+        visible_ahead: &[&Runner],
     ) -> bool {
-        !self.others(all_runners).any(|other| {
-            self.is_visible(other)
-                && proximity::is_near_by(
-                    other.position - self.position,
-                    (other.lane.current - candidate_lane).abs(),
-                    max_distance,
-                    0.8,
-                )
+        !visible_ahead.iter().any(|other| {
+            proximity::is_near_by(
+                other.position - self.position,
+                (other.lane.current - candidate_lane).abs(),
+                max_distance,
+                0.8,
+            )
         })
     }
 
@@ -564,20 +581,21 @@ impl Runner {
         }
     }
 
-    /// Next extra_move_lane based on furthest visible runner ahead.
+    /// Next extra_move_lane based on the furthest runner in `visible_ahead` (see
+    /// [`Self::visible_ahead`]) strictly ahead of this one.
     ///
     /// Only updated during Early and Mid phases, so that the one set upon
     /// entering the final corner is kept. Keeps the current value if no runner
     /// ahead is visible.
-    fn next_extra_move_lane(&self, all_runners: &[Runner]) -> Option<CourseWidths> {
+    fn next_extra_move_lane(&self, visible_ahead: &[&Runner]) -> Option<CourseWidths> {
         if self.phase > Phase::Mid {
             return self.extra_move_lane;
         }
 
         // Find furthest visible runner ahead.
-        all_runners
+        visible_ahead
             .iter()
-            .filter(|r| r.position > self.position && self.is_visible(r))
+            .filter(|r| r.position > self.position)
             .max_by(|a, b| a.position.total_cmp(&b.position))
             .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
