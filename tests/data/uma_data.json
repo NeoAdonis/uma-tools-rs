@@ -1,0 +1,13 @@
+{
+    "speed": 1500,
+    "stamina": 800,
+    "power": 1200,
+    "guts": 700,
+    "wisdom": 1200,
+    "strategy": "Oikomi",
+    "distanceAptitude": "S",
+    "surfaceAptitude": "A",
+    "strategyAptitude": "A",
+    "motivation": "Great",
+    "skills": [200642]
+}

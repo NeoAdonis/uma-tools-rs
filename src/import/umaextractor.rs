@@ -204,6 +204,42 @@ impl UmaExtractorData {
         Ok(Self::from_json(&content)?)
     }
 
+    /// Parse a list of `UmaExtractorData` from a JSON array, as UmaExtractor
+    /// exports every trained Uma at once.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON isn't an array, or for the same reasons as
+    /// [`UmaExtractorData::from_json`] for any of its elements.
+    pub fn all_from_json(json: &str) -> Result<Vec<Self>, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    /// Parse a list of `UmaExtractorData` from a JSON file with an array.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read, or for the same reasons as
+    /// [`UmaExtractorData::all_from_json`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use uma_tools::import::umaextractor::UmaExtractorData;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// let all = UmaExtractorData::all_from_json_file("uma.json")?;
+    /// assert_eq!(all.len(), 18);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn all_from_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Vec<Self>, Box<dyn std::error::Error + Send + Sync>> {
+        let content = std::fs::read_to_string(path)?;
+        Ok(Self::all_from_json(&content)?)
+    }
+
     /// Convert `self` to [`UmaData`] for a race of the given distance type and
     /// track surface, with the given mood.
     ///
@@ -416,5 +452,27 @@ mod tests {
     #[test]
     fn test_from_missing_file() {
         assert!(UmaExtractorData::from_json_file("does_not_exist.json").is_err());
+        assert!(UmaExtractorData::all_from_json_file("does_not_exist.json").is_err());
+    }
+
+    #[test]
+    fn test_all_from_json() {
+        let single = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let other = UMA_JSON.replace(r#""card_id": 100101"#, r#""card_id": 100201"#);
+        let all = UmaExtractorData::all_from_json(&format!("[{UMA_JSON}, {other}]")).unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0], single);
+        assert_eq!(all[1].card_id, 100201);
+        assert!(UmaExtractorData::all_from_json("[]").unwrap().is_empty());
+        // A single Uma isn't a list, and one invalid Uma fails the whole list.
+        assert!(UmaExtractorData::all_from_json(UMA_JSON).is_err());
+        let invalid = UMA_JSON.replace(r#""guts": 604"#, r#""guts": 0"#);
+        assert!(UmaExtractorData::all_from_json(&format!("[{UMA_JSON}, {invalid}]")).is_err());
+    }
+
+    #[test]
+    fn test_all_from_json_file() {
+        let all = UmaExtractorData::all_from_json_file("uma.json").unwrap();
+        assert_eq!(all.len(), 18);
     }
 }

@@ -23,7 +23,7 @@ The project requires a [Rust toolchain](https://www.rust-lang.org/tools/install)
 cargo run --release
 ```
 
-The demo simulates a single race with one Umamusume and prints a summary of it. By default, it reads its input from `config.json` (simulation settings), `uma.json` (the Umamusume, her mood and skills) and `parameters.json` (course and race conditions). Use `--config`, `--uma` and `--parameters` to read other files instead; for example, `cargo run --release -- --uma my_uma.json`.
+The demo simulates a single race and prints a summary of it. By default, it reads its input from `config.json` (simulation settings), `uma.json` (the Umamusume, as an array exported by UmaExtractor, of which the first `gates` race with Great mood) and `parameters.json` (course and race conditions). Use `--config`, `--uma` and `--parameters` to read other files instead; for example, `cargo run --release -- --uma my_uma.json`.
 
 > [!NOTE]
 > The demo is still very limited compared to the objectives above. For now, it serves mostly as a way to try out the simulation.

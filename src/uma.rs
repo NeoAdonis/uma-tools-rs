@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_uma_data_from_json_file() {
-        let uma_data = UmaData::from_json_file("uma.json").unwrap();
+        let uma_data = UmaData::from_json_file("tests/data/uma_data.json").unwrap();
         assert_eq!(uma_data.uma.speed, 1500);
         assert_eq!(uma_data.uma.style, Style::End);
         assert_eq!(uma_data.mood, Mood::Great);
