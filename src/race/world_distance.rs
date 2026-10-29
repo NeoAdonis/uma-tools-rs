@@ -37,13 +37,18 @@ pub(crate) fn ratio(
     end_lane: CourseWidths,
     curvature: f64,
 ) -> f64 {
+    // These conditions need to be satisfied to ensure that the ratio is at least 1.
+    debug_assert!(curvature >= 0.0 && start_lane.0 >= 0.0 && end_lane.0 >= 0.0);
     if distance <= 0.0 {
         return 1.0;
+    }
+    if start_lane == end_lane {
+        return 1.0 + curvature * start_lane.meters();
     }
     let mid_lane = ((start_lane + end_lane) / 2.0).meters();
     let forward = distance * (1.0 + curvature * mid_lane);
     let lateral = (end_lane - start_lane).meters();
-    (forward.hypot(lateral) / distance).max(1.0)
+    (forward * forward + lateral * lateral).sqrt() / distance
 }
 
 #[cfg(test)]
