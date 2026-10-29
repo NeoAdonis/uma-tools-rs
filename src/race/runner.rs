@@ -283,6 +283,9 @@ pub struct Runner {
     pub(crate) min_speed: f64,
     /// Target speed in m/s.
     pub target_speed: f64,
+    /// Speed modifier applied when affected by a skill that modifies lane move speed
+    /// and if lane movement was performed in the previous frame.
+    pub(crate) move_lane_modifier: f64,
     /// Speed modifier applied early in the race when away from the inner fence and
     /// blocked on the inside.
     ///
@@ -652,11 +655,9 @@ impl Runner {
 
         // Lane state is updated after target speed within a frame, so `speed` still
         // holds the lane movement from the previous frame.
-        let move_lane_modifier = if game_version >= GameVersion::FirstAnniversary
-            && self.skill_modifiers.lane_speed > 0.0
-            && self.lane.speed != 0.0
+        let move_lane_modifier = if self.skill_modifiers.lane_speed > 0.0 && self.lane.speed != 0.0
         {
-            (0.0002 * self.adjusted.power as f64).sqrt()
+            self.move_lane_modifier
         } else {
             0.0
         };

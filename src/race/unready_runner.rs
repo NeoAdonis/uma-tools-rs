@@ -471,6 +471,13 @@ impl UnreadyRunner {
             course.base_speed(),
         );
 
+        // Calculate move lane modifier.
+        let move_lane_modifier = if game_version < GameVersion::FirstAnniversary {
+            0.0
+        } else {
+            (0.0002 * self.adjusted.power as f64).sqrt()
+        };
+
         // Calculate force-in modifier based on style and randomness.
         let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
             0.0
@@ -498,6 +505,7 @@ impl UnreadyRunner {
             min_speed: 0.85 * course.base_speed()
                 + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
+            move_lane_modifier,
             force_in_modifier,
             lane: LaneState::new(course.starting_lane(self.gate_roll)),
             visible_count: 0,
