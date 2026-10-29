@@ -217,6 +217,71 @@ fn test_judge_scores_total() {
     assert_eq!(total, 62.0 * (54.5f64.powf(0.8) + 1.0) * 75.0);
 }
 
+/// Get the popularity ranks of runners with the given umas, in order.
+fn popularity_ranks(umas: &[crate::uma::Uma]) -> Vec<u8> {
+    use crate::race::solver::RaceSolver;
+    use crate::test_utils::{load_course, race_params, seeded_config};
+    use crate::uma::Mood;
+
+    let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
+    let runners: Vec<_> = umas
+        .iter()
+        .enumerate()
+        .map(|(i, &uma)| {
+            UnreadyRunner::new(
+                uma,
+                i as u8 + 1,
+                Mood::Normal,
+                &state,
+                vec![],
+                RngSeed::new(0),
+            )
+        })
+        .collect();
+    calculate_popularity(&runners)
+        .into_iter()
+        .map(|(rank, _)| rank)
+        .collect()
+}
+
+#[test]
+fn test_popularity_ranks_weak_runners() {
+    use crate::test_utils::uma;
+    use crate::uma::{Style, Uma};
+
+    // Stats decrease with each runner, so the weakest ones get judge scores
+    // well below 54 and tiny (but distinct) points.
+    let umas: Vec<Uma> = (0..8)
+        .map(|i| Uma {
+            speed: 1200 - 100 * i,
+            stamina: 1000 - 100 * i,
+            power: 1000 - 100 * i,
+            ..uma(Style::Pace)
+        })
+        .collect();
+    assert_eq!(popularity_ranks(&umas), [1, 2, 3, 4, 5, 6, 7, 8]);
+}
+
+#[test]
+fn test_popularity_ranks_ties() {
+    use crate::test_utils::uma;
+    use crate::uma::{Style, Uma};
+
+    // Identical runners with the same marks share a rank, also when their
+    // points are tiny, and the next rank skips the tied places. Marks follow
+    // gate order between identical runners, so the strong ones don't tie
+    // except for the two △, and the weak ones get no marks.
+    let strong = uma(Style::Pace);
+    let weak = Uma {
+        speed: 300,
+        stamina: 300,
+        power: 300,
+        ..strong
+    };
+    let ranks = popularity_ranks(&[strong, strong, strong, strong, strong, weak, weak, weak]);
+    assert_eq!(ranks, [1, 2, 3, 4, 4, 6, 6, 6]);
+}
+
 #[test]
 fn test_phi_calculation() {
     // Test normal case.

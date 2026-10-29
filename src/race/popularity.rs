@@ -434,16 +434,17 @@ pub(crate) fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeS
     // Sort by total points (descending) to determine ranks.
     popularity_data.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-    // Assign ranks (1-indexed, ties get same rank).
+    // Assign ranks (1-indexed, ties get same rank). Points are compared exactly,
+    // since a low judge score can make them tiny (e.g. 1e-60). Identical
+    // runners still get identical points.
     let mut ranks = vec![0u8; n];
     let mut scores = vec![JudgeScores::default(); n];
     let mut current_rank = 1u8;
     let mut prev_points = f64::MAX;
 
-    for (runner_idx, points, judge_scores) in popularity_data {
-        // If points are different from previous, update rank.
-        if (points - prev_points).abs() > 1e-9 {
-            current_rank = (ranks.iter().filter(|&&r| r > 0).count() + 1) as u8;
+    for (place, (runner_idx, points, judge_scores)) in popularity_data.into_iter().enumerate() {
+        if points != prev_points {
+            current_rank = place as u8 + 1;
         }
 
         ranks[runner_idx] = current_rank;
