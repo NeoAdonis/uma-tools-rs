@@ -158,9 +158,12 @@ pub struct RaceSolver<T> {
     /// Runners of the current phase (see [`Self::runners`]).
     pub(crate) runners: Vec<T>,
     pub state: RaceState,
-    /// Time (s) each pair of runners has been close in a row, keyed by their gates
-    /// (lowest first). Only pairs that may still start a duel are tracked.
-    duel_close_times: HashMap<(u8, u8), f64>,
+    /// Time (s) each pair of runners has been close in a row, indexed by their
+    /// gates (see [`Self::duel_pair_index`]). Only pairs that may still start a
+    /// duel are tracked.
+    duel_close_times: Vec<Option<f64>>,
+    /// Close times of the previous frame, kept to reuse their memory.
+    prev_duel_close_times: Vec<Option<f64>>,
 }
 
 /// Methods available in both phases.
@@ -218,7 +221,8 @@ impl RaceSolver<UnreadyRunner> {
         RaceSolver {
             runners: Vec::new(),
             state,
-            duel_close_times: HashMap::new(),
+            duel_close_times: Vec::new(),
+            prev_duel_close_times: Vec::new(),
         }
     }
 
@@ -427,10 +431,12 @@ impl RaceSolver<UnreadyRunner> {
             .into_iter()
             .map(|builder| Runner::new(builder, &state))
             .collect();
+        let gates = state.params.gates as usize;
         RaceSolver {
             runners,
             state,
-            duel_close_times: HashMap::new(),
+            duel_close_times: vec![None; gates * gates],
+            prev_duel_close_times: vec![None; gates * gates],
         }
     }
 }
@@ -1229,7 +1235,9 @@ impl RaceSolver<Runner> {
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn try_start_duels(&mut self, delta_time: f64) {
-        let mut close_times = HashMap::with_capacity(self.duel_close_times.len());
+        // Pairs no longer close aren't written again, which resets their time.
+        std::mem::swap(&mut self.duel_close_times, &mut self.prev_duel_close_times);
+        self.duel_close_times.fill(None);
         let mut starting = Vec::new();
         for i in 0..self.runners.len() {
             let ahead = &self.runners[i];
@@ -1247,24 +1255,27 @@ impl RaceSolver<Runner> {
                     continue;
                 }
 
-                let gates = (ahead.gate_roll, behind.gate_roll);
-                let key = (gates.0.min(gates.1), gates.0.max(gates.1));
+                let pair = self.duel_pair_index(ahead.gate_roll, behind.gate_roll);
                 // Time starts counting from the first frame they're close.
-                let close_time = self
-                    .duel_close_times
-                    .get(&key)
-                    .map_or(0.0, |time| time + delta_time);
-                close_times.insert(key, close_time);
+                let close_time =
+                    self.prev_duel_close_times[pair].map_or(0.0, |time| time + delta_time);
+                self.duel_close_times[pair] = Some(close_time);
                 if duel::is_close_long_enough(close_time) && self.can_start_duel(i, j) {
                     starting.extend([i, j]);
                 }
             }
         }
-        // Pairs no longer close are dropped, which resets their time.
-        self.duel_close_times = close_times;
         for i in starting {
             self.runners[i].start_duel();
         }
+    }
+
+    /// Index of the pair of runners with gates `a` and `b` in the duel close
+    /// times, the same in either order.
+    fn duel_pair_index(&self, a: u8, b: u8) -> usize {
+        let gates = self.state.params.gates as usize;
+        let (low, high) = (a.min(b) as usize, a.max(b) as usize);
+        (low - 1) * gates + (high - 1)
     }
 
     /// Check if runners `i` and `j`, already close for long enough, meet the
