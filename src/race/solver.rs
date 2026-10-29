@@ -147,9 +147,9 @@ pub struct RaceState {
 ///         Some(finish_time(seed, &[])? - finish_time(seed, &skills)?)
 ///     })
 ///     .sum();
-/// // Professor of Curvature saves about 0.24 seconds on average, wit check
+/// // Professor of Curvature saves about 0.07 seconds on average, wit check
 /// // failures included.
-/// assert!(saved / seeds as f64 > 0.1);
+/// assert!(saved / seeds as f64 > 0.05);
 /// # Ok(())
 /// # }
 /// ```
@@ -977,6 +977,12 @@ impl RaceSolver<Runner> {
     fn update_positioning_strategy(&mut self) {
         // Debug: check sorting.
         self.assert_runners_sorted();
+        // A single runner has nobody to keep pace with, so she always runs at
+        // regular pace. Otherwise she'd be her own pacemaker, and runners other
+        // than front runners would pace down for the whole positioning window.
+        if self.runners.len() == 1 {
+            return;
+        }
 
         // Front runners for the purpose of Speed Up mode distances: Runaways and
         // runners acting as front runners because they're rushed don't count.

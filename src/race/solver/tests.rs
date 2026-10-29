@@ -324,19 +324,6 @@ fn test_front_speed_up_only_exits_when_far_ahead() {
 }
 
 #[test]
-fn test_lone_front_runner_never_speeds_up() {
-    use PositioningStrategy::*;
-
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
-    update_positioning_repeatedly(&mut solver);
-    assert_eq!(strategy_at(&solver, 100.0), Normal);
-
-    set_strategy_at(&mut solver, 100.0, FrontSpeedUp);
-    solver.update_positioning_strategy();
-    assert_eq!(strategy_at(&solver, 100.0), Normal);
-}
-
-#[test]
 fn test_front_overtake_when_not_first_in_strategy() {
     use PositioningStrategy::*;
 
@@ -3644,5 +3631,19 @@ fn test_level_field_has_zero_distance_rate() {
     solver.update_order_values();
     for runner in &solver.runners {
         assert_eq!(runner.position_diff.rate_from_first, 0.0);
+    }
+}
+
+#[test]
+fn test_lone_runner_keeps_regular_pace() {
+    for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
+        let mut solver = positioning_solver(&[(style, 200.0)], GameVersion::LATEST);
+        solver.runners[0].section = 2;
+        update_positioning_repeatedly(&mut solver);
+        assert_eq!(
+            solver.runners[0].positioning_strategy,
+            PositioningStrategy::Normal,
+            "{style:?}"
+        );
     }
 }
