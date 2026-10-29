@@ -11,3 +11,4 @@ cobertura.xml
 codecov.json
 *.profraw
 *.profdata
+profile.json*
