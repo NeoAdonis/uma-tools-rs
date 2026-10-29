@@ -9,6 +9,7 @@ license = "MIT"
 keywords = ["umamusume", "simulation", "racing", "game"]
 categories = ["simulation", "games"]
 publish = false
+default-run = "uma-tools"
 
 [dependencies]
 derive_more = { version = "2", features = ["add", "add_assign", "mul", "not"] }
@@ -19,3 +20,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1"
 serde_with = "3.24"
+
+# Release build with debug info, to profile simulations (e.g. with `perf`).
+[profile.profiling]
+inherits = "release"
+debug = true

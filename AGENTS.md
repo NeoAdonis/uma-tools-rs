@@ -62,6 +62,8 @@ Source code, relative to `src/`:
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
 - `test_utils.rs`: reusable helpers to create data structures for unit tests.
 - `main.rs`: small application to demonstrate race simulations.
+- `bin/multi_race.rs`: small application to simulate the same race many times
+  with different seeds and summarize finish times, also used for profiling.
 
 Test code, relative to `tests/`:
 
