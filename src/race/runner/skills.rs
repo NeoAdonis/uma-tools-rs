@@ -234,8 +234,9 @@ impl Runner {
         // Out-of-gate skills activate on the first frame the runner moves; their
         // pre-race effects were already applied before the race. Taken, so that
         // they're only checked once.
-        let race_start = std::mem::take(&mut self.trigger_scheduler.race_start_triggers);
-        self.try_activate_all(race_start, state);
+        self.try_activate_all(state, |scheduler, indices| {
+            indices.append(&mut scheduler.race_start_triggers);
+        });
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
@@ -243,12 +244,14 @@ impl Runner {
         // Depend on the activations above. Heal-dependent triggers go last, as
         // any-skill-dependent ones may activate heals.
         if self.activation_flags.any_activated {
-            let any_activation = self.trigger_scheduler.any_activation_triggers.to_vec();
-            self.try_activate_all(any_activation, state);
+            self.try_activate_all(state, |scheduler, indices| {
+                indices.extend_from_slice(&scheduler.any_activation_triggers);
+            });
         }
         if self.activation_flags.heal_activated {
-            let heal_activation = self.trigger_scheduler.heal_activation_triggers.to_vec();
-            self.try_activate_all(heal_activation, state);
+            self.try_activate_all(state, |scheduler, indices| {
+                indices.extend_from_slice(&scheduler.heal_activation_triggers);
+            });
         }
     }
 
@@ -267,15 +270,10 @@ impl Runner {
     /// precondition, so that a skill can activate in the same frame its
     /// precondition is satisfied.
     fn check_precondition_windows(&mut self, state: &RaceState) {
-        let inside = self
-            .trigger_scheduler
-            .precondition_windows
-            .advance(self.position, EPSILON);
-
-        let mut any_unlocked = false;
-        for logic_idx in inside {
-            any_unlocked |= self.try_activate_skill(logic_idx, state);
-        }
+        let position = self.position;
+        let any_unlocked = self.try_activate_all(state, |scheduler, indices| {
+            indices.extend(scheduler.precondition_windows.advance(position, EPSILON));
+        });
 
         // Stop checking every branch whose preconditions were just satisfied.
         if any_unlocked {
@@ -308,28 +306,29 @@ impl Runner {
             .take_entered_straight()
             .is_some_and(|straight_idx| straight_idx + 1 == state.course.straights.len());
 
-        let scheduler = &mut self.trigger_scheduler;
-        let mut inside = scheduler.position_windows.advance(self.position, EPSILON);
-        inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
-
-        // HP can recover, so HP windows are never dropped.
+        let position = self.position;
         let hp = self.hp.percent();
-        inside.extend(
-            scheduler
-                .hp_windows
-                .iter()
-                .filter(|window| {
-                    hp >= window.min_threshold - EPSILON && hp <= window.max_threshold + EPSILON
-                })
-                .map(|window| window.logic_idx),
-        );
-        if entered_last_straight {
-            inside.extend(&scheduler.last_straight_triggers);
-        }
+        self.try_activate_all(state, |scheduler, inside| {
+            inside.extend(scheduler.position_windows.advance(position, EPSILON));
+            inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
 
-        // Try activations in the order the logics were built.
-        inside.sort_unstable();
-        self.try_activate_all(inside, state);
+            // HP can recover, so HP windows are never dropped.
+            inside.extend(
+                scheduler
+                    .hp_windows
+                    .iter()
+                    .filter(|window| {
+                        hp >= window.min_threshold - EPSILON && hp <= window.max_threshold + EPSILON
+                    })
+                    .map(|window| window.logic_idx),
+            );
+            if entered_last_straight {
+                inside.extend(&scheduler.last_straight_triggers);
+            }
+
+            // Try activations in the order the logics were built.
+            inside.sort_unstable();
+        });
     }
 
     /// Check `is_other_character_activate_advantage_skill` and
@@ -338,16 +337,33 @@ impl Runner {
     /// Other runners' activations are only known once every runner has checked
     /// her skills, so this is called by the solver afterwards.
     pub(crate) fn check_advantage_triggers(&mut self, state: &RaceState) {
-        let buff_activation = self.trigger_scheduler.buff_activation_triggers.to_vec();
-        self.try_activate_all(buff_activation, state);
+        self.try_activate_all(state, |scheduler, indices| {
+            indices.extend_from_slice(&scheduler.buff_activation_triggers);
+        });
     }
 
     /// Attempt to activate the skills associated with each trigger index, in
     /// order.
-    fn try_activate_all(&mut self, trigger_indices: Vec<usize>, state: &RaceState) {
-        for trigger_index in trigger_indices {
-            self.try_activate_skill(trigger_index, state);
+    ///
+    /// The indices are added by `collect` to the scheduler's check buffer, which
+    /// is reused so that checks don't allocate.
+    ///
+    /// Returns whether any logic succeeded.
+    fn try_activate_all(
+        &mut self,
+        state: &RaceState,
+        collect: impl FnOnce(&mut TriggerScheduler, &mut Vec<usize>),
+    ) -> bool {
+        // Taken, since activating skills needs the whole runner.
+        let mut trigger_indices = std::mem::take(&mut self.trigger_scheduler.check_buffer);
+        collect(&mut self.trigger_scheduler, &mut trigger_indices);
+        let mut any_succeeded = false;
+        for &trigger_index in &trigger_indices {
+            any_succeeded |= self.try_activate_skill(trigger_index, state);
         }
+        trigger_indices.clear();
+        self.trigger_scheduler.check_buffer = trigger_indices;
+        any_succeeded
     }
 
     /// Given a trigger index, attempt to activate the associated skill.

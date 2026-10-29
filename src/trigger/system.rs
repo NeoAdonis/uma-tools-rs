@@ -101,6 +101,10 @@ pub(crate) struct TriggerScheduler {
 
     // Activation tracking.
     pub(crate) activation_counts: ActivationCounts,
+
+    // Logic indices to check, reused across checks so that they don't allocate.
+    // Empty between checks.
+    pub(crate) check_buffer: Vec<usize>,
 }
 
 impl TriggerScheduler {
@@ -169,10 +173,10 @@ impl WindowQueue {
         self.pending.insert(idx, trigger);
     }
 
-    /// Advance the queue to `value` and return the logic indices whose window
-    /// contains it. Windows left behind are dropped. Bounds are widened by
+    /// Advance the queue to `value` and iterate over the logic indices whose
+    /// window contains it. Windows left behind are dropped. Bounds are widened by
     /// `epsilon`.
-    pub(crate) fn advance(&mut self, value: f64, epsilon: f64) -> Vec<usize> {
+    pub(crate) fn advance(&mut self, value: f64, epsilon: f64) -> impl Iterator<Item = usize> {
         while self
             .pending
             .last()
@@ -182,7 +186,7 @@ impl WindowQueue {
         }
 
         self.active.retain(|t| value <= t.max_threshold + epsilon);
-        self.active.iter().map(|t| t.logic_idx).collect()
+        self.active.iter().map(|t| t.logic_idx)
     }
 
     /// Remove every window matching `predicate`.
@@ -279,8 +283,9 @@ mod tests {
             scheduler.buff_activation_triggers.push(logic_idx);
             scheduler.heal_activation_triggers.push(logic_idx);
         }
-        // An active window, so that both queue stages are checked.
-        scheduler.position_windows.advance(0.0, 0.0);
+        // An active window, so that both queue stages are checked. Only the
+        // advance matters, not the windows inside.
+        let _ = scheduler.position_windows.advance(0.0, 0.0);
         scheduler
     }
 
@@ -428,13 +433,13 @@ mod tests {
         queue.push(window(1, 0.0, f64::INFINITY));
         queue.push(window(2, 150.0, 300.0));
 
-        assert_eq!(queue.advance(50.0, 0.0), vec![1]);
+        assert_eq!(queue.advance(50.0, 0.0).collect::<Vec<_>>(), vec![1]);
 
-        let mut inside = queue.advance(160.0, 0.0);
+        let mut inside = queue.advance(160.0, 0.0).collect::<Vec<_>>();
         inside.sort_unstable();
         assert_eq!(inside, vec![0, 1, 2]);
 
-        let mut inside = queue.advance(250.0, 0.0);
+        let mut inside = queue.advance(250.0, 0.0).collect::<Vec<_>>();
         inside.sort_unstable();
         assert_eq!(inside, vec![1, 2]);
 
@@ -447,7 +452,7 @@ mod tests {
         let mut queue = WindowQueue::default();
         queue.push(window(0, 100.0, 105.0));
 
-        assert!(queue.advance(110.0, 0.0).is_empty());
+        assert!(queue.advance(110.0, 0.0).next().is_none());
         assert!(queue.is_empty());
     }
 
@@ -456,9 +461,9 @@ mod tests {
         let mut queue = WindowQueue::default();
         queue.push(window(0, 100.0, 200.0));
 
-        assert_eq!(queue.advance(99.95, 0.1), vec![0]);
-        assert_eq!(queue.advance(200.05, 0.1), vec![0]);
-        assert!(queue.advance(200.2, 0.1).is_empty());
+        assert_eq!(queue.advance(99.95, 0.1).collect::<Vec<_>>(), vec![0]);
+        assert_eq!(queue.advance(200.05, 0.1).collect::<Vec<_>>(), vec![0]);
+        assert!(queue.advance(200.2, 0.1).next().is_none());
         assert!(queue.is_empty());
     }
 
@@ -468,8 +473,9 @@ mod tests {
         queue.push(window(0, 0.0, 100.0));
         queue.push(window(1, 50.0, 100.0));
         queue.push(window(2, 0.0, 100.0));
-        // 0 and 2 active, 1 pending.
-        queue.advance(10.0, 0.0);
+        // 0 and 2 active, 1 pending. Only the advance matters, not the windows
+        // inside.
+        let _ = queue.advance(10.0, 0.0);
 
         queue.remove_if(|w| w.logic_idx != 2);
         let remaining: Vec<_> = queue.iter().map(|w| w.logic_idx).collect();
