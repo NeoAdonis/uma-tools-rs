@@ -80,6 +80,7 @@ use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
+use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
@@ -281,19 +282,20 @@ impl UnreadyRunner {
         let skill = self.skills[skill_index].clone();
         for effect in &skill.alternatives[alt_index].effects {
             let effect_type = &effect.skill_type;
+            let modifier = skill_scaling::level_scaled_modifier(effect, skill.level);
 
             // Apply stat boosts.
             if effect_type.is_stat_boost() {
-                apply_stat_boost(&mut self.adjusted, effect_type, effect.modifier);
+                apply_stat_boost(&mut self.adjusted, effect_type, modifier);
                 if matches!(effect_type, SkillType::PowerUp | SkillType::AllStatsUp) {
-                    self.power_skill_bonus += effect.modifier as i32;
+                    self.power_skill_bonus += modifier as i32;
                 }
             }
             // Apply start delay modifications.
             else if matches!(effect_type, SkillType::MultiplyStartDelay) {
-                self.start_delay *= effect.modifier;
+                self.start_delay *= modifier;
             } else if matches!(effect_type, SkillType::AddStartDelay) {
-                self.start_delay += effect.modifier;
+                self.start_delay += modifier;
             }
             // Apply style changes.
             else if let Some(style) = effect_type.style_change() {
@@ -301,7 +303,7 @@ impl UnreadyRunner {
             }
             // Apply rush chance modifications.
             else if effect_type.is_rush_chance_effect() {
-                self.rush_chance_modifier += effect.modifier;
+                self.rush_chance_modifier += modifier;
             }
             // "Sympathy" activation affects every runner, so it's left to the solver.
             else if matches!(effect_type, SkillType::ActivateSympathy) {

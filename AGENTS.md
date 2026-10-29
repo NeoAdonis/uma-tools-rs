@@ -85,4 +85,5 @@ Scripts, relative to `scripts/`:
 - `make_skill_data.pl`: generates `skill_data.json` from the game's master database (`master.mdb`).
 - `make_skillnames.pl`: updates `skillnames.json` from the game's master database (`master.mdb`).
 - `make_character_names.pl`: updates `character_names.json` from the game's master database (`master.mdb`).
+- `make_skill_level_values.pl`: generates `src/race/skill_scaling/level_values.rs` from the game's master database (`master.mdb`).
 - `check_comment_width.pl`: reports comment lines longer than 80 characters in Rust files (`src/` and `tests/` by default), as `file:line`.

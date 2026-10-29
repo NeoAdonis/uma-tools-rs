@@ -685,7 +685,8 @@ pub struct Skill {
     ///
     /// Not part of the skill data, but of the Uma that has the skill; see
     /// [`UmaData::resolve_skills`]. [`DEFAULT_SKILL_LEVEL`] when loading the
-    /// skill. Not used by the simulation yet.
+    /// skill. Higher levels multiply the modifiers of the skill's effects,
+    /// depending on their type.
     ///
     /// [`UmaData::resolve_skills`]: crate::uma::UmaData::resolve_skills
     #[serde(skip, default = "default_skill_level")]

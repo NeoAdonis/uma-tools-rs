@@ -2,7 +2,33 @@
 //! runner's situation (see [`ValueScaling`](crate::skill::ValueScaling) and
 //! [`DurationScaling`](crate::skill::DurationScaling)).
 
+mod level_values;
+
 use crate::course::DistanceType;
+use crate::skill::{SkillEffect, SkillType};
+
+use level_values::LEVEL_MULTIPLIERS;
+
+/// Multiplier for an effect of `skill_type` from a skill at `level`.
+///
+/// Levels beyond the game's table use its closest level, and types missing from
+/// it are 1x.
+pub(crate) fn level_multiplier(skill_type: SkillType, level: u8) -> f64 {
+    LEVEL_MULTIPLIERS
+        .get(skill_type as usize)
+        .map_or(1.0, |row| row[(level.max(1) as usize).min(row.len()) - 1])
+}
+
+/// Modifier of `effect` scaled with the level of its skill (see
+/// [`level_multiplier`]).
+pub(crate) fn level_scaled_modifier(effect: &SkillEffect, level: u8) -> f64 {
+    // ? Only positive effects are assumed to scale, so that neither drawbacks
+    // on oneself nor debuffs on opponents grow with the level.
+    if !effect.is_positive() {
+        return effect.modifier;
+    }
+    effect.modifier * level_multiplier(effect.skill_type, level)
+}
 
 /// Multiplier for Unity Cup (アオハル杯) skills.
 ///

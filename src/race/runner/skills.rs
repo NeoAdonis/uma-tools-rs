@@ -592,8 +592,8 @@ impl Runner {
         }
     }
 
-    /// Value of an effect's modifier scaled with the runner's situation (see
-    /// [`ValueScaling`]).
+    /// Value of an effect's modifier scaled with its skill's level, then with
+    /// the runner's situation (see [`ValueScaling`]).
     fn scaled_modifier(
         &mut self,
         effect: &SkillEffect,
@@ -601,7 +601,8 @@ impl Runner {
         state: &RaceState,
     ) -> f64 {
         use ValueScaling::*;
-        let modifier = effect.modifier;
+        let level = self.skills[skill_index].level;
+        let modifier = skill_scaling::level_scaled_modifier(effect, level);
         match effect.value_scaling {
             Direct => modifier,
             MultiplySkillNum => {

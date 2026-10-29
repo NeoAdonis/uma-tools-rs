@@ -259,3 +259,60 @@ fn test_uphill_duration_bonus() {
         );
     }
 }
+
+#[test]
+fn test_level_multiplier() {
+    use SkillType::*;
+    let cases = [
+        (SpeedUp, 1, 1.0),
+        (SpeedUp, 10, 1.1),
+        (TargetSpeed, 2, 1.01),
+        (TargetSpeed, 10, 1.25),
+        (Acceleration, 7, 1.125),
+        // Clamped to the game's levels.
+        (TargetSpeed, 0, 1.0),
+        (TargetSpeed, 11, 1.25),
+        // Missing from the game's table.
+        (ActivateRandomGold, 10, 1.0),
+    ];
+    for (skill_type, level, expected) in cases {
+        assert_eq!(
+            level_multiplier(skill_type, level),
+            expected,
+            "{skill_type:?} level {level}"
+        );
+    }
+}
+
+#[test]
+fn test_level_scaled_modifier() {
+    use crate::test_utils::effect;
+    assert_close!(
+        level_scaled_modifier(&effect(SkillType::TargetSpeed, 0.35), 10),
+        0.4375
+    );
+    assert_close!(
+        level_scaled_modifier(&effect(SkillType::AddStartDelay, -0.1), 10),
+        -0.118
+    );
+    // Negative effects don't scale.
+    for (skill_type, modifier) in [
+        (SkillType::CurrentSpeed, -0.25),
+        (SkillType::Recovery, -0.04),
+        (SkillType::MultiplyStartDelay, 1.5),
+    ] {
+        let modifier_at_10 = level_scaled_modifier(&effect(skill_type, modifier), 10);
+        assert_eq!(modifier_at_10, modifier, "{skill_type:?}");
+    }
+}
+
+#[test]
+fn test_level_multipliers_are_1x_at_level_1() {
+    // Skills loaded from the skill data (level 1) must keep their modifiers.
+    for id in 0..=u8::MAX {
+        let Ok(skill_type) = SkillType::try_from(id) else {
+            continue;
+        };
+        assert_eq!(level_multiplier(skill_type, 1), 1.0, "{skill_type:?}");
+    }
+}
