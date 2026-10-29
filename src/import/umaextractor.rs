@@ -1,0 +1,420 @@
+//! Import of trained Umas exported by UmaExtractor.
+//!
+//! UmaExtractor exports trained Umas as JSON objects using the game's field
+//! names (`card_id`, `wiz`, `proper_distance_mile`, etc.), with aptitudes from
+//! 1 (G) to 8 (S). [`UmaExtractorData`] reads one of them, ignoring the fields
+//! that the simulation doesn't use.
+//!
+//! An Uma has aptitudes for every distance and track surface, so importing it
+//! takes the ones to use, as well as its mood.
+//!
+//! # Examples
+//!
+//! Import an Uma for a turf mile race:
+//!
+//! ```
+//! use uma_tools::course::{DistanceType, Track};
+//! use uma_tools::import::umaextractor::UmaExtractorData;
+//! use uma_tools::{Aptitude, Mood, Style};
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! let path = "tests/data/umaextractor_uma.json";
+//! let data = UmaExtractorData::from_json_file(path)?;
+//! let uma_data =
+//!     data.to_uma_data(DistanceType::Mile, Track::Turf, Mood::Great);
+//! assert_eq!(uma_data.uma.style, Style::Late);
+//! assert_eq!(uma_data.uma.distance_aptitude, Aptitude::A);
+//! assert_eq!(uma_data.uma.character_id, Some(101901));
+//! # Ok(())
+//! # }
+//! ```
+
+use serde::{Deserialize, Deserializer, de::Error};
+use std::path::Path;
+
+use crate::course::{DistanceType, Track};
+use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat};
+
+/// A trained Uma as exported by UmaExtractor.
+///
+/// Convert it with [`UmaExtractorData::to_uma_data`] to race with it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+pub struct UmaExtractorData {
+    /// See [`Uma::character_id`].
+    card_id: u32,
+    #[serde(deserialize_with = "deserialize_stat")]
+    speed: u16,
+    #[serde(deserialize_with = "deserialize_stat")]
+    stamina: u16,
+    #[serde(deserialize_with = "deserialize_stat")]
+    power: u16,
+    #[serde(deserialize_with = "deserialize_stat")]
+    guts: u16,
+    #[serde(rename = "wiz", deserialize_with = "deserialize_stat")]
+    wit: u16,
+    fans: u32,
+    #[serde(deserialize_with = "deserialize_style")]
+    running_style: Style,
+    #[serde(
+        rename = "proper_running_style_nige",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    front_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_running_style_senko",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    pace_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_running_style_sashi",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    late_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_running_style_oikomi",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    end_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_distance_short",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    short_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_distance_mile",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    mile_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_distance_middle",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    medium_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_distance_long",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    long_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_ground_turf",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    turf_aptitude: Aptitude,
+    #[serde(
+        rename = "proper_ground_dirt",
+        deserialize_with = "deserialize_aptitude"
+    )]
+    dirt_aptitude: Aptitude,
+    #[serde(rename = "skill_array", deserialize_with = "deserialize_skills")]
+    skills: Vec<UmaSkill>,
+}
+
+/// Deserialize a running style from its game value, from 1 (Front) to 4
+/// (End).
+///
+/// Runaway isn't a running style in the game data, but the effect of a skill.
+fn deserialize_style<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Style, D::Error> {
+    match u8::deserialize(deserializer)? {
+        1 => Ok(Style::Front),
+        2 => Ok(Style::Pace),
+        3 => Ok(Style::Late),
+        4 => Ok(Style::End),
+        value => Err(D::Error::custom(format!(
+            "invalid running style {value}: expected 1 to 4"
+        ))),
+    }
+}
+
+/// Deserialize an aptitude from its game value, from 1 (G) to 8 (S).
+fn deserialize_aptitude<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Aptitude, D::Error> {
+    let value = u8::deserialize(deserializer)?;
+    Aptitude::try_from(value).map_err(D::Error::custom)
+}
+
+/// Deserialize skills from objects with `skill_id` and `level`.
+fn deserialize_skills<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<UmaSkill>, D::Error> {
+    #[derive(Deserialize)]
+    struct RawSkill {
+        skill_id: i32,
+        level: u8,
+    }
+
+    let skills = Vec::<RawSkill>::deserialize(deserializer)?;
+    Ok(skills
+        .into_iter()
+        .map(|skill| UmaSkill {
+            id: skill.skill_id,
+            level: skill.level,
+        })
+        .collect())
+}
+
+impl UmaExtractorData {
+    /// Parse `UmaExtractorData` from a JSON string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON is invalid, a stat is zero, or a running
+    /// style or aptitude is out of range.
+    ///
+    /// # Examples
+    ///
+    /// Only the fields used by the simulation are required:
+    ///
+    /// ```
+    /// use uma_tools::import::umaextractor::UmaExtractorData;
+    ///
+    /// # fn main() -> Result<(), serde_json::Error> {
+    /// let data = UmaExtractorData::from_json(
+    ///     r#"{
+    ///         "card_id": 101901, "speed": 1305, "stamina": 495,
+    ///         "power": 1143, "guts": 688, "wiz": 898, "fans": 172229,
+    ///         "running_style": 3,
+    ///         "proper_running_style_nige": 2,
+    ///         "proper_running_style_senko": 7,
+    ///         "proper_running_style_sashi": 7,
+    ///         "proper_running_style_oikomi": 6,
+    ///         "proper_distance_short": 2, "proper_distance_mile": 7,
+    ///         "proper_distance_middle": 7, "proper_distance_long": 1,
+    ///         "proper_ground_turf": 7, "proper_ground_dirt": 7,
+    ///         "skill_array": [{ "skill_id": 100191, "level": 5 }]
+    ///     }"#,
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    /// Parse `UmaExtractorData` from a JSON file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read, or for the same reasons as
+    /// [`UmaExtractorData::from_json`].
+    ///
+    /// See the [module docs](self) for an example.
+    pub fn from_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let content = std::fs::read_to_string(path)?;
+        Ok(Self::from_json(&content)?)
+    }
+
+    /// Convert `self` to [`UmaData`] for a race of the given distance type and
+    /// track surface, with the given mood.
+    ///
+    /// The distance and track aptitudes are the ones for `distance` and
+    /// `track`, and the style aptitude the one for the Uma's running style.
+    pub fn to_uma_data(&self, distance: DistanceType, track: Track, mood: Mood) -> UmaData {
+        let style_aptitude = match self.running_style {
+            Style::Runaway | Style::Front => self.front_aptitude,
+            Style::Pace => self.pace_aptitude,
+            Style::Late => self.late_aptitude,
+            Style::End => self.end_aptitude,
+        };
+        let distance_aptitude = match distance {
+            DistanceType::Short => self.short_aptitude,
+            DistanceType::Mile => self.mile_aptitude,
+            DistanceType::Medium => self.medium_aptitude,
+            DistanceType::Long => self.long_aptitude,
+        };
+        let track_aptitude = match track {
+            Track::Turf => self.turf_aptitude,
+            Track::Dirt => self.dirt_aptitude,
+        };
+        UmaData {
+            uma: Uma {
+                speed: self.speed,
+                stamina: self.stamina,
+                power: self.power,
+                guts: self.guts,
+                wit: self.wit,
+                style: self.running_style,
+                distance_aptitude,
+                track_aptitude,
+                style_aptitude,
+                fan_count: Some(self.fans),
+                character_id: Some(self.card_id),
+            },
+            mood,
+            skills: self.skills.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::skill::Skill;
+
+    /// Path to an Uma exported by UmaExtractor, with every field.
+    const UMA_PATH: &str = "tests/data/umaextractor_uma.json";
+
+    /// JSON for [`UmaExtractorData`] with only the required fields, and
+    /// distinct aptitudes (S to G, then S and A) in field order.
+    const UMA_JSON: &str = r#"{
+        "card_id": 100101,
+        "speed": 1201, "stamina": 802, "power": 1003, "guts": 604,
+        "wiz": 1105, "fans": 98765, "running_style": 1,
+        "proper_running_style_nige": 8,
+        "proper_running_style_senko": 7,
+        "proper_running_style_sashi": 6,
+        "proper_running_style_oikomi": 5,
+        "proper_distance_short": 4, "proper_distance_mile": 3,
+        "proper_distance_middle": 2, "proper_distance_long": 1,
+        "proper_ground_turf": 8, "proper_ground_dirt": 7,
+        "skill_array": [
+            { "skill_id": 100011, "level": 4 },
+            { "skill_id": 200012, "level": 1 }
+        ]
+    }"#;
+
+    #[test]
+    fn test_to_uma_data() {
+        let data = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let expected = UmaData {
+            uma: Uma {
+                speed: 1201,
+                stamina: 802,
+                power: 1003,
+                guts: 604,
+                wit: 1105,
+                style: Style::Front,
+                distance_aptitude: Aptitude::D,
+                track_aptitude: Aptitude::S,
+                style_aptitude: Aptitude::S,
+                fan_count: Some(98765),
+                character_id: Some(100101),
+            },
+            mood: Mood::Good,
+            skills: vec![
+                UmaSkill {
+                    id: 100011,
+                    level: 4,
+                },
+                UmaSkill {
+                    id: 200012,
+                    level: 1,
+                },
+            ],
+        };
+        let uma_data = data.to_uma_data(DistanceType::Short, Track::Turf, Mood::Good);
+        assert_eq!(uma_data, expected);
+    }
+
+    #[test]
+    fn test_to_uma_data_picks_aptitudes() {
+        let data = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let cases = [
+            (DistanceType::Short, Track::Turf, Aptitude::D, Aptitude::S),
+            (DistanceType::Mile, Track::Dirt, Aptitude::E, Aptitude::A),
+            (DistanceType::Medium, Track::Turf, Aptitude::F, Aptitude::S),
+            (DistanceType::Long, Track::Dirt, Aptitude::G, Aptitude::A),
+        ];
+        for (distance, track, distance_aptitude, track_aptitude) in cases {
+            let uma = data.to_uma_data(distance, track, Mood::Normal).uma;
+            assert_eq!(uma.distance_aptitude, distance_aptitude, "{distance:?}");
+            assert_eq!(uma.track_aptitude, track_aptitude, "{track:?}");
+        }
+    }
+
+    #[test]
+    fn test_style_aptitude_follows_running_style() {
+        let cases = [
+            (1, Style::Front, Aptitude::S),
+            (2, Style::Pace, Aptitude::A),
+            (3, Style::Late, Aptitude::B),
+            (4, Style::End, Aptitude::C),
+        ];
+        for (value, style, aptitude) in cases {
+            let json = UMA_JSON.replace(
+                r#""running_style": 1"#,
+                &format!(r#""running_style": {value}"#),
+            );
+            let uma = UmaExtractorData::from_json(&json)
+                .unwrap()
+                .to_uma_data(DistanceType::Mile, Track::Turf, Mood::Normal)
+                .uma;
+            assert_eq!(
+                (uma.style, uma.style_aptitude),
+                (style, aptitude),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_from_invalid_json() {
+        let invalid = |from: &str, to: &str| {
+            assert_eq!(UMA_JSON.matches(from).count(), 1, "{from}");
+            let json = UMA_JSON.replace(from, to);
+            assert!(UmaExtractorData::from_json(&json).is_err(), "{to}");
+        };
+        invalid(r#""running_style": 1"#, r#""running_style": 0"#);
+        invalid(r#""running_style": 1"#, r#""running_style": 5"#);
+        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 0"#);
+        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 9"#);
+        invalid(r#""guts": 604"#, r#""guts": 0"#);
+        invalid(r#""fans": 98765, "#, "");
+        invalid(r#""level": 4"#, r#""lv": 4"#);
+        assert!(UmaExtractorData::from_json("{").is_err());
+    }
+
+    #[test]
+    fn test_from_json_file() {
+        let uma_data = UmaExtractorData::from_json_file(UMA_PATH)
+            .unwrap()
+            .to_uma_data(DistanceType::Long, Track::Dirt, Mood::Normal);
+        let uma = uma_data.uma;
+        assert_eq!(
+            (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
+            (1305, 495, 1143, 688, 898)
+        );
+        assert_eq!(uma.style, Style::Late);
+        assert_eq!(
+            (
+                uma.distance_aptitude,
+                uma.track_aptitude,
+                uma.style_aptitude
+            ),
+            (Aptitude::G, Aptitude::A, Aptitude::A)
+        );
+        assert_eq!(uma.fan_count, Some(172229));
+        assert_eq!(uma.character_id, Some(101901));
+        assert_eq!(uma_data.skills.len(), 18);
+        assert_eq!(
+            uma_data.skills[..2],
+            [
+                UmaSkill {
+                    id: 100191,
+                    level: 5
+                },
+                UmaSkill {
+                    id: 200072,
+                    level: 1
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_skills_resolve_with_levels() {
+        let all_skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
+        let skills = UmaExtractorData::from_json_file(UMA_PATH)
+            .unwrap()
+            .to_uma_data(DistanceType::Mile, Track::Turf, Mood::Normal)
+            .resolve_skills(&all_skills)
+            .unwrap();
+        assert_eq!((skills[0].id, skills[0].level), (100191, 5));
+        assert_eq!((skills[1].id, skills[1].level), (200072, 1));
+    }
+
+    #[test]
+    fn test_from_missing_file() {
+        assert!(UmaExtractorData::from_json_file("does_not_exist.json").is_err());
+    }
+}

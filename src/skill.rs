@@ -494,6 +494,14 @@ fn deserialize_base_duration<'de, D: Deserializer<'de>>(deserializer: D) -> Resu
 /// reactivate.
 pub const DEFAULT_COOLDOWN: f64 = 500.0;
 
+/// Level of a skill when not given, e.g. for skills loaded from the skill data.
+pub const DEFAULT_SKILL_LEVEL: u8 = 1;
+
+/// [`DEFAULT_SKILL_LEVEL`], for serde defaults.
+fn default_skill_level() -> u8 {
+    DEFAULT_SKILL_LEVEL
+}
+
 /// ID of the "Sympathy" skill, which skills with an
 /// [`SkillType::ActivateSympathy`] effect activate for every runner.
 pub(crate) const SYMPATHY_ID: i32 = 201631;
@@ -673,6 +681,15 @@ pub struct Skill {
     /// ones (e.g. ○ is 1, ◎ is 2 and the gold version is 3). Negative for
     /// negative skills (×).
     pub group_rate: i8,
+    /// Skill level, e.g. a unique skill's level from the Uma's talent level.
+    ///
+    /// Not part of the skill data, but of the Uma that has the skill; see
+    /// [`UmaData::resolve_skills`]. [`DEFAULT_SKILL_LEVEL`] when loading the
+    /// skill. Not used by the simulation yet.
+    ///
+    /// [`UmaData::resolve_skills`]: crate::uma::UmaData::resolve_skills
+    #[serde(skip, default = "default_skill_level")]
+    pub level: u8,
 }
 
 impl Skill {

@@ -96,6 +96,7 @@ pub(crate) fn uma(style: Style) -> Uma {
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
         fan_count: None,
+        character_id: None,
     }
 }
 
@@ -167,6 +168,7 @@ pub(crate) fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
         wit_check: false,
         group: 0,
         group_rate: 1,
+        level: 1,
     }
 }
 

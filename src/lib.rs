@@ -11,6 +11,7 @@
 //! - [`condition`] and [`trigger`]: parsing and evaluation of skill
 //!   conditions, and the system that activates skills during a race.
 //! - [`configuration`]: simulation behavior, game version and language.
+//! - [`import`]: import of Umas from data exported by other tools.
 //!
 //! Commonly used types are re-exported at the crate root.
 //!
@@ -70,6 +71,7 @@
 pub mod condition;
 pub mod configuration;
 pub mod course;
+pub mod import;
 pub mod race;
 pub mod skill;
 pub mod trigger;
@@ -88,4 +90,4 @@ pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::runner::Runner;
 pub use race::solver::RaceSolver;
 pub use skill::Skill;
-pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData};
+pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData, UmaSkill};

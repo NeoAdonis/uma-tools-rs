@@ -23,6 +23,7 @@
 //!     track_aptitude: Aptitude::A,
 //!     style_aptitude: Aptitude::A,
 //!     fan_count: None,
+//!     character_id: None,
 //! };
 //! let base_speeds: Vec<u16> = (1000..=1500)
 //!     .step_by(100)
@@ -31,10 +32,11 @@
 //! assert_eq!(base_speeds, [1000, 1100, 1200, 1250, 1300, 1350]);
 //! ```
 
+use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};
 
 use crate::course::ThresholdStat;
-use crate::skill::Skill;
+use crate::skill::{DEFAULT_SKILL_LEVEL, Skill};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
@@ -124,17 +126,19 @@ impl Style {
     }
 }
 
-/// Aptitude levels for distance, track surface, and running style.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+/// Aptitude levels for distance, track surface, and running style, with the
+/// game's values.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Aptitude {
-    S,
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
+    S = 8,
+    A = 7,
+    B = 6,
+    C = 5,
+    D = 4,
+    E = 3,
+    F = 2,
+    G = 1,
 }
 
 /// Mood or condition of the Uma. Affects base stat multipliers.
@@ -202,13 +206,20 @@ pub struct Uma {
     /// [`Configuration::default_fan_count`]:
     ///     crate::configuration::Configuration::default_fan_count
     pub fan_count: Option<u32>,
+    /// Six-digits ID of the character card identifying the character the Uma
+    /// represents and its outfit. The character ID is its first 4 digits.
+    ///
+    /// `None` if unknown.
+    pub character_id: Option<u32>,
 }
 
 /// Deserialize a stat, rejecting zero.
 ///
 /// Stats are at least 1 in the game. There's no upper bound, as the cap keeps
 /// rising with game updates.
-fn deserialize_stat<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+pub(crate) fn deserialize_stat<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
     let stat = u16::deserialize(deserializer)?;
     if stat >= 1 {
         Ok(stat)
@@ -226,8 +237,34 @@ pub struct UmaData {
     /// Mood, motivation or condition of the Uma. Affects base stat multipliers.
     #[serde(rename = "motivation")]
     pub mood: Mood,
-    /// List of [`skill`](crate::skill::Skill)s by ID that the Uma has.
-    pub skills: Vec<i32>,
+    /// [`Skill`]s that the Uma has. In JSON, a list of skill IDs, all with
+    /// [`DEFAULT_SKILL_LEVEL`].
+    #[serde(deserialize_with = "deserialize_skill_ids")]
+    pub skills: Vec<UmaSkill>,
+}
+
+/// A skill that an Uma has, by ID, with its level.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct UmaSkill {
+    /// Skill ID.
+    pub id: i32,
+    /// Skill level (see [`Skill::level`]).
+    pub level: u8,
+}
+
+/// Deserialize a list of skill IDs into [`UmaSkill`]s with
+/// [`DEFAULT_SKILL_LEVEL`].
+fn deserialize_skill_ids<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<UmaSkill>, D::Error> {
+    let ids = Vec::<i32>::deserialize(deserializer)?;
+    Ok(ids
+        .into_iter()
+        .map(|id| UmaSkill {
+            id,
+            level: DEFAULT_SKILL_LEVEL,
+        })
+        .collect())
 }
 
 impl UmaData {
@@ -280,6 +317,9 @@ impl UmaData {
 
     /// Look up the skills of `self` in `all_skills` by ID, keeping their order.
     ///
+    /// Skills are shared with `all_skills`, except those whose level differs,
+    /// which are copied with their level set.
+    ///
     /// # Errors
     ///
     /// Returns [`ResolveSkillsError::UnknownSkill`] with the first ID that isn't
@@ -317,11 +357,18 @@ impl UmaData {
         let skills = self
             .skills
             .iter()
-            .map(|&id| {
-                all_skills
+            .map(|&UmaSkill { id, level }| {
+                let skill = all_skills
                     .get(&id)
-                    .cloned()
-                    .ok_or(ResolveSkillsError::UnknownSkill(id))
+                    .ok_or(ResolveSkillsError::UnknownSkill(id))?;
+                Ok(if skill.level == level {
+                    skill.clone()
+                } else {
+                    Arc::new(Skill {
+                        level,
+                        ..Skill::clone(skill)
+                    })
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
         for (i, skill) in skills.iter().enumerate() {
@@ -404,6 +451,7 @@ impl Uma {
     ///     track_aptitude: Aptitude::A,
     ///     style_aptitude: Aptitude::A,
     ///     fan_count: None,
+    ///     character_id: None,
     /// };
     /// assert_eq!(raw.to_base(Mood::Normal).speed, 1400);
     /// assert_eq!(raw.to_base(Mood::Great).speed, 1456);
@@ -490,6 +538,7 @@ mod tests {
             track_aptitude: Aptitude::B,
             style_aptitude: Aptitude::C,
             fan_count: Some(120000),
+            character_id: Some(101901),
         };
 
         // Style, aptitudes and fan count are kept.
@@ -538,9 +587,10 @@ mod tests {
                 track_aptitude: Aptitude::B,
                 style_aptitude: Aptitude::C,
                 fan_count: Some(98765),
+                character_id: None,
             },
             mood: Mood::Bad,
-            skills: vec![200642, 201161],
+            skills: [200642, 201161].map(skill_level_1).to_vec(),
         };
         assert_eq!(UmaData::from_json(&uma_json("Senkou")).unwrap(), expected);
     }
@@ -580,7 +630,7 @@ mod tests {
         assert_eq!(uma_data.uma.speed, 1500);
         assert_eq!(uma_data.uma.style, Style::End);
         assert_eq!(uma_data.mood, Mood::Great);
-        assert_eq!(uma_data.skills, vec![200642]);
+        assert_eq!(uma_data.skills, [skill_level_1(200642)]);
     }
 
     #[test]
@@ -588,8 +638,18 @@ mod tests {
         assert!(UmaData::from_json_file("does_not_exist.json").is_err());
     }
 
-    /// Uma data with the given skill IDs.
+    /// [`UmaSkill`] with the given ID and level 1.
+    fn skill_level_1(id: i32) -> UmaSkill {
+        UmaSkill { id, level: 1 }
+    }
+
+    /// Uma data with the given skill IDs, all with level 1.
     fn uma_with_skills(skills: Vec<i32>) -> UmaData {
+        uma_with_skill_levels(skills.into_iter().map(skill_level_1).collect())
+    }
+
+    /// Uma data with the given skills.
+    fn uma_with_skill_levels(skills: Vec<UmaSkill>) -> UmaData {
         UmaData {
             uma: crate::test_utils::uma(Style::Pace),
             mood: Mood::Normal,
@@ -617,6 +677,17 @@ mod tests {
         assert_eq!(skills.len(), 2);
         assert!(Arc::ptr_eq(&skills[0], &all_skills[&3]));
         assert!(Arc::ptr_eq(&skills[1], &all_skills[&1]));
+    }
+
+    #[test]
+    fn test_resolve_skills_sets_levels() {
+        let all_skills = HashMap::from([(1, Arc::new(synthetic_skill(vec![])))]);
+        let skills = uma_with_skill_levels(vec![UmaSkill { id: 1, level: 5 }])
+            .resolve_skills(&all_skills)
+            .unwrap();
+        assert_eq!(skills[0].level, 5);
+        // The loaded skill is left untouched.
+        assert_eq!(all_skills[&1].level, 1);
     }
 
     #[test]

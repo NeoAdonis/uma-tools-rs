@@ -56,6 +56,7 @@ Source code, relative to `src/`:
   - Any other module in `race/` contains properties and calculations related to a specific race mechanic.
 - `trigger.rs`, `trigger/`: trigger system to activate skills based upon their conditions and variables. The `trigger` module docs give an overview of the whole skill activation system.
 - `skill.rs`: skill data structures and helpers.
+- `import.rs`, `import/`: import of Umas from data exported by other tools (e.g. `import/umaextractor.rs` for UmaExtractor).
 - `uma.rs`: Umamusume data structures and helpers.
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
 - `test_utils.rs`: reusable helpers to create data structures for unit tests.
@@ -65,6 +66,7 @@ Test code, relative to `tests/`:
 
 - `integration/`: integration tests.
   - `integration/common.rs`: common test code and helpers to create data structures for integration tests.
+- `data/`: data files used by tests and doc examples (e.g. `umaextractor_uma.json`, an Uma exported by UmaExtractor).
 
 Documentation, relative to `docs/`:
 

@@ -96,15 +96,9 @@ fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma 
     // This is not implemented here.
     Uma {
         speed: calculate_adjusted_speed(uma.speed, parameters.track_condition, course_modifier),
-        stamina: uma.stamina,
         power: calculate_adjusted_power(uma.power, course.surface, parameters.track_condition),
-        guts: uma.guts,
         wit: calculate_adjusted_wit(uma.wit, uma.style_aptitude),
-        style: uma.style,
-        distance_aptitude: uma.distance_aptitude,
-        track_aptitude: uma.track_aptitude,
-        style_aptitude: uma.style_aptitude,
-        fan_count: uma.fan_count,
+        ..*uma
     }
 }
 
