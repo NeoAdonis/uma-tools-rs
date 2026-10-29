@@ -35,6 +35,7 @@
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};
 
+use crate::configuration::Language;
 use crate::course::ThresholdStat;
 use crate::skill::{DEFAULT_SKILL_LEVEL, Skill};
 use std::collections::HashMap;
@@ -425,6 +426,12 @@ impl Mood {
 }
 
 impl Uma {
+    /// Get the name of the character card (outfit and Uma) in the specified
+    /// language, or `None` if the card or its name in that language is unknown.
+    pub fn name(&self, language: Language) -> Option<&'static str> {
+        crate::names::character_name(self.character_id?, language)
+    }
+
     /// Convert `self`, holding raw stats, to base stats using the mood
     /// multiplier.
     ///

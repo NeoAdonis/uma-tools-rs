@@ -27,10 +27,9 @@
 //! # }
 //! ```
 
-include!("course/track_names.rs");
-
 pub mod geometry;
 
+use crate::configuration::Language;
 use crate::course::geometry::*;
 use crate::units::{CourseWidths, deserialize_ten_thousandths};
 use num_enum::TryFromPrimitive;
@@ -511,12 +510,12 @@ impl Course {
     /// Get the track name in the specified language, or `None` if the track name is
     /// not available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
-        track_name(self.race_track_id, language)
+        crate::names::track_name(self.race_track_id, language)
     }
 
     /// Check if this is an exchange race (dirt grade).
     ///
-    /// Exchange races take place at Ooi (10101), Kawasaki (10103), Funabashi
+    /// Exchange races take place at Oi (10101), Kawasaki (10103), Funabashi
     /// (10104), or Morioka (10105).
     pub fn is_exchange_race(&self) -> bool {
         matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
@@ -754,7 +753,7 @@ mod tests {
 
     #[test]
     fn test_is_exchange_race() {
-        // Ooi, Kawasaki, Funabashi, Morioka.
+        // Oi, Kawasaki, Funabashi, Morioka.
         let exchange = [10101, 10103, 10104, 10105];
         for track_id in TRACK_IDS {
             assert_eq!(
@@ -796,7 +795,7 @@ mod tests {
         let lane = CourseWidths::from_horse_lanes;
         // (racetrack, gate roll, expected lane in horse lanes)
         let cases = [
-            // Ooi: never adjusted.
+            // Oi: never adjusted.
             (TRACK_ID_OOI, 9, 9.0),
             (TRACK_ID_OOI, 12, 12.0),
             // Longchamp: adjusted from gate roll 13.
@@ -814,7 +813,7 @@ mod tests {
             );
         }
 
-        // Course 10101 is at Sapporo, not at Ooi (racetrack 10101).
+        // Course 10101 is at Sapporo, not at Oi (racetrack 10101).
         let course = Course {
             id: 10101,
             race_track_id: 10001,

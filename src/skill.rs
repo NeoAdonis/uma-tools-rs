@@ -33,6 +33,7 @@ use std::sync::Arc;
 
 use crate::condition::parser::Condition;
 use crate::condition::variables::{ActivationVar, VarType};
+use crate::configuration::Language;
 use crate::uma::Style;
 use crate::units::deserialize_ten_thousandths;
 
@@ -694,6 +695,12 @@ pub struct Skill {
 }
 
 impl Skill {
+    /// Get the skill name in the specified language, or `None` if it isn't
+    /// available in that language.
+    pub fn name(&self, language: Language) -> Option<&'static str> {
+        crate::names::skill_name(self.id, language)
+    }
+
     /// Check if `self` is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(&self) -> bool {
         matches!(

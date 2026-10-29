@@ -498,7 +498,7 @@ fn course_value(var: &CourseVar, course: &Course) -> i32 {
         // Is basis distance (multiple of 400m).
         IsBasisDistance => course.is_basis_distance() as i32,
 
-        // Is exchange race (dirt grade): races at Ooi, Kawasaki, Funabashi or Morioka.
+        // Is exchange race (dirt grade): races at Oi, Kawasaki, Funabashi or Morioka.
         IsDirtgrade => course.is_exchange_race() as i32,
 
         // Is held at a racetrack with tight turns.

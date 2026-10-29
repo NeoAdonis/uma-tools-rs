@@ -491,7 +491,7 @@ fn test_course_flags_by_track() {
     let cases = [
         // Longchamp.
         (10201, 2400, 1, 1, 0, 0),
-        // Ooi.
+        // Oi.
         (10101, 2000, 0, 1, 1, 0),
         // Kawasaki.
         (10103, 2100, 0, 0, 1, 1),

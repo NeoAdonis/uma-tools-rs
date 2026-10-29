@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use uma_tools::names;
 use uma_tools::race::charge_up::ChargeUpOutcome;
 use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData};
 
@@ -38,6 +39,8 @@ fn main() {
 
     // Load Uma data from JSON file.
     let uma_data = UmaData::from_json_file(&uma_path).expect("Failed to parse uma JSON");
+    let language = config.language;
+    println!("Uma: {}", uma_data.uma.name(language).unwrap_or("Unknown"));
 
     // Load race parameters from JSON file.
     let parameters = RaceParametersData::from_json_file(&parameters_path)
@@ -54,7 +57,7 @@ fn main() {
     println!("  ID: {}", course.id);
     println!(
         "  Name: {}",
-        course.track_name(config.language).unwrap_or("Unknown")
+        course.track_name(language).unwrap_or("Unknown")
     );
     println!("  Distance: {}m", course.distance);
     if course.run_up > 0.0 {
@@ -75,7 +78,12 @@ fn main() {
 
     println!("Uma has {} skills", skills.len());
     for skill in &skills {
-        println!("  Skill ID: {}, Rarity: {:?}", skill.id, skill.rarity);
+        println!(
+            "  {} ({}), Rarity: {:?}",
+            skill.name(language).unwrap_or("Unknown"),
+            skill.id,
+            skill.rarity
+        );
     }
 
     // Initialize the race state.
@@ -147,14 +155,20 @@ fn main() {
         println!("Activated skills:");
         for skill in &runner.activated_skills {
             println!(
-                "  Skill ID: {} at {:.2} meters",
-                skill.skill_id, skill.distance
+                "  {} ({}) at {:.2} meters",
+                names::skill_name(skill.skill_id, language).unwrap_or("Unknown"),
+                skill.skill_id,
+                skill.distance
             );
         }
         if !runner.failed_skills().is_empty() {
             println!("Failed wit check:");
             for skill in runner.failed_skills() {
-                println!("  Skill ID: {}", skill.id);
+                println!(
+                    "  {} ({})",
+                    skill.name(language).unwrap_or("Unknown"),
+                    skill.id
+                );
             }
         }
     }

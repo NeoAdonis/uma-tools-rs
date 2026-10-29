@@ -490,7 +490,7 @@ Checks if the girl behind you is closer to the inner fence than you.
 
 ## is_dirtgrade
 
-The race is an exchange race (takes place at either the Kawasaki, Funabashi, Morioka, or Ooi racetrack)
+The race is an exchange race (takes place at either the Kawasaki, Funabashi, Morioka, or Oi racetrack)
 
 *Note:* More generally, any race held on a racetrack which is considered to be a 「地方」 (local) racetrack (as opposed to the bigger 「中央」 (Center) racetracks) will count for this.
 
@@ -498,7 +498,7 @@ The race is an exchange race (takes place at either the Kawasaki, Funabashi, Mor
 
 *Example:* `is_dirtgrade==1`
 
-*Meaning:* The current race is an exchange race (takes place at either the Kawasaki, Funabashi, Morioka, or Ooi racetrack)
+*Meaning:* The current race is an exchange race (takes place at either the Kawasaki, Funabashi, Morioka, or Oi racetrack)
 
 ## is_exist_chara_id
 
@@ -1313,7 +1313,7 @@ The time of day during which the race takes place.
 
 The ID of the current racetrack.
 
-*Some possible values:* 10001 (Sapporo, 札幌), 10002 (Hakodate, 函館), 10003 (Niigata, 新潟), 10004 (Fukushima, 福島), 10005 (Nakayama, 中山), 10006 (Tokyo, 東京), 10007 (Chukyo, 中京), 10008 (Kyoto, 京都), 10009 (Hanshin, 阪神), 10010 (Kokura, 小倉), 10101 (Ooi, 大井), 10103 (Kawasaki, 川崎), 10104 (Funabashi, 船橋), 10105 (Morioka, 盛岡)
+*Some possible values:* 10001 (Sapporo, 札幌), 10002 (Hakodate, 函館), 10003 (Niigata, 新潟), 10004 (Fukushima, 福島), 10005 (Nakayama, 中山), 10006 (Tokyo, 東京), 10007 (Chukyo, 中京), 10008 (Kyoto, 京都), 10009 (Hanshin, 阪神), 10010 (Kokura, 小倉), 10101 (Oi, 大井), 10103 (Kawasaki, 川崎), 10104 (Funabashi, 船橋), 10105 (Morioka, 盛岡)
 
 *Example:* `track_id==10006`
 

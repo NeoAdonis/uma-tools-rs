@@ -58,6 +58,7 @@ Source code, relative to `src/`:
 - `skill.rs`: skill data structures and helpers.
 - `import.rs`, `import/`: import of Umas from data exported by other tools (e.g. `import/umaextractor.rs` for UmaExtractor).
 - `uma.rs`: Umamusume data structures and helpers.
+- `names.rs`: character, skill and track names in Japanese and English, embedded from `data/names.json`.
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
 - `test_utils.rs`: reusable helpers to create data structures for unit tests.
 - `main.rs`: small application to demonstrate race simulations.
@@ -76,14 +77,12 @@ Documentation, relative to `docs/`:
 Data, relative to `data/`:
 
 - `skill_data.json`: skill information (duration, targets, effects, conditions, etc.).
-- `skillnames.json`: skill names in Japanese and English, keyed by skill ID.
-- `character_names.json`: character names (outfit and Uma) in Japanese and English, keyed by card ID.
+- `names.json`: names in Japanese and English, by kind (`characters` by card ID, outfit and Uma; `skills` by skill ID; `tracks` by track ID).
 - `course_data.json`: course information (distance, corners, straights, slopes, etc.), keyed by course ID.
 
 Scripts, relative to `scripts/`:
 
 - `make_skill_data.pl`: generates `skill_data.json` from the game's master database (`master.mdb`).
-- `make_skillnames.pl`: updates `skillnames.json` from the game's master database (`master.mdb`).
-- `make_character_names.pl`: updates `character_names.json` from the game's master database (`master.mdb`).
+- `make_names.pl`: updates `names.json` from the game's master databases (`master.mdb`), keeping names missing from them.
 - `make_skill_level_values.pl`: generates `src/race/skill_scaling/level_values.rs` from the game's master database (`master.mdb`).
 - `check_comment_width.pl`: reports comment lines longer than 80 characters in Rust files (`src/` and `tests/` by default), as `file:line`.

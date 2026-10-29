@@ -12,6 +12,7 @@
 //!   conditions, and the system that activates skills during a race.
 //! - [`configuration`]: simulation behavior, game version and language.
 //! - [`import`]: import of Umas from data exported by other tools.
+//! - [`names`]: character, skill and track names in every supported language.
 //!
 //! Commonly used types are re-exported at the crate root.
 //!
@@ -72,6 +73,7 @@ pub mod condition;
 pub mod configuration;
 pub mod course;
 pub mod import;
+pub mod names;
 pub mod race;
 pub mod skill;
 pub mod trigger;
