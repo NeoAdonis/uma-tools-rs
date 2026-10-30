@@ -1,7 +1,13 @@
 //! Simulates the same race many times with different seeds and summarizes the
 //! finish time of every runner.
+//!
+//! Races are split across `--threads` threads (one per logical CPU by
+//! default); pass `--threads 1` to simulate them all in a single thread, e.g.
+//! for profiling.
 
+use std::ops::Range;
 use std::path::PathBuf;
+use std::thread;
 use std::time::Instant;
 
 use uma_tools::import::umaextractor::UmaExtractorData;
@@ -15,6 +21,8 @@ fn main() {
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
     let mut races: u64 = 1000;
+    // One thread per logical CPU by default, or a single one if unknown.
+    let mut threads: u64 = thread::available_parallelism().map_or(1, |n| n.get() as u64);
 
     // Parse command-line arguments.
     let mut args = std::env::args().skip(1);
@@ -36,10 +44,17 @@ fn main() {
                 let value = args.next().expect("--races requires a number");
                 races = value.parse().expect("--races requires a number");
             }
+            "--threads" => {
+                let value = args.next().expect("--threads requires a number");
+                threads = value.parse().expect("--threads requires a number");
+            }
             other => panic!("Unrecognized argument: {other}"),
         }
     }
     assert!(races > 0, "--races must be at least 1");
+    assert!(threads > 0, "--threads must be at least 1");
+    // Don't spawn threads that would have no races to simulate.
+    let threads = threads.min(races);
 
     // Load everything once, so that every race only builds its solver.
     let config = Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
@@ -72,37 +87,64 @@ fn main() {
     // own with that seed.
     let base_seed = config.seed.unwrap_or_else(rand::random);
     println!(
-        "Course {} ({}), {} runners, {races} races, base seed {base_seed}",
+        "Course {} ({}), {} runners, {races} races, base seed {base_seed}, \
+         {threads} threads",
         course.id,
         course.track_name(language).unwrap_or("Unknown"),
         entries.len()
     );
 
-    // Finish times of every race, by entry.
-    let mut finish_times = vec![Vec::with_capacity(races as usize); entries.len()];
-    let start = Instant::now();
-    for race in 0..races {
-        let config = Configuration {
-            seed: Some(base_seed.wrapping_add(race)),
-            ..config
-        };
-        let mut solver = RaceSolver::new(course.clone(), race_parameters, config);
-        for (uma, mood, skills) in &entries {
-            solver.add_runner(*uma, *mood, skills.clone());
-        }
-        // Runners get reordered once ready, so map their gates back to entries.
-        let mut entry_by_gate = [0; u8::MAX as usize + 1];
-        for (entry, runner) in solver.runners().iter().enumerate() {
-            entry_by_gate[runner.gate_roll as usize] = entry;
-        }
+    // Simulate a range of races, returning their finish times by entry.
+    let run_races = |races: Range<u64>| {
+        let count = (races.end - races.start) as usize;
+        let mut finish_times = vec![Vec::with_capacity(count); entries.len()];
+        for race in races {
+            let config = Configuration {
+                seed: Some(base_seed.wrapping_add(race)),
+                ..config
+            };
+            let mut solver = RaceSolver::new(course.clone(), race_parameters, config);
+            for (uma, mood, skills) in &entries {
+                solver.add_runner(*uma, *mood, skills.clone());
+            }
+            // Runners get reordered once ready, so map their gates back to
+            // entries.
+            let mut entry_by_gate = [0; u8::MAX as usize + 1];
+            for (entry, runner) in solver.runners().iter().enumerate() {
+                entry_by_gate[runner.gate_roll as usize] = entry;
+            }
 
-        let mut solver = solver.ready_runners();
-        solver.run();
-        for runner in solver.runners() {
-            let entry = entry_by_gate[runner.gate_roll as usize];
-            finish_times[entry].push(runner.finish_time.expect("Runner didn't finish"));
+            let mut solver = solver.ready_runners();
+            solver.run();
+            for runner in solver.runners() {
+                let entry = entry_by_gate[runner.gate_roll as usize];
+                finish_times[entry].push(runner.finish_time.expect("Runner didn't finish"));
+            }
         }
-    }
+        finish_times
+    };
+
+    // Split the races into one contiguous range per thread, then gather the
+    // finish times of every race, by entry.
+    let start = Instant::now();
+    let mut finish_times = thread::scope(|scope| {
+        let run_races = &run_races;
+        let handles: Vec<_> = (0..threads)
+            .map(|thread| {
+                let first = races * thread / threads;
+                let last = races * (thread + 1) / threads;
+                scope.spawn(move || run_races(first..last))
+            })
+            .collect();
+        let mut finish_times = vec![Vec::with_capacity(races as usize); entries.len()];
+        for handle in handles {
+            let thread_times = handle.join().expect("Race thread panicked");
+            for (times, thread_times) in finish_times.iter_mut().zip(thread_times) {
+                times.extend(thread_times);
+            }
+        }
+        finish_times
+    });
     let elapsed = start.elapsed().as_secs_f64();
     println!(
         "Simulated in {elapsed:.3}s ({:.1} races/s, {:.3} ms/race)",
