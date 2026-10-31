@@ -15,7 +15,11 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! // Tokyo, turf 2400m.
-//! let course = Course::from_json_file("data/course_data.json", "10606")?;
+//! let course = Course::from_json_files(
+//!     "data/course_data.json",
+//!     "data/rails",
+//!     "10606",
+//! )?;
 //! let position = 2000.0;
 //!
 //! let straight = course.straights.iter().find(|s| s.contains(position));
@@ -69,31 +73,6 @@ pub struct Corner {
     pub start: f64,
     /// Length of the corner in meters.
     pub length: f64,
-    /// Total angle the course turns through within the corner in degrees,
-    /// always positive (the turning side is given by the course direction).
-    pub turn_angle: f64,
-}
-
-impl Corner {
-    /// Curvature in radians per meter, as if the corner turned evenly.
-    ///
-    /// # Examples
-    ///
-    /// Estimate the extra distance a runner covers by taking a corner further
-    /// out, which is its curvature times the lane offset over its length:
-    ///
-    /// ```
-    /// use uma_tools::course::geometry::Corner;
-    /// use uma_tools::units::CourseWidths;
-    ///
-    /// let corner = Corner { start: 500.0, length: 150.0, turn_angle: 90.0 };
-    /// let lane = CourseWidths(0.5);
-    /// let extra = corner.curvature() * lane.meters() * corner.length;
-    /// assert_eq!(extra.round(), 9.0);
-    /// ```
-    pub fn curvature(&self) -> f64 {
-        self.turn_angle.to_radians() / self.length
-    }
 }
 
 impl Segment for Corner {
@@ -215,7 +194,6 @@ mod tests {
         let corner = Corner {
             start: 100.0,
             length: 50.0,
-            turn_angle: 90.0,
         };
         assert_eq!(corner.range(), (100.0, 150.0));
 

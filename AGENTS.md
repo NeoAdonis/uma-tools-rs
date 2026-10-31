@@ -81,6 +81,7 @@ Data, relative to `data/`:
 - `skill_data.json`: skill information (duration, targets, effects, conditions, etc.).
 - `names.json`: names in Japanese and English, by kind (`characters` by card ID, outfit and Uma; `skills` by skill ID; `tracks` by track ID).
 - `course_data.json`: course information (distance, corners, straights, slopes, etc.), keyed by course ID.
+- `rails/`: shape of each course's inner rail in the world (base ratio, and excess length and turn between position keyframes), one file per course named after its ID.
 
 Scripts, relative to `scripts/`:
 

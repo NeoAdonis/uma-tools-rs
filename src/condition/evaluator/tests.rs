@@ -527,12 +527,10 @@ fn location_course() -> Course {
             Corner {
                 start: 1000.0,
                 length: 200.0,
-                turn_angle: 90.0,
             },
             Corner {
                 start: 1400.0,
                 length: 400.0,
-                turn_angle: 90.0,
             },
         ],
         straights: vec![

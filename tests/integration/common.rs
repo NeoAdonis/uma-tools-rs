@@ -12,9 +12,10 @@ use uma_tools::race::solver::RaceSolver;
 use uma_tools::skill::*;
 use uma_tools::uma::*;
 
-/// Load a course from `data/course_data.json`.
+/// Load a course from `data/course_data.json` and `data/rails/`.
 pub fn load_course(course_id: u32) -> Course {
-    Course::from_json_file("data/course_data.json", &course_id.to_string())
+    let (courses, rails) = ("data/course_data.json", "data/rails");
+    Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 

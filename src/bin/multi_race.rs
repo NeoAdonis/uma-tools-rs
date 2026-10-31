@@ -62,7 +62,8 @@ fn main() {
     let parameters = RaceParametersData::from_json_file(&parameters_path)
         .expect("Failed to parse parameters JSON");
     let race_parameters = parameters.race;
-    let course = Course::from_json_file("data/course_data.json", &parameters.course_id)
+    let (courses, rails) = ("data/course_data.json", "data/rails");
+    let course = Course::from_json_files(courses, rails, &parameters.course_id)
         .expect("Failed to load course data");
     let skills_map =
         Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");

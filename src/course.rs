@@ -17,7 +17,11 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! // Tokyo, turf 2400m.
-//! let course = Course::from_json_file("data/course_data.json", "10606")?;
+//! let course = Course::from_json_files(
+//!     "data/course_data.json",
+//!     "data/rails",
+//!     "10606",
+//! )?;
 //! assert_eq!(course.track_name(Language::English), Some("Tokyo"));
 //! assert_eq!(course.distance_type(), DistanceType::Medium);
 //!
@@ -28,9 +32,11 @@
 //! ```
 
 pub mod geometry;
+pub mod rail;
 
 use crate::configuration::Language;
 use crate::course::geometry::*;
+use crate::course::rail::Rail;
 use crate::units::{CourseWidths, deserialize_ten_thousandths};
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer};
@@ -86,7 +92,11 @@ impl Phase {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// // Tokyo, turf 2400m.
-    /// let course = Course::from_json_file("data/course_data.json", "10606")?;
+    /// let course = Course::from_json_files(
+    ///     "data/course_data.json",
+    ///     "data/rails",
+    ///     "10606",
+    /// )?;
     /// assert_eq!(Phase::Last.boundaries(&course), (2000.0, 2400.0));
     /// assert_eq!(Phase::Last.boundaries_first_half(&course), (2000.0, 2200.0));
     /// # Ok(())
@@ -156,7 +166,11 @@ impl Phase {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
-    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// let course = Course::from_json_files(
+    ///     "data/course_data.json",
+    ///     "data/rails",
+    ///     "11619",
+    /// )?;
     /// assert_eq!(Phase::from_position(30.0, &course), Phase::RunUp);
     /// assert_eq!(Phase::from_position(50.0, &course), Phase::Early);
     /// # Ok(())
@@ -314,6 +328,12 @@ pub struct Course {
     /// converted when deserializing.
     #[serde(rename = "laneMax", deserialize_with = "deserialize_width")]
     pub width: CourseWidths,
+    /// Shape of the inner rail in the world.
+    ///
+    /// Not part of each course's data, but read from the rail data when
+    /// loading the course.
+    #[serde(skip)]
+    pub rail: Rail,
 }
 
 /// Deserialize the course width from 10000ths of a course width.
@@ -352,7 +372,11 @@ impl Course {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
-    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// let course = Course::from_json_files(
+    ///     "data/course_data.json",
+    ///     "data/rails",
+    ///     "11619",
+    /// )?;
     /// let position = course.position_at_rate(50.0);
     /// assert_eq!(position, 850.0);
     /// assert_eq!(course.nominal_position(position), 800.0);
@@ -410,7 +434,11 @@ impl Course {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// // Tokyo, turf 3400m, with six corners.
-    /// let course = Course::from_json_file("data/course_data.json", "10608")?;
+    /// let course = Course::from_json_files(
+    ///     "data/course_data.json",
+    ///     "data/rails",
+    ///     "10608",
+    /// )?;
     /// let starts: Vec<f64> = (0..course.corners.len())
     ///     .filter(|&idx| course.corner_number(idx) == 3)
     ///     .map(|idx| course.corners[idx].start)
@@ -473,7 +501,11 @@ impl Course {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
-    /// let course = Course::from_json_file("data/course_data.json", "11619")?;
+    /// let course = Course::from_json_files(
+    ///     "data/course_data.json",
+    ///     "data/rails",
+    ///     "11619",
+    /// )?;
     /// let section = course.section_from_position(1200.0);
     /// assert_eq!(section, 17);
     /// assert!(course.section_start(section) <= 1200.0);
@@ -539,29 +571,34 @@ impl Course {
         )
     }
 
-    /// Load a specific course by ID from a JSON file.
+    /// Load a specific course by ID from the course data JSON file
+    /// (`data/course_data.json`) and its rail's JSON file in `rail_dir`
+    /// (`data/rails/`), named after the course ID.
     ///
     /// # Errors
     ///
-    /// Returns an error if the file can't be read, the JSON is invalid, or the
-    /// course ID isn't found or isn't a valid number.
+    /// Returns an error if a file can't be read, the JSON is invalid, or the
+    /// course ID isn't found in the course data or isn't a valid number.
     ///
     /// See [`Course::from_json`] for an example.
-    pub fn from_json_file(
-        json_path: impl AsRef<Path>,
+    pub fn from_json_files(
+        course_path: impl AsRef<Path>,
+        rail_dir: impl AsRef<Path>,
         course_id: &str,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
-        let json_content = fs::read_to_string(json_path)?;
-        Self::from_json(&json_content, course_id)
+        let course_json = fs::read_to_string(course_path)?;
+        let rail_json = fs::read_to_string(rail_dir.as_ref().join(format!("{course_id}.json")))?;
+        Self::from_json(&course_json, &rail_json, course_id)
     }
 
-    /// Load a specific course by ID from a JSON string.
+    /// Load a specific course by ID from a course data JSON string, and the
+    /// JSON string of its rail.
     ///
     /// # Errors
     ///
-    /// Returns an error if the JSON is invalid, or the course ID isn't found or
-    /// isn't a valid number.
+    /// Returns an error if the JSON is invalid, or the course ID isn't found in
+    /// the course data or isn't a valid number.
     ///
     /// # Examples
     ///
@@ -569,26 +606,31 @@ impl Course {
     /// compare a runner across distances:
     ///
     /// ```
+    /// use std::fs;
     /// use uma_tools::Course;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    /// let data = std::fs::read_to_string("data/course_data.json")?;
+    /// let courses = fs::read_to_string("data/course_data.json")?;
     /// // Tokyo, turf 2000m and 2400m.
     /// let courses = ["10604", "10606"]
     ///     .into_iter()
-    ///     .map(|id| Course::from_json(&data, id))
+    ///     .map(|id| {
+    ///         let rail = fs::read_to_string(format!("data/rails/{id}.json"))?;
+    ///         Course::from_json(&courses, &rail, id)
+    ///     })
     ///     .collect::<Result<Vec<_>, _>>()?;
     /// assert_eq!(courses[1].distance - courses[0].distance, 400);
     /// # Ok(())
     /// # }
     /// ```
     pub fn from_json(
-        json_str: &str,
+        course_json: &str,
+        rail_json: &str,
         course_id: &str,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::collections::HashMap;
 
-        let mut courses: HashMap<String, Course> = serde_json::from_str(json_str)?;
+        let mut courses: HashMap<String, Course> = serde_json::from_str(course_json)?;
 
         let mut course = courses
             .remove(course_id)
@@ -597,6 +639,7 @@ impl Course {
         course.id = course_id
             .parse::<u16>()
             .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
+        course.rail = serde_json::from_str(rail_json)?;
 
         Ok(course)
     }
@@ -732,7 +775,6 @@ mod tests {
         let corner = Corner {
             start: 400.0,
             length: 200.0,
-            turn_angle: 90.0,
         };
         let course = |move_lane_point, corners| Course {
             move_lane_point,
@@ -830,7 +872,6 @@ mod tests {
                 .map(|i| Corner {
                     start: i as f64 * 200.0,
                     length: 100.0,
-                    turn_angle: 90.0,
                 })
                 .collect();
             course
@@ -858,12 +899,35 @@ mod tests {
         let courses: serde_json::Value = serde_json::from_str(&json).unwrap();
         let data = &courses["10101"];
         let json = serde_json::json!({ "10101": data, "abc": data }).to_string();
+        let rail = std::fs::read_to_string("data/rails/10101.json").unwrap();
 
-        assert_eq!(Course::from_json(&json, "10101").unwrap().id, 10101);
-        let error = Course::from_json(&json, "10102").unwrap_err();
+        assert_eq!(Course::from_json(&json, &rail, "10101").unwrap().id, 10101);
+        let error = Course::from_json(&json, &rail, "10102").unwrap_err();
         assert_eq!(error.to_string(), "Course ID '10102' not found in JSON");
-        let error = Course::from_json(&json, "abc").unwrap_err();
+        let error = Course::from_json(&json, &rail, "abc").unwrap_err();
         assert_eq!(error.to_string(), "Invalid course ID format: 'abc'");
+        assert!(Course::from_json(&json, "{}", "10101").is_err());
+    }
+
+    #[test]
+    fn test_every_course_has_a_rail() {
+        let json = std::fs::read_to_string("data/course_data.json").unwrap();
+        let courses: std::collections::HashMap<String, Course> =
+            serde_json::from_str(&json).unwrap();
+        let mut course_ids: Vec<_> = courses.into_keys().collect();
+        let mut rail_ids: Vec<_> = std::fs::read_dir("data/rails")
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                let json = std::fs::read_to_string(&path).unwrap();
+                let rail = serde_json::from_str::<Rail>(&json);
+                assert!(rail.is_ok(), "{}: {rail:?}", path.display());
+                path.file_stem().unwrap().to_string_lossy().into_owned()
+            })
+            .collect();
+        course_ids.sort();
+        rail_ids.sort();
+        assert_eq!(course_ids, rail_ids);
     }
 
     #[test]

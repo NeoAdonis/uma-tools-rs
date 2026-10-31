@@ -1,6 +1,7 @@
 //! Shared helpers for unit tests.
 
 use crate::configuration::Configuration;
+use crate::course::rail::Rail;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
@@ -32,14 +33,15 @@ macro_rules! assert_close {
 }
 pub(crate) use assert_close;
 
-/// Load a course from `data/course_data.json`.
+/// Load a course from `data/course_data.json` and `data/rails/`.
 pub(crate) fn load_course(course_id: u32) -> Course {
-    Course::from_json_file("data/course_data.json", &course_id.to_string())
+    let (courses, rails) = ("data/course_data.json", "data/rails");
+    Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
 /// Synthetic 2000m (Medium) turf course at Tokyo with ID 0, without corners,
-/// slopes or straights.
+/// slopes or straights, and a straight rail.
 ///
 /// Override fields with `Course { distance: 2400, ..synthetic_course() }`.
 pub(crate) fn synthetic_course() -> Course {
@@ -58,6 +60,7 @@ pub(crate) fn synthetic_course() -> Course {
         finish_time_min: 117.1,
         finish_time_max: 123.0,
         width: CourseWidths(1.0),
+        rail: Rail::default(),
     }
 }
 
@@ -107,7 +110,17 @@ pub(crate) fn ready_solver(
     skills: Vec<Arc<Skill>>,
     config: Configuration,
 ) -> RaceSolver<Runner> {
-    let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
+    ready_solver_on(load_course(course_id), uma, skills, config)
+}
+
+/// [`ready_solver`] on `course` instead of a course from the course data.
+pub(crate) fn ready_solver_on(
+    course: Course,
+    uma: Uma,
+    skills: Vec<Arc<Skill>>,
+    config: Configuration,
+) -> RaceSolver<Runner> {
+    let mut solver = RaceSolver::new(course, race_params(), config);
     solver.add_runner(uma, Mood::Normal, skills);
     solver.ready_runners()
 }

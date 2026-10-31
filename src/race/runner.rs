@@ -40,8 +40,9 @@
 //! #         "motivation": "Great", "skills": [200331]
 //! #     }"#,
 //! # )?;
-//! # let path = "data/course_data.json";
-//! # let course = Course::from_json_file(path, &parameters.course_id)?;
+//! # let (courses, rails) = ("data/course_data.json", "data/rails");
+//! # let course =
+//! #     Course::from_json_files(courses, rails, &parameters.course_id)?;
 //! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
 //! # let skills = uma.resolve_skills(&all_skills)?;
 //! let config = Configuration::default();
@@ -712,20 +713,17 @@ impl Runner {
         }
     }
 
-    /// Ratio of world distance to course distance of the last move, at least 1.
+    /// Ratio of world distance to course distance of the last move, relative
+    /// to the course's base ratio, and at least 1.
     ///
-    /// The move ends at the current lane and position, so the current corner
-    /// (if any) gives its curvature.
+    /// The move ends at the current lane and position.
     fn world_distance_ratio(&self, course: &Course) -> f64 {
-        let curvature = self
-            .segments
-            .corner()
-            .map_or(0.0, |idx| course.corners[idx].curvature());
         world_distance::ratio(
-            self.last_move.distance,
+            course,
+            self.position - self.last_move.distance,
+            self.position,
             self.last_move.lane,
             self.lane.current,
-            curvature,
         )
     }
 

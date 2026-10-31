@@ -49,8 +49,8 @@ fn main() {
     let race_parameters = parameters.race;
     let course_id = parameters.course_id;
 
-    // Load course data from JSON file.
-    let course = Course::from_json_file("data/course_data.json", &course_id)
+    // Load course and rail data from JSON files.
+    let course = Course::from_json_files("data/course_data.json", "data/rails", &course_id)
         .expect("Failed to load course data");
 
     println!("Loaded course:");

@@ -18,17 +18,14 @@ fn create_test_course() -> Course {
             Corner {
                 start: 100.0,
                 length: 150.0,
-                turn_angle: 90.0,
             },
             Corner {
                 start: 500.0,
                 length: 200.0,
-                turn_angle: 90.0,
             },
             Corner {
                 start: 1200.0,
                 length: 180.0,
-                turn_angle: 90.0,
             },
         ],
         slopes: vec![Slope::new(800.0, 100.0, 0.05)],

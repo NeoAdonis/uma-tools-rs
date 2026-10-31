@@ -58,12 +58,29 @@ fn test_update_order_rate_tracks_best_and_worst_orders() {
 
 #[test]
 fn test_update_position_slows_down_off_rail_in_corners() {
+    use crate::course::rail::Rail;
     use crate::test_utils::*;
+    // Synthetic 2000m course whose 2m segments from 500m to 800m (a corner)
+    // turn by 0.01 radians.
+    let turn: Vec<f64> = (0..1000)
+        .map(|segment| {
+            if (250..400).contains(&segment) {
+                0.01
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    let course = Course {
+        rail: Rail::new(1.0, &[0.0; 1000], &turn),
+        ..synthetic_course()
+    };
     // Course distance covered in one frame from `position` at `lane`, after a
     // 1m move at the same lane.
     let advance = |position: f64, lane: f64| {
         let lane = CourseWidths(lane);
-        let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
+        let mut solver =
+            ready_solver_on(course.clone(), uma(Style::Late), vec![], seeded_config(0));
         solver.state.elapsed_time = 10.0;
         let runner = &mut solver.runners[0];
         runner.position = position;
@@ -73,15 +90,13 @@ fn test_update_position_slows_down_off_rail_in_corners() {
             distance: 1.0,
             lane,
         };
-        runner.segments.update(position, &solver.state.course);
         runner.update_position(0.1, &solver.state);
         runner.position - position
     };
 
-    // Straight before the first corner (400m), then within it.
+    // Straight before the corner, then within it.
     assert_eq!(advance(300.0, 1.0), 2.0);
-    assert_eq!(advance(500.0, 0.0), 2.0);
-    let corner = &load_course(10101).corners[0];
-    let expected = 2.0 / (1.0 + corner.curvature() * 11.25);
-    assert!((advance(500.0, 1.0) - expected).abs() < 1e-9);
+    assert_eq!(advance(600.0, 0.0), 2.0);
+    let expected = 2.0 / (1.0 + 0.005 * 11.25);
+    assert_close!(advance(600.0, 1.0), expected);
 }

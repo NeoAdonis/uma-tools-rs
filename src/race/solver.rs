@@ -123,8 +123,9 @@ pub struct RaceState {
 ///         "motivation": "Great", "skills": [200331]
 ///     }"#,
 /// )?;
-/// let path = "data/course_data.json";
-/// let course = Course::from_json_file(path, &parameters.course_id)?;
+/// let (courses, rails) = ("data/course_data.json", "data/rails");
+/// let course =
+///     Course::from_json_files(courses, rails, &parameters.course_id)?;
 /// let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
 /// let skills = uma.resolve_skills(&all_skills)?;
 ///
@@ -270,8 +271,9 @@ impl RaceSolver<UnreadyRunner> {
     /// #         "motivation": "Great", "skills": [200331]
     /// #     }"#,
     /// # )?;
-    /// # let path = "data/course_data.json";
-    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
+    /// # let course =
+    /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
     /// # let skills = uma.resolve_skills(&all_skills)?;
     /// let config = Configuration::default();
@@ -381,8 +383,9 @@ impl RaceSolver<UnreadyRunner> {
     /// #         "motivation": "Great", "skills": [200331]
     /// #     }"#,
     /// # )?;
-    /// # let path = "data/course_data.json";
-    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
+    /// # let course =
+    /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
     /// # let skills = uma.resolve_skills(&all_skills)?;
     /// let config = Configuration::default();
@@ -470,8 +473,9 @@ impl RaceSolver<Runner> {
     /// #         "motivation": "Great", "skills": [200331]
     /// #     }"#,
     /// # )?;
-    /// # let path = "data/course_data.json";
-    /// # let course = Course::from_json_file(path, &parameters.course_id)?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
+    /// # let course =
+    /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
     /// # let skills = uma.resolve_skills(&all_skills)?;
     /// let config = Configuration::default();
