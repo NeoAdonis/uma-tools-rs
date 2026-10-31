@@ -700,15 +700,14 @@ impl Runner {
         // Use effective_speed which includes current_speed modifiers, slowed down
         // along the course by the world distance covered on the last move, which
         // ends at the current lane and position.
-        let rail = course.rail.totals_at(prev_position, course.length());
-        let ratio = world_distance::ratio(&course.rail, &self.last_move, rail, self.lane.current);
+        let world = course.rail.world_position(prev_position, self.lane.current);
+        let ratio = world_distance::ratio(&course.rail, &self.last_move, world);
         let course_speed = self.effective_speed() / ratio;
         self.position += course_speed * move_time;
         // The lane changes after the move, so the next move ends at the new lane.
         self.last_move = LastMove {
             distance: self.position - prev_position,
-            lane: self.lane.current,
-            rail,
+            world,
         };
         if self.finish_time.is_none() && self.position >= course.length() {
             // Calculate exact finish time.

@@ -58,7 +58,7 @@ fn test_update_order_rate_tracks_best_and_worst_orders() {
 
 #[test]
 fn test_update_position_slows_down_off_rail_in_corners() {
-    use crate::course::rail::Rail;
+    use crate::course::rail::rail_from_turns;
     use crate::test_utils::*;
     // Synthetic 2000m course whose 2m segments from 500m to 800m (a corner)
     // turn by 0.01 radians.
@@ -72,7 +72,7 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         })
         .collect();
     let course = Course {
-        rail: Rail::new(1.0, &[0.0; 1000], &turn),
+        rail: rail_from_turns(1.0, 2000.0, &[0.0; 1000], &turn),
         ..synthetic_course()
     };
     // Course distance covered in one frame from `position` at `lane`, after a
@@ -88,16 +88,16 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         runner.lane = LaneState::new(lane);
         runner.last_move = LastMove {
             distance: 1.0,
-            lane,
-            rail: course.rail.totals_at(position - 1.0, course.length()),
+            world: course.rail.world_position(position - 1.0, lane),
         };
         runner.update_position(0.1, &solver.state);
         runner.position - position
     };
 
     // Straight before the corner, then within it.
-    assert_eq!(advance(300.0, 1.0), 2.0);
-    assert_eq!(advance(600.0, 0.0), 2.0);
+    assert_close!(advance(300.0, 1.0), 2.0);
+    assert_close!(advance(600.0, 0.0), 2.0);
     let expected = 2.0 / (1.0 + 0.005 * 11.25);
-    assert_close!(advance(600.0, 1.0), expected);
+    // Lanes turn between keyframes rather than evenly.
+    assert_close!(advance(600.0, 1.0), expected, tolerance = 1e-5);
 }
