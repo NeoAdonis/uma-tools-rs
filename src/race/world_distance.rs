@@ -26,11 +26,13 @@ pub(crate) struct LastMove {
     pub(crate) world: [f64; 2],
 }
 
-/// Ratio of world distance to course distance of `last_move`, relative to
-/// the base ratio of `rail`, and at least 1.
+/// Inverse of the ratio of world distance to course distance of `last_move`,
+/// relative to the base ratio of `rail`, and at most 1.
 ///
-/// The move ends at world position `end` on the horizontal plane.
-pub(crate) fn ratio(rail: &Rail, last_move: &LastMove, end: [f64; 2]) -> f64 {
+/// The move ends at world position `end` on the horizontal plane. Its inverse
+/// takes a single division to slow down the next move, and is 1 if the move
+/// covered no world distance.
+pub(crate) fn inverse_ratio(rail: &Rail, last_move: &LastMove, end: [f64; 2]) -> f64 {
     let LastMove {
         distance,
         world: start,
@@ -40,10 +42,10 @@ pub(crate) fn ratio(rail: &Rail, last_move: &LastMove, end: [f64; 2]) -> f64 {
     }
     let (dx, dz) = (end[0] - start[0], end[1] - start[1]);
     // `hypot` is much slower and more precise than needed here.
-    let ratio = (dx * dx + dz * dz).sqrt() / (distance * rail.base_ratio);
+    let inverse = (distance * rail.base_ratio) / (dx * dx + dz * dz).sqrt();
     // Ratio can be less than 1 where the rail covers less than at the base ratio,
     // or where the course turns the other way while off the rail.
-    ratio.max(1.0)
+    inverse.min(1.0)
 }
 
 #[cfg(test)]
@@ -58,8 +60,9 @@ mod tests {
     /// assume lanes turning evenly rather than between keyframes.
     const TOLERANCE: f64 = 1e-5;
 
-    /// [`ratio`] of a move along `course` from `start` to `end` (positions in
-    /// meters), and from `start_lane` to `end_lane`.
+    /// Ratio (the inverse of [`inverse_ratio`]) of a move along `course` from
+    /// `start` to `end` (positions in meters), and from `start_lane` to
+    /// `end_lane`.
     fn ratio_of_move(
         course: &Course,
         start: f64,
@@ -72,7 +75,7 @@ mod tests {
             distance: end - start,
             world: rail.world_position(start, start_lane),
         };
-        ratio(rail, &last_move, rail.world_position(end, end_lane))
+        1.0 / inverse_ratio(rail, &last_move, rail.world_position(end, end_lane))
     }
 
     /// Synthetic 2000m course with base ratio `base_ratio`, whose 2m segments
@@ -212,7 +215,7 @@ mod tests {
                 distance: 2.0,
                 world: rail.world_position(0.0, CourseWidths(start)),
             };
-            ratio(
+            1.0 / inverse_ratio(
                 &rail,
                 &last_move,
                 rail.world_position(2.0, CourseWidths(end)),

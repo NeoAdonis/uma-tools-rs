@@ -701,8 +701,8 @@ impl Runner {
         // along the course by the world distance covered on the last move, which
         // ends at the current lane and position.
         let world = course.rail.world_position(prev_position, self.lane.current);
-        let ratio = world_distance::ratio(&course.rail, &self.last_move, world);
-        let course_speed = self.effective_speed() / ratio;
+        let inverse_ratio = world_distance::inverse_ratio(&course.rail, &self.last_move, world);
+        let course_speed = self.effective_speed() * inverse_ratio;
         self.position += course_speed * move_time;
         // The lane changes after the move, so the next move ends at the new lane.
         self.last_move = LastMove {

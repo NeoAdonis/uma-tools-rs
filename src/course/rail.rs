@@ -116,6 +116,8 @@ impl Rail {
     ///
     /// Positions before the gate are clamped to it, and those past the goal
     /// extend the last segment in a straight line.
+    // Inlined into its only call site per frame, in another module.
+    #[inline]
     pub(crate) fn world_position(&self, position: f64, lane: CourseWidths) -> [f64; 2] {
         // `u32` rather than `usize` indices, which convert to and from floats
         // with fewer instructions.
