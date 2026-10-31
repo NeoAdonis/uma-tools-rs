@@ -689,6 +689,7 @@ impl Runner {
 
     /// Update the runner's position based on effective current speed.
     pub(crate) fn update_position(&mut self, delta_time: f64, state: &RaceState) {
+        let course = &state.course;
         // Runner only moves for the part of the frame after her start delay.
         // The start delay may span several frames, so it's measured from the race
         // start. Clamped to avoid negative values from float drift in elapsed time.
@@ -697,34 +698,24 @@ impl Runner {
             .max(0.0);
         let prev_position = self.position;
         // Use effective_speed which includes current_speed modifiers, slowed down
-        // along the course by the world distance covered on the last move.
-        let course_speed = self.effective_speed() / self.world_distance_ratio(&state.course);
+        // along the course by the world distance covered on the last move, which
+        // ends at the current lane and position.
+        let rail = course.rail.totals_at(prev_position, course.length());
+        let ratio = world_distance::ratio(&course.rail, &self.last_move, rail, self.lane.current);
+        let course_speed = self.effective_speed() / ratio;
         self.position += course_speed * move_time;
         // The lane changes after the move, so the next move ends at the new lane.
         self.last_move = LastMove {
             distance: self.position - prev_position,
             lane: self.lane.current,
+            rail,
         };
-        if self.finish_time.is_none() && self.position >= state.course.length() {
+        if self.finish_time.is_none() && self.position >= course.length() {
             // Calculate exact finish time.
-            let remaining_distance = state.course.length() - prev_position;
+            let remaining_distance = course.length() - prev_position;
             let time_to_finish = remaining_distance / course_speed;
             self.finish_time = Some(state.elapsed_time - delta_time + time_to_finish);
         }
-    }
-
-    /// Ratio of world distance to course distance of the last move, relative
-    /// to the course's base ratio, and at least 1.
-    ///
-    /// The move ends at the current lane and position.
-    fn world_distance_ratio(&self, course: &Course) -> f64 {
-        world_distance::ratio(
-            course,
-            self.position - self.last_move.distance,
-            self.position,
-            self.last_move.lane,
-            self.lane.current,
-        )
     }
 
     /// Check if `other` is an opponent (i.e. on a different team).

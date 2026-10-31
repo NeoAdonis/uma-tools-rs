@@ -19,40 +19,39 @@
 //! by a few degrees in corners, which changes how much world distance a lane
 //! change covers there.
 
-use crate::course::Course;
+use crate::course::rail::{Rail, Totals};
 use crate::units::CourseWidths;
 
-/// Course distance and starting lane of a runner's last move.
+/// Course distance, starting lane and rail totals of a runner's last move.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LastMove {
     /// Course distance covered in meters.
     pub(crate) distance: f64,
     /// Lane at the start of the move.
     pub(crate) lane: CourseWidths,
+    /// Running totals of the rail at the start of the move, kept from the
+    /// previous frame so that each frame looks up the rail only once.
+    pub(crate) rail: Totals,
 }
 
-/// Ratio of world distance to course distance of a move, relative to the
-/// course's base ratio, and at least 1.
+/// Ratio of world distance to course distance of `last_move`, relative to
+/// the base ratio of `rail`, and at least 1.
 ///
-/// The move goes along `course` from `start` to `end` (positions in meters),
-/// and from `start_lane` to `end_lane`.
-pub(crate) fn ratio(
-    course: &Course,
-    start: f64,
-    end: f64,
-    start_lane: CourseWidths,
-    end_lane: CourseWidths,
-) -> f64 {
-    let distance = end - start;
+/// The move ends at `end_lane`, where the rail's running totals are `end`.
+pub(crate) fn ratio(rail: &Rail, last_move: &LastMove, end: Totals, end_lane: CourseWidths) -> f64 {
+    let LastMove {
+        distance,
+        lane: start_lane,
+        rail: start,
+    } = *last_move;
     if distance <= 0.0 {
         return 1.0;
     }
-    let rail = &course.rail;
-    let change = rail.change(start, end, course.length());
+    let (excess, turn) = (end.excess - start.excess, end.turn - start.turn);
     let mid_lane = ((start_lane + end_lane) / 2.0).meters();
     // Calculate world distance of the move at the base ratio.
     let base_distance = distance * rail.base_ratio;
-    let forward = base_distance + change.excess + mid_lane * change.turn;
+    let forward = base_distance + excess + mid_lane * turn;
     let ratio = if start_lane == end_lane {
         forward / base_distance
     } else {
@@ -68,8 +67,26 @@ pub(crate) fn ratio(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::course::rail::Rail;
+    use crate::course::Course;
     use crate::test_utils::{assert_close, synthetic_course};
+
+    /// [`ratio`] of a move along `course` from `start` to `end` (positions in
+    /// meters), and from `start_lane` to `end_lane`.
+    fn ratio_of_move(
+        course: &Course,
+        start: f64,
+        end: f64,
+        start_lane: CourseWidths,
+        end_lane: CourseWidths,
+    ) -> f64 {
+        let (rail, length) = (&course.rail, course.length());
+        let last_move = LastMove {
+            distance: end - start,
+            lane: start_lane,
+            rail: rail.totals_at(start, length),
+        };
+        ratio(rail, &last_move, rail.totals_at(end, length), end_lane)
+    }
 
     /// Synthetic 2000m course with base ratio `base_ratio`, whose 2m segments
     /// between keyframes from 500m to 800m (a corner) are `excess` meters
@@ -99,7 +116,7 @@ mod tests {
     fn test_ratio_on_straight_without_lane_change() {
         let course = course(1.0, 0.0);
         assert_eq!(
-            ratio(&course, 100.0, 101.5, CourseWidths(0.5), CourseWidths(0.5)),
+            ratio_of_move(&course, 100.0, 101.5, CourseWidths(0.5), CourseWidths(0.5)),
             1.0
         );
     }
@@ -108,7 +125,7 @@ mod tests {
     fn test_ratio_without_move() {
         let course = course(1.0, 0.0);
         assert_eq!(
-            ratio(&course, 600.0, 600.0, CourseWidths(0.0), CourseWidths(0.1)),
+            ratio_of_move(&course, 600.0, 600.0, CourseWidths(0.0), CourseWidths(0.1)),
             1.0
         );
     }
@@ -117,7 +134,7 @@ mod tests {
     fn test_ratio_on_corner_grows_with_lane() {
         let course = course(1.0, 0.0);
         let at_lane = |lane| {
-            ratio(
+            ratio_of_move(
                 &course,
                 600.0,
                 601.5,
@@ -135,7 +152,7 @@ mod tests {
         let course = course(1.0, 0.0);
         let lane = CourseWidths(1.0);
         let expected = 1.0 + CURVATURE * 11.25 / 2.0;
-        assert_close!(ratio(&course, 799.0, 801.0, lane, lane), expected);
+        assert_close!(ratio_of_move(&course, 799.0, 801.0, lane, lane), expected);
     }
 
     #[test]
@@ -143,7 +160,7 @@ mod tests {
         let course = course(1.05, 0.0);
         let lane = CourseWidths(1.0);
         let expected = 1.0 + CURVATURE * 11.25 / 1.05;
-        assert_close!(ratio(&course, 600.0, 601.5, lane, lane), expected);
+        assert_close!(ratio_of_move(&course, 600.0, 601.5, lane, lane), expected);
     }
 
     #[test]
@@ -152,13 +169,13 @@ mod tests {
         let lane = CourseWidths(0.0);
         let longer = course(1.05, 0.001);
         let expected = 1.0 + 0.0005 / 1.05;
-        assert_close!(ratio(&longer, 600.0, 601.5, lane, lane), expected);
+        assert_close!(ratio_of_move(&longer, 600.0, 601.5, lane, lane), expected);
         let shorter = course(1.05, -0.001);
-        assert_eq!(ratio(&shorter, 600.0, 601.5, lane, lane), 1.0);
+        assert_eq!(ratio_of_move(&shorter, 600.0, 601.5, lane, lane), 1.0);
         // Running wide makes up for a shorter rail.
         let lane = CourseWidths(1.0);
         let expected = 1.0 + (CURVATURE * 11.25 - 0.0005) / 1.05;
-        assert_close!(ratio(&shorter, 600.0, 601.5, lane, lane), expected);
+        assert_close!(ratio_of_move(&shorter, 600.0, 601.5, lane, lane), expected);
     }
 
     #[test]
@@ -167,7 +184,7 @@ mod tests {
         let course = course(1.0, 0.0);
         let expected = 3f64.hypot(4.5) / 3.0;
         let ratio = |start, end| {
-            ratio(
+            ratio_of_move(
                 &course,
                 100.0,
                 103.0,
@@ -185,7 +202,7 @@ mod tests {
         let course = course(1.05, 0.0);
         let forward = 2.0 * (1.0 + CURVATURE * CourseWidths(0.5).meters() / 1.05);
         let expected = forward.hypot(CourseWidths(0.2).meters() / 1.05) / 2.0;
-        let ratio = ratio(&course, 600.0, 602.0, CourseWidths(0.4), CourseWidths(0.6));
+        let ratio = ratio_of_move(&course, 600.0, 602.0, CourseWidths(0.4), CourseWidths(0.6));
         assert_close!(ratio, expected);
     }
 
@@ -194,6 +211,6 @@ mod tests {
         // The corner turns the other way, so running wide covers less.
         let course = course_with(1.0, 0.0, -CURVATURE * 2.0);
         let lane = CourseWidths(1.0);
-        assert_eq!(ratio(&course, 600.0, 601.5, lane, lane), 1.0);
+        assert_eq!(ratio_of_move(&course, 600.0, 601.5, lane, lane), 1.0);
     }
 }

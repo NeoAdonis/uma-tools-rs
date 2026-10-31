@@ -89,6 +89,7 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         runner.last_move = LastMove {
             distance: 1.0,
             lane,
+            rail: course.rail.totals_at(position - 1.0, course.length()),
         };
         runner.update_position(0.1, &solver.state);
         runner.position - position

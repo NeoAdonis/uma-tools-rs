@@ -33,12 +33,12 @@ pub struct Rail {
     pub(crate) base_ratio: f64,
     /// Running totals at each keyframe, equally spaced from the gate (first)
     /// to the goal (last).
-    keyframes: Box<[Keyframe]>,
+    keyframes: Box<[Totals]>,
 }
 
 /// Running totals of a rail from the gate to a keyframe or position.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct Keyframe {
+pub(crate) struct Totals {
     /// World length of the rail beyond `base_ratio` times the course
     /// distance, in meters (negative if shorter).
     pub(crate) excess: f64,
@@ -85,7 +85,7 @@ impl Rail {
     /// equally long segments.
     pub(crate) fn new(base_ratio: f64, excess: &[f64], turn: &[f64]) -> Self {
         debug_assert!(base_ratio > 0.0 && excess.len() == turn.len() && !turn.is_empty());
-        let mut total = Keyframe::default();
+        let mut total = Totals::default();
         let keyframes = std::iter::once(total)
             .chain(excess.iter().zip(turn).map(|(excess, turn)| {
                 total.excess += excess;
@@ -99,32 +99,18 @@ impl Rail {
         }
     }
 
-    /// Change of the running totals from position `start` to `end` in meters,
-    /// on a course `length` meters long, clamped to the course.
-    pub(crate) fn change(&self, start: f64, end: f64, length: f64) -> Keyframe {
-        let frames_per_meter = (self.keyframes.len() - 1) as f64 / length;
-        let (from, to) = (
-            self.at(start * frames_per_meter),
-            self.at(end * frames_per_meter),
-        );
-        Keyframe {
-            excess: to.excess - from.excess,
-            turn: to.turn - from.turn,
-        }
-    }
-
-    /// Running totals at `frame` (fractional keyframe index), clamped to the
-    /// keyframes.
-    fn at(&self, frame: f64) -> Keyframe {
+    /// Running totals at `position` in meters, on a course `length` meters
+    /// long, clamped to the course.
+    pub(crate) fn totals_at(&self, position: f64, length: f64) -> Totals {
         // `u32` rather than `usize` indices, which convert to and from floats
         // with fewer instructions.
         let segments = (self.keyframes.len() - 1) as u32;
-        let frame = frame.clamp(0.0, segments as f64);
+        let frame = (position * segments as f64 / length).clamp(0.0, segments as f64);
         let idx = (frame as u32).min(segments - 1);
         let t = frame - idx as f64;
         let idx = idx as usize;
         let (start, end) = (self.keyframes[idx], self.keyframes[idx + 1]);
-        Keyframe {
+        Totals {
             excess: start.excess + t * (end.excess - start.excess),
             turn: start.turn + t * (end.turn - start.turn),
         }
@@ -142,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_change_interpolates_running_totals() {
+    fn test_totals_at_interpolates_running_totals() {
         let cases = [
             (0.0, 0.0, 0.0),
             (1.0, 0.05, 0.25),
@@ -151,27 +137,24 @@ mod tests {
             (4.0, -0.2, 0.5),
         ];
         for (position, excess, turn) in cases {
-            let change = rail().change(0.0, position, 4.0);
-            assert_close!(change.excess, excess, "excess at {position}m");
-            assert_close!(change.turn, turn, "turn at {position}m");
+            let totals = rail().totals_at(position, 4.0);
+            assert_close!(totals.excess, excess, "excess at {position}m");
+            assert_close!(totals.turn, turn, "turn at {position}m");
         }
-        let change = rail().change(1.0, 3.0, 4.0);
-        assert_close!(change.excess, -0.1);
-        assert_close!(change.turn, 0.25);
     }
 
     #[test]
-    fn test_change_clamps_to_course() {
+    fn test_totals_at_clamps_to_course() {
         let rail = rail();
-        assert_eq!(rail.change(-2.0, 6.0, 4.0), rail.change(0.0, 4.0, 4.0));
-        assert_eq!(rail.change(5.0, 6.0, 4.0), Keyframe::default());
+        assert_eq!(rail.totals_at(-2.0, 4.0), Totals::default());
+        assert_eq!(rail.totals_at(6.0, 4.0), rail.totals_at(4.0, 4.0));
     }
 
     #[test]
     fn test_default_rail_is_straight() {
         let rail = Rail::default();
         assert_eq!(rail.base_ratio, 1.0);
-        assert_eq!(rail.change(0.0, 2000.0, 2000.0), Keyframe::default());
+        assert_eq!(rail.totals_at(2000.0, 2000.0), Totals::default());
     }
 
     #[test]
