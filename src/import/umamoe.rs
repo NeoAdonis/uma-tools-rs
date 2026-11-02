@@ -40,21 +40,20 @@
 //! let mut config = Configuration::default();
 //! config.gate_order = build.gate_order().unwrap_or(config.gate_order);
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
-//! let mut gates = Vec::new();
 //! for team in build.teams() {
 //!     let mut members = Vec::new();
+//!     let mut gates = Vec::new();
 //!     for runner in team {
 //!         let uma_data = runner.to_uma_data(distance, track);
 //!         let skills = uma_data.resolve_skills(&all_skills)?;
 //!         members.push((uma_data.uma, uma_data.mood, skills));
 //!         gates.push(runner.gate());
 //!     }
-//!     solver.add_team(members);
-//! }
-//! // Runners were added in the same order as their gates.
-//! for (runner, gate) in gates.into_iter().enumerate() {
-//!     if let Some(gate) = gate {
-//!         solver.set_gate(runner, gate);
+//!     // IDs come in the same order as the members.
+//!     for (id, gate) in solver.add_team(members).into_iter().zip(gates) {
+//!         if let Some(gate) = gate {
+//!             solver.set_gate(id, gate);
+//!         }
 //!     }
 //! }
 //! let mut solver = solver.ready_runners();

@@ -257,11 +257,13 @@ pub(crate) struct RushCounter {
 #[derive(Debug, PartialEq)]
 pub struct Runner {
     /// Gate number (1-indexed). It determines starting lane position.
-    /// It is also used as a unique identifier for the runner.
+    ///
+    /// Each runner has a different gate, so the solver also uses it to tell
+    /// runners apart during the race. To find the runner added from some
+    /// input, use [`RaceSolver::runner`] instead.
+    ///
+    /// [`RaceSolver::runner`]: crate::race::solver::RaceSolver::runner
     pub gate_roll: u8,
-    /// Order in which the runner was added to the race (0-indexed), e.g. to
-    /// match her with what she was added from.
-    pub index: u8,
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,

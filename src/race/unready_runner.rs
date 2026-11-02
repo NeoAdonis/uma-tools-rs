@@ -153,8 +153,6 @@ pub struct UnreadyRunner {
     ///
     /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
     pub gate: Option<u8>,
-    /// Order in which the runner was added to the race (0-indexed).
-    pub index: u8,
 
     // === Mutable state being constructed ===
     /// Set of static values related to the runner at the start of the race.
@@ -240,8 +238,6 @@ impl UnreadyRunner {
             base: base_uma,
             raw: uma,
             gate: None,
-            // Assigned by the solver when the runner joins the race.
-            index: 0,
             adjusted: adjusted_uma,
             initial_state: InitialState {
                 mood,
@@ -506,7 +502,6 @@ impl UnreadyRunner {
         // Initialize race state.
         Runner {
             gate_roll,
-            index: self.index,
             base: self.base,
             raw: self.raw,
             adjusted: self.adjusted,

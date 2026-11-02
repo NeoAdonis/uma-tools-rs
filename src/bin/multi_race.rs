@@ -230,20 +230,22 @@ fn main() {
                 ..config
             };
             let mut solver = RaceSolver::new(course.clone(), race_parameters, config);
+            // Teams are added in entry order, so IDs are by entry too.
+            let mut ids = Vec::with_capacity(entries.len());
             for team in &teams {
                 let members = entries[team.clone()]
                     .iter()
                     .map(|entry| (entry.uma, entry.mood, entry.skills.clone()))
                     .collect();
-                solver.add_team(members);
+                ids.extend(solver.add_team(members));
             }
-            for (index, entry) in entries.iter().enumerate() {
+            for (&id, entry) in ids.iter().zip(&entries) {
                 if let Some(gate) = entry.gate {
-                    solver.set_gate(index, gate);
+                    solver.set_gate(id, gate);
                 }
             }
 
-            // Runners get reordered once ready, but keep the index of their entry.
+            // Runners get reordered once ready, but keep their IDs.
             let mut solver = solver.ready_runners();
             let mut stats: Vec<RunnerRace> =
                 (0..entries.len()).map(|_| Default::default()).collect();
@@ -251,8 +253,8 @@ fn main() {
             let mut finished = false;
             while !finished {
                 finished = solver.step_frame();
-                for runner in solver.runners() {
-                    let entry = runner.index as usize;
+                for (entry, &id) in ids.iter().enumerate() {
+                    let runner = solver.runner(id);
                     let stats = &mut stats[entry];
                     if stats.place > 0 {
                         continue;
@@ -296,8 +298,8 @@ fn main() {
             for (place, &entry) in by_finish.iter().enumerate() {
                 stats[entry].place = place + 1;
             }
-            for runner in solver.runners() {
-                let stats = &mut stats[runner.index as usize];
+            for (stats, &id) in stats.iter_mut().zip(&ids) {
+                let runner = solver.runner(id);
                 stats.start_delay = runner.start_delay;
                 stats.rushed_time = runner
                     .rush_state

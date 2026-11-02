@@ -93,6 +93,6 @@ pub use configuration::Configuration;
 pub use course::Course;
 pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::runner::Runner;
-pub use race::solver::RaceSolver;
+pub use race::solver::{RaceSolver, RunnerId};
 pub use skill::Skill;
 pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData, UmaSkill};

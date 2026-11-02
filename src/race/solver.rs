@@ -86,6 +86,15 @@ pub struct RaceState {
     pub(crate) popularity_top_activations: SkillActivationFlags,
 }
 
+/// Identifier of a runner in a race, returned when she's added to the
+/// [`RaceSolver`] (see [`RaceSolver::add_runner`]).
+///
+/// It identifies her throughout the race, even after runners get reordered
+/// (see [`RaceSolver::runner`]). It's only meaningful for the solver that
+/// returned it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RunnerId(u8);
+
 /// Race solver that manages the race simulation.
 ///
 /// It is managed in two phases:
@@ -158,6 +167,9 @@ pub struct RaceState {
 pub struct RaceSolver<T> {
     /// Runners of the current phase (see [`Self::runners`]).
     pub(crate) runners: Vec<T>,
+    /// Gate of each runner, indexed by [`RunnerId`]. Empty until runners are
+    /// ready.
+    gates_by_id: Vec<u8>,
     pub state: RaceState,
     /// Time (s) each pair of runners has been close in a row, indexed by their
     /// gates (see [`Self::duel_pair_index`]). Only pairs that may still start a
@@ -221,6 +233,7 @@ impl RaceSolver<UnreadyRunner> {
 
         RaceSolver {
             runners: Vec::new(),
+            gates_by_id: Vec::new(),
             state,
             duel_close_times: Vec::new(),
             prev_duel_close_times: Vec::new(),
@@ -232,21 +245,27 @@ impl RaceSolver<UnreadyRunner> {
     /// The runner gets a team of its own, so every other runner is an opponent.
     /// See [`RaceSolver::add_team`] to add allies instead.
     ///
+    /// Returns the runner's ID, to find her once runners are ready (see
+    /// [`RaceSolver::runner`]).
+    ///
     /// # Panics
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
-    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>) {
+    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>) -> RunnerId {
         if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
         let team = self.new_team();
-        self.add_member(uma, mood, skills, team);
+        self.add_member(uma, mood, skills, team)
     }
 
     /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
     ///
     /// Members are allies of each other and opponents of everyone else.
+    ///
+    /// Returns the members' IDs, in the same order as `members` (see
+    /// [`RaceSolver::add_runner`]).
     ///
     /// # Examples
     ///
@@ -297,7 +316,7 @@ impl RaceSolver<UnreadyRunner> {
     /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], or if
     /// there aren't enough free gates for all of them (see
     /// [`RaceParameters::gates`]).
-    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Arc<Skill>>)>) {
+    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Arc<Skill>>)>) -> Vec<RunnerId> {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
@@ -307,13 +326,13 @@ impl RaceSolver<UnreadyRunner> {
         }
 
         let team = self.new_team();
-        for (uma, mood, skills) in members {
-            self.add_member(uma, mood, skills, team);
-        }
+        members
+            .into_iter()
+            .map(|(uma, mood, skills)| self.add_member(uma, mood, skills, team))
+            .collect()
     }
 
-    /// Set the gate (1-indexed) of the runner added in position `runner`
-    /// (0-indexed) BEFORE the race starts.
+    /// Set the gate (1-indexed) of `runner` BEFORE the race starts.
     ///
     /// Whether she keeps it depends on [`Configuration::gate_order`]. Runners
     /// get their gates when they get ready (see [`Self::ready_runners`]).
@@ -352,40 +371,39 @@ impl RaceSolver<UnreadyRunner> {
     ///     ..Configuration::default()
     /// };
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
-    /// for _ in 0..3 {
-    ///     solver.add_runner(uma.uma, uma.mood, skills.clone());
-    /// }
-    /// solver.set_gate(2, 1);
+    /// let mut add = || solver.add_runner(uma.uma, uma.mood, skills.clone());
+    /// let ids = [add(), add(), add()];
+    /// solver.set_gate(ids[2], 1);
     /// let solver = solver.ready_runners();
     ///
-    /// // Runners are ordered by gate once ready.
-    /// let runners = solver.runners().iter();
-    /// let gates: Vec<_> = runners.map(|r| (r.index, r.gate_roll)).collect();
-    /// assert_eq!(gates, [(2, 1), (0, 2), (1, 3)]);
+    /// // Runners are ordered by gate once ready, but IDs still find them.
+    /// let gate = |id| solver.runner(id).gate_roll;
+    /// assert_eq!(ids.map(gate), [2, 3, 1]);
     /// # Ok(())
     /// # }
     /// ```
     ///
     /// # Panics
     ///
-    /// Panics if no runner was added in position `runner`, if `gate` isn't
-    /// between 1 and [`RaceParameters::gates`], or if another runner already
-    /// has it.
-    pub fn set_gate(&mut self, runner: usize, gate: u8) {
+    /// Panics if `runner` isn't in this race, if `gate` isn't between 1 and
+    /// [`RaceParameters::gates`], or if another runner already has it.
+    pub fn set_gate(&mut self, runner: RunnerId, gate: u8) {
         let gates = self.state.params.gates;
         assert!(
             (1..=gates).contains(&gate),
             "Invalid gate {gate}: expected 1 to {gates}"
         );
+        let index = runner.0 as usize;
         assert!(
             !self
                 .runners
                 .iter()
-                .any(|other| other.index as usize != runner && other.gate == Some(gate)),
+                .enumerate()
+                .any(|(other, builder)| other != index && builder.gate == Some(gate)),
             "Gate {gate} is already set for another runner"
         );
-        let Some(builder) = self.runners.get_mut(runner) else {
-            panic!("No runner added in position {runner}");
+        let Some(builder) = self.runners.get_mut(index) else {
+            panic!("No runner with {runner:?} in this race");
         };
         builder.gate = Some(gate);
     }
@@ -399,9 +417,9 @@ impl RaceSolver<UnreadyRunner> {
         team
     }
 
-    /// Add a runner as a member of `team`. Gate capacity must be checked by the
-    /// caller.
-    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>, team: u8) {
+    /// Add a runner as a member of `team`, returning her ID. Gate capacity must
+    /// be checked by the caller.
+    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>, team: u8) -> RunnerId {
         // Get existing skills before moving them into builder.
         for skill in &skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
@@ -414,13 +432,13 @@ impl RaceSolver<UnreadyRunner> {
 
         // Create builder. Gates are assigned once every runner has been added.
         let mut builder = UnreadyRunner::new(uma, mood, &self.state, skills, rng_seed);
-        builder.index = index;
         builder.initial_state.team = team;
 
         // Update runnners-by-style count before moving builder.
         self.state.runners_by_style[builder.base.style.base_style() as usize] += 1;
 
         self.runners.push(builder);
+        RunnerId(index)
     }
 
     /// Get all runners ready by calculating their stats and activating out-of-gate
@@ -473,6 +491,11 @@ impl RaceSolver<UnreadyRunner> {
         let mut builders = self.runners;
         let mut state = self.state;
         assign_gates(&mut builders, &state);
+        // Builders are still in the order they were added, i.e. by ID.
+        let gates_by_id = builders
+            .iter()
+            .map(|builder| builder.gate.expect("gates were just assigned"))
+            .collect();
         // Ready runners by gate, which settles ties (e.g. between popularity marks).
         builders.sort_by_key(|builder| builder.gate);
 
@@ -506,6 +529,7 @@ impl RaceSolver<UnreadyRunner> {
         let gates = state.params.gates as usize;
         RaceSolver {
             runners,
+            gates_by_id,
             state,
             duel_close_times: vec![None; gates * gates],
             prev_duel_close_times: vec![None; gates * gates],
@@ -560,6 +584,20 @@ fn assign_gates(builders: &mut [UnreadyRunner], state: &RaceState) {
 /// Methods available AFTER runners are ready (stats have been calculated,
 /// out-of-gate skills have been applied...).
 impl RaceSolver<Runner> {
+    /// The runner with ID `id`, wherever she is in [`Self::runners`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` isn't in this race.
+    pub fn runner(&self, id: RunnerId) -> &Runner {
+        let gate = self.gates_by_id.get(id.0 as usize);
+        let gate = *gate.unwrap_or_else(|| panic!("No runner with {id:?} in this race"));
+        self.runners
+            .iter()
+            .find(|runner| runner.gate_roll == gate)
+            .expect("every ID has a runner")
+    }
+
     /// Get the time as displayed on the scoreboard after a race finishes.
     ///
     /// Simulated times are scaled to match displayed ones, and clamped to the

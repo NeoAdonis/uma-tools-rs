@@ -3794,20 +3794,18 @@ fn gates_in_order(gate_order: GateOrder, seed: u64, set: bool) -> Vec<u8> {
         ..race_params()
     };
     let mut solver = RaceSolver::new(load_course(10101), params, config);
-    for _ in 0..4 {
-        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
-    }
+    let ids: Vec<_> = (0..4)
+        .map(|_| solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]))
+        .collect();
     if set {
-        solver.set_gate(2, 1);
+        solver.set_gate(ids[2], 1);
     }
     let solver = solver.ready_runners();
-    let mut gates = vec![0; 4];
     for runner in &solver.runners {
         // With up to 8 gates, every gate is a bracket of its own.
         assert_eq!(runner.initial_state.gate_block, runner.gate_roll);
-        gates[runner.index as usize] = runner.gate_roll;
     }
-    gates
+    ids.iter().map(|&id| solver.runner(id).gate_roll).collect()
 }
 
 #[test]
@@ -3839,26 +3837,54 @@ fn test_gate_orders() {
 #[should_panic(expected = "Gate 1 is already set for another runner")]
 fn test_set_gate_rejects_gates_of_other_runners() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
-    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
-    solver.set_gate(0, 1);
+    let first = solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    let second = solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.set_gate(first, 1);
     // Setting it again for the same runner is fine.
-    solver.set_gate(0, 1);
-    solver.set_gate(1, 1);
+    solver.set_gate(first, 1);
+    solver.set_gate(second, 1);
 }
 
 #[test]
 #[should_panic(expected = "Invalid gate 10: expected 1 to 9")]
 fn test_set_gate_rejects_gates_out_of_range() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
-    solver.set_gate(0, 10);
+    let id = solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.set_gate(id, 10);
 }
 
 #[test]
-#[should_panic(expected = "No runner added in position 1")]
-fn test_set_gate_rejects_runners_not_added() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+#[should_panic(expected = "No runner with RunnerId(1) in this race")]
+fn test_set_gate_rejects_runners_of_other_races() {
+    let new_solver = || RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    let mut other = new_solver();
+    other.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    let id = other.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    let mut solver = new_solver();
     solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
-    solver.set_gate(1, 1);
+    solver.set_gate(id, 1);
+}
+
+#[test]
+fn test_runner_finds_runners_by_id_after_reordering() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    let styles = [Style::End, Style::Late, Style::Pace, Style::Front];
+    let ids = styles.map(|style| solver.add_runner(uma(style), Mood::Normal, vec![]));
+    let mut solver = solver.ready_runners();
+    solver.run();
+    for (id, style) in ids.into_iter().zip(styles) {
+        assert_eq!(solver.runner(id).raw.style, style);
+    }
+}
+
+#[test]
+#[should_panic(expected = "No runner with RunnerId(1) in this race")]
+fn test_runner_rejects_runners_of_other_races() {
+    let new_solver = || RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    let mut other = new_solver();
+    other.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    let id = other.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    let mut solver = new_solver();
+    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.ready_runners().runner(id);
 }
