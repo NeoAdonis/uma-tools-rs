@@ -37,7 +37,7 @@ use crate::uma::*;
 use crate::units::CourseWidths;
 
 /// Scale applied to raw finish times to get displayed times.
-pub(crate) const FINISH_TIME_SCALE: f64 = 1.18;
+pub const FINISH_TIME_SCALE: f64 = 1.18;
 
 /// Duration of a single frame in seconds (race state is updated 15 times per
 /// second).
@@ -513,10 +513,24 @@ impl RaceSolver<Runner> {
 
     /// Run simulation until every runner finishes, then record finish margins.
     pub fn run(&mut self) {
-        while !self.runners.iter().all(Runner::has_finished) {
-            self.step(DELTA_TIME);
+        while !self.step_frame() {}
+    }
+
+    /// Advance the race by one frame ([`DELTA_TIME`]), e.g. to observe it
+    /// frame by frame, unless every runner has already finished.
+    ///
+    /// Returns whether every runner has finished. Finish margins are recorded
+    /// on the frame the last runner finishes, as [`Self::run`] does.
+    pub fn step_frame(&mut self) -> bool {
+        if self.runners.iter().all(Runner::has_finished) {
+            return true;
         }
-        self.update_finish_margins();
+        self.step(DELTA_TIME);
+        let finished = self.runners.iter().all(Runner::has_finished);
+        if finished {
+            self.update_finish_margins();
+        }
+        finished
     }
 
     /// Set each runner's margin behind the runner that placed immediately ahead.

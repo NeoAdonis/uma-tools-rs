@@ -141,7 +141,7 @@ impl Runner {
     }
 
     /// Check if this runner is front-blocked.
-    pub(crate) fn is_front_blocked(&self) -> bool {
+    pub fn is_front_blocked(&self) -> bool {
         self.blocked.speed_limit.is_some()
     }
 

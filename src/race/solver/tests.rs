@@ -3728,3 +3728,33 @@ fn test_lone_runner_keeps_regular_pace() {
         );
     }
 }
+
+#[test]
+fn test_step_frame_matches_run() {
+    let new_solver = || {
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+        solver.add_runner(uma(Style::Front), Mood::Normal, vec![]);
+        solver.add_runner(uma(Style::End), Mood::Normal, vec![]);
+        solver.ready_runners()
+    };
+    let mut run = new_solver();
+    run.run();
+
+    // Not finished until the last frame, when margins are recorded.
+    let mut stepped = new_solver();
+    while !stepped.step_frame() {
+        assert!(stepped.runners.iter().all(|r| r.finish_margin.is_none()));
+    }
+    let results = |solver: &RaceSolver<Runner>| {
+        let runners = solver.runners.iter();
+        runners
+            .map(|r| (r.gate_roll, r.finish_time, r.finish_margin))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(results(&stepped), results(&run));
+
+    // Once every runner has finished, frames don't advance anymore.
+    let elapsed_time = stepped.state.elapsed_time;
+    assert!(stepped.step_frame());
+    assert_eq!(stepped.state.elapsed_time, elapsed_time);
+}
