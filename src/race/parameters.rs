@@ -26,11 +26,13 @@
 //!
 //! [`RaceSolver`]: crate::race::solver::RaceSolver
 
+use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;
 
 /// Track condition (a.k.a. ground condition) enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(u8)]
 pub enum TrackCondition {
     /// 良
     Firm = 1,
@@ -43,7 +45,8 @@ pub enum TrackCondition {
 }
 
 /// Weather enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Weather {
     /// 晴
     Sunny = 1,
@@ -56,7 +59,8 @@ pub enum Weather {
 }
 
 /// Season enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Season {
     /// 春
     Spring = 1,
@@ -73,7 +77,8 @@ pub enum Season {
 }
 
 /// Time of day enumeration.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Time {
     None,
     /// 午前

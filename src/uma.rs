@@ -63,6 +63,11 @@ use std::sync::Arc;
 /// When required to treat both Front and Runaway the same way,
 /// [`Style::is_front_like`] can be used. Otherwise, explicit matching on
 /// `Style` should be done to handle their distinct behaviors.
+///
+/// ## Deserialization
+///
+/// Styles are deserialized from their romanized Japanese names: `Oonige`,
+/// `Nige`, `Senkou` (or `Senko`), `Sasi` (or `Sashi`) and `Oikomi`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
 pub enum Style {
@@ -74,11 +79,11 @@ pub enum Style {
     #[serde(rename = "Nige")]
     Front = 1,
     /// 先行, senkō - Stays near the front, behind the front runners (if any).
-    #[serde(rename = "Senkou")]
+    #[serde(rename = "Senkou", alias = "Senko")]
     Pace = 2,
     /// 差し, sashi - Stays in the middle, behind front runners and pace chasers, and
     /// makes a late surge.
-    #[serde(rename = "Sasi")]
+    #[serde(rename = "Sasi", alias = "Sashi")]
     Late = 3,
     /// End closer (追込, oikomi) - Stays at the back and sprints towards the end.
     #[serde(rename = "Oikomi")]
@@ -142,8 +147,10 @@ pub enum Aptitude {
     G = 1,
 }
 
-/// Mood or condition of the Uma. Affects base stat multipliers.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+/// Mood or condition of the Uma, with the game's values from -2 (Awful) to 2
+/// (Great). Affects base stat multipliers.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[repr(i8)]
 pub enum Mood {
     /// 絶不調, very bad.
     Awful = -2,
@@ -608,7 +615,9 @@ mod tests {
             ("Oonige", Style::Runaway),
             ("Nige", Style::Front),
             ("Senkou", Style::Pace),
+            ("Senko", Style::Pace),
             ("Sasi", Style::Late),
+            ("Sashi", Style::Late),
             ("Oikomi", Style::End),
         ];
         for (name, expected) in cases {
