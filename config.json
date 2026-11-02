@@ -5,5 +5,8 @@
     "witChecks": "Random",
     "rushing": "Random",
     "defaultFanCount": 500000,
-    "gateOrder": "RandomMissing"
+    "gateAssignment": "Unset",
+    "defaultGate": "Random",
+    "moodAssignment": "All",
+    "defaultMood": "Great"
 }

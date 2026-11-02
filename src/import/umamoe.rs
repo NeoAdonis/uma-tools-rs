@@ -13,7 +13,7 @@
 //!   skills. Older build codes, or those without a field, only have two runners
 //!   (`uma1` and `uma2`), with no team.
 //! - The gate order, and the gates of some runners (see
-//!   [`UmaMoeBuild::gate_order`] and [`UmaMoeRunner::gate`]).
+//!   [`UmaMoeBuild::configure_gates`] and [`UmaMoeRunner::gate`]).
 //!
 //! Runners have aptitudes for every distance and track surface, so racing with
 //! them takes the ones to use (see [`UmaMoeRunner::to_uma_data`]). Their fan
@@ -38,7 +38,7 @@
 //!
 //! let (distance, track) = (course.distance_type(), course.surface);
 //! let mut config = Configuration::default();
-//! config.gate_order = build.gate_order().unwrap_or(config.gate_order);
+//! build.configure_gates(&mut config);
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
 //! for team in build.teams() {
 //!     let mut members = Vec::new();
@@ -72,7 +72,7 @@ use serde_with::{TryFromInto, serde_as};
 use std::io::Read;
 use std::path::Path;
 
-use crate::configuration::GateOrder;
+use crate::configuration::{Assignment, Configuration, DefaultGate};
 use crate::course::{DistanceType, Track};
 use crate::race::parameters::{
     Grade, MAX_GATES, RaceParameters, RaceParametersData, Season, Time, TrackCondition, Weather,
@@ -94,7 +94,7 @@ pub struct UmaMoeBuild {
     time: Time,
     /// From 1 to [`MAX_GATES`] runners, in field order.
     runners: Vec<UmaMoeRunner>,
-    gate_order: Option<GateOrder>,
+    gate_order: Option<RawGateOrder>,
 }
 
 /// A runner from an uma.moe build code.
@@ -160,23 +160,14 @@ struct RawPage {
 }
 
 /// Gate order, as in the build code.
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
 enum RawGateOrder {
     /// Gates as set for each runner, the rest in field order.
     #[serde(rename = "sent")]
     Sent,
-    /// Random gates for every runner.
+    /// Random gates for every runner, even those with one set.
     #[serde(rename = "randomized")]
     Randomized,
-}
-
-impl From<RawGateOrder> for GateOrder {
-    fn from(raw: RawGateOrder) -> Self {
-        match raw {
-            RawGateOrder::Sent => GateOrder::AsSet,
-            RawGateOrder::Randomized => GateOrder::RandomAll,
-        }
-    }
 }
 
 /// Runner of the race field.
@@ -406,7 +397,7 @@ impl TryFrom<RawBuild> for UmaMoeBuild {
             season: racedef.season,
             time: racedef.time,
             runners,
-            gate_order: gate_order.map(GateOrder::from),
+            gate_order,
         })
     }
 }
@@ -455,8 +446,9 @@ impl UmaMoeBuild {
     /// Only the fields used by the simulation are required:
     ///
     /// ```
-    /// use uma_tools::configuration::GateOrder;
+    /// use uma_tools::configuration::DefaultGate;
     /// use uma_tools::import::umamoe::UmaMoeBuild;
+    /// use uma_tools::Configuration;
     ///
     /// # fn main() -> Result<(), serde_json::Error> {
     /// let build = UmaMoeBuild::from_json(
@@ -480,7 +472,9 @@ impl UmaMoeBuild {
     ///     }"#,
     /// )?;
     /// assert_eq!(build.runners().len(), 1);
-    /// assert_eq!(build.gate_order(), Some(GateOrder::AsSet));
+    /// let mut config = Configuration::default();
+    /// build.configure_gates(&mut config);
+    /// assert_eq!(config.default_gate, DefaultGate::InOrder);
     /// # Ok(())
     /// # }
     /// ```
@@ -529,15 +523,21 @@ impl UmaMoeBuild {
         teams
     }
 
-    /// Order in which runners get their gates, if the build code says:
-    /// [`GateOrder::AsSet`] for gates as sent, or [`GateOrder::RandomAll`] for
-    /// random ones.
+    /// Make `config` assign gates as the build code says, if it does: gates as
+    /// sent ([`Assignment::Unset`] and [`DefaultGate::InOrder`]), or random
+    /// ones for every runner ([`Assignment::All`] and [`DefaultGate::Random`]).
     ///
     /// As sent, runners without a gate (see [`UmaMoeRunner::gate`]) take the
     /// free ones in field order. The solver gives them in the order runners are
     /// added, so they match if runners are added in field order.
-    pub fn gate_order(&self) -> Option<GateOrder> {
-        self.gate_order
+    pub fn configure_gates(&self, config: &mut Configuration) {
+        let (assignment, default_gate) = match self.gate_order {
+            None => return,
+            Some(RawGateOrder::Sent) => (Assignment::Unset, DefaultGate::InOrder),
+            Some(RawGateOrder::Randomized) => (Assignment::All, DefaultGate::Random),
+        };
+        config.gate_assignment = assignment;
+        config.default_gate = default_gate;
     }
 }
 
@@ -592,7 +592,7 @@ impl UmaMoeRunner {
                 fan_count: self.fan_count,
                 character_id: self.character_id,
             },
-            mood: self.mood,
+            mood: Some(self.mood),
             skills: self.skills.clone(),
         }
     }
@@ -678,7 +678,7 @@ mod tests {
                 course_id: "10506".to_string(),
             }
         );
-        assert_eq!(build.gate_order(), Some(GateOrder::AsSet));
+        assert_eq!(build.gate_order, Some(RawGateOrder::Sent));
         assert!(build.runners().iter().all(|runner| runner.gate().is_none()));
 
         let uma_data = build.runners()[0].to_uma_data(DistanceType::Long, Track::Turf);
@@ -698,7 +698,7 @@ mod tests {
         );
         assert_eq!(uma.fan_count, Some(999999));
         assert_eq!(uma.character_id, Some(100201));
-        assert_eq!(uma_data.mood, Mood::Great);
+        assert_eq!(uma_data.mood, Some(Mood::Great));
         assert_eq!(uma_data.skills.len(), 21);
         // Only the first runner has a fan count.
         let uma = build.runners()[1].to_uma_data(DistanceType::Long, Track::Turf);
@@ -762,7 +762,7 @@ mod tests {
                 fan_count: Some(123456),
                 character_id: Some(100101),
             },
-            mood: Mood::Bad,
+            mood: Some(Mood::Bad),
             skills: vec![
                 UmaSkill {
                     id: 100011,
@@ -824,15 +824,35 @@ mod tests {
     }
 
     #[test]
-    fn test_gate_order() {
+    fn test_configure_gates() {
+        // Different from both orders, so that changes show.
+        let base = Configuration {
+            gate_assignment: Assignment::All,
+            default_gate: DefaultGate::InOrder,
+            ..Configuration::default()
+        };
         let cases = [
-            ("", None),
-            (r#""gateOrder": "randomized","#, Some(GateOrder::RandomAll)),
-            (r#""gateOrder": "sent","#, Some(GateOrder::AsSet)),
+            ("", base),
+            (
+                r#""gateOrder": "randomized","#,
+                Configuration {
+                    default_gate: DefaultGate::Random,
+                    ..base
+                },
+            ),
+            (
+                r#""gateOrder": "sent","#,
+                Configuration {
+                    gate_assignment: Assignment::Unset,
+                    ..base
+                },
+            ),
         ];
         for (gate_order, expected) in cases {
             let build = UmaMoeBuild::from_json(&field_json(gate_order)).unwrap();
-            assert_eq!(build.gate_order(), expected, "{gate_order}");
+            let mut config = base;
+            build.configure_gates(&mut config);
+            assert_eq!(config, expected, "{gate_order}");
         }
         assert!(UmaMoeBuild::from_json(&field_json(r#""gateOrder": "fixed","#)).is_err());
     }
@@ -861,7 +881,7 @@ mod tests {
     fn test_from_uma1_uma2() {
         let build = UmaMoeBuild::from_json(UMA1_UMA2_JSON).unwrap();
         assert_eq!(build.race_parameters().race.gates, 2);
-        assert_eq!(build.gate_order(), None);
+        assert_eq!(build.gate_order, None);
         assert_eq!(build.teams().len(), 2);
 
         let runners = build.runners();
@@ -879,7 +899,7 @@ mod tests {
             ),
             (Aptitude::E, Aptitude::G, Aptitude::S)
         );
-        assert_eq!(uma_data.mood, Mood::Bad);
+        assert_eq!(uma_data.mood, Some(Mood::Bad));
         // Only the unique skill gets the unique level, not inherited ones.
         let levels: Vec<_> = uma_data.skills.iter().map(|s| (s.id, s.level)).collect();
         assert_eq!(levels, [(100021, 5), (200132, 1), (910071, 1)]);
@@ -888,7 +908,7 @@ mod tests {
         assert_eq!(uma_data.uma.character_id, None);
         assert_eq!(uma_data.uma.fan_count, None);
         assert_eq!(uma_data.uma.style_aptitude, Aptitude::E);
-        assert_eq!(uma_data.mood, Mood::Great);
+        assert_eq!(uma_data.mood, Some(Mood::Great));
     }
 
     #[test]

@@ -242,9 +242,10 @@ pub(crate) fn deserialize_stat<'de, D: Deserializer<'de>>(
 pub struct UmaData {
     #[serde(flatten)]
     pub uma: Uma,
-    /// Mood, motivation or condition of the Uma. Affects base stat multipliers.
-    #[serde(rename = "motivation")]
-    pub mood: Mood,
+    /// Mood, motivation or condition of the Uma, if set. Affects base stat
+    /// multipliers.
+    #[serde(rename = "motivation", default)]
+    pub mood: Option<Mood>,
     /// [`Skill`]s that the Uma has. In JSON, a list of skill IDs, all with
     /// [`DEFAULT_SKILL_LEVEL`].
     #[serde(deserialize_with = "deserialize_skill_ids")]
@@ -603,10 +604,16 @@ mod tests {
                 fan_count: Some(98765),
                 character_id: None,
             },
-            mood: Mood::Bad,
+            mood: Some(Mood::Bad),
             skills: [200642, 201161].map(skill_level_1).to_vec(),
         };
         assert_eq!(UmaData::from_json(&uma_json("Senkou")).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_uma_data_without_mood() {
+        let json = uma_json("Nige").replace(r#""motivation": "Bad","#, "");
+        assert_eq!(UmaData::from_json(&json).unwrap().mood, None);
     }
 
     #[test]
@@ -631,7 +638,7 @@ mod tests {
         // Unknown style.
         assert!(UmaData::from_json(&uma_json("Front")).is_err());
         // Missing field.
-        let json = uma_json("Nige").replace(r#""motivation": "Bad","#, "");
+        let json = uma_json("Nige").replace(r#""speed": 1501,"#, "");
         assert!(UmaData::from_json(&json).is_err());
         // Zero stat.
         let json = uma_json("Nige").replace(r#""guts": 704"#, r#""guts": 0"#);
@@ -645,7 +652,7 @@ mod tests {
         let uma_data = UmaData::from_json_file("tests/data/uma_data.json").unwrap();
         assert_eq!(uma_data.uma.speed, 1500);
         assert_eq!(uma_data.uma.style, Style::End);
-        assert_eq!(uma_data.mood, Mood::Great);
+        assert_eq!(uma_data.mood, Some(Mood::Great));
         assert_eq!(uma_data.skills, [skill_level_1(200642)]);
     }
 
@@ -668,7 +675,7 @@ mod tests {
     fn uma_with_skill_levels(skills: Vec<UmaSkill>) -> UmaData {
         UmaData {
             uma: crate::test_utils::uma(Style::Pace),
-            mood: Mood::Normal,
+            mood: Some(Mood::Normal),
             skills,
         }
     }

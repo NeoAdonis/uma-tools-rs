@@ -27,13 +27,10 @@ use uma_tools::race::parameters::RaceParameters;
 use uma_tools::race::solver::{DELTA_TIME, FINISH_TIME_SCALE};
 use uma_tools::{Configuration, Course, Mood, RaceParametersData, RaceSolver, Skill, Uma};
 
-/// Mood of every runner from UmaExtractor, since its exports don't include it.
-const MOOD: Mood = Mood::Great;
-
 /// A runner of the field, in the order the runners are added to the race.
 struct Entry {
     uma: Uma,
-    mood: Mood,
+    mood: Option<Mood>,
     skills: Vec<Arc<Skill>>,
     /// Gate set for the runner, if any.
     gate: Option<u8>,
@@ -144,7 +141,7 @@ fn main() {
         Vec<usize>,
     ) = if let Some(build_path) = &build_path {
         let build = UmaMoeBuild::from_build_code_file(build_path).expect("Failed to parse build");
-        config.gate_order = build.gate_order().unwrap_or(config.gate_order);
+        build.configure_gates(&mut config);
         let parameters = build.race_parameters();
         let course = load_course(&parameters);
         let (distance, track) = (course.distance_type(), course.surface);
@@ -180,7 +177,7 @@ fn main() {
             .iter()
             .take(parameters.race.gates as usize)
             .map(|data| {
-                let uma_data = data.to_uma_data(distance, track, MOOD);
+                let uma_data = data.to_uma_data(distance, track);
                 let skills = uma_data
                     .resolve_skills(&skills_map)
                     .expect("Failed to resolve uma skills");
@@ -205,8 +202,8 @@ fn main() {
     // own with that seed.
     let base_seed = config.seed.unwrap_or_else(rand::random);
     println!(
-        "Course {} ({}, {} m), {:?}, {:?}, {:?}, {:?}, {} runners, gates {:?}, \
-         {races} races, base seed {base_seed}, {threads} threads",
+        "Course {} ({}, {} m), {:?}, {:?}, {:?}, {:?}, {} runners, gates {:?} ({:?}), \
+         moods {:?} ({:?}), {races} races, base seed {base_seed}, {threads} threads",
         course.id,
         course.track_name(language).unwrap_or("Unknown"),
         course.distance,
@@ -215,7 +212,10 @@ fn main() {
         race_parameters.season,
         race_parameters.time,
         entries.len(),
-        config.gate_order
+        config.default_gate,
+        config.gate_assignment,
+        config.default_mood,
+        config.mood_assignment,
     );
 
     // Simulate a range of races, returning what every entry did in each.

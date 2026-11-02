@@ -7,7 +7,7 @@ use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::race::parameters::*;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
-use uma_tools::race::unready_runner::UnreadyRunner;
+use uma_tools::race::unready_runner::Entrant;
 use uma_tools::uma::*;
 
 #[test]
@@ -82,7 +82,7 @@ fn test_multi_runner_race_simulation() {
         };
         let mut solver = RaceSolver::new(course.clone(), params, config);
         for style in styles {
-            solver.add_runner(uma(style), Mood::Normal, vec![]);
+            solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();
@@ -117,7 +117,7 @@ fn test_same_seed_gives_same_race() {
         let config = seeded_config(seed);
         let mut solver = RaceSolver::new(course, params, config);
         for style in styles {
-            solver.add_runner(uma(style), Mood::Normal, vec![]);
+            solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
         }
         let mut solver = solver.ready_runners();
         solver.run();
@@ -140,7 +140,7 @@ fn test_same_seed_gives_same_race() {
 #[test]
 fn test_solvers_are_send() {
     fn assert_send<T: Send>() {}
-    assert_send::<RaceSolver<UnreadyRunner>>();
+    assert_send::<RaceSolver<Entrant>>();
     assert_send::<RaceSolver<Runner>>();
 }
 
@@ -148,6 +148,6 @@ fn test_solvers_are_send() {
 #[test]
 fn test_solvers_are_sync() {
     fn assert_sync<T: Sync>() {}
-    assert_sync::<RaceSolver<UnreadyRunner>>();
+    assert_sync::<RaceSolver<Entrant>>();
     assert_sync::<RaceSolver<Runner>>();
 }

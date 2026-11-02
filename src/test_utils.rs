@@ -1,6 +1,6 @@
 //! Shared helpers for unit tests.
 
-use crate::configuration::Configuration;
+use crate::configuration::{Assignment, Configuration};
 use crate::course::rail::Rail;
 use crate::course::*;
 use crate::race::parameters::*;
@@ -76,10 +76,12 @@ pub(crate) fn race_params() -> RaceParameters {
     }
 }
 
-/// Default configuration with the given RNG seed.
+/// Default configuration with the given RNG seed, keeping the moods set for
+/// runners (see [`Configuration::mood_assignment`]).
 pub(crate) fn seeded_config(seed: u64) -> Configuration {
     Configuration {
         seed: Some(seed),
+        mood_assignment: Assignment::Unset,
         ..Default::default()
     }
 }
@@ -121,7 +123,7 @@ pub(crate) fn ready_solver_on(
     config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(course, race_params(), config);
-    solver.add_runner(uma, Mood::Normal, skills);
+    solver.add_runner(uma, Some(Mood::Normal), skills);
     solver.ready_runners()
 }
 

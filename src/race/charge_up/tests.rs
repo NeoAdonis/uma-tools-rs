@@ -25,7 +25,7 @@ fn solver(
         ..seeded_config(rng_seed)
     };
     let mut solver = RaceSolver::new(load_course(10204), race_params(), config);
-    solver.add_runner(uma, mood, vec![]);
+    solver.add_runner(uma, Some(mood), vec![]);
     solver.ready_runners()
 }
 

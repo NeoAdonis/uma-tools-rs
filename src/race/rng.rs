@@ -36,6 +36,8 @@ pub(crate) enum Stream {
     // === Runner streams ===
     /// Gate roll.
     Gate,
+    /// Mood roll.
+    Mood,
     /// Start delay.
     StartDelay,
     /// Rush chance check, rush style and section, and snap-out checks.

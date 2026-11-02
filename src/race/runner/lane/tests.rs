@@ -9,7 +9,7 @@ use crate::units::CourseWidths;
 fn lane_solver(runners: &[(f64, f64)]) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
-        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
     }
     let mut solver = solver.ready_runners();
     for (runner, &(position, lane)) in solver.runners.iter_mut().zip(runners) {

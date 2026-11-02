@@ -3,10 +3,7 @@ use std::path::PathBuf;
 use uma_tools::import::umaextractor::UmaExtractorData;
 use uma_tools::names;
 use uma_tools::race::charge_up::ChargeUpOutcome;
-use uma_tools::{Configuration, Course, Mood, RaceParametersData, RaceSolver, Skill};
-
-/// Mood of every runner, since UmaExtractor exports don't include it.
-const MOOD: Mood = Mood::Great;
+use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver, Skill};
 
 fn main() {
     let mut config_path = PathBuf::from("config.json");
@@ -93,7 +90,7 @@ fn main() {
     let mut solver = RaceSolver::new(course, race_parameters, config);
     println!("\nRunners:");
     for data in all_umas.iter().take(gates) {
-        let uma_data = data.to_uma_data(distance_type, surface, MOOD);
+        let uma_data = data.to_uma_data(distance_type, surface);
         let skills = uma_data
             .resolve_skills(&skills_map)
             .expect("Failed to resolve uma skills");

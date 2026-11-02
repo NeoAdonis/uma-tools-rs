@@ -23,8 +23,11 @@
 //! ```
 
 use rand::{Rng, RngExt};
-use serde::Deserialize;
+use serde::de::{Error, IntoDeserializer};
+use serde::{Deserialize, Deserializer};
 use std::path::Path;
+
+use crate::uma::Mood;
 
 /// Represents different versions of the game.
 ///
@@ -120,21 +123,55 @@ impl Roll {
     }
 }
 
-/// How runners get their gates when they get ready to race.
+/// Which runners get a default value (e.g. [`DefaultGate`] or
+/// [`DefaultMood`]) when they get ready to race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+pub enum Assignment {
+    /// Runners keep the values set for them, and the rest get the default.
+    Unset,
+    /// Every runner gets the default, even if a value was set for her.
+    All,
+}
+
+/// Gate of the runners that get a default one (see
+/// [`Configuration::gate_assignment`]).
 ///
 /// Gates can be set for some runners with [`RaceSolver::set_gate`].
 ///
 /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Deserialize)]
-pub enum GateOrder {
-    /// Runners keep the gates set for them, and the rest take the lowest free
-    /// gates in the order they were added to the race.
-    AsSet,
-    /// Runners keep the gates set for them, and the rest get random gates.
-    #[default]
-    RandomMissing,
-    /// Every runner gets a random gate, even if one was set for her.
-    RandomAll,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+pub enum DefaultGate {
+    /// The lowest free gates, in the order runners were added to the race.
+    InOrder,
+    /// Random free gates.
+    Random,
+}
+
+/// Mood of the runners that get a default one (see
+/// [`Configuration::mood_assignment`]).
+///
+/// In JSON, either a [`Mood`] (e.g. `"Great"`) or `"Random"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DefaultMood {
+    /// The given mood.
+    Fixed(Mood),
+    /// A random mood, every mood being equally likely.
+    Random,
+}
+
+impl<'de> Deserialize<'de> for DefaultMood {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        if value == "Random" {
+            return Ok(DefaultMood::Random);
+        }
+        let mood = Mood::deserialize(value.as_str().into_deserializer());
+        let mood = mood.map_err(|_: D::Error| {
+            let expected = "expected a mood or \"Random\"";
+            D::Error::custom(format!("invalid default mood {value:?}: {expected}"))
+        })?;
+        Ok(DefaultMood::Fixed(mood))
+    }
 }
 
 /// Runtime configuration shared by everything in a race.
@@ -156,8 +193,14 @@ pub struct Configuration {
     pub rushing: Roll,
     /// Fan count for runners that don't define their own.
     pub default_fan_count: u32,
-    /// How runners get their gates.
-    pub gate_order: GateOrder,
+    /// Which runners get [`Self::default_gate`] (unset gates by default).
+    pub gate_assignment: Assignment,
+    /// Gate of the runners that get a default one (random by default).
+    pub default_gate: DefaultGate,
+    /// Which runners get [`Self::default_mood`] (every runner by default).
+    pub mood_assignment: Assignment,
+    /// Mood of the runners that get a default one (Great by default).
+    pub default_mood: DefaultMood,
 }
 
 impl Default for Configuration {
@@ -169,7 +212,10 @@ impl Default for Configuration {
             wit_checks: Roll::Random,
             rushing: Roll::Random,
             default_fan_count: 0,
-            gate_order: GateOrder::RandomMissing,
+            gate_assignment: Assignment::Unset,
+            default_gate: DefaultGate::Random,
+            mood_assignment: Assignment::All,
+            default_mood: DefaultMood::Fixed(Mood::Great),
         }
     }
 }
@@ -231,6 +277,22 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn test_default_moods() {
+        let cases = [
+            (r#""Random""#, Some(DefaultMood::Random)),
+            (r#""Awful""#, Some(DefaultMood::Fixed(Mood::Awful))),
+            (r#""Great""#, Some(DefaultMood::Fixed(Mood::Great))),
+            (r#""Fine""#, None),
+            ("2", None),
+        ];
+        for (mood, expected) in cases {
+            let json = format!(r#"{{ "defaultMood": {mood} }}"#);
+            let actual = Configuration::from_json(&json).ok();
+            assert_eq!(actual.map(|config| config.default_mood), expected, "{mood}");
+        }
     }
 
     #[test]

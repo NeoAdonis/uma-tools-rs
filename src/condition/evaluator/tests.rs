@@ -242,9 +242,9 @@ fn test_phase_values_by_position() {
 /// Surger (team 1).
 fn create_team_race_solver() -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || (uma(Style::Late), Mood::Normal, vec![]);
+    let member = || (uma(Style::Late), Some(Mood::Normal), vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(uma(Style::Late), Mood::Normal, vec![]);
+    solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![]);
     solver.ready_runners()
 }
 
@@ -319,7 +319,7 @@ fn test_temptation_opponent_count_by_position() {
 fn test_runaways_count_as_front_runners() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for style in [Style::Runaway, Style::Front, Style::Pace] {
-        solver.add_runner(uma(style), Mood::Normal, vec![]);
+        solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
     }
     let solver = solver.ready_runners();
     let state = &solver.state;
@@ -1179,7 +1179,7 @@ fn test_running_style_counts() {
         Style::End,
     ];
     for style in styles {
-        solver.add_runner(uma(style), Mood::Normal, vec![]);
+        solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
     }
     let solver = solver.ready_runners();
     let state = &solver.state;

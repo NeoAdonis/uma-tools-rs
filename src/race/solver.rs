@@ -18,7 +18,7 @@ use std::vec;
 
 use rand::prelude::*;
 
-use crate::configuration::{Configuration, GameVersion, GateOrder};
+use crate::configuration::{Assignment, Configuration, DefaultGate, DefaultMood, GameVersion};
 use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
@@ -31,7 +31,7 @@ use crate::race::runner::{
 };
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
-use crate::race::unready_runner::UnreadyRunner;
+use crate::race::unready_runner::{Entrant, UnreadyRunner};
 use crate::skill::*;
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -99,10 +99,11 @@ pub struct RunnerId(u8);
 ///
 /// It is managed in two phases:
 ///
-/// 1. Before runners are ready (`RaceSolver<UnreadyRunner>`): Runners can be
-///    added, but their stats are not calculated yet.
-/// 2. After runners are ready (`RaceSolver<Runner>`): Runners' stats are
-///    calculated and out-of-gate skills are applied. The simulation can begin.
+/// 1. Before runners are ready (`RaceSolver<Entrant>`): Runners can be
+///    added, but their gates, moods and stats are not set yet.
+/// 2. After runners are ready (`RaceSolver<Runner>`): Runners have their gates
+///    and moods, their stats are calculated and out-of-gate skills are
+///    applied. The simulation can begin.
 ///
 /// # Examples
 ///
@@ -198,7 +199,7 @@ impl<T> RaceSolver<T> {
 
 /// Methods available BEFORE runners are ready (before stats have been
 /// calculated and out-of-gate skills have been applied).
-impl RaceSolver<UnreadyRunner> {
+impl RaceSolver<Entrant> {
     /// Create a new RaceSolver for a given course and parameters.
     ///
     /// If the configuration has no seed, a random one is used.
@@ -245,13 +246,21 @@ impl RaceSolver<UnreadyRunner> {
     /// The runner gets a team of its own, so every other runner is an opponent.
     /// See [`RaceSolver::add_team`] to add allies instead.
     ///
+    /// Her mood may be unset, or replaced by a default one when she gets ready
+    /// (see [`Configuration::mood_assignment`]).
+    ///
     /// Returns the runner's ID, to find her once runners are ready (see
     /// [`RaceSolver::runner`]).
     ///
     /// # Panics
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
-    pub fn add_runner(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>) -> RunnerId {
+    pub fn add_runner(
+        &mut self,
+        uma: Uma,
+        mood: Option<Mood>,
+        skills: Vec<Arc<Skill>>,
+    ) -> RunnerId {
         if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
@@ -316,7 +325,10 @@ impl RaceSolver<UnreadyRunner> {
     /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], or if
     /// there aren't enough free gates for all of them (see
     /// [`RaceParameters::gates`]).
-    pub fn add_team(&mut self, members: Vec<(Uma, Mood, Vec<Arc<Skill>>)>) -> Vec<RunnerId> {
+    pub fn add_team(
+        &mut self,
+        members: Vec<(Uma, Option<Mood>, Vec<Arc<Skill>>)>,
+    ) -> Vec<RunnerId> {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
@@ -334,8 +346,9 @@ impl RaceSolver<UnreadyRunner> {
 
     /// Set the gate (1-indexed) of `runner` BEFORE the race starts.
     ///
-    /// Whether she keeps it depends on [`Configuration::gate_order`]. Runners
-    /// get their gates when they get ready (see [`Self::ready_runners`]).
+    /// Whether she keeps it depends on [`Configuration::gate_assignment`].
+    /// Runners get their gates when they get ready (see
+    /// [`Self::ready_runners`]).
     ///
     /// # Examples
     ///
@@ -343,7 +356,7 @@ impl RaceSolver<UnreadyRunner> {
     /// next ones in the order they were added:
     ///
     /// ```
-    /// # use uma_tools::configuration::GateOrder;
+    /// # use uma_tools::configuration::DefaultGate;
     /// # use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver};
     /// # use uma_tools::{Skill, UmaData};
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -367,7 +380,7 @@ impl RaceSolver<UnreadyRunner> {
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
     /// # let skills = uma.resolve_skills(&all_skills)?;
     /// let config = Configuration {
-    ///     gate_order: GateOrder::AsSet,
+    ///     default_gate: DefaultGate::InOrder,
     ///     ..Configuration::default()
     /// };
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
@@ -419,29 +432,35 @@ impl RaceSolver<UnreadyRunner> {
 
     /// Add a runner as a member of `team`, returning her ID. Gate capacity must
     /// be checked by the caller.
-    fn add_member(&mut self, uma: Uma, mood: Mood, skills: Vec<Arc<Skill>>, team: u8) -> RunnerId {
-        // Get existing skills before moving them into builder.
+    fn add_member(
+        &mut self,
+        uma: Uma,
+        mood: Option<Mood>,
+        skills: Vec<Arc<Skill>>,
+        team: u8,
+    ) -> RunnerId {
         for skill in &skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
+        self.state.runners_by_style[uma.style.base_style() as usize] += 1;
 
         // Runners are identified by insertion order, so that their random streams
         // don't depend on their skills.
         let index = self.runners.len() as u8;
         let rng_seed = self.state.seed.derive(Stream::Runner(index));
-
-        // Create builder. Gates are assigned once every runner has been added.
-        let mut builder = UnreadyRunner::new(uma, mood, &self.state, skills, rng_seed);
-        builder.initial_state.team = team;
-
-        // Update runnners-by-style count before moving builder.
-        self.state.runners_by_style[builder.base.style.base_style() as usize] += 1;
-
-        self.runners.push(builder);
+        self.runners.push(Entrant {
+            uma,
+            mood,
+            gate: None,
+            skills,
+            team,
+            rng_seed,
+        });
         RunnerId(index)
     }
 
-    /// Get all runners ready by calculating their stats and activating out-of-gate
+    /// Get all runners ready: assign their gates and moods (see
+    /// [`Configuration`]), calculate their stats and activate out-of-gate
     /// skills.
     ///
     /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
@@ -488,13 +507,22 @@ impl RaceSolver<UnreadyRunner> {
     /// # }
     /// ```
     pub fn ready_runners(self) -> RaceSolver<Runner> {
-        let mut builders = self.runners;
+        let entrants = self.runners;
         let mut state = self.state;
-        assign_gates(&mut builders, &state);
-        // Builders are still in the order they were added, i.e. by ID.
-        let gates_by_id = builders
-            .iter()
-            .map(|builder| builder.gate.expect("gates were just assigned"))
+        // Entrants are in the order they were added, i.e. by ID.
+        let gates_by_id = assign_gates(&entrants, &state);
+        let moods = assign_moods(&entrants, &state);
+        let mut builders: Vec<_> = entrants
+            .into_iter()
+            .zip(&gates_by_id)
+            .zip(moods)
+            .map(|((entrant, &gate), mood)| {
+                let mut builder =
+                    UnreadyRunner::new(entrant.uma, mood, &state, entrant.skills, entrant.rng_seed);
+                builder.initial_state.team = entrant.team;
+                builder.assign_gate(gate, &state);
+                builder
+            })
             .collect();
         // Ready runners by gate, which settles ties (e.g. between popularity marks).
         builders.sort_by_key(|builder| builder.gate);
@@ -537,48 +565,74 @@ impl RaceSolver<UnreadyRunner> {
     }
 }
 
-/// Assign a gate to every runner in `builders` (in the order they were added)
-/// according to [`Configuration::gate_order`], keeping the gates set for them
-/// unless they're all random.
+/// Gate of every entrant, in the same order, according to
+/// [`Configuration::gate_assignment`] and [`Configuration::default_gate`].
 ///
 /// Random gates are rolled in order, each runner from her own stream until she
 /// gets a free one.
-fn assign_gates(builders: &mut [UnreadyRunner], state: &RaceState) {
-    let gate_order = state.config.gate_order;
+fn assign_gates(entrants: &[Entrant], state: &RaceState) -> Vec<u8> {
+    let config = &state.config;
+    let set_gate = |entrant: &Entrant| match config.gate_assignment {
+        Assignment::Unset => entrant.gate,
+        Assignment::All => None,
+    };
     let mut taken = [false; MAX_GATES as usize + 1];
-    for builder in builders.iter_mut() {
-        if gate_order == GateOrder::RandomAll {
-            builder.gate = None;
-        }
-        if let Some(gate) = builder.gate {
-            taken[gate as usize] = true;
-        }
+    for gate in entrants.iter().filter_map(set_gate) {
+        taken[gate as usize] = true;
     }
 
-    // Lowest gate that may still be free, for gates as set.
+    // Lowest gate that may still be free, for gates in order.
     let mut next_gate = 1;
-    for builder in builders.iter_mut() {
-        let gate = match builder.gate {
-            Some(gate) => gate,
-            None if gate_order == GateOrder::AsSet => {
-                while taken[next_gate as usize] {
-                    next_gate += 1;
+    entrants
+        .iter()
+        .map(|entrant| {
+            let gate = match (set_gate(entrant), config.default_gate) {
+                (Some(gate), _) => gate,
+                (None, DefaultGate::InOrder) => {
+                    while taken[next_gate as usize] {
+                        next_gate += 1;
+                    }
+                    next_gate
                 }
-                next_gate
-            }
-            None => {
-                let mut rng = builder.rng_seed.rng(Stream::Gate);
-                loop {
-                    let gate = rng.random_range(1..=state.params.gates);
-                    if !taken[gate as usize] {
-                        break gate;
+                (None, DefaultGate::Random) => {
+                    let mut rng = entrant.rng_seed.rng(Stream::Gate);
+                    loop {
+                        let gate = rng.random_range(1..=state.params.gates);
+                        if !taken[gate as usize] {
+                            break gate;
+                        }
                     }
                 }
-            }
-        };
-        taken[gate as usize] = true;
-        builder.assign_gate(gate, state);
-    }
+            };
+            taken[gate as usize] = true;
+            gate
+        })
+        .collect()
+}
+
+/// Mood of every entrant, in the same order, according to
+/// [`Configuration::mood_assignment`] and [`Configuration::default_mood`].
+///
+/// Random moods are rolled from each runner's own stream.
+fn assign_moods(entrants: &[Entrant], state: &RaceState) -> Vec<Mood> {
+    let config = &state.config;
+    entrants
+        .iter()
+        .map(|entrant| {
+            let set_mood = match config.mood_assignment {
+                Assignment::Unset => entrant.mood,
+                Assignment::All => None,
+            };
+            set_mood.unwrap_or_else(|| match config.default_mood {
+                DefaultMood::Fixed(mood) => mood,
+                DefaultMood::Random => {
+                    let mut rng = entrant.rng_seed.rng(Stream::Mood);
+                    let mood = rng.random_range(Mood::Awful as i8..=Mood::Great as i8);
+                    Mood::try_from(mood).expect("moods are contiguous")
+                }
+            })
+        })
+        .collect()
 }
 
 /// Methods available AFTER runners are ready (stats have been calculated,

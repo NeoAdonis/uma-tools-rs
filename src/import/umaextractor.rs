@@ -6,7 +6,7 @@
 //! that the simulation doesn't use.
 //!
 //! An Uma has aptitudes for every distance and track surface, so importing it
-//! takes the ones to use, as well as its mood.
+//! takes the ones to use. Exports don't include the mood, so it's left unset.
 //!
 //! # Examples
 //!
@@ -15,13 +15,12 @@
 //! ```
 //! use uma_tools::course::{DistanceType, Track};
 //! use uma_tools::import::umaextractor::UmaExtractorData;
-//! use uma_tools::{Aptitude, Mood, Style};
+//! use uma_tools::{Aptitude, Style};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! let path = "tests/data/umaextractor_uma.json";
 //! let data = UmaExtractorData::from_json_file(path)?;
-//! let uma_data =
-//!     data.to_uma_data(DistanceType::Mile, Track::Turf, Mood::Great);
+//! let uma_data = data.to_uma_data(DistanceType::Mile, Track::Turf);
 //! assert_eq!(uma_data.uma.style, Style::Late);
 //! assert_eq!(uma_data.uma.distance_aptitude, Aptitude::A);
 //! assert_eq!(uma_data.uma.character_id, Some(101901));
@@ -33,7 +32,7 @@ use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;
 
 use crate::course::{DistanceType, Track};
-use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat};
+use crate::uma::{Aptitude, Style, Uma, UmaData, UmaSkill, deserialize_stat};
 
 /// A trained Uma as exported by UmaExtractor.
 ///
@@ -241,11 +240,11 @@ impl UmaExtractorData {
     }
 
     /// Convert `self` to [`UmaData`] for a race of the given distance type and
-    /// track surface, with the given mood.
+    /// track surface, with no mood.
     ///
     /// The distance and track aptitudes are the ones for `distance` and
     /// `track`, and the style aptitude the one for the Uma's running style.
-    pub fn to_uma_data(&self, distance: DistanceType, track: Track, mood: Mood) -> UmaData {
+    pub fn to_uma_data(&self, distance: DistanceType, track: Track) -> UmaData {
         let style_aptitude = match self.running_style {
             Style::Runaway | Style::Front => self.front_aptitude,
             Style::Pace => self.pace_aptitude,
@@ -276,7 +275,7 @@ impl UmaExtractorData {
                 fan_count: Some(self.fans),
                 character_id: Some(self.card_id),
             },
-            mood,
+            mood: None,
             skills: self.skills.clone(),
         }
     }
@@ -326,7 +325,7 @@ mod tests {
                 fan_count: Some(98765),
                 character_id: Some(100101),
             },
-            mood: Mood::Good,
+            mood: None,
             skills: vec![
                 UmaSkill {
                     id: 100011,
@@ -338,7 +337,7 @@ mod tests {
                 },
             ],
         };
-        let uma_data = data.to_uma_data(DistanceType::Short, Track::Turf, Mood::Good);
+        let uma_data = data.to_uma_data(DistanceType::Short, Track::Turf);
         assert_eq!(uma_data, expected);
     }
 
@@ -352,7 +351,7 @@ mod tests {
             (DistanceType::Long, Track::Dirt, Aptitude::G, Aptitude::A),
         ];
         for (distance, track, distance_aptitude, track_aptitude) in cases {
-            let uma = data.to_uma_data(distance, track, Mood::Normal).uma;
+            let uma = data.to_uma_data(distance, track).uma;
             assert_eq!(uma.distance_aptitude, distance_aptitude, "{distance:?}");
             assert_eq!(uma.track_aptitude, track_aptitude, "{track:?}");
         }
@@ -373,7 +372,7 @@ mod tests {
             );
             let uma = UmaExtractorData::from_json(&json)
                 .unwrap()
-                .to_uma_data(DistanceType::Mile, Track::Turf, Mood::Normal)
+                .to_uma_data(DistanceType::Mile, Track::Turf)
                 .uma;
             assert_eq!(
                 (uma.style, uma.style_aptitude),
@@ -404,7 +403,7 @@ mod tests {
     fn test_from_json_file() {
         let uma_data = UmaExtractorData::from_json_file(UMA_PATH)
             .unwrap()
-            .to_uma_data(DistanceType::Long, Track::Dirt, Mood::Normal);
+            .to_uma_data(DistanceType::Long, Track::Dirt);
         let uma = uma_data.uma;
         assert_eq!(
             (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
@@ -442,7 +441,7 @@ mod tests {
         let all_skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
         let skills = UmaExtractorData::from_json_file(UMA_PATH)
             .unwrap()
-            .to_uma_data(DistanceType::Mile, Track::Turf, Mood::Normal)
+            .to_uma_data(DistanceType::Mile, Track::Turf)
             .resolve_skills(&all_skills)
             .unwrap();
         assert_eq!((skills[0].id, skills[0].level), (100191, 5));

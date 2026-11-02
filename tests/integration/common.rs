@@ -4,7 +4,7 @@
 //! so tests can be moved between both with few changes.
 
 use std::sync::Arc;
-use uma_tools::configuration::Configuration;
+use uma_tools::configuration::{Assignment, Configuration};
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
 use uma_tools::race::runner::Runner;
@@ -31,10 +31,12 @@ pub fn race_params() -> RaceParameters {
     }
 }
 
-/// Default configuration with the given RNG seed.
+/// Default configuration with the given RNG seed, keeping the moods set for
+/// runners (see [`Configuration::mood_assignment`]).
 pub fn seeded_config(seed: u64) -> Configuration {
     Configuration {
         seed: Some(seed),
+        mood_assignment: Assignment::Unset,
         ..Default::default()
     }
 }
@@ -66,7 +68,7 @@ pub fn ready_solver(
     config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), config);
-    solver.add_runner(uma, Mood::Normal, skills);
+    solver.add_runner(uma, Some(Mood::Normal), skills);
     solver.ready_runners()
 }
 

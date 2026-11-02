@@ -23,7 +23,7 @@ The project requires a [Rust toolchain](https://www.rust-lang.org/tools/install)
 cargo run --release
 ```
 
-The demo simulates a single race and prints a summary of it. By default, it reads its input from `config.json` (simulation settings), `uma.json` (the Umamusume, as an array exported by UmaExtractor, of which the first `gates` race with Great mood) and `parameters.json` (course and race conditions). Use `--config`, `--uma` and `--parameters` to read other files instead; for example, `cargo run --release -- --uma my_uma.json`.
+The demo simulates a single race and prints a summary of it. By default, it reads its input from `config.json` (simulation settings), `uma.json` (the Umamusume, as an array exported by UmaExtractor, of which the first `gates` race, with the mood set by `defaultMood`) and `parameters.json` (course and race conditions). Use `--config`, `--uma` and `--parameters` to read other files instead; for example, `cargo run --release -- --uma my_uma.json`.
 
 To simulate the same race many times instead, run `cargo run --release --bin multi_race`. It reads the same files and accepts the same options, plus `--races` for the number of races (1000 by default). Race N uses the configured seed plus N (or a random base seed if none is set), and the app prints the simulation speed and the finish time statistics of every runner. To profile it, build with `--profile profiling`, which keeps debug info in an optimized build.
 
