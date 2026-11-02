@@ -31,7 +31,7 @@ use crate::race::runner::{
 };
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
-use crate::race::unready_runner::{Entrant, UnreadyRunner};
+use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -95,6 +95,69 @@ pub struct RaceState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RunnerId(u8);
 
+/// A runner as entered in a race: what she's added to the [`RaceSolver`]
+/// with, before she gets ready (see [`RaceSolver::ready_runners`]).
+///
+/// # Examples
+///
+/// Enter a runner with a mood and a gate, leaving the rest to the solver:
+///
+/// ```
+/// use uma_tools::{Aptitude, Entrant, Mood, Style, Uma};
+///
+/// let uma = Uma {
+///     speed: 1200,
+///     stamina: 800,
+///     power: 1000,
+///     guts: 600,
+///     wit: 1100,
+///     style: Style::Late,
+///     distance_aptitude: Aptitude::A,
+///     track_aptitude: Aptitude::A,
+///     style_aptitude: Aptitude::A,
+///     fan_count: None,
+///     character_id: None,
+/// };
+/// let entrant = Entrant {
+///     mood: Some(Mood::Good),
+///     gate: Some(3),
+///     ..Entrant::new(uma, vec![])
+/// };
+/// assert_eq!(entrant.uma.style, Style::Late);
+/// ```
+///
+/// [`RaceSolver`]: crate::RaceSolver
+/// [`RaceSolver::ready_runners`]: crate::RaceSolver::ready_runners
+#[derive(Debug, Clone)]
+pub struct Entrant {
+    /// Raw stats, before halving and mood multiplier.
+    pub uma: Uma,
+    /// Mood, if set. Whether she keeps it depends on
+    /// [`Configuration::mood_assignment`].
+    ///
+    /// [`Configuration::mood_assignment`]: crate::Configuration::mood_assignment
+    pub mood: Option<Mood>,
+    /// Gate number (1-indexed), if set. Whether she keeps it depends on
+    /// [`Configuration::gate_assignment`].
+    ///
+    /// [`Configuration::gate_assignment`]: crate::Configuration::gate_assignment
+    pub gate: Option<u8>,
+    /// Skills, before wit checks.
+    pub skills: Vec<Arc<Skill>>,
+}
+
+impl Entrant {
+    /// Entrant with the given raw stats and skills, with no mood nor gate set.
+    pub fn new(uma: Uma, skills: Vec<Arc<Skill>>) -> Self {
+        Entrant {
+            uma,
+            mood: None,
+            gate: None,
+            skills,
+        }
+    }
+}
+
 /// Race solver that manages the race simulation.
 ///
 /// It is managed in two phases:
@@ -115,7 +178,8 @@ pub struct RunnerId(u8);
 /// ```
 /// use std::sync::Arc;
 /// use uma_tools::{
-///     Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData,
+///     Configuration, Course, Entrant, RaceParametersData, RaceSolver, Skill,
+///     UmaData,
 /// };
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -146,7 +210,11 @@ pub struct RunnerId(u8);
 ///     };
 ///     let course = course.clone();
 ///     let mut solver = RaceSolver::new(course, parameters.race, config);
-///     solver.add_runner(uma.uma, uma.mood, skills.to_vec());
+///     let entrant = Entrant {
+///         mood: uma.mood,
+///         ..Entrant::new(uma.uma, skills.to_vec())
+///     };
+///     solver.add_runner(entrant);
 ///     let mut solver = solver.ready_runners();
 ///     solver.run();
 ///     solver.runners()[0].finish_time
@@ -168,6 +236,8 @@ pub struct RunnerId(u8);
 pub struct RaceSolver<T> {
     /// Runners of the current phase (see [`Self::runners`]).
     pub(crate) runners: Vec<T>,
+    /// Team of each runner, indexed by [`RunnerId`].
+    teams_by_id: Vec<u8>,
     /// Gate of each runner, indexed by [`RunnerId`]. Empty until runners are
     /// ready.
     gates_by_id: Vec<u8>,
@@ -234,6 +304,7 @@ impl RaceSolver<Entrant> {
 
         RaceSolver {
             runners: Vec::new(),
+            teams_by_id: Vec::new(),
             gates_by_id: Vec::new(),
             state,
             duel_close_times: Vec::new(),
@@ -246,27 +317,77 @@ impl RaceSolver<Entrant> {
     /// The runner gets a team of its own, so every other runner is an opponent.
     /// See [`RaceSolver::add_team`] to add allies instead.
     ///
-    /// Her mood may be unset, or replaced by a default one when she gets ready
-    /// (see [`Configuration::mood_assignment`]).
+    /// Her mood and gate may be unset, or replaced by default ones when she
+    /// gets ready (see [`Configuration::mood_assignment`] and
+    /// [`Configuration::gate_assignment`]).
     ///
     /// Returns the runner's ID, to find her once runners are ready (see
     /// [`RaceSolver::runner`]).
     ///
+    /// # Examples
+    ///
+    /// Start the third runner from the innermost gate, and the rest from the
+    /// next ones in the order they were added:
+    ///
+    /// ```
+    /// # use uma_tools::configuration::DefaultGate;
+    /// # use uma_tools::{Configuration, Course, Entrant, RaceParametersData};
+    /// # use uma_tools::{RaceSolver, Skill, UmaData};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let uma = UmaData::from_json(
+    /// #     r#"{
+    /// #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    /// #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
+    /// #         "surfaceAptitude": "A", "strategyAptitude": "A",
+    /// #         "motivation": "Great", "skills": [200331]
+    /// #     }"#,
+    /// # )?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
+    /// # let course =
+    /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
+    /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// let config = Configuration {
+    ///     default_gate: DefaultGate::InOrder,
+    ///     ..Configuration::default()
+    /// };
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// let entrant = uma.to_entrant(&all_skills)?;
+    /// let innermost = Entrant {
+    ///     gate: Some(1),
+    ///     ..entrant.clone()
+    /// };
+    /// let ids = [
+    ///     solver.add_runner(entrant.clone()),
+    ///     solver.add_runner(entrant),
+    ///     solver.add_runner(innermost),
+    /// ];
+    /// let solver = solver.ready_runners();
+    ///
+    /// // Runners are ordered by gate once ready, but IDs still find them.
+    /// let gate = |id| solver.runner(id).gate_roll;
+    /// assert_eq!(ids.map(gate), [2, 3, 1]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
     /// # Panics
     ///
-    /// Panics if every gate is already taken (see [`RaceParameters::gates`]).
-    pub fn add_runner(
-        &mut self,
-        uma: Uma,
-        mood: Option<Mood>,
-        skills: Vec<Arc<Skill>>,
-    ) -> RunnerId {
+    /// Panics if every gate is already taken (see [`RaceParameters::gates`]),
+    /// or if her gate is set but isn't between 1 and [`RaceParameters::gates`],
+    /// or another runner already has it.
+    pub fn add_runner(&mut self, entrant: Entrant) -> RunnerId {
         if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
         }
 
         let team = self.new_team();
-        self.add_member(uma, mood, skills, team)
+        self.add_member(entrant, team)
     }
 
     /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
@@ -303,11 +424,11 @@ impl RaceSolver<Entrant> {
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
-    /// solver.add_team(vec![(uma.uma, uma.mood, skills.clone()); 3]);
-    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// solver.add_team(vec![entrant.clone(); 3]);
+    /// solver.add_runner(entrant);
     /// let solver = solver.ready_runners();
     ///
     /// let runners = solver.runners();
@@ -322,13 +443,11 @@ impl RaceSolver<Entrant> {
     ///
     /// # Panics
     ///
-    /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], or if
+    /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], if
     /// there aren't enough free gates for all of them (see
-    /// [`RaceParameters::gates`]).
-    pub fn add_team(
-        &mut self,
-        members: Vec<(Uma, Option<Mood>, Vec<Arc<Skill>>)>,
-    ) -> Vec<RunnerId> {
+    /// [`RaceParameters::gates`]), or if a member's gate can't be set (see
+    /// [`RaceSolver::add_runner`]).
+    pub fn add_team(&mut self, members: Vec<Entrant>) -> Vec<RunnerId> {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
         }
@@ -340,85 +459,8 @@ impl RaceSolver<Entrant> {
         let team = self.new_team();
         members
             .into_iter()
-            .map(|(uma, mood, skills)| self.add_member(uma, mood, skills, team))
+            .map(|member| self.add_member(member, team))
             .collect()
-    }
-
-    /// Set the gate (1-indexed) of `runner` BEFORE the race starts.
-    ///
-    /// Whether she keeps it depends on [`Configuration::gate_assignment`].
-    /// Runners get their gates when they get ready (see
-    /// [`Self::ready_runners`]).
-    ///
-    /// # Examples
-    ///
-    /// Start the third runner from the innermost gate, and the rest from the
-    /// next ones in the order they were added:
-    ///
-    /// ```
-    /// # use uma_tools::configuration::DefaultGate;
-    /// # use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver};
-    /// # use uma_tools::{Skill, UmaData};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    /// # let parameters = RaceParametersData::from_json(
-    /// #     r#"{
-    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
-    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
-    /// #     }"#,
-    /// # )?;
-    /// # let uma = UmaData::from_json(
-    /// #     r#"{
-    /// #         "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
-    /// #         "wisdom": 1200, "strategy": "Oikomi", "distanceAptitude": "S",
-    /// #         "surfaceAptitude": "A", "strategyAptitude": "A",
-    /// #         "motivation": "Great", "skills": [200331]
-    /// #     }"#,
-    /// # )?;
-    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
-    /// # let course =
-    /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-    /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-    /// # let skills = uma.resolve_skills(&all_skills)?;
-    /// let config = Configuration {
-    ///     default_gate: DefaultGate::InOrder,
-    ///     ..Configuration::default()
-    /// };
-    /// let mut solver = RaceSolver::new(course, parameters.race, config);
-    /// let mut add = || solver.add_runner(uma.uma, uma.mood, skills.clone());
-    /// let ids = [add(), add(), add()];
-    /// solver.set_gate(ids[2], 1);
-    /// let solver = solver.ready_runners();
-    ///
-    /// // Runners are ordered by gate once ready, but IDs still find them.
-    /// let gate = |id| solver.runner(id).gate_roll;
-    /// assert_eq!(ids.map(gate), [2, 3, 1]);
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panics if `runner` isn't in this race, if `gate` isn't between 1 and
-    /// [`RaceParameters::gates`], or if another runner already has it.
-    pub fn set_gate(&mut self, runner: RunnerId, gate: u8) {
-        let gates = self.state.params.gates;
-        assert!(
-            (1..=gates).contains(&gate),
-            "Invalid gate {gate}: expected 1 to {gates}"
-        );
-        let index = runner.0 as usize;
-        assert!(
-            !self
-                .runners
-                .iter()
-                .enumerate()
-                .any(|(other, builder)| other != index && builder.gate == Some(gate)),
-            "Gate {gate} is already set for another runner"
-        );
-        let Some(builder) = self.runners.get_mut(index) else {
-            panic!("No runner with {runner:?} in this race");
-        };
-        builder.gate = Some(gate);
     }
 
     /// Allocate the next team index.
@@ -430,33 +472,29 @@ impl RaceSolver<Entrant> {
         team
     }
 
-    /// Add a runner as a member of `team`, returning her ID. Gate capacity must
-    /// be checked by the caller.
-    fn add_member(
-        &mut self,
-        uma: Uma,
-        mood: Option<Mood>,
-        skills: Vec<Arc<Skill>>,
-        team: u8,
-    ) -> RunnerId {
-        for skill in &skills {
+    /// Add `entrant` as a member of `team`, returning her ID. Gate capacity
+    /// must be checked by the caller.
+    fn add_member(&mut self, entrant: Entrant, team: u8) -> RunnerId {
+        if let Some(gate) = entrant.gate {
+            let gates = self.state.params.gates;
+            assert!(
+                (1..=gates).contains(&gate),
+                "Invalid gate {gate}: expected 1 to {gates}"
+            );
+            assert!(
+                !self.runners.iter().any(|other| other.gate == Some(gate)),
+                "Gate {gate} is already set for another runner"
+            );
+        }
+        for skill in &entrant.skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
-        self.state.runners_by_style[uma.style.base_style() as usize] += 1;
+        self.state.runners_by_style[entrant.uma.style.base_style() as usize] += 1;
 
-        // Runners are identified by insertion order, so that their random streams
-        // don't depend on their skills.
-        let index = self.runners.len() as u8;
-        let rng_seed = self.state.seed.derive(Stream::Runner(index));
-        self.runners.push(Entrant {
-            uma,
-            mood,
-            gate: None,
-            skills,
-            team,
-            rng_seed,
-        });
-        RunnerId(index)
+        let id = RunnerId(self.runners.len() as u8);
+        self.runners.push(entrant);
+        self.teams_by_id.push(team);
+        id
     }
 
     /// Get all runners ready: assign their gates and moods (see
@@ -492,10 +530,10 @@ impl RaceSolver<Entrant> {
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
-    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// solver.add_runner(entrant);
     /// let solver = solver.ready_runners();
     ///
     /// let runner = &solver.runners()[0];
@@ -509,17 +547,23 @@ impl RaceSolver<Entrant> {
     pub fn ready_runners(self) -> RaceSolver<Runner> {
         let entrants = self.runners;
         let mut state = self.state;
-        // Entrants are in the order they were added, i.e. by ID.
-        let gates_by_id = assign_gates(&entrants, &state);
-        let moods = assign_moods(&entrants, &state);
+        // Entrants are in the order they were added, i.e. by ID. Their random
+        // streams derive from their IDs, so that they don't depend on skills.
+        let seeds: Vec<_> = (0..entrants.len())
+            .map(|index| state.seed.derive(Stream::Runner(index as u8)))
+            .collect();
+        let gates_by_id = assign_gates(&entrants, &seeds, &state);
+        let moods = assign_moods(&entrants, &seeds, &state);
         let mut builders: Vec<_> = entrants
             .into_iter()
+            .zip(seeds)
+            .zip(&self.teams_by_id)
             .zip(&gates_by_id)
             .zip(moods)
-            .map(|((entrant, &gate), mood)| {
+            .map(|((((entrant, seed), &team), &gate), mood)| {
                 let mut builder =
-                    UnreadyRunner::new(entrant.uma, mood, &state, entrant.skills, entrant.rng_seed);
-                builder.initial_state.team = entrant.team;
+                    UnreadyRunner::new(entrant.uma, mood, &state, entrant.skills, seed);
+                builder.initial_state.team = team;
                 builder.assign_gate(gate, &state);
                 builder
             })
@@ -557,6 +601,7 @@ impl RaceSolver<Entrant> {
         let gates = state.params.gates as usize;
         RaceSolver {
             runners,
+            teams_by_id: self.teams_by_id,
             gates_by_id,
             state,
             duel_close_times: vec![None; gates * gates],
@@ -568,9 +613,9 @@ impl RaceSolver<Entrant> {
 /// Gate of every entrant, in the same order, according to
 /// [`Configuration::gate_assignment`] and [`Configuration::default_gate`].
 ///
-/// Random gates are rolled in order, each runner from her own stream until she
-/// gets a free one.
-fn assign_gates(entrants: &[Entrant], state: &RaceState) -> Vec<u8> {
+/// Random gates are rolled in order, each runner from her own stream (derived
+/// from her seed in `seeds`) until she gets a free one.
+fn assign_gates(entrants: &[Entrant], seeds: &[RngSeed], state: &RaceState) -> Vec<u8> {
     let config = &state.config;
     let set_gate = |entrant: &Entrant| match config.gate_assignment {
         Assignment::Unset => entrant.gate,
@@ -585,7 +630,8 @@ fn assign_gates(entrants: &[Entrant], state: &RaceState) -> Vec<u8> {
     let mut next_gate = 1;
     entrants
         .iter()
-        .map(|entrant| {
+        .zip(seeds)
+        .map(|(entrant, seed)| {
             let gate = match (set_gate(entrant), config.default_gate) {
                 (Some(gate), _) => gate,
                 (None, DefaultGate::InOrder) => {
@@ -595,7 +641,7 @@ fn assign_gates(entrants: &[Entrant], state: &RaceState) -> Vec<u8> {
                     next_gate
                 }
                 (None, DefaultGate::Random) => {
-                    let mut rng = entrant.rng_seed.rng(Stream::Gate);
+                    let mut rng = seed.rng(Stream::Gate);
                     loop {
                         let gate = rng.random_range(1..=state.params.gates);
                         if !taken[gate as usize] {
@@ -613,12 +659,14 @@ fn assign_gates(entrants: &[Entrant], state: &RaceState) -> Vec<u8> {
 /// Mood of every entrant, in the same order, according to
 /// [`Configuration::mood_assignment`] and [`Configuration::default_mood`].
 ///
-/// Random moods are rolled from each runner's own stream.
-fn assign_moods(entrants: &[Entrant], state: &RaceState) -> Vec<Mood> {
+/// Random moods are rolled from each runner's own stream (derived from her seed
+/// in `seeds`).
+fn assign_moods(entrants: &[Entrant], seeds: &[RngSeed], state: &RaceState) -> Vec<Mood> {
     let config = &state.config;
     entrants
         .iter()
-        .map(|entrant| {
+        .zip(seeds)
+        .map(|(entrant, seed)| {
             let set_mood = match config.mood_assignment {
                 Assignment::Unset => entrant.mood,
                 Assignment::All => None,
@@ -626,7 +674,7 @@ fn assign_moods(entrants: &[Entrant], state: &RaceState) -> Vec<Mood> {
             set_mood.unwrap_or_else(|| match config.default_mood {
                 DefaultMood::Fixed(mood) => mood,
                 DefaultMood::Random => {
-                    let mut rng = entrant.rng_seed.rng(Stream::Mood);
+                    let mut rng = seed.rng(Stream::Mood);
                     let mood = rng.random_range(Mood::Awful as i8..=Mood::Great as i8);
                     Mood::try_from(mood).expect("moods are contiguous")
                 }
@@ -682,10 +730,10 @@ impl RaceSolver<Runner> {
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
     /// # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-    /// # let skills = uma.resolve_skills(&all_skills)?;
+    /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
-    /// solver.add_runner(uma.uma, uma.mood, skills);
+    /// solver.add_runner(entrant);
     /// let mut solver = solver.ready_runners();
     /// solver.run();
     ///

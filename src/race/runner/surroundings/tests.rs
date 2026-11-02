@@ -1,5 +1,5 @@
 use crate::race::runner::Runner;
-use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::race::solver::{DELTA_TIME, Entrant, RaceSolver};
 use crate::test_utils::{load_course, race_params, seeded_config, uma};
 use crate::uma::*;
 
@@ -8,7 +8,7 @@ fn ready_runners(count: usize) -> Vec<Runner> {
     let params = race_params();
     let mut solver = RaceSolver::new(course, params, seeded_config(42));
     for _ in 0..count {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
     solver.ready_runners().runners
 }

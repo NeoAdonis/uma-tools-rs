@@ -26,7 +26,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
     for course_id in [10101, 10104, 10606, 10913] {
         let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
         for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
-            solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
+            solver.add_runner(Entrant::new(uma(style), vec![]));
         }
         let mut solver = solver.ready_runners();
 
@@ -110,7 +110,7 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     for &(style, _) in runners {
-        solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(style), vec![]));
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
@@ -570,7 +570,7 @@ fn test_runners_bound_to_rush_do_rush() {
             wit: 100,
             ..uma(Style::Late)
         };
-        solver.add_runner(uma, Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma, vec![]));
     }
     let mut solver = solver.ready_runners();
     solver.run();
@@ -597,7 +597,7 @@ fn test_all_runners_finish_with_margins() {
             speed: 1000 + 50 * i as u16,
             ..uma(style)
         };
-        solver.add_runner(uma, Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma, vec![]));
     }
     let mut solver = solver.ready_runners();
 
@@ -1659,7 +1659,7 @@ fn test_fov_debuffs_cannot_shorten_field_of_view_below_zero() {
 fn test_individual_runners_are_all_opponents() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..3 {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
     let solver = solver.ready_runners();
 
@@ -1674,9 +1674,9 @@ fn test_individual_runners_are_all_opponents() {
 #[test]
 fn test_team_members_are_allies() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || (uma(Style::Pace), Some(Mood::Normal), vec![]);
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member(), member()]);
-    solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
     solver.add_team(vec![member(), member()]);
     let solver = solver.ready_runners();
 
@@ -1699,7 +1699,7 @@ fn test_team_members_are_allies() {
 #[should_panic(expected = "Team must have between 1 and 3 runners")]
 fn test_team_larger_than_max_size_panics() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || (uma(Style::Pace), Some(Mood::Normal), vec![]);
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member(), member(), member()]);
 }
 
@@ -1736,7 +1736,7 @@ fn test_runner_exceeding_gates_panics() {
     // 9 gates.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..10 {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
 }
 
@@ -1746,9 +1746,9 @@ fn test_team_exceeding_gates_panics() {
     // 9 gates: 8 individual runners leave room for one more, not a team of two.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..8 {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
-    let member = || (uma(Style::Pace), Some(Mood::Normal), vec![]);
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
 }
 
@@ -1768,10 +1768,10 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
 fn test_rush_counters_by_position_count_opponents() {
     // In position order: team 0 (×2), team 1 and team 2.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || (uma(Style::Pace), Some(Mood::Normal), vec![]);
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
     solver.runners.sort_by_key(|r| r.initial_state.team);
@@ -1816,7 +1816,7 @@ fn test_rushed_by_team_matches_runners() {
             wit: 100,
             ..uma(style)
         };
-        (uma, Some(Mood::Normal), vec![])
+        Entrant::new(uma, vec![])
     };
     solver.add_team(vec![
         member(Style::Late),
@@ -1825,8 +1825,7 @@ fn test_rushed_by_team_matches_runners() {
     ]);
     solver.add_team(vec![member(Style::Late), member(Style::End)]);
     for style in [Style::Runaway, Style::Runaway, Style::Front, Style::Pace] {
-        let (uma, mood, skills) = member(style);
-        solver.add_runner(uma, mood, skills);
+        solver.add_runner(member(style));
     }
     let mut solver = solver.ready_runners();
 
@@ -1856,9 +1855,9 @@ fn test_rushed_by_team_matches_runners() {
 #[test]
 fn test_team_activations_sum_team_members() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || (uma(Style::Pace), Some(Mood::Normal), vec![]);
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     let mut solver = solver.ready_runners();
     for runner in &mut solver.runners {
         let all = match runner.initial_state.team {
@@ -1885,10 +1884,10 @@ fn test_team_activations_match_runners_each_frame() {
             skill(24, "phase>=2", SkillType::TargetSpeed, 0.1),
         ]
     };
-    let member = |style| (uma(style), Some(Mood::Normal), skills());
+    let member = |style| Entrant::new(uma(style), skills());
     solver.add_team(vec![member(Style::Front), member(Style::Late)]);
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), skills());
-    solver.add_runner(uma(Style::End), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Pace), skills()));
+    solver.add_runner(Entrant::new(uma(Style::End), vec![]));
     let mut solver = solver.ready_runners();
 
     while solver.state.finish_time.is_none() {
@@ -1915,7 +1914,7 @@ fn test_team_activations_match_runners_each_frame() {
 fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
-        solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
@@ -2144,8 +2143,8 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     });
 
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![debuff]);
-    solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Late), vec![debuff]));
+    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
     let mut solver = solver.ready_runners();
     // The caster is ahead.
     for runner in &mut solver.runners {
@@ -2277,7 +2276,7 @@ fn activates_with_most_popular(
         .map(|skills| skills.iter().map(|skill| skill.id).collect())
         .collect();
     for skills in skills {
-        solver.add_runner(uma(Style::Late), Some(Mood::Normal), skills);
+        solver.add_runner(Entrant::new(uma(Style::Late), skills));
     }
     let mut solver = solver.ready_runners();
 
@@ -3349,8 +3348,8 @@ fn test_longest_mid_race_side_block_is_tracked() {
 fn test_largest_lead_before_late_race_is_tracked() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let skills = vec![scaled_skill(30, ValueScaling::MultiplyTopLeadAmount, 0.25)];
-    solver.add_runner(uma(Style::Front), Some(Mood::Normal), skills);
-    solver.add_runner(uma(Style::Late), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Front), skills));
+    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
     let mut solver = solver.ready_runners();
     let update = |solver: &mut RaceSolver<Runner>, front, late, phase| {
         for runner in &mut solver.runners {
@@ -3695,7 +3694,7 @@ fn test_front_blocker_limits_speed() {
 fn test_edge_gaps_are_infinite() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..3 {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
     let mut solver = solver.ready_runners();
     for (runner, position) in solver.runners.iter_mut().zip([300.0, 200.0, 100.0]) {
@@ -3715,7 +3714,7 @@ fn test_edge_gaps_are_infinite() {
 #[test]
 fn test_lone_runner_has_no_lead() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(uma(Style::Front), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Front), vec![]));
     let mut solver = solver.ready_runners();
     solver.runners[0].position = 100.0;
     solver.update_order_values();
@@ -3726,7 +3725,7 @@ fn test_lone_runner_has_no_lead() {
 fn test_level_field_has_zero_distance_rate() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..2 {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
     let mut solver = solver.ready_runners();
     for runner in &mut solver.runners {
@@ -3756,8 +3755,8 @@ fn test_lone_runner_keeps_regular_pace() {
 fn test_step_frame_matches_run() {
     let new_solver = || {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-        solver.add_runner(uma(Style::Front), Some(Mood::Normal), vec![]);
-        solver.add_runner(uma(Style::End), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Front), vec![]));
+        solver.add_runner(Entrant::new(uma(Style::End), vec![]));
         solver.ready_runners()
     };
     let mut run = new_solver();
@@ -3801,11 +3800,12 @@ fn gates_in_order(
     };
     let mut solver = RaceSolver::new(load_course(10101), params, config);
     let ids: Vec<_> = (0..4)
-        .map(|_| solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]))
+        .map(|index| {
+            let gate = (set && index == 2).then_some(1);
+            let entrant = Entrant::new(uma(Style::Pace), vec![]);
+            solver.add_runner(Entrant { gate, ..entrant })
+        })
         .collect();
-    if set {
-        solver.set_gate(ids[2], 1);
-    }
     let solver = solver.ready_runners();
     for runner in &solver.runners {
         // With up to 8 gates, every gate is a bracket of its own.
@@ -3852,8 +3852,10 @@ fn moods_in_order(mood_assignment: Assignment, default_mood: DefaultMood, seed: 
         ..seeded_config(seed)
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
-    let ids =
-        [Some(Mood::Bad), None, None].map(|mood| solver.add_runner(uma(Style::Pace), mood, vec![]));
+    let ids = [Some(Mood::Bad), None, None].map(|mood| {
+        let entrant = Entrant::new(uma(Style::Pace), vec![]);
+        solver.add_runner(Entrant { mood, ..entrant })
+    });
     let solver = solver.ready_runners();
     let moods = ids.map(|id| solver.runner(id).initial_state.mood);
     for (id, mood) in ids.into_iter().zip(moods) {
@@ -3892,43 +3894,42 @@ fn test_mood_assignments() {
     assert!(random_unset.len() > 1, "unset moods should be random");
 }
 
+/// Entrant with the given gate.
+fn entrant_at(gate: u8) -> Entrant {
+    Entrant {
+        gate: Some(gate),
+        ..Entrant::new(uma(Style::Pace), vec![])
+    }
+}
+
 #[test]
 #[should_panic(expected = "Gate 1 is already set for another runner")]
-fn test_set_gate_rejects_gates_of_other_runners() {
+fn test_add_runner_rejects_gates_of_other_runners() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let first = solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    let second = solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    solver.set_gate(first, 1);
-    // Setting it again for the same runner is fine.
-    solver.set_gate(first, 1);
-    solver.set_gate(second, 1);
+    solver.add_runner(entrant_at(1));
+    solver.add_runner(entrant_at(2));
+    solver.add_runner(entrant_at(1));
+}
+
+#[test]
+#[should_panic(expected = "Gate 2 is already set for another runner")]
+fn test_add_team_rejects_gates_of_other_members() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_team(vec![entrant_at(2), entrant_at(2)]);
 }
 
 #[test]
 #[should_panic(expected = "Invalid gate 10: expected 1 to 9")]
-fn test_set_gate_rejects_gates_out_of_range() {
+fn test_add_runner_rejects_gates_out_of_range() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let id = solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    solver.set_gate(id, 10);
-}
-
-#[test]
-#[should_panic(expected = "No runner with RunnerId(1) in this race")]
-fn test_set_gate_rejects_runners_of_other_races() {
-    let new_solver = || RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let mut other = new_solver();
-    other.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    let id = other.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    let mut solver = new_solver();
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    solver.set_gate(id, 1);
+    solver.add_runner(entrant_at(10));
 }
 
 #[test]
 fn test_runner_finds_runners_by_id_after_reordering() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let styles = [Style::End, Style::Late, Style::Pace, Style::Front];
-    let ids = styles.map(|style| solver.add_runner(uma(style), Some(Mood::Normal), vec![]));
+    let ids = styles.map(|style| solver.add_runner(Entrant::new(uma(style), vec![])));
     let mut solver = solver.ready_runners();
     solver.run();
     for (id, style) in ids.into_iter().zip(styles) {
@@ -3941,9 +3942,9 @@ fn test_runner_finds_runners_by_id_after_reordering() {
 fn test_runner_rejects_runners_of_other_races() {
     let new_solver = || RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let mut other = new_solver();
-    other.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
-    let id = other.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+    other.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    let id = other.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     let mut solver = new_solver();
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     solver.ready_runners().runner(id);
 }

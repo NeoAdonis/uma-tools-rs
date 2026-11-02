@@ -1,9 +1,10 @@
 //! Runners before the race: their stats, skills and out-of-gate skills.
 //!
-//! An [`Entrant`] holds what a runner was added to the race with. When runners
-//! get ready, each one gets her gate and mood, and becomes an
-//! [`UnreadyRunner`], which holds everything known about her before the race
+//! When runners get ready, each [`Entrant`] gets her gate and mood, and becomes
+//! an [`UnreadyRunner`], which holds everything known about her before the race
 //! starts. Then out-of-gate skills are applied, and the [`Runner`] is built.
+//!
+//! [`Entrant`]: crate::Entrant
 //!
 //! ## Skill Setup
 //!
@@ -134,34 +135,6 @@ fn modify_stat(stat: &mut u16, modifier: i32) {
     } else {
         stat.saturating_sub((-modifier) as u16).max(1)
     };
-}
-
-/// A runner as added to the race, before she gets ready (see
-/// [`RaceSolver::ready_runners`]).
-///
-/// [`RaceSolver::ready_runners`]: crate::RaceSolver::ready_runners
-#[derive(Debug)]
-pub struct Entrant {
-    /// Raw stats, before halving and mood multiplier.
-    pub uma: Uma,
-    /// Mood, if set. Whether she keeps it depends on
-    /// [`Configuration::mood_assignment`].
-    ///
-    /// [`Configuration::mood_assignment`]: crate::Configuration::mood_assignment
-    pub mood: Option<Mood>,
-    /// Gate number (1-indexed), if set (see [`RaceSolver::set_gate`]). Whether
-    /// she keeps it depends on [`Configuration::gate_assignment`].
-    ///
-    /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
-    /// [`Configuration::gate_assignment`]: crate::Configuration::gate_assignment
-    pub gate: Option<u8>,
-    /// Skills, before wit checks.
-    pub skills: Vec<Arc<Skill>>,
-    /// Team index (see [`InitialState::team`]).
-    pub(crate) team: u8,
-    /// Seed from which every random stream of the runner derives (see
-    /// [`crate::race::rng`]).
-    pub(crate) rng_seed: RngSeed,
 }
 
 /// A data structure that holds all information needed to initialize a

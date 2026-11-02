@@ -15,7 +15,6 @@
 
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
@@ -25,16 +24,7 @@ use uma_tools::import::umamoe::UmaMoeBuild;
 use uma_tools::race::last_spurt::LastSpurtCategory;
 use uma_tools::race::parameters::RaceParameters;
 use uma_tools::race::solver::{DELTA_TIME, FINISH_TIME_SCALE};
-use uma_tools::{Configuration, Course, Mood, RaceParametersData, RaceSolver, Skill, Uma};
-
-/// A runner of the field, in the order the runners are added to the race.
-struct Entry {
-    uma: Uma,
-    mood: Option<Mood>,
-    skills: Vec<Arc<Skill>>,
-    /// Gate set for the runner, if any.
-    gate: Option<u8>,
-}
+use uma_tools::{Configuration, Course, Entrant, RaceParametersData, RaceSolver, Skill};
 
 /// What a runner did in a single race.
 #[derive(Default)]
@@ -130,13 +120,13 @@ fn main() {
             .expect("Failed to load course data")
     };
 
-    // Entries in the order they're added, the teams they're added in (as
-    // entry indices), and each entry's index in the field, to report them in
-    // field order.
+    // Entries (runners of the field) in the order they're added, the teams
+    // they're added in (as entry indices), and each entry's index in the
+    // field, to report them in field order.
     let (course, race_parameters, entries, teams, field_order): (
         Course,
         RaceParameters,
-        Vec<Entry>,
+        Vec<Entrant>,
         Vec<Range<usize>>,
         Vec<usize>,
     ) = if let Some(build_path) = &build_path {
@@ -144,27 +134,24 @@ fn main() {
         build.configure_gates(&mut config);
         let parameters = build.race_parameters();
         let course = load_course(&parameters);
-        let (distance, track) = (course.distance_type(), course.surface);
-        let field = build.runners();
-        let (mut entries, mut teams, mut field_order) = (Vec::new(), Vec::new(), Vec::new());
-        for team in build.teams() {
+        let (mut entries, mut teams) = (Vec::new(), Vec::new());
+        let entrants = build
+            .entrants(&course, &skills_map)
+            .expect("Failed to resolve uma skills");
+        for team in entrants {
             let start = entries.len();
-            for runner in team {
-                let uma_data = runner.to_uma_data(distance, track);
-                let skills = uma_data
-                    .resolve_skills(&skills_map)
-                    .expect("Failed to resolve uma skills");
-                let index = field.iter().position(|r| std::ptr::eq(r, runner));
-                field_order.push(index.expect("Runner not in field"));
-                entries.push(Entry {
-                    uma: uma_data.uma,
-                    mood: uma_data.mood,
-                    skills,
-                    gate: runner.gate(),
-                });
-            }
+            entries.extend(team);
             teams.push(start..entries.len());
         }
+        // Entrants come in the same order as the runners of `teams()`.
+        let field = build.runners();
+        let field_order = build
+            .teams()
+            .into_iter()
+            .flatten()
+            .map(|runner| field.iter().position(|r| std::ptr::eq(r, runner)))
+            .map(|index| index.expect("Runner not in field"))
+            .collect();
         (course, parameters.race, entries, teams, field_order)
     } else {
         let parameters = RaceParametersData::from_json_file(&parameters_path)
@@ -177,16 +164,9 @@ fn main() {
             .iter()
             .take(parameters.race.gates as usize)
             .map(|data| {
-                let uma_data = data.to_uma_data(distance, track);
-                let skills = uma_data
-                    .resolve_skills(&skills_map)
-                    .expect("Failed to resolve uma skills");
-                Entry {
-                    uma: uma_data.uma,
-                    mood: uma_data.mood,
-                    skills,
-                    gate: None,
-                }
+                data.to_uma_data(distance, track)
+                    .to_entrant(&skills_map)
+                    .expect("Failed to resolve uma skills")
             })
             .collect();
         let teams = (0..entries.len()).map(|i| i..i + 1).collect();
@@ -233,16 +213,7 @@ fn main() {
             // Teams are added in entry order, so IDs are by entry too.
             let mut ids = Vec::with_capacity(entries.len());
             for team in &teams {
-                let members = entries[team.clone()]
-                    .iter()
-                    .map(|entry| (entry.uma, entry.mood, entry.skills.clone()))
-                    .collect();
-                ids.extend(solver.add_team(members));
-            }
-            for (&id, entry) in ids.iter().zip(&entries) {
-                if let Some(gate) = entry.gate {
-                    solver.set_gate(id, gate);
-                }
+                ids.extend(solver.add_team(entries[team.clone()].to_vec()));
             }
 
             // Runners get reordered once ready, but keep their IDs.

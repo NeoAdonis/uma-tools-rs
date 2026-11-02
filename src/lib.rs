@@ -52,14 +52,14 @@
 //!     &parameters.course_id,
 //! )?;
 //! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-//! let skills = uma.resolve_skills(&all_skills)?;
+//! let entrant = uma.to_entrant(&all_skills)?;
 //!
 //! let config = Configuration {
 //!     seed: Some(42),
 //!     ..Configuration::default()
 //! };
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
-//! solver.add_runner(uma.uma, uma.mood, skills);
+//! solver.add_runner(entrant);
 //! let mut solver = solver.ready_runners();
 //! solver.run();
 //!
@@ -93,6 +93,6 @@ pub use configuration::Configuration;
 pub use course::Course;
 pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::runner::Runner;
-pub use race::solver::{RaceSolver, RunnerId};
+pub use race::solver::{Entrant, RaceSolver, RunnerId};
 pub use skill::Skill;
 pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData, UmaSkill};

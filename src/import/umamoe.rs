@@ -16,8 +16,9 @@
 //!   [`UmaMoeBuild::configure_gates`] and [`UmaMoeRunner::gate`]).
 //!
 //! Runners have aptitudes for every distance and track surface, so racing with
-//! them takes the ones to use (see [`UmaMoeRunner::to_uma_data`]). Their fan
-//! count is optional.
+//! them takes the ones to use (see [`UmaMoeRunner::to_uma_data`], or
+//! [`UmaMoeBuild::entrants`] for the course of the race). Their fan count is
+//! optional.
 //!
 //! # Examples
 //!
@@ -36,25 +37,12 @@
 //! let course = Course::from_json_files(courses, rails, course_id)?;
 //! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
 //!
-//! let (distance, track) = (course.distance_type(), course.surface);
 //! let mut config = Configuration::default();
 //! build.configure_gates(&mut config);
+//! let teams = build.entrants(&course, &all_skills)?;
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
-//! for team in build.teams() {
-//!     let mut members = Vec::new();
-//!     let mut gates = Vec::new();
-//!     for runner in team {
-//!         let uma_data = runner.to_uma_data(distance, track);
-//!         let skills = uma_data.resolve_skills(&all_skills)?;
-//!         members.push((uma_data.uma, uma_data.mood, skills));
-//!         gates.push(runner.gate());
-//!     }
-//!     // IDs come in the same order as the members.
-//!     for (id, gate) in solver.add_team(members).into_iter().zip(gates) {
-//!         if let Some(gate) = gate {
-//!             solver.set_gate(id, gate);
-//!         }
-//!     }
+//! for team in teams {
+//!     solver.add_team(team);
 //! }
 //! let mut solver = solver.ready_runners();
 //! solver.run();
@@ -69,16 +57,17 @@ use flate2::read::GzDecoder;
 use serde::de::{Error, IntoDeserializer};
 use serde::{Deserialize, Deserializer};
 use serde_with::{TryFromInto, serde_as};
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::configuration::{Assignment, Configuration, DefaultGate};
-use crate::course::{DistanceType, Track};
-use crate::race::parameters::{
-    Grade, MAX_GATES, RaceParameters, RaceParametersData, Season, Time, TrackCondition, Weather,
-};
-use crate::race::solver::MAX_TEAM_SIZE;
-use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat};
+use crate::course::{Course, DistanceType, Track};
+use crate::race::parameters::*;
+use crate::race::solver::{Entrant, MAX_TEAM_SIZE};
+use crate::skill::Skill;
+use crate::uma::*;
 
 /// Only supported version of the build code format.
 const VERSION: u8 = 1;
@@ -523,6 +512,42 @@ impl UmaMoeBuild {
         teams
     }
 
+    /// Runners as [`Entrant`]s to race on `course`, grouped by team as in
+    /// [`Self::teams`], so that each team can be added with
+    /// [`RaceSolver::add_team`].
+    ///
+    /// Each runner takes her aptitudes for the course (see
+    /// [`UmaMoeRunner::to_uma_data`]), her mood and her gate (see
+    /// [`UmaMoeRunner::gate`]), and her skills are resolved from `all_skills`
+    /// (see [`UmaData::to_entrant`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a runner's skills can't be resolved.
+    ///
+    /// [`RaceSolver::add_team`]: crate::race::solver::RaceSolver::add_team
+    pub fn entrants(
+        &self,
+        course: &Course,
+        all_skills: &HashMap<i32, Arc<Skill>>,
+    ) -> Result<Vec<Vec<Entrant>>, ResolveSkillsError> {
+        let (distance, track) = (course.distance_type(), course.surface);
+        self.teams()
+            .into_iter()
+            .map(|team| {
+                team.into_iter()
+                    .map(|runner| {
+                        let entrant = runner.to_uma_data(distance, track).to_entrant(all_skills)?;
+                        Ok(Entrant {
+                            gate: runner.gate,
+                            ..entrant
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
     /// Make `config` assign gates as the build code says, if it does: gates as
     /// sent ([`Assignment::Unset`] and [`DefaultGate::InOrder`]), or random
     /// ones for every runner ([`Assignment::All`] and [`DefaultGate::Random`]).
@@ -547,10 +572,7 @@ impl UmaMoeRunner {
         self.team
     }
 
-    /// Gate (1-indexed) set in the build code, if any. Set it with
-    /// [`RaceSolver::set_gate`] to race with it.
-    ///
-    /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
+    /// Gate (1-indexed) set in the build code, if any (see [`Entrant::gate`]).
     pub fn gate(&self) -> Option<u8> {
         self.gate
     }
@@ -855,6 +877,52 @@ mod tests {
             assert_eq!(config, expected, "{gate_order}");
         }
         assert!(UmaMoeBuild::from_json(&field_json(r#""gateOrder": "fixed","#)).is_err());
+    }
+
+    #[test]
+    fn test_entrants() {
+        // The second runner in a team of her own, with gate 1.
+        let json = field_json("").replacen(
+            r#""cardId": 100201, "teamId": 1,"#,
+            r#""cardId": 100201, "teamId": 2, "frameOrder": 1,"#,
+            1,
+        );
+        let build = UmaMoeBuild::from_json(&json).unwrap();
+        let skill = |id| {
+            (
+                id,
+                Arc::new(Skill {
+                    id,
+                    group: id,
+                    ..crate::test_utils::synthetic_skill(vec![])
+                }),
+            )
+        };
+        let all_skills = HashMap::from([skill(100011), skill(200012)]);
+        let course = crate::test_utils::load_course(10101);
+        let (distance, track) = (course.distance_type(), course.surface);
+
+        let teams = build.entrants(&course, &all_skills).unwrap();
+        let sizes: Vec<_> = teams.iter().map(Vec::len).collect();
+        assert_eq!(sizes, [1, 1]);
+        let (first, second) = (&teams[0][0], &teams[1][0]);
+        assert_eq!(
+            first.uma,
+            build.runners()[0].to_uma_data(distance, track).uma
+        );
+        assert_eq!((first.mood, first.gate), (Some(Mood::Bad), None));
+        assert_eq!((second.mood, second.gate), (Some(Mood::Bad), Some(1)));
+        // Skills keep the levels from the build code.
+        let levels: Vec<_> = first
+            .skills
+            .iter()
+            .map(|skill| (skill.id, skill.level))
+            .collect();
+        assert_eq!(levels, [(100011, 4), (200012, 1)]);
+
+        // Skills missing from the skill data.
+        let error = build.entrants(&course, &HashMap::new()).err();
+        assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(100011)));
     }
 
     #[test]

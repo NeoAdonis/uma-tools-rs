@@ -1,11 +1,11 @@
 //! Shared helpers for unit tests.
 
-use crate::configuration::{Assignment, Configuration};
+use crate::configuration::{Assignment, Configuration, DefaultMood};
 use crate::course::rail::Rail;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
-use crate::race::solver::RaceSolver;
+use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::*;
 use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
 use crate::trigger::system::TriggerScheduler;
@@ -77,11 +77,13 @@ pub(crate) fn race_params() -> RaceParameters {
 }
 
 /// Default configuration with the given RNG seed, keeping the moods set for
-/// runners (see [`Configuration::mood_assignment`]).
+/// runners and giving Normal mood to the rest (see
+/// [`Configuration::mood_assignment`]).
 pub(crate) fn seeded_config(seed: u64) -> Configuration {
     Configuration {
         seed: Some(seed),
         mood_assignment: Assignment::Unset,
+        default_mood: DefaultMood::Fixed(Mood::Normal),
         ..Default::default()
     }
 }
@@ -123,7 +125,7 @@ pub(crate) fn ready_solver_on(
     config: Configuration,
 ) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(course, race_params(), config);
-    solver.add_runner(uma, Some(Mood::Normal), skills);
+    solver.add_runner(Entrant::new(uma, skills));
     solver.ready_runners()
 }
 

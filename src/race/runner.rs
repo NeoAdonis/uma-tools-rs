@@ -22,7 +22,7 @@
 //!
 //! ```
 //! use uma_tools::race::margin::Margin;
-//! use uma_tools::{Configuration, RaceSolver, Runner, Uma};
+//! use uma_tools::{Configuration, Entrant, RaceSolver, Runner, Uma};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! # use uma_tools::{Course, RaceParametersData, Skill, UmaData};
@@ -44,12 +44,12 @@
 //! # let course =
 //! #     Course::from_json_files(courses, rails, &parameters.course_id)?;
 //! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-//! # let skills = uma.resolve_skills(&all_skills)?;
+//! # let entrant = uma.to_entrant(&all_skills)?;
 //! let config = Configuration::default();
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
 //! for speed in [1300, 1400, 1500] {
-//!     let variant = Uma { speed, ..uma.uma };
-//!     solver.add_runner(variant, uma.mood, skills.clone());
+//!     let uma = Uma { speed, ..entrant.uma };
+//!     solver.add_runner(Entrant { uma, ..entrant.clone() });
 //! }
 //! let mut solver = solver.ready_runners();
 //! solver.run();

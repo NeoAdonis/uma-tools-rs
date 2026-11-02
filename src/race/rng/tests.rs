@@ -3,10 +3,10 @@ use std::sync::Arc;
 use rand::RngExt;
 
 use super::*;
-use crate::race::solver::RaceSolver;
+use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::{Skill, SkillType};
 use crate::test_utils::*;
-use crate::uma::{Mood, Style};
+use crate::uma::Style;
 
 #[test]
 fn test_streams_are_reproducible() {
@@ -58,10 +58,10 @@ fn finish_times(seed: u64, extra: &[Arc<Skill>]) -> Vec<(u8, f64)> {
         skill_with_wit_check(2, "corner_random==1"),
     ];
     let skills = extra.iter().chain(&first_skills).cloned().collect();
-    solver.add_runner(uma(Style::Pace), Some(Mood::Normal), skills);
+    solver.add_runner(Entrant::new(uma(Style::Pace), skills));
     for (style, id) in [(Style::Front, 3), (Style::Late, 4)] {
         let skills = vec![skill_with_wit_check(id, "phase_laterhalf_random==1")];
-        solver.add_runner(uma(style), Some(Mood::Normal), skills);
+        solver.add_runner(Entrant::new(uma(style), skills));
     }
     let mut solver = solver.ready_runners();
     solver.run();

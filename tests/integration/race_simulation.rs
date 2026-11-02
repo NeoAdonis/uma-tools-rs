@@ -3,11 +3,11 @@
 //! These tests verify the public API of the race simulation system.
 
 use crate::common::{load_course, race_params, seeded_config, uma};
+use uma_tools::Entrant;
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::race::parameters::*;
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
-use uma_tools::race::unready_runner::Entrant;
 use uma_tools::uma::*;
 
 #[test]
@@ -82,7 +82,7 @@ fn test_multi_runner_race_simulation() {
         };
         let mut solver = RaceSolver::new(course.clone(), params, config);
         for style in styles {
-            solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
+            solver.add_runner(Entrant::new(uma(style), vec![]));
         }
         let mut solver = solver.ready_runners();
         solver.run();
@@ -117,7 +117,7 @@ fn test_same_seed_gives_same_race() {
         let config = seeded_config(seed);
         let mut solver = RaceSolver::new(course, params, config);
         for style in styles {
-            solver.add_runner(uma(style), Some(Mood::Normal), vec![]);
+            solver.add_runner(Entrant::new(uma(style), vec![]));
         }
         let mut solver = solver.ready_runners();
         solver.run();

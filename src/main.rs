@@ -90,11 +90,11 @@ fn main() {
     let mut solver = RaceSolver::new(course, race_parameters, config);
     println!("\nRunners:");
     for data in all_umas.iter().take(gates) {
-        let uma_data = data.to_uma_data(distance_type, surface);
-        let skills = uma_data
-            .resolve_skills(&skills_map)
+        let entrant = data
+            .to_uma_data(distance_type, surface)
+            .to_entrant(&skills_map)
             .expect("Failed to resolve uma skills");
-        let uma = &uma_data.uma;
+        let uma = &entrant.uma;
         println!(
             "  {} ({:?}): {}/{}/{}/{}/{}, aptitudes {:?}/{:?}/{:?}, {} skills",
             uma.name(language).unwrap_or("Unknown"),
@@ -107,9 +107,9 @@ fn main() {
             uma.distance_aptitude,
             uma.track_aptitude,
             uma.style_aptitude,
-            skills.len()
+            entrant.skills.len()
         );
-        solver.add_runner(uma_data.uma, uma_data.mood, skills);
+        solver.add_runner(entrant);
     }
 
     // Initialize runners.

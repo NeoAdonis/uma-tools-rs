@@ -1,7 +1,7 @@
 //! Race simulation: parameters, runners and mechanics.
 //!
 //! A race is set up and run by a [`RaceSolver`](solver::RaceSolver) in two
-//! phases. First, runners are added as [`Entrant`](unready_runner::Entrant)s
+//! phases. First, runners are added as [`Entrant`](solver::Entrant)s
 //! under the given [`RaceParameters`](parameters::RaceParameters). Once every
 //! runner is known, they get their gates and moods, and become
 //! [`Runner`](runner::Runner)s, which the solver updates frame by frame until

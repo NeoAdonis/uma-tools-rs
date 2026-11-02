@@ -1,6 +1,6 @@
 use super::*;
 use crate::configuration::{Configuration, Roll};
-use crate::race::solver::RaceSolver;
+use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::SkillAlternative;
 use crate::test_utils::*;
 use std::sync::Arc;
@@ -428,7 +428,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
             ..uma(Style::Pace)
         };
         let skills = ids.iter().map(|id| skills[id].clone()).collect();
-        solver.add_runner(uma, Some(Mood::Normal), skills);
+        solver.add_runner(Entrant::new(uma, skills));
     }
     let mut runners = solver.ready_runners().runners;
     runners.sort_by_key(|runner| runner.base.guts);
@@ -548,7 +548,7 @@ fn test_gambler_activation_rate() {
         .filter(|&seed| {
             let mut solver = RaceSolver::new(course.clone(), race_params(), seeded_config(seed));
             let gambler = skills[&GAMBLER_ID].clone();
-            solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![gambler]);
+            solver.add_runner(Entrant::new(uma(Style::Pace), vec![gambler]));
             let runner = &solver.ready_runners().runners[0];
             !race_start_ids(runner.available_skills(), &runner.trigger_scheduler).is_empty()
         })

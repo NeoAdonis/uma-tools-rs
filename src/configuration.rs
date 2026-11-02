@@ -136,9 +136,9 @@ pub enum Assignment {
 /// Gate of the runners that get a default one (see
 /// [`Configuration::gate_assignment`]).
 ///
-/// Gates can be set for some runners with [`RaceSolver::set_gate`].
+/// Gates can be set for some runners (see [`Entrant::gate`]).
 ///
-/// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
+/// [`Entrant::gate`]: crate::Entrant::gate
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum DefaultGate {
     /// The lowest free gates, in the order runners were added to the race.

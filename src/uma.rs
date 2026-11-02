@@ -37,6 +37,7 @@ use serde::{Deserialize, Deserializer, de::Error};
 
 use crate::configuration::Language;
 use crate::course::ThresholdStat;
+use crate::race::solver::Entrant;
 use crate::skill::{DEFAULT_SKILL_LEVEL, Skill};
 use std::collections::HashMap;
 use std::fmt;
@@ -387,6 +388,37 @@ impl UmaData {
         }
         Ok(skills)
     }
+
+    /// Convert `self` to an [`Entrant`], to add it to a race, with its mood and
+    /// its skills resolved from `all_skills` (see [`Self::resolve_skills`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the skills can't be resolved.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use uma_tools::{Mood, Skill, UmaData};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// let uma = UmaData::from_json_file("tests/data/uma_data.json")?;
+    /// let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+    /// let entrant = uma.to_entrant(&all_skills)?;
+    /// assert_eq!(entrant.mood, Some(Mood::Great));
+    /// assert_eq!(entrant.gate, None);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn to_entrant(
+        &self,
+        all_skills: &HashMap<i32, Arc<Skill>>,
+    ) -> Result<Entrant, ResolveSkillsError> {
+        Ok(Entrant {
+            mood: self.mood,
+            ..Entrant::new(self.uma, self.resolve_skills(all_skills)?)
+        })
+    }
 }
 
 /// Error resolving the skills of an Uma.
@@ -700,6 +732,22 @@ mod tests {
         assert_eq!(skills.len(), 2);
         assert!(Arc::ptr_eq(&skills[0], &all_skills[&3]));
         assert!(Arc::ptr_eq(&skills[1], &all_skills[&1]));
+    }
+
+    #[test]
+    fn test_to_entrant() {
+        let all_skills = HashMap::from([(1, Arc::new(synthetic_skill(vec![])))]);
+        let uma_data = UmaData {
+            mood: Some(Mood::Bad),
+            ..uma_with_skills(vec![1])
+        };
+        let entrant = uma_data.to_entrant(&all_skills).unwrap();
+        assert_eq!(entrant.uma, uma_data.uma);
+        assert_eq!((entrant.mood, entrant.gate), (Some(Mood::Bad), None));
+        assert!(Arc::ptr_eq(&entrant.skills[0], &all_skills[&1]));
+
+        let error = uma_with_skills(vec![2]).to_entrant(&all_skills).err();
+        assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(2)));
     }
 
     #[test]

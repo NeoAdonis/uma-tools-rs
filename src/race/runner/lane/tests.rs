@@ -1,5 +1,5 @@
 use super::*;
-use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::race::solver::{DELTA_TIME, Entrant, RaceSolver};
 use crate::test_utils::{assert_close, load_course, race_params, seeded_config, uma};
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -9,7 +9,7 @@ use crate::units::CourseWidths;
 fn lane_solver(runners: &[(f64, f64)]) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
-        solver.add_runner(uma(Style::Pace), Some(Mood::Normal), vec![]);
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
     }
     let mut solver = solver.ready_runners();
     for (runner, &(position, lane)) in solver.runners.iter_mut().zip(runners) {

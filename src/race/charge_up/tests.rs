@@ -3,7 +3,7 @@ use crate::configuration::{Configuration, GameVersion};
 use crate::course::DistanceType;
 use crate::race::last_spurt::*;
 use crate::race::runner::{PositioningStrategy, Runner};
-use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::race::solver::{DELTA_TIME, Entrant, RaceSolver};
 use crate::test_utils::{assert_close, load_course, race_params, seeded_config, uma};
 use crate::uma::*;
 
@@ -25,7 +25,10 @@ fn solver(
         ..seeded_config(rng_seed)
     };
     let mut solver = RaceSolver::new(load_course(10204), race_params(), config);
-    solver.add_runner(uma, Some(mood), vec![]);
+    solver.add_runner(Entrant {
+        mood: Some(mood),
+        ..Entrant::new(uma, vec![])
+    });
     solver.ready_runners()
 }
 

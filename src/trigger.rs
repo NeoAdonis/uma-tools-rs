@@ -89,7 +89,7 @@
 //! # let course =
 //! #     Course::from_json_files(courses, rails, &parameters.course_id)?;
 //! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
-//! # let skills = uma.resolve_skills(&all_skills)?;
+//! # let entrant = uma.to_entrant(&all_skills)?;
 //! let mut positions = Vec::new();
 //! for seed in 0..20 {
 //!     let config = Configuration {
@@ -98,7 +98,7 @@
 //!     };
 //!     let course = course.clone();
 //!     let mut solver = RaceSolver::new(course, parameters.race, config);
-//!     solver.add_runner(uma.uma, uma.mood, skills.clone());
+//!     solver.add_runner(entrant.clone());
 //!     let mut solver = solver.ready_runners();
 //!     solver.run();
 //!     let activations = &solver.runners()[0].activated_skills;
