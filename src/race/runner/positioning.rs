@@ -35,6 +35,7 @@ pub(crate) enum PositioningStrategy {
     FrontSpeedUp,
     /// *(Front-runners only.)*
     /// Try to catch up with first place by pacing up to a certain distance.
+    /// Runaways and front runners count as the same strategy here.
     FrontOvertake,
     /// *(Non-front-runners only.)*
     /// Try to stay within a certain distance from pacemaker by pacing up.
@@ -112,7 +113,8 @@ impl Runner {
     /// `lead` is the distance to the runner behind if this runner is first
     /// overall, or `None` otherwise. `strategy_lead` is the distance to the next
     /// runner with the same strategy if this runner is first among them, or `None`
-    /// otherwise. Both are infinite if there's no such runner behind.
+    /// otherwise, where runaways and front runners count as the same strategy.
+    /// Both are infinite if there's no such runner behind.
     pub(crate) fn update_positioning_front(
         &mut self,
         lead: Option<f64>,

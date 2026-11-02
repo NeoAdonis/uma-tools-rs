@@ -359,30 +359,42 @@ fn test_front_overtake_when_not_first_in_strategy() {
     assert_eq!(strategy_at(&solver, 110.0), Normal);
     assert_eq!(strategy_at(&solver, 100.0), FrontOvertake);
 
-    // Runaways are a different strategy: the Front runner is first in hers.
-    let mut solver = positioning_solver(
-        &[(Style::Runaway, 150.0), (Style::Front, 110.0)],
-        GameVersion::FirstAnniversary,
-    );
-    update_positioning_repeatedly(&mut solver);
-    assert_eq!(strategy_at(&solver, 110.0), Normal);
+    // Runaways and front runners are the same strategy.
+    for (behind, ahead) in [
+        (Style::Front, Style::Runaway),
+        (Style::Runaway, Style::Front),
+    ] {
+        let mut solver = positioning_solver(
+            &[(Style::Pace, 200.0), (ahead, 150.0), (behind, 110.0)],
+            GameVersion::FirstAnniversary,
+        );
+        update_positioning_repeatedly(&mut solver);
+        assert_eq!(
+            strategy_at(&solver, 110.0),
+            FrontOvertake,
+            "{behind:?} behind {ahead:?}"
+        );
+    }
 }
 
 #[test]
 fn test_front_overtake_exits_when_far_ahead_in_strategy() {
     use PositioningStrategy::*;
 
-    // (style, lead over the next runner with the same strategy, expected). The
-    // Pace runner ahead shows that the lead only counts the same strategy.
+    // (style, style behind, lead over the runner behind, expected). The Pace
+    // runner ahead shows that the lead only counts the same strategy, where
+    // runaways and front runners are the same strategy.
     let cases = [
-        (Style::Front, 9.0, FrontOvertake),
-        (Style::Front, 11.0, Normal),
-        (Style::Runaway, 27.0, FrontOvertake),
-        (Style::Runaway, 28.0, Normal),
+        (Style::Front, Style::Front, 9.0, FrontOvertake),
+        (Style::Front, Style::Front, 11.0, Normal),
+        (Style::Runaway, Style::Runaway, 27.0, FrontOvertake),
+        (Style::Runaway, Style::Runaway, 28.0, Normal),
+        (Style::Front, Style::Runaway, 9.0, FrontOvertake),
+        (Style::Runaway, Style::Front, 27.0, FrontOvertake),
     ];
-    for (style, lead, expected) in cases {
+    for (style, behind, lead, expected) in cases {
         let mut solver = positioning_solver(
-            &[(Style::Pace, 200.0), (style, 100.0 + lead), (style, 100.0)],
+            &[(Style::Pace, 200.0), (style, 100.0 + lead), (behind, 100.0)],
             GameVersion::FirstAnniversary,
         );
         set_strategy_at(&mut solver, 100.0 + lead, FrontOvertake);
@@ -390,7 +402,7 @@ fn test_front_overtake_exits_when_far_ahead_in_strategy() {
         assert_eq!(
             strategy_at(&solver, 100.0 + lead),
             expected,
-            "{style:?} {lead}m ahead"
+            "{style:?} {lead}m ahead of {behind:?}"
         );
     }
 }

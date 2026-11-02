@@ -1183,7 +1183,9 @@ impl RaceSolver<Runner> {
                         .map_or(f64::INFINITY, |next| runner.position - next.position)
                 });
                 // Lead over the next runner with the same strategy if first among them.
-                let same_strategy = |other: &Runner| other.positioning_style() == style;
+                // Runaways count as front runners here too.
+                let same_strategy =
+                    |other: &Runner| other.positioning_style().base_style() == base_style;
                 let is_first_in_strategy = !self.runners[..i].iter().any(same_strategy);
                 let strategy_lead = is_first_in_strategy.then(|| {
                     self.runners[i + 1..]
