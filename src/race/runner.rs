@@ -581,10 +581,16 @@ impl Runner {
         // Update speed based on acceleration.
         self.speed += self.acceleration * delta_time;
 
-        // Handle start dash end and min speed.
-        if self.is_start_dash && self.speed >= 0.85 * course_base_speed {
-            self.is_start_dash = false;
-        } else if !self.is_start_dash && self.speed < self.min_speed {
+        // Handle start dash end and min speed. The start dash ends once speed
+        // reaches its threshold, which caps speed so that the start dash
+        // acceleration isn't carried over.
+        let start_dash_speed = 0.85 * course_base_speed;
+        if self.is_start_dash {
+            if self.speed >= start_dash_speed {
+                self.speed = start_dash_speed;
+                self.is_start_dash = false;
+            }
+        } else if self.speed < self.min_speed {
             self.speed = self.min_speed;
         }
         // Cap speed along with target speed to avoid overshooting due to acceleration.

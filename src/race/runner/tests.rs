@@ -101,3 +101,36 @@ fn test_update_position_slows_down_off_rail_in_corners() {
     // Lanes turn between keyframes rather than evenly.
     assert_close!(advance(600.0, 1.0), expected, tolerance = 1e-5);
 }
+
+#[test]
+fn test_start_dash_caps_speed_at_its_end() {
+    use crate::race::solver::DELTA_TIME;
+    use crate::test_utils::*;
+    // 2000m course: the start dash ends at 0.85 * 20 m/s, below the minimum
+    // speed with 800 guts (17.4 m/s).
+    let uma = Uma {
+        guts: 800,
+        ..uma(Style::Pace)
+    };
+    let mut solver = ready_solver(10104, uma, vec![], seeded_config(0));
+    let base_speed = solver.state.course.base_speed();
+    let runner = &mut solver.runners[0];
+    assert!(runner.is_start_dash);
+
+    // Below the threshold, the start dash goes on, ignoring the minimum speed.
+    runner.speed = 15.0;
+    runner.acceleration = 24.5;
+    runner.update_speed(DELTA_TIME, base_speed);
+    assert!(runner.is_start_dash);
+    assert_close!(runner.speed, 15.0 + 24.5 * DELTA_TIME);
+
+    // Reaching it ends the start dash without carrying its acceleration over.
+    runner.update_speed(DELTA_TIME, base_speed);
+    assert!(!runner.is_start_dash);
+    assert_eq!(runner.speed, 17.0);
+
+    // Speed is then raised to the minimum speed.
+    runner.acceleration = 0.4;
+    runner.update_speed(DELTA_TIME, base_speed);
+    assert_close!(runner.speed, 17.4);
+}
