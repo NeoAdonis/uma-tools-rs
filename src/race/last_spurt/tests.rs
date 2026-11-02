@@ -160,10 +160,11 @@ fn test_candidate_speeds_are_steps_from_max() {
 
 #[test]
 fn test_high_wit_always_accepts_best_candidate() {
-    // 15 + 0.05 * 2000 = 115% chance, which must not panic.
+    // Raw 2400 wit is 1800 after halving above 1200, so 15 + 0.05 * 1800 =
+    // 105% chance, which must not panic.
     let results: Vec<_> = (0..10)
         .map(|rng_seed| {
-            let mut solver = solver(2000, GameVersion::LATEST, rng_seed);
+            let mut solver = solver(2400, GameVersion::LATEST, rng_seed);
             move_to_section(&mut solver, 16);
             set_hp_above_base(&mut solver);
             let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
