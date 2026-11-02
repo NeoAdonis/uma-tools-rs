@@ -704,3 +704,17 @@ fn test_in_race_alternatives_are_not_activated_before_the_race() {
     assert_eq!(logics.len(), 1);
     assert_eq!(logics[0].alternative_index, 1);
 }
+
+#[test]
+fn test_min_speed_scales_with_guts() {
+    // 2000m course: 0.85 * 20 m/s, plus sqrt(200 * 800) * 0.001 from guts.
+    let uma = Uma {
+        guts: 800,
+        ..uma(Style::Pace)
+    };
+    let runner = ready_solver(10104, uma, vec![], seeded_config(0))
+        .runners
+        .remove(0);
+    assert_eq!(runner.adjusted.guts, 800);
+    assert_close!(runner.min_speed, 17.0 + 0.4);
+}

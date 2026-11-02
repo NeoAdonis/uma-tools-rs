@@ -515,7 +515,7 @@ impl UnreadyRunner {
             // Start dash acceleration is applied separately.
             acceleration: 0.0,
             min_speed: 0.85 * course.base_speed()
-                + (200.0 + self.adjusted.guts as f64).sqrt() * 0.001,
+                + (200.0 * self.adjusted.guts as f64).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
             move_lane_modifier,
             force_in_modifier,
