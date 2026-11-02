@@ -1299,12 +1299,12 @@ fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
     let state = solver.state;
     let mut runner = UnreadyRunner::new(
         uma(Style::Late),
-        1,
         Mood::Good,
         &state,
         vec![],
         RngSeed::new(0),
     );
+    runner.assign_gate(1, &state);
     runner.base.speed = 1101;
     (state, runner)
 }

@@ -259,6 +259,9 @@ pub struct Runner {
     /// Gate number (1-indexed). It determines starting lane position.
     /// It is also used as a unique identifier for the runner.
     pub gate_roll: u8,
+    /// Order in which the runner was added to the race (0-indexed), e.g. to
+    /// match her with what she was added from.
+    pub index: u8,
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
     pub base: Uma,

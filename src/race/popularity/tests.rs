@@ -147,7 +147,8 @@ fn speed_bonus(skill: &Skill) -> f64 {
         guts: 1000,
         ..uma(Style::Pace)
     };
-    let runner = UnreadyRunner::new(uma, 1, Mood::Normal, &state, vec![], RngSeed::new(0));
+    let mut runner = UnreadyRunner::new(uma, Mood::Normal, &state, vec![], RngSeed::new(0));
+    runner.assign_gate(1, &state);
     skill_bonus([skill], &runner, &state).speed
 }
 
@@ -228,14 +229,9 @@ fn popularity_ranks(umas: &[crate::uma::Uma]) -> Vec<u8> {
         .iter()
         .enumerate()
         .map(|(i, &uma)| {
-            UnreadyRunner::new(
-                uma,
-                i as u8 + 1,
-                Mood::Normal,
-                &state,
-                vec![],
-                RngSeed::new(0),
-            )
+            let mut runner = UnreadyRunner::new(uma, Mood::Normal, &state, vec![], RngSeed::new(0));
+            runner.assign_gate(i as u8 + 1, &state);
+            runner
         })
         .collect();
     calculate_popularity(&runners)

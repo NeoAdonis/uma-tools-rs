@@ -147,9 +147,14 @@ pub struct UnreadyRunner {
     pub base: Uma,
     /// Raw stats before halving and adjustments. Used for popularity and Charge Up.
     pub raw: Uma,
-    /// Gate number (1-indexed). It determines starting lane position.
-    /// It is also used as a unique identifier for the runner.
-    pub gate_roll: u8,
+    /// Gate number (1-indexed), if set (see [`RaceSolver::set_gate`]). Every
+    /// runner gets one when runners get ready, which determines her starting
+    /// lane position.
+    ///
+    /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
+    pub gate: Option<u8>,
+    /// Order in which the runner was added to the race (0-indexed).
+    pub index: u8,
 
     // === Mutable state being constructed ===
     /// Set of static values related to the runner at the start of the race.
@@ -192,16 +197,16 @@ pub struct UnreadyRunner {
     // === Random number generation ===
     /// Seed from which every random stream of the runner derives (see
     /// [`crate::race::rng`]).
-    rng_seed: RngSeed,
+    pub(crate) rng_seed: RngSeed,
 }
 
 impl UnreadyRunner {
     /// Create a new runner with initial values not yet ready for simulation.
     ///
-    /// Its random streams derive from `rng_seed`.
+    /// Its random streams derive from `rng_seed`. Its gate is assigned later
+    /// (see [`Self::assign_gate`]).
     pub(crate) fn new(
         uma: Uma,
-        gate_roll: u8,
         mood: Mood,
         state: &RaceState,
         skills: Vec<Arc<Skill>>,
@@ -211,7 +216,6 @@ impl UnreadyRunner {
         let params = &state.params;
 
         // Calculate base stats.
-        let gate_block = Self::gate_bracket(gate_roll, params.gates);
         let base_uma = uma.to_base(mood);
 
         // Calculate skill activation chance and determine whether skills can activate.
@@ -232,14 +236,17 @@ impl UnreadyRunner {
         // Determine start delay (0.0 to 0.1 seconds).
         let start_delay = rng_seed.rng(Stream::StartDelay).random_range(0.0..=0.1);
 
-        let mut runner = UnreadyRunner {
+        UnreadyRunner {
             base: base_uma,
             raw: uma,
-            gate_roll,
+            gate: None,
+            // Assigned by the solver when the runner joins the race.
+            index: 0,
             adjusted: adjusted_uma,
             initial_state: InitialState {
                 mood,
-                gate_block,
+                // Assigned with the gate.
+                gate_block: 0,
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
                 fan_count: uma.fan_count.unwrap_or(state.config.default_fan_count),
@@ -258,18 +265,21 @@ impl UnreadyRunner {
             casts_sympathy: false,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
-        };
+        }
+    }
+
+    /// Assign `gate` (1-indexed) to the runner, along with her gate bracket
+    /// (post number) and the popularity bonus of her skills, whose guards may
+    /// depend on it.
+    pub(crate) fn assign_gate(&mut self, gate: u8, state: &RaceState) {
+        self.gate = Some(gate);
+        self.initial_state.gate_block = Self::gate_bracket(gate, state.params.gates);
 
         // Popularity guards are known before the race, so the skill bonus can be
         // calculated now. The runner is needed to evaluate the guards.
-        let all_skills = runner
-            .skills
-            .iter()
-            .chain(&runner.failed_skills)
-            .map(Arc::as_ref);
-        runner.popularity_bonus = popularity::skill_bonus(all_skills, &runner, state);
-
-        runner
+        let all_skills = self.skills.iter().chain(&self.failed_skills);
+        let all_skills = all_skills.map(Arc::as_ref);
+        self.popularity_bonus = popularity::skill_bonus(all_skills, self, state);
     }
 
     /// Activate an out-of-gate skill alternative: apply its pre-race effects now,
@@ -438,6 +448,7 @@ impl UnreadyRunner {
 
     /// Build the final [`Runner`] with all modifications applied.
     pub(crate) fn build(self, state: &RaceState) -> Runner {
+        let gate_roll = self.gate.expect("gates are assigned before building");
         let course = &state.course;
         let game_version = state.config.game_version;
 
@@ -494,7 +505,8 @@ impl UnreadyRunner {
 
         // Initialize race state.
         Runner {
-            gate_roll: self.gate_roll,
+            gate_roll,
+            index: self.index,
             base: self.base,
             raw: self.raw,
             adjusted: self.adjusted,
@@ -507,7 +519,7 @@ impl UnreadyRunner {
             target_speed: 0.85 * course.base_speed(),
             move_lane_modifier,
             force_in_modifier,
-            lane: LaneState::new(course.starting_lane(self.gate_roll)),
+            lane: LaneState::new(course.starting_lane(gate_roll)),
             visible_count: 0,
             nearby: NearbyState::default(),
             blocked: BlockedState::default(),

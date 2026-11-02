@@ -4,5 +4,6 @@
     "seed": 42,
     "witChecks": "Random",
     "rushing": "Random",
-    "defaultFanCount": 500000
+    "defaultFanCount": 500000,
+    "gateOrder": "RandomMissing"
 }

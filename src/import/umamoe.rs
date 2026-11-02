@@ -12,7 +12,8 @@
 //! - The runners of the race field (`page.field`), with their teams, mood and
 //!   skills. Older build codes, or those without a field, only have two runners
 //!   (`uma1` and `uma2`), with no team.
-//! - The gate order ([`GateOrder`]).
+//! - The gate order, and the gates of some runners (see
+//!   [`UmaMoeBuild::gate_order`] and [`UmaMoeRunner::gate`]).
 //!
 //! Runners have aptitudes for every distance and track surface, so racing with
 //! them takes the ones to use (see [`UmaMoeRunner::to_uma_data`]). Their fan
@@ -20,7 +21,7 @@
 //!
 //! # Examples
 //!
-//! Race the field of a build code, with its teams:
+//! Race the field of a build code, with its teams and gates:
 //!
 //! ```
 //! use uma_tools::import::umamoe::UmaMoeBuild;
@@ -36,16 +37,25 @@
 //! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
 //!
 //! let (distance, track) = (course.distance_type(), course.surface);
-//! let config = Configuration::default();
+//! let mut config = Configuration::default();
+//! config.gate_order = build.gate_order().unwrap_or(config.gate_order);
 //! let mut solver = RaceSolver::new(course, parameters.race, config);
+//! let mut gates = Vec::new();
 //! for team in build.teams() {
 //!     let mut members = Vec::new();
 //!     for runner in team {
 //!         let uma_data = runner.to_uma_data(distance, track);
 //!         let skills = uma_data.resolve_skills(&all_skills)?;
 //!         members.push((uma_data.uma, uma_data.mood, skills));
+//!         gates.push(runner.gate());
 //!     }
 //!     solver.add_team(members);
+//! }
+//! // Runners were added in the same order as their gates.
+//! for (runner, gate) in gates.into_iter().enumerate() {
+//!     if let Some(gate) = gate {
+//!         solver.set_gate(runner, gate);
+//!     }
 //! }
 //! let mut solver = solver.ready_runners();
 //! solver.run();
@@ -63,6 +73,7 @@ use serde_with::{TryFromInto, serde_as};
 use std::io::Read;
 use std::path::Path;
 
+use crate::configuration::GateOrder;
 use crate::course::{DistanceType, Track};
 use crate::race::parameters::{
     Grade, MAX_GATES, RaceParameters, RaceParametersData, Season, Time, TrackCondition, Weather,
@@ -72,20 +83,6 @@ use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat
 
 /// Only supported version of the build code format.
 const VERSION: u8 = 1;
-
-/// Order in which runners enter their gates.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Deserialize)]
-pub enum GateOrder {
-    /// Gates in field order: the first runner gets gate 1, and so on.
-    ///
-    /// The solver doesn't support it yet: gates are always random.
-    #[serde(rename = "sent")]
-    AsSet,
-    /// Random gates. Default if the build code doesn't say.
-    #[default]
-    #[serde(rename = "randomized")]
-    Random,
-}
 
 /// A race setup from an uma.moe build code.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -98,7 +95,7 @@ pub struct UmaMoeBuild {
     time: Time,
     /// From 1 to [`MAX_GATES`] runners, in field order.
     runners: Vec<UmaMoeRunner>,
-    gate_order: GateOrder,
+    gate_order: Option<GateOrder>,
 }
 
 /// A runner from an uma.moe build code.
@@ -126,6 +123,8 @@ pub struct UmaMoeRunner {
     skills: Vec<UmaSkill>,
     /// Team ID in the build code, if any.
     team: Option<u8>,
+    /// Gate (1-indexed) set in the build code, if any.
+    gate: Option<u8>,
 }
 
 /// Build code as it is in JSON.
@@ -158,8 +157,27 @@ struct RawRaceDef {
 #[serde(rename_all = "camelCase")]
 struct RawPage {
     field: Option<Vec<RawFieldUma>>,
-    #[serde(default)]
-    gate_order: GateOrder,
+    gate_order: Option<RawGateOrder>,
+}
+
+/// Gate order, as in the build code.
+#[derive(Deserialize)]
+enum RawGateOrder {
+    /// Gates as set for each runner, the rest in field order.
+    #[serde(rename = "sent")]
+    Sent,
+    /// Random gates for every runner.
+    #[serde(rename = "randomized")]
+    Randomized,
+}
+
+impl From<RawGateOrder> for GateOrder {
+    fn from(raw: RawGateOrder) -> Self {
+        match raw {
+            RawGateOrder::Sent => GateOrder::AsSet,
+            RawGateOrder::Randomized => GateOrder::RandomAll,
+        }
+    }
 }
 
 /// Runner of the race field.
@@ -171,6 +189,8 @@ struct RawFieldUma {
     card_id: Option<u32>,
     team_id: Option<u8>,
     fan_count: Option<u32>,
+    /// Gate (1-indexed).
+    frame_order: Option<u8>,
 }
 
 /// Stats, style, mood and aptitudes of a runner of the race field, with stats
@@ -276,6 +296,7 @@ impl From<RawFieldUma> for UmaMoeRunner {
                 })
                 .collect(),
             team: raw.team_id,
+            gate: raw.frame_order,
         }
     }
 }
@@ -322,6 +343,7 @@ impl TryFrom<RawUma> for UmaMoeRunner {
             fan_count: raw.fans,
             skills,
             team: None,
+            gate: None,
         })
     }
 }
@@ -338,7 +360,7 @@ impl TryFrom<RawBuild> for UmaMoeBuild {
         }
         let (field, gate_order) = match raw.page {
             Some(page) => (page.field.unwrap_or_default(), page.gate_order),
-            None => (Vec::new(), GateOrder::default()),
+            None => (Vec::new(), None),
         };
         // Fall back to `uma1` and `uma2` without a race field.
         let runners: Vec<UmaMoeRunner> = if field.is_empty() {
@@ -356,6 +378,12 @@ impl TryFrom<RawBuild> for UmaMoeBuild {
                 "invalid number of runners {}: expected 1 to {MAX_GATES}",
                 runners.len()
             ));
+        }
+        let gates = runners.len();
+        for gate in runners.iter().filter_map(|runner| runner.gate) {
+            if !(1..=gates).contains(&(gate as usize)) {
+                return Err(format!("invalid gate {gate}: expected 1 to {gates}"));
+            }
         }
         for runner in &runners {
             let Some(team) = runner.team else { continue };
@@ -379,7 +407,7 @@ impl TryFrom<RawBuild> for UmaMoeBuild {
             season: racedef.season,
             time: racedef.time,
             runners,
-            gate_order,
+            gate_order: gate_order.map(GateOrder::from),
         })
     }
 }
@@ -428,7 +456,8 @@ impl UmaMoeBuild {
     /// Only the fields used by the simulation are required:
     ///
     /// ```
-    /// use uma_tools::import::umamoe::{GateOrder, UmaMoeBuild};
+    /// use uma_tools::configuration::GateOrder;
+    /// use uma_tools::import::umamoe::UmaMoeBuild;
     ///
     /// # fn main() -> Result<(), serde_json::Error> {
     /// let build = UmaMoeBuild::from_json(
@@ -452,7 +481,7 @@ impl UmaMoeBuild {
     ///     }"#,
     /// )?;
     /// assert_eq!(build.runners().len(), 1);
-    /// assert_eq!(build.gate_order(), GateOrder::AsSet);
+    /// assert_eq!(build.gate_order(), Some(GateOrder::AsSet));
     /// # Ok(())
     /// # }
     /// ```
@@ -501,8 +530,14 @@ impl UmaMoeBuild {
         teams
     }
 
-    /// Order in which runners enter their gates.
-    pub fn gate_order(&self) -> GateOrder {
+    /// Order in which runners get their gates, if the build code says:
+    /// [`GateOrder::AsSet`] for gates as sent, or [`GateOrder::RandomAll`] for
+    /// random ones.
+    ///
+    /// As sent, runners without a gate (see [`UmaMoeRunner::gate`]) take the
+    /// free ones in field order. The solver gives them in the order runners are
+    /// added, so they match if runners are added in field order.
+    pub fn gate_order(&self) -> Option<GateOrder> {
         self.gate_order
     }
 }
@@ -511,6 +546,14 @@ impl UmaMoeRunner {
     /// Team ID in the build code, if any.
     pub fn team(&self) -> Option<u8> {
         self.team
+    }
+
+    /// Gate (1-indexed) set in the build code, if any. Set it with
+    /// [`RaceSolver::set_gate`] to race with it.
+    ///
+    /// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
+    pub fn gate(&self) -> Option<u8> {
+        self.gate
     }
 
     /// Convert `self` to [`UmaData`] for a race of the given distance type and
@@ -636,7 +679,8 @@ mod tests {
                 course_id: "10506".to_string(),
             }
         );
-        assert_eq!(build.gate_order(), GateOrder::AsSet);
+        assert_eq!(build.gate_order(), Some(GateOrder::AsSet));
+        assert!(build.runners().iter().all(|runner| runner.gate().is_none()));
 
         let uma_data = build.runners()[0].to_uma_data(DistanceType::Long, Track::Turf);
         let uma = uma_data.uma;
@@ -783,9 +827,9 @@ mod tests {
     #[test]
     fn test_gate_order() {
         let cases = [
-            ("", GateOrder::Random),
-            (r#""gateOrder": "randomized","#, GateOrder::Random),
-            (r#""gateOrder": "sent","#, GateOrder::AsSet),
+            ("", None),
+            (r#""gateOrder": "randomized","#, Some(GateOrder::RandomAll)),
+            (r#""gateOrder": "sent","#, Some(GateOrder::AsSet)),
         ];
         for (gate_order, expected) in cases {
             let build = UmaMoeBuild::from_json(&field_json(gate_order)).unwrap();
@@ -795,10 +839,30 @@ mod tests {
     }
 
     #[test]
+    fn test_gates() {
+        // Set for the first runner only.
+        let with_gate = |gate: u8| {
+            let json = field_json("").replacen(
+                r#""teamId": 1,"#,
+                &format!(r#""teamId": 1, "frameOrder": {gate},"#),
+                1,
+            );
+            UmaMoeBuild::from_json(&json)
+        };
+        let build = with_gate(2).unwrap();
+        let gates: Vec<_> = build.runners().iter().map(UmaMoeRunner::gate).collect();
+        assert_eq!(gates, [Some(2), None]);
+
+        // Only as many gates as runners.
+        assert!(with_gate(0).is_err());
+        assert!(with_gate(3).is_err());
+    }
+
+    #[test]
     fn test_from_uma1_uma2() {
         let build = UmaMoeBuild::from_json(UMA1_UMA2_JSON).unwrap();
         assert_eq!(build.race_parameters().race.gates, 2);
-        assert_eq!(build.gate_order(), GateOrder::Random);
+        assert_eq!(build.gate_order(), None);
         assert_eq!(build.teams().len(), 2);
 
         let runners = build.runners();

@@ -120,6 +120,23 @@ impl Roll {
     }
 }
 
+/// How runners get their gates when they get ready to race.
+///
+/// Gates can be set for some runners with [`RaceSolver::set_gate`].
+///
+/// [`RaceSolver::set_gate`]: crate::race::solver::RaceSolver::set_gate
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Deserialize)]
+pub enum GateOrder {
+    /// Runners keep the gates set for them, and the rest take the lowest free
+    /// gates in the order they were added to the race.
+    AsSet,
+    /// Runners keep the gates set for them, and the rest get random gates.
+    #[default]
+    RandomMissing,
+    /// Every runner gets a random gate, even if one was set for her.
+    RandomAll,
+}
+
 /// Runtime configuration shared by everything in a race.
 ///
 /// Every field is optional when deserialized; missing fields take their
@@ -139,6 +156,8 @@ pub struct Configuration {
     pub rushing: Roll,
     /// Fan count for runners that don't define their own.
     pub default_fan_count: u32,
+    /// How runners get their gates.
+    pub gate_order: GateOrder,
 }
 
 impl Default for Configuration {
@@ -150,6 +169,7 @@ impl Default for Configuration {
             wit_checks: Roll::Random,
             rushing: Roll::Random,
             default_fan_count: 0,
+            gate_order: GateOrder::RandomMissing,
         }
     }
 }

@@ -5,8 +5,9 @@
 //!
 //! Runners come from an UmaExtractor export (`--uma`, raced with the race
 //! parameters of `--parameters`), or from an uma.moe build code (`--build`),
-//! which has its own course, race conditions and teams. `--focus` picks the
-//! runner (by field index, 0 by default) whose skills are summarized.
+//! which has its own course, race conditions, teams and gates (its gate order
+//! overrides the configured one, if it has one). `--focus` picks the runner
+//! (by field index, 0 by default) whose skills are summarized.
 //!
 //! Races are split across `--threads` threads (one per logical CPU by
 //! default); pass `--threads 1` to simulate them all in a single thread, e.g.
@@ -34,6 +35,8 @@ struct Entry {
     uma: Uma,
     mood: Mood,
     skills: Vec<Arc<Skill>>,
+    /// Gate set for the runner, if any.
+    gate: Option<u8>,
 }
 
 /// What a runner did in a single race.
@@ -119,7 +122,8 @@ fn main() {
     let threads = threads.min(races);
 
     // Load everything once, so that every race only builds its solver.
-    let config = Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
+    let mut config =
+        Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
     let language = config.language;
     let skills_map =
         Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");
@@ -140,6 +144,7 @@ fn main() {
         Vec<usize>,
     ) = if let Some(build_path) = &build_path {
         let build = UmaMoeBuild::from_build_code_file(build_path).expect("Failed to parse build");
+        config.gate_order = build.gate_order().unwrap_or(config.gate_order);
         let parameters = build.race_parameters();
         let course = load_course(&parameters);
         let (distance, track) = (course.distance_type(), course.surface);
@@ -158,6 +163,7 @@ fn main() {
                     uma: uma_data.uma,
                     mood: uma_data.mood,
                     skills,
+                    gate: runner.gate(),
                 });
             }
             teams.push(start..entries.len());
@@ -182,6 +188,7 @@ fn main() {
                     uma: uma_data.uma,
                     mood: uma_data.mood,
                     skills,
+                    gate: None,
                 }
             })
             .collect();
@@ -198,8 +205,8 @@ fn main() {
     // own with that seed.
     let base_seed = config.seed.unwrap_or_else(rand::random);
     println!(
-        "Course {} ({}, {} m), {:?}, {:?}, {:?}, {:?}, {} runners, {races} races, \
-         base seed {base_seed}, {threads} threads",
+        "Course {} ({}, {} m), {:?}, {:?}, {:?}, {:?}, {} runners, gates {:?}, \
+         {races} races, base seed {base_seed}, {threads} threads",
         course.id,
         course.track_name(language).unwrap_or("Unknown"),
         course.distance,
@@ -207,7 +214,8 @@ fn main() {
         race_parameters.weather,
         race_parameters.season,
         race_parameters.time,
-        entries.len()
+        entries.len(),
+        config.gate_order
     );
 
     // Simulate a range of races, returning what every entry did in each.
@@ -229,13 +237,13 @@ fn main() {
                     .collect();
                 solver.add_team(members);
             }
-            // Runners get reordered once ready, so map their gates back to
-            // entries.
-            let mut entry_by_gate = [0; u8::MAX as usize + 1];
-            for (entry, runner) in solver.runners().iter().enumerate() {
-                entry_by_gate[runner.gate_roll as usize] = entry;
+            for (index, entry) in entries.iter().enumerate() {
+                if let Some(gate) = entry.gate {
+                    solver.set_gate(index, gate);
+                }
             }
 
+            // Runners get reordered once ready, but keep the index of their entry.
             let mut solver = solver.ready_runners();
             let mut stats: Vec<RunnerRace> =
                 (0..entries.len()).map(|_| Default::default()).collect();
@@ -244,7 +252,7 @@ fn main() {
             while !finished {
                 finished = solver.step_frame();
                 for runner in solver.runners() {
-                    let entry = entry_by_gate[runner.gate_roll as usize];
+                    let entry = runner.index as usize;
                     let stats = &mut stats[entry];
                     if stats.place > 0 {
                         continue;
@@ -289,7 +297,7 @@ fn main() {
                 stats[entry].place = place + 1;
             }
             for runner in solver.runners() {
-                let stats = &mut stats[entry_by_gate[runner.gate_roll as usize]];
+                let stats = &mut stats[runner.index as usize];
                 stats.start_delay = runner.start_delay;
                 stats.rushed_time = runner
                     .rush_state

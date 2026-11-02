@@ -7,6 +7,7 @@ use crate::race::spot_struggle::SpotStruggle;
 use crate::test_utils::*;
 use crate::trigger::skill_activation::{OvertakeExtension, PendingEffect};
 use crate::units::CourseWidths;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Index of the course feature containing `position`, given `(start, end)`
@@ -3757,4 +3758,85 @@ fn test_step_frame_matches_run() {
     let elapsed_time = stepped.state.elapsed_time;
     assert!(stepped.step_frame());
     assert_eq!(stepped.state.elapsed_time, elapsed_time);
+}
+
+/// Gates of four runners in a race with four gates, in the order they were
+/// added, with gate 1 set for the third one if `set`.
+fn gates_in_order(gate_order: GateOrder, seed: u64, set: bool) -> Vec<u8> {
+    let config = Configuration {
+        gate_order,
+        ..seeded_config(seed)
+    };
+    let params = RaceParameters {
+        gates: 4,
+        ..race_params()
+    };
+    let mut solver = RaceSolver::new(load_course(10101), params, config);
+    for _ in 0..4 {
+        solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    }
+    if set {
+        solver.set_gate(2, 1);
+    }
+    let solver = solver.ready_runners();
+    let mut gates = vec![0; 4];
+    for runner in &solver.runners {
+        // With up to 8 gates, every gate is a bracket of its own.
+        assert_eq!(runner.initial_state.gate_block, runner.gate_roll);
+        gates[runner.index as usize] = runner.gate_roll;
+    }
+    gates
+}
+
+#[test]
+fn test_gate_orders() {
+    // As set, the rest take the free gates in order.
+    assert_eq!(gates_in_order(GateOrder::AsSet, 0, true), [2, 3, 1, 4]);
+    assert_eq!(gates_in_order(GateOrder::AsSet, 0, false), [1, 2, 3, 4]);
+
+    let mut random_missing = HashSet::new();
+    for seed in 0..20 {
+        // Random for missing gates: the set gate is kept.
+        let gates = gates_in_order(GateOrder::RandomMissing, seed, true);
+        assert_eq!(gates[2], 1);
+        let mut sorted = gates.clone();
+        sorted.sort();
+        assert_eq!(sorted, [1, 2, 3, 4]);
+        random_missing.insert(gates);
+
+        // Random for everyone: the set gate is ignored, as if it wasn't set.
+        assert_eq!(
+            gates_in_order(GateOrder::RandomAll, seed, true),
+            gates_in_order(GateOrder::RandomMissing, seed, false)
+        );
+    }
+    assert!(random_missing.len() > 1, "missing gates should be random");
+}
+
+#[test]
+#[should_panic(expected = "Gate 1 is already set for another runner")]
+fn test_set_gate_rejects_gates_of_other_runners() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.set_gate(0, 1);
+    // Setting it again for the same runner is fine.
+    solver.set_gate(0, 1);
+    solver.set_gate(1, 1);
+}
+
+#[test]
+#[should_panic(expected = "Invalid gate 10: expected 1 to 9")]
+fn test_set_gate_rejects_gates_out_of_range() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.set_gate(0, 10);
+}
+
+#[test]
+#[should_panic(expected = "No runner added in position 1")]
+fn test_set_gate_rejects_runners_not_added() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(uma(Style::Pace), Mood::Normal, vec![]);
+    solver.set_gate(1, 1);
 }
