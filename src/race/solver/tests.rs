@@ -170,14 +170,24 @@ fn test_pace_up_ex_front_runner_enters_and_exits() {
 }
 
 #[test]
-fn test_pace_up_ex_runaway_behind_front() {
+fn test_pace_up_ex_runaway_and_front_are_the_same_strategy() {
+    for (behind, ahead) in [
+        (Style::Runaway, Style::Front),
+        (Style::Front, Style::Runaway),
+    ] {
+        let mut solver =
+            positioning_solver(&[(behind, 100.0), (ahead, 110.0)], GameVersion::LATEST);
+        solver.update_positioning_strategy();
+        assert!(!is_pace_up_ex(&mut solver, behind));
+        assert!(!is_pace_up_ex(&mut solver, ahead));
+    }
+    // A runner whose strategy should be behind still counts.
     let mut solver = positioning_solver(
-        &[(Style::Runaway, 100.0), (Style::Front, 110.0)],
+        &[(Style::Runaway, 100.0), (Style::Pace, 110.0)],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Runaway));
-    assert!(!is_pace_up_ex(&mut solver, Style::Front));
 }
 
 #[test]

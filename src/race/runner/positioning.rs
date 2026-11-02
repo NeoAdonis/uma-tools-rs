@@ -46,7 +46,8 @@ pub(crate) enum PositioningStrategy {
     /// another runner ahead whose strategy should actually position her behind.
     /// Front-runners enter it when any such runner is ahead; other runners enter it
     /// when the pacemaker is such a runner. Exits once no such runner is ahead.
-    /// Takes priority over all other strategies.
+    /// Runaways and front runners count as the same strategy here. Takes
+    /// priority over all other strategies.
     PaceUpEx,
 }
 

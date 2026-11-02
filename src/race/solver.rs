@@ -1155,13 +1155,15 @@ impl RaceSolver<Runner> {
 
         let has_pace_up_ex = self.state.config.game_version >= GameVersion::OnePointFiveAnniversary;
         let pacemaker_style = self.runners[0].positioning_style();
-        // Most passive style among runners ahead of the current one.
+        // Most passive style among runners ahead of the current one. Runaways
+        // count as front runners, so neither should be behind the other.
         let mut max_style_ahead: Option<Style> = None;
 
         for i in 0..self.runners.len() {
             let style = self.runners[i].positioning_style();
-            let passive_ahead = max_style_ahead > Some(style);
-            max_style_ahead = max_style_ahead.max(Some(style));
+            let base_style = style.base_style();
+            let passive_ahead = max_style_ahead > Some(base_style);
+            max_style_ahead = max_style_ahead.max(Some(base_style));
             if self.runners[i].section >= POSITIONING_END_SECTION {
                 self.runners[i].positioning_strategy = PositioningStrategy::Normal;
                 continue;
