@@ -45,6 +45,8 @@ use std::path::Path;
 
 // Track IDs for special handling.
 const TRACK_ID_OOI: u16 = 10101;
+const TRACK_ID_KAWASAKI: u16 = 10103;
+const TRACK_ID_FUNABASHI: u16 = 10104;
 const TRACK_ID_LONGCHAMP: u16 = 10201;
 
 /// Represents the phase of a race based on the position on the course.
@@ -521,9 +523,9 @@ impl Course {
     /// (1-indexed), with gate 1 on the rail.
     pub(crate) fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
         let adjustor = match self.race_track_id {
-            TRACK_ID_OOI => 0.0,
+            TRACK_ID_OOI | TRACK_ID_KAWASAKI | TRACK_ID_FUNABASHI => 0.0,
             TRACK_ID_LONGCHAMP => {
-                if gate_roll >= 13 {
+                if gate_roll >= 15 {
                     1.86
                 } else {
                     0.0
@@ -840,12 +842,14 @@ mod tests {
         let cases = [
             // Gate 1 starts on the rail.
             (10001, 1, 0.0),
-            // Oi: never adjusted.
+            // Oi, Kawasaki and Funabashi: never adjusted.
             (TRACK_ID_OOI, 9, 8.0),
             (TRACK_ID_OOI, 12, 11.0),
-            // Longchamp: adjusted from gate roll 13.
-            (TRACK_ID_LONGCHAMP, 12, 11.0),
-            (TRACK_ID_LONGCHAMP, 13, 12.0 + 1.86),
+            (TRACK_ID_KAWASAKI, 12, 11.0),
+            (TRACK_ID_FUNABASHI, 12, 11.0),
+            // Longchamp: adjusted from gate roll 15.
+            (TRACK_ID_LONGCHAMP, 14, 13.0),
+            (TRACK_ID_LONGCHAMP, 15, 14.0 + 1.86),
             // Anywhere else: adjusted from gate roll 10.
             (10001, 9, 8.0),
             (10001, 10, 9.0 + 0.6),
