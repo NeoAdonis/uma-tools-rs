@@ -374,6 +374,9 @@ pub struct Runner {
     pub(crate) positioning_strategy: PositioningStrategy,
     /// Next time to check positioning strategy conditions, in seconds.
     pub(crate) next_positioning_check: f64,
+    /// Position (m) at which the current positioning strategy ends, unless its
+    /// exit conditions are met first (see `enter_positioning`).
+    pub(crate) positioning_end: f64,
     /// Current slope target speed modifier in m/s, if any.
     ///
     /// Positive in downhill mode, negative when going uphill.

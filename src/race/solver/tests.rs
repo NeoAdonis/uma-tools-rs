@@ -320,6 +320,12 @@ fn test_front_speed_up_only_exits_when_far_ahead() {
             expected,
             "{lead}m ahead"
         );
+        if expected == Normal {
+            // Checked again after a 1s cooldown and the 2s interval.
+            let runner = solver.runners.iter().find(|r| r.position > 100.0);
+            let next_check = solver.state.elapsed_time + 3.0;
+            assert_eq!(runner.unwrap().next_positioning_check, next_check);
+        }
     }
 }
 
@@ -393,6 +399,45 @@ fn test_positioning_ends_after_first_ten_sections() {
         runner_with_style(&mut solver, Style::Front).positioning_strategy,
         PositioningStrategy::Normal
     ));
+}
+
+#[test]
+fn test_positioning_lasts_one_section_at_most() {
+    // Far behind a runner ahead whose strategy keeps her in hers: a Pace runner
+    // paces up and a Runaway overtakes, until they've run the length of a
+    // section (50m), or three for runaways.
+    for (style, ahead, length) in [
+        (Style::Pace, Style::Front, 50.0),
+        (Style::Runaway, Style::Runaway, 150.0),
+    ] {
+        let mut solver = positioning_solver(
+            &[(ahead, 300.0), (style, 100.0)],
+            GameVersion::FirstAnniversary,
+        );
+        update_positioning_repeatedly(&mut solver);
+        let i = solver.runners.iter().position(|r| r.position == 100.0);
+        let i = i.unwrap();
+        assert_ne!(
+            solver.runners[i].positioning_strategy,
+            PositioningStrategy::Normal
+        );
+
+        solver.runners[i].position = 100.0 + length - 0.1;
+        solver.update_positioning_strategy();
+        assert_ne!(
+            solver.runners[i].positioning_strategy,
+            PositioningStrategy::Normal,
+            "{style:?} before the end"
+        );
+
+        // Checked again after a 1s cooldown and the 2s interval.
+        solver.runners[i].position = 100.0 + length;
+        solver.update_positioning_strategy();
+        let runner = &solver.runners[i];
+        assert_eq!(runner.positioning_strategy, PositioningStrategy::Normal);
+        let next_check = solver.state.elapsed_time + 3.0;
+        assert_eq!(runner.next_positioning_check, next_check);
+    }
 }
 
 /// Solver with a single runner whose start delay is overridden.
@@ -909,19 +954,19 @@ fn test_spot_struggle_expired_strugglers_can_exit() {
 }
 
 #[test]
-fn test_spot_struggle_ends_upon_entering_tenth_section() {
-    let mut solver = struggle_solver(&[(Style::Front, 380.0, 0.0)], GameVersion::LATEST);
+fn test_spot_struggle_ends_upon_entering_ninth_section() {
+    let mut solver = struggle_solver(&[(Style::Front, 330.0, 0.0)], GameVersion::LATEST);
     let elapsed_time = solver.state.elapsed_time;
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.start_spot_struggle(elapsed_time);
 
-    // Section 8 (0-indexed) is still fine.
-    runner.position = 405.0;
+    // Section 7 (0-indexed) is still fine.
+    runner.position = 355.0;
     runner.update_phase(state);
     assert!(runner.spot_struggle.is_active(elapsed_time));
 
-    runner.position = 455.0;
+    runner.position = 405.0;
     runner.update_phase(state);
     assert_eq!(runner.spot_struggle, SpotStruggle::Ended);
 }

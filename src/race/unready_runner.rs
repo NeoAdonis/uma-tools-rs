@@ -531,6 +531,7 @@ impl UnreadyRunner {
             is_start_dash: true,
             next_positioning_check: self.start_delay,
             positioning_strategy: PositioningStrategy::Normal,
+            positioning_end: f64::INFINITY,
             slope_speed_modifier: None,
             downhill_check_timer: 0.0,
             uphills_climbed: 0,

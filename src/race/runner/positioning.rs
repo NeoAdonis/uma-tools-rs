@@ -11,12 +11,21 @@ use super::Runner;
 
 /// First section where positioning strategies no longer apply.
 pub(crate) const POSITIONING_END_SECTION: u8 = 10;
+/// Interval (s) between checks to enter a positioning strategy.
+const CHECK_INTERVAL: f64 = 2.0;
+/// Cooldown (s) after exiting a positioning strategy, before the next check
+/// interval starts.
+const EXIT_COOLDOWN: f64 = 1.0;
 
 /// Positioning strategy during the first 10 sections (5/12) of the race.
 ///
 /// For front-runners, it determines the pacing behavior to stay ahead or catch
 /// up. For non-front-runners, it determines the pacing behavior to keep their
 /// distance from the pacemaker.
+///
+/// Every strategy other than `Normal` and `PaceUpEx` ends once its exit
+/// conditions are met or after running the length of a section in it (three
+/// for runaways), followed by a 1s cooldown before checks resume.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PositioningStrategy {
     /// Run at regular pace.
@@ -115,18 +124,21 @@ impl Runner {
         let can_speed_up = |runner: &Self, lead| {
             runner.can_speed_up_to_front(lead, is_single_front_runner, game_version)
         };
+        if self.has_positioning_ended(elapsed_time) {
+            return;
+        }
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
                     return;
                 }
 
-                self.next_positioning_check += 2.0;
+                self.next_positioning_check += CHECK_INTERVAL;
 
                 // Use original style to determine if runner was originally a front-runner that
                 // should speed up.
                 if self.is_rushed() && self.adjusted.style.is_front_like() {
-                    self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
+                    self.enter_positioning(PositioningStrategy::FrontSpeedUp, state);
                     return;
                 }
 
@@ -136,16 +148,16 @@ impl Runner {
 
                 if lead.is_some_and(|lead| can_speed_up(self, lead)) {
                     // First and not far enough ahead: try to stay ahead.
-                    self.positioning_strategy = PositioningStrategy::FrontSpeedUp;
+                    self.enter_positioning(PositioningStrategy::FrontSpeedUp, state);
                 } else if strategy_lead.is_none() {
                     // Not first in the same strategy: try to catch up.
-                    self.positioning_strategy = PositioningStrategy::FrontOvertake;
+                    self.enter_positioning(PositioningStrategy::FrontOvertake, state);
                 }
             }
             PositioningStrategy::FrontSpeedUp => {
                 // Exit if sufficiently ahead (staying if overtaken).
                 if lead.is_some_and(|lead| !can_speed_up(self, lead)) {
-                    self.positioning_strategy = PositioningStrategy::Normal;
+                    self.exit_positioning(elapsed_time);
                 }
             }
             PositioningStrategy::FrontOvertake => {
@@ -156,7 +168,7 @@ impl Runner {
                     10.0
                 };
                 if strategy_lead.is_some_and(|lead| lead > distance_threshold) {
-                    self.positioning_strategy = PositioningStrategy::Normal;
+                    self.exit_positioning(elapsed_time);
                 }
             }
             _ => {
@@ -176,13 +188,16 @@ impl Runner {
     pub(crate) fn update_positioning_non_front(&mut self, distance_behind: f64, state: &RaceState) {
         let elapsed_time = state.elapsed_time;
         let course_length = state.course.distance as f64;
+        if self.has_positioning_ended(elapsed_time) {
+            return;
+        }
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
                     return;
                 }
 
-                self.next_positioning_check += 2.0;
+                self.next_positioning_check += CHECK_INTERVAL;
 
                 // Determine target distance range based on style and course length.
                 let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;
@@ -203,7 +218,7 @@ impl Runner {
                     }
 
                     let threshold = self.rng.positioning.random_range(range);
-                    self.positioning_strategy = PositioningStrategy::PaceUp(threshold);
+                    self.enter_positioning(PositioningStrategy::PaceUp(threshold), state);
                 } else if distance_behind < range.start && !self.skill_modifiers.has_speed_effects()
                 {
                     // Pace down to a certain distance (unless affected by speed-increasing skills).
@@ -221,19 +236,19 @@ impl Runner {
                     } else {
                         self.rng.positioning.random_range(range)
                     };
-                    self.positioning_strategy = PositioningStrategy::PaceDown(threshold);
+                    self.enter_positioning(PositioningStrategy::PaceDown(threshold), state);
                 }
             }
             PositioningStrategy::PaceUp(threshold) => {
                 // Exit when caught up within threshold.
                 if distance_behind < threshold {
-                    self.reset_positioning(elapsed_time + 3.0);
+                    self.exit_positioning(elapsed_time);
                 }
             }
             PositioningStrategy::PaceDown(threshold) => {
                 // Exit when fallen back beyond threshold or if speed is increased by skills.
                 if distance_behind > threshold || self.skill_modifiers.has_speed_effects() {
-                    self.reset_positioning(elapsed_time + 3.0);
+                    self.exit_positioning(elapsed_time);
                 }
             }
             _ => {
@@ -250,6 +265,37 @@ impl Runner {
     pub(super) fn reset_positioning(&mut self, next_check: f64) {
         self.positioning_strategy = PositioningStrategy::Normal;
         self.next_positioning_check = next_check;
+    }
+
+    /// Enter `strategy`, which lasts until its exit conditions are met or the
+    /// runner has run the length of a section in it (rounded down), or three
+    /// for runaways.
+    fn enter_positioning(&mut self, strategy: PositioningStrategy, state: &RaceState) {
+        let sections = if self.positioning_style() == Style::Runaway {
+            3.0
+        } else {
+            1.0
+        };
+        self.positioning_strategy = strategy;
+        self.positioning_end = self.position + state.course.section_length().floor() * sections;
+    }
+
+    /// Exit the current strategy at `elapsed_time` (s), checking again after
+    /// the exit cooldown and the usual check interval.
+    fn exit_positioning(&mut self, elapsed_time: f64) {
+        self.reset_positioning(elapsed_time + EXIT_COOLDOWN + CHECK_INTERVAL);
+    }
+
+    /// Exit the current strategy at `elapsed_time` (s) if the runner has run
+    /// for long enough in it (see [`Self::enter_positioning`]), returning
+    /// whether she did.
+    fn has_positioning_ended(&mut self, elapsed_time: f64) -> bool {
+        let ended = self.positioning_strategy != PositioningStrategy::Normal
+            && self.position >= self.positioning_end;
+        if ended {
+            self.exit_positioning(elapsed_time);
+        }
+        ended
     }
 
     /// Roll a wit check to change positioning strategy, with a chance of

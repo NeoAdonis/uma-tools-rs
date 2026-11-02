@@ -21,7 +21,7 @@ pub(crate) const MIN_POSITION: f64 = 150.0;
 /// the leader and the runner struggling with her must be in them.
 pub(crate) const SECTIONS: RangeInclusive<u8> = 0..=5;
 /// Section (0-indexed) upon whose entry any ongoing spot struggle stops.
-pub(crate) const END_SECTION: u8 = 9;
+pub(crate) const END_SECTION: u8 = 8;
 /// Maximum distance (m) from the leader to start struggling with her.
 pub(crate) const TRIGGER_DISTANCE: f64 = 3.75;
 /// Maximum lane gap (in course widths) from the leader to start struggling
