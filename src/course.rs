@@ -517,7 +517,8 @@ impl Course {
         (self.nominal_position(position) / self.section_length()).floor() as u8
     }
 
-    /// Get the starting lane position in course widths based on the gate roll.
+    /// Get the starting lane position in course widths based on the gate roll
+    /// (1-indexed), with gate 1 on the rail.
     pub(crate) fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
         let adjustor = match self.race_track_id {
             TRACK_ID_OOI => 0.0,
@@ -536,7 +537,7 @@ impl Course {
                 }
             }
         };
-        CourseWidths::from_horse_lanes(gate_roll as f64 + adjustor)
+        CourseWidths::from_horse_lanes((gate_roll - 1) as f64 + adjustor)
     }
 
     /// Get the track name in the specified language, or `None` if the track name is
@@ -837,15 +838,17 @@ mod tests {
         let lane = CourseWidths::from_horse_lanes;
         // (racetrack, gate roll, expected lane in horse lanes)
         let cases = [
+            // Gate 1 starts on the rail.
+            (10001, 1, 0.0),
             // Oi: never adjusted.
-            (TRACK_ID_OOI, 9, 9.0),
-            (TRACK_ID_OOI, 12, 12.0),
+            (TRACK_ID_OOI, 9, 8.0),
+            (TRACK_ID_OOI, 12, 11.0),
             // Longchamp: adjusted from gate roll 13.
-            (TRACK_ID_LONGCHAMP, 12, 12.0),
-            (TRACK_ID_LONGCHAMP, 13, 13.0 + 1.86),
+            (TRACK_ID_LONGCHAMP, 12, 11.0),
+            (TRACK_ID_LONGCHAMP, 13, 12.0 + 1.86),
             // Anywhere else: adjusted from gate roll 10.
-            (10001, 9, 9.0),
-            (10001, 10, 10.0 + 0.6),
+            (10001, 9, 8.0),
+            (10001, 10, 9.0 + 0.6),
         ];
         for (track_id, gate_roll, expected) in cases {
             assert_eq!(
@@ -861,7 +864,7 @@ mod tests {
             race_track_id: 10001,
             ..synthetic_course()
         };
-        assert_eq!(course.starting_lane(12), lane(12.0 + 0.6));
+        assert_eq!(course.starting_lane(12), lane(11.0 + 0.6));
     }
 
     #[test]
