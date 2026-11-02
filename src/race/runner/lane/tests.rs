@@ -1,5 +1,5 @@
 use super::*;
-use crate::race::solver::RaceSolver;
+use crate::race::solver::{DELTA_TIME, RaceSolver};
 use crate::test_utils::{assert_close, load_course, race_params, seeded_config, uma};
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -176,6 +176,31 @@ fn test_normal_mode_extra_move_lane_from_final_corner() {
     // In the final corner, not only on the final straight.
     solver.runners[0].position = final_corner + 1.0;
     assert_close!(target(&solver).0, 0.5);
+}
+
+#[test]
+fn test_normal_mode_moves_inward_up_to_the_rail() {
+    let mut solver = lane_solver(&[(100.0, 0.02)]);
+    let course = solver.state.course.clone();
+    let runner = &mut solver.runners[0];
+    // The target may be inside the rail...
+    let target = runner.normal_mode_lane_target(&course, &[]);
+    assert_close!(target.0, 0.02 - 0.05);
+
+    // ...but the runner stops at it.
+    runner.lane.target = target;
+    for _ in 0..60 {
+        runner.update_lane(&course, DELTA_TIME);
+        assert!(runner.lane.current >= CourseWidths(0.0));
+    }
+    assert_eq!(runner.lane.current, CourseWidths(0.0));
+    assert_eq!(runner.lane.speed, 0.0);
+
+    // Once at the rail, the target is updated as if blocked towards it, and
+    // she keeps straight.
+    assert!(runner.should_update_target_lane());
+    let target = runner.normal_mode_lane_target(&course, &[]);
+    assert_eq!(target, CourseWidths(0.0));
 }
 
 #[test]

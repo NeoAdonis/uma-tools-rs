@@ -133,16 +133,12 @@ impl Runner {
             (self.lane.current_speed - speed_step).max(target_speed)
         };
 
-        let moving_out = lane_diff > CourseWidths(0.0);
-        let blocked = if moving_out {
-            self.blocked.side_out
-        } else {
-            self.blocked.side_in
-        };
-        if blocked {
+        if !self.has_lane_space_to(target_lane) {
             self.lane.speed = 0.0;
             return;
         }
+
+        let moving_out = lane_diff > CourseWidths(0.0);
 
         let direction_modifier = if moving_out {
             1.0
@@ -153,12 +149,13 @@ impl Runner {
             .clamp(0.0, MAX_SPEED)
             * direction_modifier;
 
+        // Runners stop at the rail, even if their target is inside it.
         let lane_change = CourseWidths(self.lane.speed * delta_time);
         if lane_change.abs() >= lane_diff.abs() {
-            self.lane.current = target_lane;
+            self.lane.current = target_lane.max(CourseWidths(0.0));
             self.lane.current_speed = 0.0;
         } else {
-            self.lane.current += lane_change;
+            self.lane.current = (self.lane.current + lane_change).max(CourseWidths(0.0));
         }
     }
 
@@ -374,10 +371,11 @@ impl Runner {
             return extra.clamp(CourseWidths(0.0), course.width);
         }
 
-        // In early-race or mid-race, move inward.
+        // In early-race or mid-race, move inward. The target may be inside the
+        // rail, but the runner stops at it (see `update_lane`).
         if self.phase <= Phase::Mid {
             let target = self.lane.current - CourseWidths(0.05);
-            if target >= CourseWidths(0.0) && self.has_lane_space_to(target) {
+            if self.has_lane_space_to(target) {
                 return target;
             }
         }
@@ -600,11 +598,14 @@ impl Runner {
 
     /// Check if the runner has lane space to reach `target_lane`, i.e. she
     /// isn't side-blocked towards it (see [`proximity::check_side_blocked`]).
+    ///
+    /// Target lanes may be inside the rail, but the rail blocks runners on it
+    /// from moving further inward.
     fn has_lane_space_to(&self, target_lane: CourseWidths) -> bool {
         if target_lane > self.lane.current {
             !self.blocked.side_out
         } else if target_lane < self.lane.current {
-            !self.blocked.side_in
+            !self.blocked.side_in && self.lane.current > CourseWidths(0.0)
         } else {
             true
         }
