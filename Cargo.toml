@@ -9,7 +9,6 @@ license = "MIT"
 keywords = ["umamusume", "simulation", "racing", "game"]
 categories = ["simulation", "games"]
 publish = false
-default-run = "uma-tools"
 
 [dependencies]
 base64 = "0.23"

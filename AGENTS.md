@@ -61,9 +61,7 @@ Source code, relative to `src/`:
 - `names.rs`: character, skill and track names in Japanese and English, embedded from `data/names.json`.
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
 - `test_utils.rs`: reusable helpers to create data structures for unit tests.
-- `main.rs`: small application to demonstrate race simulations.
-- `bin/multi_race.rs`: small application to simulate the same race many times
-  with different seeds and summarize finish times, also used for profiling.
+- `main.rs`: small application to demonstrate race simulations, simulating the same race many times with different seeds and summarizing how every runner performed, also used for profiling.
 
 Test code, relative to `tests/`:
 
