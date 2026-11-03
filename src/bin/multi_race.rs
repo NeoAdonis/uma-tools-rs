@@ -3,7 +3,7 @@
 //! behavior (positions, blocking, rushing, downhill mode, position fights,
 //! duels) and, for one runner, how often each skill activates.
 //!
-//! Runners come from an UmaExtractor export (`--uma`, raced with the race
+//! Runners come from an umadump export (`--uma`, raced with the race
 //! parameters of `--parameters`), or from an uma.moe build code (`--build`),
 //! which has its own course, race conditions, teams and gates (its gate order
 //! overrides the configured one, if it has one). `--focus` picks the runner
@@ -19,7 +19,7 @@ use std::thread;
 use std::time::Instant;
 
 use uma_tools::course::Phase;
-use uma_tools::import::umaextractor::UmaExtractorData;
+use uma_tools::import::umadump::UmaDumpData;
 use uma_tools::import::umamoe::UmaMoeBuild;
 use uma_tools::race::last_spurt::LastSpurtCategory;
 use uma_tools::race::parameters::RaceParameters;
@@ -159,7 +159,7 @@ fn main() {
         let course = load_course(&parameters);
         let (distance, track) = (course.distance_type(), course.surface);
         let all_umas =
-            UmaExtractorData::all_from_json_file(&uma_path).expect("Failed to parse uma JSON");
+            UmaDumpData::all_from_json_file(&uma_path).expect("Failed to parse uma JSON");
         let entries: Vec<_> = all_umas
             .iter()
             .take(parameters.race.gates as usize)

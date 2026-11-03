@@ -1,8 +1,8 @@
-//! Import of trained Umas exported by UmaExtractor.
+//! Import of trained Umas exported by umadump.
 //!
-//! UmaExtractor exports trained Umas as JSON objects using the game's field
+//! umadump exports trained Umas as JSON objects using the game's field
 //! names (`card_id`, `wiz`, `proper_distance_mile`, etc.), with aptitudes from
-//! 1 (G) to 8 (S). [`UmaExtractorData`] reads one of them, ignoring the fields
+//! 1 (G) to 8 (S). [`UmaDumpData`] reads one of them, ignoring the fields
 //! that the simulation doesn't use.
 //!
 //! An Uma has aptitudes for every distance and track surface, so importing it
@@ -14,12 +14,12 @@
 //!
 //! ```
 //! use uma_tools::course::{DistanceType, Track};
-//! use uma_tools::import::umaextractor::UmaExtractorData;
+//! use uma_tools::import::umadump::UmaDumpData;
 //! use uma_tools::{Aptitude, Style};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let path = "tests/data/umaextractor_uma.json";
-//! let data = UmaExtractorData::from_json_file(path)?;
+//! let path = "tests/data/umadump_uma.json";
+//! let data = UmaDumpData::from_json_file(path)?;
 //! let uma_data = data.to_uma_data(DistanceType::Mile, Track::Turf);
 //! assert_eq!(uma_data.uma.style, Style::Late);
 //! assert_eq!(uma_data.uma.distance_aptitude, Aptitude::A);
@@ -34,11 +34,11 @@ use std::path::Path;
 use crate::course::{DistanceType, Track};
 use crate::uma::{Aptitude, Style, Uma, UmaData, UmaSkill, deserialize_stat};
 
-/// A trained Uma as exported by UmaExtractor.
+/// A trained Uma as exported by umadump.
 ///
-/// Convert it with [`UmaExtractorData::to_uma_data`] to race with it.
+/// Convert it with [`UmaDumpData::to_uma_data`] to race with it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
-pub struct UmaExtractorData {
+pub struct UmaDumpData {
     /// See [`Uma::character_id`].
     card_id: u32,
     #[serde(deserialize_with = "deserialize_stat")]
@@ -150,8 +150,8 @@ fn deserialize_skills<'de, D: Deserializer<'de>>(
         .collect())
 }
 
-impl UmaExtractorData {
-    /// Parse `UmaExtractorData` from a JSON string.
+impl UmaDumpData {
+    /// Parse `UmaDumpData` from a JSON string.
     ///
     /// # Errors
     ///
@@ -163,10 +163,10 @@ impl UmaExtractorData {
     /// Only the fields used by the simulation are required:
     ///
     /// ```
-    /// use uma_tools::import::umaextractor::UmaExtractorData;
+    /// use uma_tools::import::umadump::UmaDumpData;
     ///
     /// # fn main() -> Result<(), serde_json::Error> {
-    /// let data = UmaExtractorData::from_json(
+    /// let data = UmaDumpData::from_json(
     ///     r#"{
     ///         "card_id": 101901, "speed": 1305, "stamina": 495,
     ///         "power": 1143, "guts": 688, "wiz": 898, "fans": 172229,
@@ -188,12 +188,12 @@ impl UmaExtractorData {
         serde_json::from_str(json)
     }
 
-    /// Parse `UmaExtractorData` from a JSON file.
+    /// Parse `UmaDumpData` from a JSON file.
     ///
     /// # Errors
     ///
     /// Returns an error if the file can't be read, or for the same reasons as
-    /// [`UmaExtractorData::from_json`].
+    /// [`UmaDumpData::from_json`].
     ///
     /// See the [module docs](self) for an example.
     pub fn from_json_file(
@@ -203,31 +203,31 @@ impl UmaExtractorData {
         Ok(Self::from_json(&content)?)
     }
 
-    /// Parse a list of `UmaExtractorData` from a JSON array, as UmaExtractor
+    /// Parse a list of `UmaDumpData` from a JSON array, as umadump
     /// exports every trained Uma at once.
     ///
     /// # Errors
     ///
     /// Returns an error if the JSON isn't an array, or for the same reasons as
-    /// [`UmaExtractorData::from_json`] for any of its elements.
+    /// [`UmaDumpData::from_json`] for any of its elements.
     pub fn all_from_json(json: &str) -> Result<Vec<Self>, serde_json::Error> {
         serde_json::from_str(json)
     }
 
-    /// Parse a list of `UmaExtractorData` from a JSON file with an array.
+    /// Parse a list of `UmaDumpData` from a JSON file with an array.
     ///
     /// # Errors
     ///
     /// Returns an error if the file can't be read, or for the same reasons as
-    /// [`UmaExtractorData::all_from_json`].
+    /// [`UmaDumpData::all_from_json`].
     ///
     /// # Examples
     ///
     /// ```
-    /// use uma_tools::import::umaextractor::UmaExtractorData;
+    /// use uma_tools::import::umadump::UmaDumpData;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    /// let all = UmaExtractorData::all_from_json_file("uma.json")?;
+    /// let all = UmaDumpData::all_from_json_file("uma.json")?;
     /// assert_eq!(all.len(), 18);
     /// # Ok(())
     /// # }
@@ -286,10 +286,10 @@ mod tests {
     use super::*;
     use crate::skill::Skill;
 
-    /// Path to an Uma exported by UmaExtractor, with every field.
-    const UMA_PATH: &str = "tests/data/umaextractor_uma.json";
+    /// Path to an Uma exported by umadump, with every field.
+    const UMA_PATH: &str = "tests/data/umadump_uma.json";
 
-    /// JSON for [`UmaExtractorData`] with only the required fields, and
+    /// JSON for [`UmaDumpData`] with only the required fields, and
     /// distinct aptitudes (S to G, then S and A) in field order.
     const UMA_JSON: &str = r#"{
         "card_id": 100101,
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_to_uma_data() {
-        let data = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let data = UmaDumpData::from_json(UMA_JSON).unwrap();
         let expected = UmaData {
             uma: Uma {
                 speed: 1201,
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_to_uma_data_picks_aptitudes() {
-        let data = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let data = UmaDumpData::from_json(UMA_JSON).unwrap();
         let cases = [
             (DistanceType::Short, Track::Turf, Aptitude::D, Aptitude::S),
             (DistanceType::Mile, Track::Dirt, Aptitude::E, Aptitude::A),
@@ -370,7 +370,7 @@ mod tests {
                 r#""running_style": 1"#,
                 &format!(r#""running_style": {value}"#),
             );
-            let uma = UmaExtractorData::from_json(&json)
+            let uma = UmaDumpData::from_json(&json)
                 .unwrap()
                 .to_uma_data(DistanceType::Mile, Track::Turf)
                 .uma;
@@ -387,7 +387,7 @@ mod tests {
         let invalid = |from: &str, to: &str| {
             assert_eq!(UMA_JSON.matches(from).count(), 1, "{from}");
             let json = UMA_JSON.replace(from, to);
-            assert!(UmaExtractorData::from_json(&json).is_err(), "{to}");
+            assert!(UmaDumpData::from_json(&json).is_err(), "{to}");
         };
         invalid(r#""running_style": 1"#, r#""running_style": 0"#);
         invalid(r#""running_style": 1"#, r#""running_style": 5"#);
@@ -396,12 +396,12 @@ mod tests {
         invalid(r#""guts": 604"#, r#""guts": 0"#);
         invalid(r#""fans": 98765, "#, "");
         invalid(r#""level": 4"#, r#""lv": 4"#);
-        assert!(UmaExtractorData::from_json("{").is_err());
+        assert!(UmaDumpData::from_json("{").is_err());
     }
 
     #[test]
     fn test_from_json_file() {
-        let uma_data = UmaExtractorData::from_json_file(UMA_PATH)
+        let uma_data = UmaDumpData::from_json_file(UMA_PATH)
             .unwrap()
             .to_uma_data(DistanceType::Long, Track::Dirt);
         let uma = uma_data.uma;
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn test_skills_resolve_with_levels() {
         let all_skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
-        let skills = UmaExtractorData::from_json_file(UMA_PATH)
+        let skills = UmaDumpData::from_json_file(UMA_PATH)
             .unwrap()
             .to_uma_data(DistanceType::Mile, Track::Turf)
             .resolve_skills(&all_skills)
@@ -450,28 +450,28 @@ mod tests {
 
     #[test]
     fn test_from_missing_file() {
-        assert!(UmaExtractorData::from_json_file("does_not_exist.json").is_err());
-        assert!(UmaExtractorData::all_from_json_file("does_not_exist.json").is_err());
+        assert!(UmaDumpData::from_json_file("does_not_exist.json").is_err());
+        assert!(UmaDumpData::all_from_json_file("does_not_exist.json").is_err());
     }
 
     #[test]
     fn test_all_from_json() {
-        let single = UmaExtractorData::from_json(UMA_JSON).unwrap();
+        let single = UmaDumpData::from_json(UMA_JSON).unwrap();
         let other = UMA_JSON.replace(r#""card_id": 100101"#, r#""card_id": 100201"#);
-        let all = UmaExtractorData::all_from_json(&format!("[{UMA_JSON}, {other}]")).unwrap();
+        let all = UmaDumpData::all_from_json(&format!("[{UMA_JSON}, {other}]")).unwrap();
         assert_eq!(all.len(), 2);
         assert_eq!(all[0], single);
         assert_eq!(all[1].card_id, 100201);
-        assert!(UmaExtractorData::all_from_json("[]").unwrap().is_empty());
+        assert!(UmaDumpData::all_from_json("[]").unwrap().is_empty());
         // A single Uma isn't a list, and one invalid Uma fails the whole list.
-        assert!(UmaExtractorData::all_from_json(UMA_JSON).is_err());
+        assert!(UmaDumpData::all_from_json(UMA_JSON).is_err());
         let invalid = UMA_JSON.replace(r#""guts": 604"#, r#""guts": 0"#);
-        assert!(UmaExtractorData::all_from_json(&format!("[{UMA_JSON}, {invalid}]")).is_err());
+        assert!(UmaDumpData::all_from_json(&format!("[{UMA_JSON}, {invalid}]")).is_err());
     }
 
     #[test]
     fn test_all_from_json_file() {
-        let all = UmaExtractorData::all_from_json_file("uma.json").unwrap();
+        let all = UmaDumpData::all_from_json_file("uma.json").unwrap();
         assert_eq!(all.len(), 18);
     }
 }

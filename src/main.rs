@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use uma_tools::import::umaextractor::UmaExtractorData;
+use uma_tools::import::umadump::UmaDumpData;
 use uma_tools::names;
 use uma_tools::race::charge_up::ChargeUpOutcome;
 use uma_tools::{Configuration, Course, RaceParametersData, RaceSolver, Skill};
@@ -74,8 +74,7 @@ fn main() {
     println!("\nLoaded {} skills from JSON", skills_map.len());
 
     // Load the Umas from JSON file, one per gate.
-    let all_umas =
-        UmaExtractorData::all_from_json_file(&uma_path).expect("Failed to parse uma JSON");
+    let all_umas = UmaDumpData::all_from_json_file(&uma_path).expect("Failed to parse uma JSON");
     let gates = race_parameters.gates as usize;
     if all_umas.len() < gates {
         println!(

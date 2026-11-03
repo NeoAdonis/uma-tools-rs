@@ -56,7 +56,7 @@ Source code, relative to `src/`:
   - Any other module in `race/` contains properties and calculations related to a specific race mechanic.
 - `trigger.rs`, `trigger/`: trigger system to activate skills based upon their conditions and variables. The `trigger` module docs give an overview of the whole skill activation system.
 - `skill.rs`: skill data structures and helpers.
-- `import.rs`, `import/`: import of Umas from data exported by other tools (`import/umaextractor.rs` for UmaExtractor, `import/umamoe.rs` for uma.moe build codes).
+- `import.rs`, `import/`: import of Umas from data exported by other tools (`import/umadump.rs` for umadump, `import/umamoe.rs` for uma.moe build codes).
 - `uma.rs`: Umamusume data structures and helpers.
 - `names.rs`: character, skill and track names in Japanese and English, embedded from `data/names.json`.
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
@@ -69,7 +69,7 @@ Test code, relative to `tests/`:
 
 - `integration/`: integration tests.
   - `integration/common.rs`: common test code and helpers to create data structures for integration tests.
-- `data/`: data files used by tests and doc examples (e.g. `umaextractor_uma.json`, an Uma exported by UmaExtractor; `uma_data.json`, an Uma in the `UmaData` format; `umamoe_build.txt`, an uma.moe build code).
+- `data/`: data files used by tests and doc examples (e.g. `umadump_uma.json`, an Uma exported by umadump; `uma_data.json`, an Uma in the `UmaData` format; `umamoe_build.txt`, an uma.moe build code).
 
 Documentation, relative to `docs/`:
 
