@@ -246,7 +246,7 @@ fn deserialize_motivation<'de, D: Deserializer<'de>>(deserializer: D) -> Result<
     value
         .parse::<i8>()
         .ok()
-        .and_then(|motivation| Mood::try_from(motivation.checked_sub(3)?).ok())
+        .and_then(Mood::from_motivation)
         .ok_or_else(|| D::Error::custom(format!("invalid motivation {value:?}: expected 1 to 5")))
 }
 

@@ -1,12 +1,19 @@
-//! Import of trained Umas exported by umadump.
+//! Import of Umas exported by umadump.
 //!
 //! umadump exports trained Umas as JSON objects using the game's field
 //! names (`card_id`, `wiz`, `proper_distance_mile`, etc.), with aptitudes from
 //! 1 (G) to 8 (S). [`UmaDumpData`] reads one of them, ignoring the fields
 //! that the simulation doesn't use.
 //!
+//! umadump also exports the state of a career on each turn, with the Uma in
+//! training under `single_mode_load_common.chara_info`, in the same format
+//! except for its running style field (`race_running_style`) and an extra
+//! mood (`motivation`). [`UmaDumpData::from_career_json`] reads it, so the
+//! last turn of a career can race as if trained.
+//!
 //! An Uma has aptitudes for every distance and track surface, so importing it
-//! takes the ones to use. Exports don't include the mood, so it's left unset.
+//! takes the ones to use. Trained Umas don't include the mood, so it's left
+//! unset for them.
 //!
 //! # Examples
 //!
@@ -32,9 +39,9 @@ use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;
 
 use crate::course::{DistanceType, Track};
-use crate::uma::{Aptitude, Style, Uma, UmaData, UmaSkill, deserialize_stat};
+use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat};
 
-/// A trained Uma as exported by umadump.
+/// A trained Uma, or one in training, as exported by umadump.
 ///
 /// Convert it with [`UmaDumpData::to_uma_data`] to race with it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -52,8 +59,16 @@ pub struct UmaDumpData {
     #[serde(rename = "wiz", deserialize_with = "deserialize_stat")]
     wit: u16,
     fans: u32,
-    #[serde(deserialize_with = "deserialize_style")]
+    /// `race_running_style` in careers.
+    #[serde(alias = "race_running_style", deserialize_with = "deserialize_style")]
     running_style: Style,
+    /// Only in careers.
+    #[serde(
+        rename = "motivation",
+        default,
+        deserialize_with = "deserialize_motivation"
+    )]
+    mood: Option<Mood>,
     #[serde(
         rename = "proper_running_style_nige",
         deserialize_with = "deserialize_aptitude"
@@ -124,6 +139,16 @@ fn deserialize_style<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Style
     }
 }
 
+/// Deserialize a mood from its motivation, from 1 (Awful) to 5 (Great).
+fn deserialize_motivation<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Mood>, D::Error> {
+    let value = i8::deserialize(deserializer)?;
+    Mood::from_motivation(value)
+        .map(Some)
+        .ok_or_else(|| D::Error::custom(format!("invalid motivation {value}: expected 1 to 5")))
+}
+
 /// Deserialize an aptitude from its game value, from 1 (G) to 8 (S).
 fn deserialize_aptitude<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Aptitude, D::Error> {
     let value = u8::deserialize(deserializer)?;
@@ -148,6 +173,18 @@ fn deserialize_skills<'de, D: Deserializer<'de>>(
             level: skill.level,
         })
         .collect())
+}
+
+/// A career turn as exported by umadump, with only the Uma in training.
+#[derive(Deserialize)]
+struct Career {
+    single_mode_load_common: CareerCommon,
+}
+
+/// See [`Career`].
+#[derive(Deserialize)]
+struct CareerCommon {
+    chara_info: UmaDumpData,
 }
 
 impl UmaDumpData {
@@ -239,8 +276,65 @@ impl UmaDumpData {
         Ok(Self::all_from_json(&content)?)
     }
 
+    /// Parse `UmaDumpData` from the Uma in training in a career turn, as a
+    /// JSON string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON is invalid, the Uma is missing, or for
+    /// the same reasons as [`UmaDumpData::from_json`] for the Uma, also if
+    /// its mood is out of range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use uma_tools::course::{DistanceType, Track};
+    /// use uma_tools::import::umadump::UmaDumpData;
+    /// use uma_tools::{Mood, Style};
+    ///
+    /// # fn main() -> Result<(), serde_json::Error> {
+    /// let data = UmaDumpData::from_career_json(
+    ///     r#"{ "single_mode_load_common": { "chara_info": {
+    ///         "card_id": 104601, "speed": 1168, "stamina": 682,
+    ///         "power": 1050, "guts": 567, "wiz": 679, "fans": 313947,
+    ///         "race_running_style": 1, "motivation": 5,
+    ///         "proper_running_style_nige": 7,
+    ///         "proper_running_style_senko": 4,
+    ///         "proper_running_style_sashi": 1,
+    ///         "proper_running_style_oikomi": 1,
+    ///         "proper_distance_short": 6, "proper_distance_mile": 7,
+    ///         "proper_distance_middle": 7, "proper_distance_long": 6,
+    ///         "proper_ground_turf": 4, "proper_ground_dirt": 7,
+    ///         "skill_array": [{ "skill_id": 100461, "level": 4 }]
+    ///     } } }"#,
+    /// )?;
+    /// let uma_data = data.to_uma_data(DistanceType::Mile, Track::Dirt);
+    /// assert_eq!(uma_data.uma.style, Style::Front);
+    /// assert_eq!(uma_data.mood, Some(Mood::Great));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn from_career_json(json: &str) -> Result<Self, serde_json::Error> {
+        let career: Career = serde_json::from_str(json)?;
+        Ok(career.single_mode_load_common.chara_info)
+    }
+
+    /// Parse `UmaDumpData` from the Uma in training in a career turn, from a
+    /// JSON file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file can't be read, or for the same reasons as
+    /// [`UmaDumpData::from_career_json`].
+    pub fn from_career_json_file(
+        path: impl AsRef<Path>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let content = std::fs::read_to_string(path)?;
+        Ok(Self::from_career_json(&content)?)
+    }
+
     /// Convert `self` to [`UmaData`] for a race of the given distance type and
-    /// track surface, with no mood.
+    /// track surface, with the mood if known.
     ///
     /// The distance and track aptitudes are the ones for `distance` and
     /// `track`, and the style aptitude the one for the Uma's running style.
@@ -275,7 +369,7 @@ impl UmaDumpData {
                 fan_count: Some(self.fans),
                 character_id: Some(self.card_id),
             },
-            mood: None,
+            mood: self.mood,
             skills: self.skills.clone(),
         }
     }
@@ -288,6 +382,10 @@ mod tests {
 
     /// Path to an Uma exported by umadump, with every field.
     const UMA_PATH: &str = "tests/data/umadump_uma.json";
+
+    /// Path to the last turn of a career exported by umadump, with only the
+    /// Uma in training.
+    const CAREER_PATH: &str = "tests/data/umadump_career.json";
 
     /// JSON for [`UmaDumpData`] with only the required fields, and
     /// distinct aptitudes (S to G, then S and A) in field order.
@@ -452,6 +550,79 @@ mod tests {
     fn test_from_missing_file() {
         assert!(UmaDumpData::from_json_file("does_not_exist.json").is_err());
         assert!(UmaDumpData::all_from_json_file("does_not_exist.json").is_err());
+        assert!(UmaDumpData::from_career_json_file("does_not_exist.json").is_err());
+    }
+
+    /// Wrap the Uma in `json` as a career turn, with its running style
+    /// renamed and the mood value given.
+    fn career_json(json: &str, mood: i32) -> String {
+        let chara_info = json
+            .replace(r#""running_style""#, r#""race_running_style""#)
+            .replace(
+                r#""card_id""#,
+                &format!(r#""motivation": {mood}, "card_id""#),
+            );
+        format!(r#"{{ "single_mode_load_common": {{ "chara_info": {chara_info} }} }}"#)
+    }
+
+    #[test]
+    fn test_from_career_json() {
+        let trained = UmaDumpData::from_json(UMA_JSON).unwrap();
+        let cases = [
+            (1, Mood::Awful),
+            (2, Mood::Bad),
+            (3, Mood::Normal),
+            (4, Mood::Good),
+            (5, Mood::Great),
+        ];
+        for (value, mood) in cases {
+            let data = UmaDumpData::from_career_json(&career_json(UMA_JSON, value)).unwrap();
+            let expected = UmaDumpData {
+                mood: Some(mood),
+                ..trained.clone()
+            };
+            assert_eq!(data, expected, "{value}");
+        }
+        for value in [0, 6, -1] {
+            let json = career_json(UMA_JSON, value);
+            assert!(UmaDumpData::from_career_json(&json).is_err(), "{value}");
+        }
+        // A trained Uma isn't a career, nor the other way around.
+        assert!(UmaDumpData::from_career_json(UMA_JSON).is_err());
+        let json = career_json(UMA_JSON, 3);
+        assert!(UmaDumpData::from_json(&json).is_err());
+    }
+
+    #[test]
+    fn test_from_career_json_file() {
+        let uma_data = UmaDumpData::from_career_json_file(CAREER_PATH)
+            .unwrap()
+            .to_uma_data(DistanceType::Mile, Track::Turf);
+        let uma = uma_data.uma;
+        assert_eq!(
+            (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
+            (1168, 682, 1050, 567, 679)
+        );
+        assert_eq!(uma.style, Style::Front);
+        assert_eq!(
+            (
+                uma.distance_aptitude,
+                uma.track_aptitude,
+                uma.style_aptitude
+            ),
+            (Aptitude::A, Aptitude::D, Aptitude::A)
+        );
+        assert_eq!(uma.fan_count, Some(313947));
+        assert_eq!(uma.character_id, Some(104601));
+        assert_eq!(uma_data.mood, Some(Mood::Great));
+        assert_eq!(uma_data.skills.len(), 18);
+        assert_eq!(
+            uma_data.skills[0],
+            UmaSkill {
+                id: 100461,
+                level: 4
+            }
+        );
     }
 
     #[test]

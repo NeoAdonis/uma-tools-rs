@@ -69,7 +69,7 @@ Test code, relative to `tests/`:
 
 - `integration/`: integration tests.
   - `integration/common.rs`: common test code and helpers to create data structures for integration tests.
-- `data/`: data files used by tests and doc examples (e.g. `umadump_uma.json`, an Uma exported by umadump; `uma_data.json`, an Uma in the `UmaData` format; `umamoe_build.txt`, an uma.moe build code).
+- `data/`: data files used by tests and doc examples (e.g. `umadump_uma.json`, an Uma exported by umadump; `umadump_career.json`, the last turn of a career exported by umadump, with only the Uma in training; `uma_data.json`, an Uma in the `UmaData` format; `umamoe_build.txt`, an uma.moe build code).
 
 Documentation, relative to `docs/`:
 

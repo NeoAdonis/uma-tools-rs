@@ -2,7 +2,7 @@
 //!
 //! Each submodule supports one format:
 //!
-//! - [`umadump`]: trained Umas exported by umadump.
+//! - [`umadump`]: trained Umas, and Umas in training, exported by umadump.
 //! - [`umamoe`]: race setups (course, conditions and runners) shared as build
 //!   codes by uma.moe.
 

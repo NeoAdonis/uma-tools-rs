@@ -456,6 +456,12 @@ pub(crate) fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
 }
 
 impl Mood {
+    /// Convert a motivation, the game's mood value in careers and other tools,
+    /// from 1 (Awful) to 5 (Great), or `None` if out of range.
+    pub(crate) fn from_motivation(motivation: i8) -> Option<Self> {
+        Self::try_from(motivation.checked_sub(3)?).ok()
+    }
+
     /// Calculate base stats multiplier from `self`.
     ///
     /// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2
