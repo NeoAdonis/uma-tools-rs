@@ -9,7 +9,7 @@ This project contains a Rust library with functions and data structures aimed at
 - Performance: Optimize for speed and efficiency to handle large-scale simulations effectively.
 - Testing: Implement thorough testing to ensure correctness and reliability of the simulations and analyses. Use `cargo llvm-cov` as you deem fit to check coverage.
 - Refactor freely: the project is early-stage with no backward-compatibility guarantees, so prefer a clean reimplementation over patching, as long as it respects the principles above.
-- Code as the source of truth: The code, including its doc comments, is its own primary documentation; keep doc comments up to date when changing it. If there are any inconsistencies between other documentation and the code, the code should be considered the source of truth.
+- Documentation lives with the code: doc comments are the primary documentation, with separate documents only when needed. Document what the code can't say by itself, not what it already says, and keep it up to date. Fix any mismatch you find, after checking which side matches the intended behavior.
 
 ## Coding conventions
 
@@ -56,7 +56,9 @@ Source code, relative to `src/`:
   - Any other module in `race/` contains properties and calculations related to a specific race mechanic.
 - `trigger.rs`, `trigger/`: trigger system to activate skills based upon their conditions and variables. The `trigger` module docs give an overview of the whole skill activation system.
 - `skill.rs`: skill data structures and helpers.
-- `import.rs`, `import/`: import of Umas from data exported by other tools (`import/umadump.rs` for umadump, `import/umamoe.rs` for uma.moe build codes).
+- `import.rs`, `import/`: import of Umas from data exported by other tools.
+  - `import/umadump.rs`: umadump veteran lists and career turns.
+  - `import/umamoe.rs`: uma.moe build codes.
 - `uma.rs`: Umamusume data structures and helpers.
 - `names.rs`: character, skill and track names in Japanese and English, embedded from `data/names.json`.
 - `units.rs`: conversion helpers between many units of measure used in the game and data.
