@@ -776,20 +776,30 @@ impl Skill {
     ///
     /// # Errors
     ///
-    /// Returns an error if the file can't be read or the JSON is invalid.
+    /// Returns an error if the file can't be read, or for the same reasons as
+    /// [`Skill::load_all_from_json`].
     ///
-    /// Skills are shared through [`Arc`], so that every runner with the same
-    /// skill can hold it without copying its data. See
-    /// [`UmaData::resolve_skills`](crate::uma::UmaData::resolve_skills) for an
-    /// example.
+    /// See [`UmaData::resolve_skills`](crate::uma::UmaData::resolve_skills) for
+    /// an example.
     pub fn load_all_from_json_file(
         json_path: impl AsRef<Path>,
     ) -> Result<HashMap<i32, Arc<Skill>>, Box<dyn std::error::Error + Send + Sync>> {
-        use std::fs;
+        let json = std::fs::read_to_string(json_path)?;
+        Ok(Self::load_all_from_json(&json)?)
+    }
 
-        let json_content = fs::read_to_string(json_path)?;
+    /// Load all skills from a JSON string into a map of skill ID to [`Skill`]
+    /// object, e.g. with skill data fetched by a web page.
+    ///
+    /// Skills are shared through [`Arc`], so that every runner with the same
+    /// skill can hold it without copying its data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON is invalid or a skill ID isn't a number.
+    pub fn load_all_from_json(json: &str) -> Result<HashMap<i32, Arc<Skill>>, serde_json::Error> {
         // JSON keys are strings, but serde parses them as integers.
-        let skills: HashMap<i32, Skill> = serde_json::from_str(&json_content)?;
+        let skills: HashMap<i32, Skill> = serde_json::from_str(json)?;
 
         Ok(skills
             .into_iter()
@@ -1137,16 +1147,11 @@ mod tests {
 
     #[test]
     fn test_skill_ids_must_be_numeric() {
-        let path = std::env::temp_dir().join(format!("skills-{}.json", std::process::id()));
         let load = |id: &str| {
-            let json = format!(
+            Skill::load_all_from_json(&format!(
                 r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0,
                     "group": 1, "groupRate": 1}}}}"#
-            );
-            std::fs::write(&path, json).unwrap();
-            let result = Skill::load_all_from_json_file(&path);
-            std::fs::remove_file(&path).unwrap();
-            result
+            ))
         };
         assert_eq!(load("200012").unwrap()[&200012].id, 200012);
         assert!(load("speed").is_err());
