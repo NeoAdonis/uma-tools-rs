@@ -272,7 +272,7 @@ impl<T> RaceSolver<T> {
 impl RaceSolver<Entrant> {
     /// Create a new RaceSolver for a given course and parameters.
     ///
-    /// If the configuration has no seed, a random one is used.
+    /// If the configuration has no seed, seed 0 is used.
     ///
     /// # Panics
     ///
@@ -283,7 +283,7 @@ impl RaceSolver<Entrant> {
             (1..=MAX_GATES).contains(&gates),
             "Invalid gates {gates}: expected 1 to {MAX_GATES}"
         );
-        let seed = RngSeed::new(config.seed.unwrap_or_else(rand::random));
+        let seed = RngSeed::new(config.seed.unwrap_or(0));
 
         let state = RaceState {
             course,

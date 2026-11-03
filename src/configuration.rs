@@ -185,7 +185,8 @@ pub struct Configuration {
     pub language: Language,
     /// Seed for pseudo-random number generation. Ensures reproducibility.
     ///
-    /// If `None`, a random seed is used.
+    /// If `None`, seed 0 is used. Apps that want varied races must pick a seed
+    /// themselves.
     pub seed: Option<u64>,
     /// How skill wit checks are resolved before the race.
     pub wit_checks: Roll,
