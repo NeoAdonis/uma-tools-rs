@@ -3082,9 +3082,10 @@ fn test_scenario_values_assume_the_maximum() {
         (ValueScaling::DevelopmentPoints, 1.2),
         (ValueScaling::OnsenLegendaryInn, 1.2),
         (ValueScaling::TeamRank, 1.2),
-        // TODO: Update once the Excitement Points multipliers are known.
-        (ValueScaling::ExcitementPoints, 1.0),
         (ValueScaling::FanLove, 3.0),
+        // TODO: Update the following once the multipliers are known.
+        (ValueScaling::ExcitementPoints, 1.0),
+        (ValueScaling::PerformanceLevel, 1.2),
     ];
     for (value_scaling, multiplier) in cases {
         let mut solver =

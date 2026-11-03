@@ -400,6 +400,8 @@ pub enum ValueScaling {
     TeamRank = 37,
     /// Scales with the Excitement Points earned in the Tracen-ken scenario.
     ExcitementPoints = 40,
+    /// Scales with the total performance level earned in the Shuntaisai scenario.
+    PerformanceLevel = 41,
 }
 
 /// Represents when a skill effect applies: on activation, or later, each time
@@ -1043,8 +1045,9 @@ mod tests {
         );
         assert_eq!(value_scaling(37).unwrap(), ValueScaling::TeamRank);
         assert_eq!(value_scaling(40).unwrap(), ValueScaling::ExcitementPoints);
+        assert_eq!(value_scaling(41).unwrap(), ValueScaling::PerformanceLevel);
         // Unknown IDs.
-        for id in [0, 15, 21, 29, 33, 38, 41] {
+        for id in [0, 15, 21, 29, 33, 38, 42] {
             assert!(value_scaling(id).is_err(), "ID {id}");
         }
     }

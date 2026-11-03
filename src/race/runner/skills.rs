@@ -700,6 +700,7 @@ impl Runner {
             OnsenLegendaryInn => modifier * skill_scaling::ONSEN_LEGENDARY_INN_MULTIPLIER,
             TeamRank => modifier * skill_scaling::TEAM_RANK_MULTIPLIER,
             ExcitementPoints => modifier * skill_scaling::EXCITEMENT_MULTIPLIER,
+            PerformanceLevel => modifier * skill_scaling::PERFORMANCE_LEVEL_MULTIPLIER,
         }
     }
 

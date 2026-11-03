@@ -97,6 +97,14 @@ pub(crate) const TEAM_RANK_MULTIPLIER: f64 = 1.2;
 // TODO: Revisit once the multipliers are known; no scaling for now.
 pub(crate) const EXCITEMENT_MULTIPLIER: f64 = 1.0;
 
+/// Multiplier for skills scaling with the total performance level in the
+/// Shuntaisai (午式駿大祭) scenario.
+///
+/// 1.0x below level 30, and higher from 30. The boost isn't known yet, so 1.2x
+/// is assumed, like in other scenarios.
+// TODO: Revisit once the multipliers are known.
+pub(crate) const PERFORMANCE_LEVEL_MULTIPLIER: f64 = 1.2;
+
 /// Multiplier for skills scaling with the love received from fans.
 ///
 /// Love is gained during the race from the start dash, position changes in the
