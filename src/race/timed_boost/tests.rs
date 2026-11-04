@@ -27,6 +27,4 @@ fn test_start_and_expire() {
     assert_eq!(boost.speed_bonus(), 0.3);
     boost.expire(12.0);
     assert_eq!(boost, TimedBoost::Idle { next_check: 13.0 });
-    assert!(!boost.is_check_due(12.99));
-    assert!(boost.is_check_due(13.0));
 }

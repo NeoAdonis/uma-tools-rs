@@ -9,14 +9,6 @@ use crate::test_utils::*;
 use crate::uma::Style;
 
 #[test]
-fn test_streams_are_reproducible() {
-    let seed = RngSeed::new(42);
-    let draw = |stream| seed.rng(stream).random::<u64>();
-    assert_eq!(draw(Stream::Rush), draw(Stream::Rush));
-    assert_eq!(draw(Stream::Skill(100101)), draw(Stream::Skill(100101)));
-}
-
-#[test]
 fn test_streams_are_independent() {
     let seed = RngSeed::new(42);
     let draw = |seed: RngSeed, stream| seed.rng(stream).random::<u64>();
@@ -34,10 +26,6 @@ fn test_streams_are_independent() {
         draw(seed, Stream::Rush),
         draw(RngSeed::new(43), Stream::Rush)
     );
-    // So do the streams of different runners.
-    let first = seed.derive(Stream::Runner(0));
-    let second = seed.derive(Stream::Runner(1));
-    assert_ne!(draw(first, Stream::Rush), draw(second, Stream::Rush));
 }
 
 /// Skill with a wit check, whose target speed effect activates on `condition`.

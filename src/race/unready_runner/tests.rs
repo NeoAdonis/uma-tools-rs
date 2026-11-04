@@ -716,3 +716,28 @@ fn test_min_speed_scales_with_guts() {
     assert_eq!(runner.adjusted.guts, 800);
     assert_close!(runner.min_speed, 17.0 + 0.4);
 }
+
+#[test]
+fn test_heavy_track_lowers_adjusted_speed() {
+    use crate::race::parameters::TrackCondition;
+
+    let adjusted_speed = |track_condition| {
+        let parameters = RaceParameters {
+            track_condition,
+            ..race_params()
+        };
+        let state = RaceSolver::new(load_course(10104), parameters, seeded_config(0)).state;
+        let runner = UnreadyRunner::new(
+            uma(Style::Pace),
+            Mood::Normal,
+            &state,
+            vec![],
+            RngSeed::new(0),
+        );
+        runner.adjusted.speed
+    };
+    assert_eq!(
+        adjusted_speed(TrackCondition::Heavy),
+        adjusted_speed(TrackCondition::Firm) - 50
+    );
+}

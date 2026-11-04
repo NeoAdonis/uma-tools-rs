@@ -134,3 +134,43 @@ fn test_start_dash_caps_speed_at_its_end() {
     runner.update_speed(DELTA_TIME, base_speed);
     assert_close!(runner.speed, 17.4);
 }
+
+#[test]
+fn test_stamina_limit_break_activates_at_last_spurt_speed() {
+    use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
+    use crate::test_utils::*;
+
+    // (current speed, whether the buff activates), with a last spurt speed of
+    // 20 m/s.
+    for (speed, activates) in [(20.0, true), (19.9, false)] {
+        // A high-stamina runner on a long course.
+        let uma = Uma {
+            stamina: 1600,
+            ..uma(Style::Pace)
+        };
+        let mut solver = ready_solver(10105, uma, vec![], seeded_config(42));
+        let runner = &mut solver.runners[0];
+        assert!(runner.stamina_limit_break_base > 0.0);
+
+        runner.position = 2000.0;
+        runner.speed = speed;
+        runner.last_spurt = Some(LastSpurt {
+            max_speed: 20.0,
+            target_distance: 1950.0,
+            category: LastSpurtCategory::Full,
+        });
+        runner.update_target_speed(&solver.state);
+        let buff = runner.stamina_limit_break;
+        let expected = if activates {
+            runner.stamina_limit_break_base
+        } else {
+            0.0
+        };
+        assert_eq!(buff, expected, "speed {speed}");
+
+        // The buff stays even if the last spurt is gone (e.g. HP recalculation).
+        runner.last_spurt = None;
+        runner.update_target_speed(&solver.state);
+        assert_eq!(runner.stamina_limit_break, buff, "speed {speed}");
+    }
+}

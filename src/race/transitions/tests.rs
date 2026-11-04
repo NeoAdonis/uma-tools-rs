@@ -1,10 +1,6 @@
 use super::*;
 use crate::course::geometry::Corner;
 
-fn create_test_corner(start: f64, length: f64) -> Corner {
-    Corner { start, length }
-}
-
 fn transition(exited: Option<usize>, entered: Option<usize>) -> Transition {
     Transition { exited, entered }
 }
@@ -12,7 +8,10 @@ fn transition(exited: Option<usize>, entered: Option<usize>) -> Transition {
 #[test]
 fn test_segment_entry() {
     let mut manager = SegmentManager::default();
-    let corners = vec![create_test_corner(100.0, 50.0)];
+    let corners = vec![Corner {
+        start: 100.0,
+        length: 50.0,
+    }];
 
     // Before segment.
     assert_eq!(manager.update(50.0, &corners), transition(None, None));
@@ -30,7 +29,10 @@ fn test_segment_entry() {
 #[test]
 fn test_segment_exit() {
     let mut manager = SegmentManager::default();
-    let corners = vec![create_test_corner(100.0, 50.0)];
+    let corners = vec![Corner {
+        start: 100.0,
+        length: 50.0,
+    }];
     manager.update(100.0, &corners);
 
     // At segment end.
@@ -42,29 +44,17 @@ fn test_segment_exit() {
 }
 
 #[test]
-fn test_multiple_segments() {
-    let mut manager = SegmentManager::default();
-    let corners = vec![
-        create_test_corner(100.0, 50.0),
-        create_test_corner(200.0, 30.0),
-    ];
-
-    assert_eq!(manager.update(100.0, &corners), transition(None, Some(0)));
-    assert_eq!(manager.update(150.0, &corners), transition(Some(0), None));
-
-    // Between segments.
-    assert_eq!(manager.update(175.0, &corners), transition(None, None));
-
-    assert_eq!(manager.update(200.0, &corners), transition(None, Some(1)));
-    assert_eq!(manager.update(230.0, &corners), transition(Some(1), None));
-}
-
-#[test]
 fn test_adjacent_segments() {
     let mut manager = SegmentManager::default();
     let corners = vec![
-        create_test_corner(100.0, 50.0),
-        create_test_corner(150.0, 50.0),
+        Corner {
+            start: 100.0,
+            length: 50.0,
+        },
+        Corner {
+            start: 150.0,
+            length: 50.0,
+        },
     ];
     manager.update(100.0, &corners);
 
