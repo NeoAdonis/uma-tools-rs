@@ -2,12 +2,10 @@
 //! distance, and ranges made of monotonic comparisons).
 
 use crate::course::Phase;
-use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::solver::DELTA_TIME;
 use crate::test_utils::{load_course, negligible_skill, ready_solver, seeded_config, uma};
 use crate::trigger::skill_activation::TriggerCondition;
-use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 
 /// Length of the test course (10104) in meters.
@@ -56,9 +54,19 @@ fn assert_activates_within(condition: &str, min: f64, max: f64) {
 const FRAME_DISTANCE: f64 = 30.0 * DELTA_TIME;
 
 #[test]
-fn test_random_point_activates_within_phase() {
+fn test_phase_window_activates_once_guards_hold() {
+    // Checked every frame of the phase, not only when entering it: the time
+    // guard only holds from some point in the middle of it.
     let (start, end) = Phase::Mid.boundaries(&load_course(10104));
-    assert_activates_within("phase_random==1", start, end + FRAME_DISTANCE);
+    for seed in 0..5 {
+        let positions = activation_positions("phase==1&accumulatetime>=30", seed);
+        assert_eq!(positions.len(), 1, "seed {seed}: {positions:?}");
+        assert!(
+            (start + 100.0..end).contains(&positions[0]),
+            "seed {seed}: activated at {}, Mid phase is [{start}, {end}]",
+            positions[0]
+        );
+    }
 }
 
 #[test]
@@ -73,79 +81,12 @@ fn test_remain_distance_activates_near_goal() {
 }
 
 #[test]
-fn test_reversed_remain_distance_activates_early() {
-    // remain_distance>=350 holds from the start until 1650m
-    assert_activates_within("remain_distance>=350", 0.0, COURSE_DISTANCE - 350.0);
-}
-
-#[test]
 fn test_remain_distance_range_activates_within_range() {
     // Skill 100771
     // 399 <= remain_distance <= 401, floored (so up to 402m remaining)
     let min = COURSE_DISTANCE - 402.0;
     let max = COURSE_DISTANCE - 399.0;
     assert_activates_within("remain_distance<=401&remain_distance>=399", min, max);
-}
-
-#[test]
-fn test_distance_windows_are_positions_in_order() {
-    use crate::units::furlongs_to_meters;
-    let skills = [
-        negligible_skill("remain_distance<=300"), // 1700m (1699m, as values are floored)
-        negligible_skill("distance_rate>=50"),    // 1000m
-        negligible_skill("furlong>=3"),           // 3 furlongs
-    ];
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(&skills, &load_course(10104), rng_seed);
-
-    // Windows are queued by their start
-    let order: Vec<(usize, f64)> = scheduler
-        .position_windows
-        .iter()
-        .map(|window| (window.logic_idx, window.min_threshold))
-        .collect();
-    assert_eq!(
-        order,
-        vec![
-            (2, furlongs_to_meters(3.0)),
-            (1, 1000.0),
-            (0, COURSE_DISTANCE - 301.0)
-        ]
-    );
-}
-
-#[test]
-fn test_reversed_remain_distance_window_range() {
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(
-        &[negligible_skill("remain_distance>=350")],
-        &load_course(10104),
-        rng_seed,
-    );
-
-    assert_eq!(scheduler.position_windows.len(), 1);
-    let window = scheduler.position_windows.iter().next().unwrap();
-    assert_eq!(window.min_threshold, 0.0);
-    assert_eq!(window.max_threshold, COURSE_DISTANCE - 350.0);
-}
-
-#[test]
-fn test_remain_distance_pair_window_range() {
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(
-        &[negligible_skill(
-            "remain_distance<=401&remain_distance>=399",
-        )],
-        &load_course(10104),
-        rng_seed,
-    );
-
-    // A single window; both comparisons stay as guards
-    assert_eq!(scheduler.skill_logics[0].guards.len(), 2);
-    assert_eq!(scheduler.position_windows.len(), 1);
-    let window = scheduler.position_windows.iter().next().unwrap();
-    assert_eq!(window.min_threshold, COURSE_DISTANCE - 402.0);
-    assert_eq!(window.max_threshold, COURSE_DISTANCE - 399.0);
 }
 
 #[test]

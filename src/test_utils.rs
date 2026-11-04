@@ -7,8 +7,6 @@ use crate::race::parameters::*;
 use crate::race::runner::Runner;
 use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::*;
-use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
-use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use crate::units::CourseWidths;
 use std::sync::{Arc, LazyLock};
@@ -222,13 +220,4 @@ pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f
 /// race.
 pub(crate) fn negligible_skill(condition: &str) -> Arc<Skill> {
     skill(999999, condition, SkillType::TargetSpeed, 0.0001)
-}
-
-/// Logics that activate skills (excluding the ones that unlock preconditions).
-pub(crate) fn activation_logics(scheduler: &TriggerScheduler) -> Vec<&SkillActivationLogic> {
-    scheduler
-        .skill_logics
-        .iter()
-        .filter(|logic| logic.action == LogicAction::Activate)
-        .collect()
 }

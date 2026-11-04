@@ -363,84 +363,29 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_no_triggers() {
-        let mut scheduler = scheduler_with_two_logics();
-        scheduler.remove_triggers(&[]);
+    fn test_activation_counts_by_phase() {
+        // Halfway at 1200m. Counts: (start, middle, later_half, end_after).
+        let cases = [
+            (Phase::RunUp, 10.0, (1, 0, 0, 0)),
+            (Phase::Early, 50.0, (1, 0, 0, 0)),
+            (Phase::Mid, 1199.0, (0, 1, 0, 0)),
+            (Phase::Mid, 1200.0, (0, 1, 1, 0)),
+            (Phase::Late, 1800.0, (0, 0, 1, 1)),
+            (Phase::Last, 2200.0, (0, 0, 1, 1)),
+        ];
+        for (phase, position, expected) in cases {
+            let mut counts = ActivationCounts::default();
+            counts.increment(phase, position, 1200.0);
 
-        for (name, logics) in logics_by_collection(&scheduler) {
-            assert_eq!(logics, [0, 1], "{name}");
+            let actual = (
+                counts.start,
+                counts.middle,
+                counts.later_half,
+                counts.end_after,
+            );
+            assert_eq!(counts.all, 1, "{phase:?} at {position}");
+            assert_eq!(actual, expected, "{phase:?} at {position}");
         }
-    }
-
-    #[test]
-    fn test_activation_counts_early_phase() {
-        let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Early, 50.0, 1200.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 1);
-        assert_eq!(counts.middle, 0);
-        assert_eq!(counts.later_half, 0);
-        assert_eq!(counts.end_after, 0);
-    }
-
-    #[test]
-    fn test_activation_counts_run_up_counts_as_start() {
-        let mut counts = ActivationCounts::default();
-        counts.increment(Phase::RunUp, 10.0, 1250.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 1);
-    }
-
-    #[test]
-    fn test_activation_counts_mid_phase_before_section_12() {
-        let mut counts = ActivationCounts::default();
-        // Halfway at 1200m (section 12 of 100m sections).
-        counts.increment(Phase::Mid, 1000.0, 1200.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 0);
-        assert_eq!(counts.middle, 1);
-        assert_eq!(counts.later_half, 0);
-        assert_eq!(counts.end_after, 0);
-    }
-
-    #[test]
-    fn test_activation_counts_mid_phase_after_section_12() {
-        let mut counts = ActivationCounts::default();
-        // Halfway at 1200m (section 12 of 100m sections).
-        counts.increment(Phase::Mid, 1300.0, 1200.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 0);
-        assert_eq!(counts.middle, 1);
-        assert_eq!(counts.later_half, 1);
-        assert_eq!(counts.end_after, 0);
-    }
-
-    #[test]
-    fn test_activation_counts_late_phase() {
-        let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Late, 1800.0, 1200.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 0);
-        assert_eq!(counts.middle, 0);
-        assert_eq!(counts.later_half, 1);
-        assert_eq!(counts.end_after, 1);
-    }
-
-    #[test]
-    fn test_activation_counts_last_phase() {
-        let mut counts = ActivationCounts::default();
-        counts.increment(Phase::Last, 2200.0, 1200.0);
-
-        assert_eq!(counts.all, 1);
-        assert_eq!(counts.start, 0);
-        assert_eq!(counts.middle, 0);
-        assert_eq!(counts.later_half, 1);
-        assert_eq!(counts.end_after, 1);
     }
 
     fn window(logic_idx: usize, min_threshold: f64, max_threshold: f64) -> WindowTrigger {

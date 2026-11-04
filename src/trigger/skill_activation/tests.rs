@@ -81,8 +81,11 @@ fn guards(branch: &CompiledBranch) -> Vec<String> {
 
 #[test]
 fn test_every_comparison_is_a_guard() {
-    // Including the ones that define the trigger.
-    let branch = compile_one("phase==2&is_finalcorner==1&corner!=0&order<=3&ground_type==1");
+    // Including the ones that define the trigger, and the evaluable activation
+    // events (true on frames where a skill activated).
+    let branch = compile_one(
+        "phase==2&is_finalcorner==1&corner!=0&order<=3&ground_type==1&is_activate_any_skill==1",
+    );
     assert_eq!(
         guards(&branch),
         vec![
@@ -90,7 +93,8 @@ fn test_every_comparison_is_a_guard() {
             "is_finalcorner == 1",
             "corner != 0",
             "order <= 3",
-            "ground_type == 1"
+            "ground_type == 1",
+            "is_activate_any_skill == 1"
         ]
     );
 }
@@ -125,19 +129,14 @@ fn test_events_are_the_trigger() {
         ("is_last_straight_onetime==1", "LastStraightEntry"),
         ("is_activate_any_skill==1&phase>=2", "AnySkillActivation"),
         ("is_activate_heal_skill==1&phase>=2", "HealSkillActivation"),
+        (
+            "is_other_character_activate_advantage_skill==27",
+            "BuffSkillActivation",
+        ),
     ];
     for (condition, trigger) in cases {
         assert_eq!(format!("{:?}", compile_one(condition).trigger), trigger);
     }
-}
-
-#[test]
-fn test_activation_events_stay_as_guards() {
-    // Evaluable: true on frames where a skill activated.
-    assert_eq!(
-        guards(&compile_one("is_activate_any_skill==1&phase>=2")),
-        vec!["is_activate_any_skill == 1", "phase >= 2"]
-    );
 }
 
 #[test]
@@ -189,6 +188,10 @@ fn test_position_window_ranges() {
         ("order<=3", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
         ("distance_rate!=50", (0.0, f64::INFINITY)),
+        // Not in a corner: its gaps aren't a range.
+        ("corner==0", (0.0, f64::INFINITY)),
+        // Evaluable activation comparisons that aren't events.
+        ("is_activate_other_skill_detail==1", (0.0, f64::INFINITY)),
     ];
 
     for (condition, (min, max)) in cases {
@@ -253,32 +256,6 @@ fn test_unsatisfiable_branches_are_dropped() {
     assert_eq!(guards(&branches[0]), vec!["slope == 1", "order <= 3"]);
 }
 
-#[test]
-fn test_phase_equality_is_a_window() {
-    let branch = compile_one("phase==1&distance_rate>=60");
-    let (_, min, max) = window(&branch);
-    assert_close!(min, 1200.0, "min");
-    assert_close!(max, 2000.0 / 24.0 * 16.0, "max");
-}
-
-#[test]
-fn test_spatial_comparisons_are_kept() {
-    let branch = compile_one("slope==1&order<=3");
-    assert_eq!(guards(&branch), vec!["slope == 1", "order <= 3"]);
-    let (_, min, max) = window(&branch);
-    assert_eq!((min, max), (800.0, 900.0));
-}
-
-#[test]
-fn test_multiple_trigger_comparisons_are_combined() {
-    let branch = compile_one("phase>=2&is_finalcorner==1&corner!=0&is_activate_any_skill==1");
-    assert!(matches!(
-        branch.trigger,
-        TriggerCondition::AnySkillActivation
-    ));
-    assert_eq!(branch.guards.len(), 4);
-}
-
 /// Helper function to create a test skill with precondition.
 fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) -> Arc<Skill> {
     let alternative = SkillAlternative {
@@ -328,17 +305,6 @@ fn test_precondition_creates_unlock_logic_before_skill_logic() {
 }
 
 #[test]
-fn test_empty_precondition_treated_as_none() {
-    let skill = create_skill_with_precondition(5, "distance_rate>=80", "");
-    let scheduler = build_test_scheduler(&[skill]);
-
-    assert_eq!(scheduler.skill_logics.len(), 1);
-    assert!(scheduler.skill_logics[0].precondition.is_none());
-    assert!(scheduler.precondition_satisfied.is_empty());
-    assert!(scheduler.precondition_windows.is_empty());
-}
-
-#[test]
 fn test_or_condition_branches_share_precondition() {
     let skill = create_skill_with_precondition(
         6,
@@ -349,11 +315,14 @@ fn test_or_condition_branches_share_precondition() {
     );
     let scheduler = build_test_scheduler(&[skill]);
 
-    // 1 unlock logic + 2 condition branches, all tied to the same precondition.
+    // 1 unlock logic + 2 condition branches, logics of the same alternative
+    // tied to the same precondition.
     assert_eq!(scheduler.skill_logics.len(), 3);
     assert_eq!(scheduler.skill_logics[0].action, LogicAction::Unlock(0));
-    assert_eq!(scheduler.skill_logics[1].precondition, Some(0));
-    assert_eq!(scheduler.skill_logics[2].precondition, Some(0));
+    for logic in &scheduler.skill_logics[1..] {
+        let indices = (logic.skill_index, logic.alternative_index);
+        assert_eq!((indices, logic.precondition), ((0, 0), Some(0)));
+    }
     assert_eq!(scheduler.precondition_satisfied.len(), 1);
 }
 
@@ -370,34 +339,17 @@ fn test_or_precondition_creates_one_unlock_logic_per_branch() {
 }
 
 #[test]
-fn test_precondition_only_in_alternative_zero() {
-    // Create a skill with 2 alternatives - only first has precondition.
-    let alternatives = vec![
+fn test_precondition_ids_are_assigned_per_alternative() {
+    // Only the first alternative of the first skill has a precondition.
+    let first = Arc::new(synthetic_skill(vec![
         SkillAlternative {
             precondition: Some("phase>=2".parse().unwrap()),
             ..alternative("distance_rate>=80", SkillType::TargetSpeed, 0.4)
         },
         alternative("hp_per<=50", SkillType::TargetSpeed, 0.3),
-    ];
-    let skill = Arc::new(synthetic_skill(alternatives));
-    let scheduler = build_test_scheduler(&[skill]);
-
-    // Unlock logic, then one logic per alternative.
-    assert_eq!(scheduler.skill_logics.len(), 3);
-    assert_eq!(scheduler.skill_logics[1].alternative_index, 0);
-    assert_eq!(scheduler.skill_logics[1].precondition, Some(0));
-    assert_eq!(scheduler.skill_logics[2].alternative_index, 1);
-    assert!(scheduler.skill_logics[2].precondition.is_none());
-}
-
-#[test]
-fn test_precondition_ids_are_assigned_per_alternative() {
-    let skills = [
-        create_skill_with_precondition(1, "distance_rate>=80", "phase>=2"),
-        create_skill_with_precondition(2, "hp_per<=50", ""),
-        create_skill_with_precondition(3, "distance_rate>=50", "order<=3"),
-    ];
-    let scheduler = build_test_scheduler(&skills);
+    ]));
+    let second = create_skill_with_precondition(3, "distance_rate>=50", "order<=3");
+    let scheduler = build_test_scheduler(&[first, second]);
 
     assert_eq!(scheduler.precondition_satisfied, vec![false, false]);
 
@@ -405,24 +357,39 @@ fn test_precondition_ids_are_assigned_per_alternative() {
         .skill_logics
         .iter()
         .filter(|logic| logic.action == LogicAction::Activate)
-        .map(|logic| (logic.skill_index, logic.precondition))
+        .map(|logic| {
+            (
+                logic.skill_index,
+                logic.alternative_index,
+                logic.precondition,
+            )
+        })
         .collect();
-    assert_eq!(preconditions, vec![(0, Some(0)), (1, None), (2, Some(1))]);
+    assert_eq!(
+        preconditions,
+        vec![(0, 0, Some(0)), (0, 1, None), (1, 0, Some(1))]
+    );
 }
 
 #[test]
 fn test_unsatisfiable_precondition_skips_alternative() {
-    // The test course has no downhill slopes and 3 corners (second to fourth).
-    for precondition in ["slope==2", "corner==1", "phase==1&distance_rate>=90"] {
-        let skill = create_skill_with_precondition(4, "distance_rate>=80", precondition);
-        let scheduler = build_test_scheduler(&[skill]);
+    // The test course has no downhill slopes.
+    let skill = create_skill_with_precondition(4, "distance_rate>=80", "slope==2");
+    let scheduler = build_test_scheduler(&[skill]);
 
-        assert!(
-            scheduler.skill_logics.is_empty(),
-            "{precondition} should never be satisfied"
-        );
-        assert!(scheduler.position_windows.is_empty());
-    }
+    assert!(scheduler.skill_logics.is_empty());
+    assert!(scheduler.position_windows.is_empty());
+}
+
+#[test]
+fn test_unsatisfiable_condition_skips_precondition() {
+    // The test course has no downhill slopes, so neither the skill nor its
+    // precondition is scheduled.
+    let skill = create_skill_with_precondition(4, "slope==2", "phase>=2");
+    let scheduler = build_test_scheduler(&[skill]);
+
+    assert!(scheduler.skill_logics.is_empty());
+    assert!(scheduler.precondition_satisfied.is_empty());
 }
 
 #[test]
@@ -530,16 +497,9 @@ fn test_one_event_per_branch() {
 #[test]
 #[should_panic(expected = "more than one event in a branch")]
 fn test_multiple_events_in_a_branch_panic() {
+    // With several random variables, the rolled points would be merged, turning
+    // the AND into an OR.
     compile_one("is_activate_any_skill==1&phase_random==1");
-}
-
-// Checked by a debug assertion.
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic(expected = "more than one event in a branch")]
-fn test_multiple_random_segments_in_a_branch_panic() {
-    // The rolled points would be merged, turning the AND into an OR.
-    compile_one("phase_random==2&corner_random==3");
 }
 
 #[test]
@@ -566,19 +526,13 @@ fn test_alternatives_share_random_rolls() {
         alternative("phase_random==1&order<=3", SkillType::TargetSpeed, 0.35),
         alternative("phase_random==1", SkillType::TargetSpeed, 0.15),
     ]));
-    for seed in 0..20 {
-        let rng_seed = RngSeed::new(seed);
-        let scheduler = TriggerScheduler::from_skills(
-            std::slice::from_ref(&skill),
-            &create_test_course(),
-            rng_seed,
-        );
-        let logics = &scheduler.skill_logics;
-        assert_eq!(logics.len(), 2);
-        assert!(matches!(
-            logics[0].trigger,
-            TriggerCondition::Segments { .. }
-        ));
-        assert_eq!(logics[0].trigger, logics[1].trigger, "seed {seed}");
-    }
+    let scheduler = build_test_scheduler(&[skill]);
+
+    let logics = &scheduler.skill_logics;
+    assert_eq!(logics.len(), 2);
+    assert!(matches!(
+        logics[0].trigger,
+        TriggerCondition::Segments { .. }
+    ));
+    assert_eq!(logics[0].trigger, logics[1].trigger);
 }

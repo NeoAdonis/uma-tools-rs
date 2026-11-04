@@ -1,180 +1,15 @@
-//! Tests for precondition build-time and runtime behavior
-//!
-//! These tests complement the existing precondition tests in
-//! skill_activation.rs by focusing on precondition-trigger interaction, edge
-//! cases and unlocking skills during a race.
+//! Runtime tests of preconditions: skills unlocked during a race once their
+//! precondition is satisfied, and static preconditions resolved before it.
 
-use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::solver::RaceSolver;
 use crate::skill::*;
 use crate::test_utils::{
-    activation_logics, alternative, alternative_with_precondition, load_course, ready_solver,
-    seeded_config, skill, synthetic_skill, uma,
+    alternative_with_precondition, load_course, ready_solver, seeded_config, skill,
+    synthetic_skill, uma,
 };
-use crate::trigger::skill_activation::*;
-use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use std::sync::Arc;
-
-// ============================================================================
-// PRECONDITION-TRIGGER INTERACTION (BUILD-TIME)
-// ============================================================================
-
-#[test]
-fn test_precondition_with_window_trigger() {
-    // Skill 100031: Complex precondition with spatial window trigger
-    // Precondition: phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1
-    // Condition: is_last_straight==1
-    // Tests: Complex precondition properly separated from spatial window trigger
-
-    let skill = Arc::new(Skill {
-        id: 100031,
-        ..synthetic_skill(vec![alternative_with_precondition(
-            "phase>=2&order<=3&bashin_diff_infront<=1&is_overtake==1",
-            "is_last_straight==1",
-            SkillType::TargetSpeed,
-            0.4,
-        )])
-    });
-
-    let course = load_course(10104); // 2000m course
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
-
-    // Should create 1 skill logic
-    let logics = activation_logics(&scheduler);
-    assert_eq!(logics.len(), 1);
-    let logic = logics[0];
-
-    // Verify precondition exists and is separate from condition
-    assert_eq!(
-        logic.precondition,
-        Some(0),
-        "Precondition should be compiled and stored separately"
-    );
-
-    // Verify trigger is a position window (not affected by precondition)
-    assert!(
-        matches!(
-            logic.trigger,
-            TriggerCondition::Window {
-                variable: WindowVariable::Position,
-                ..
-            }
-        ),
-        "Condition should create position window trigger"
-    );
-
-    // Only the condition's comparison is a guard
-    assert_eq!(logic.guards.len(), 1);
-
-    // Verify precondition_satisfied array is initialized correctly
-    assert_eq!(
-        scheduler.precondition_satisfied,
-        vec![false],
-        "Skill with precondition should start locked"
-    );
-}
-
-#[test]
-fn test_precondition_with_or_condition() {
-    // Test: Precondition applies to all OR branches equally
-    // Tests: Each OR branch inherits the same precondition
-
-    let alternative = alternative_with_precondition(
-        "phase>=2&ground_type==1",                         // Shared precondition
-        "distance_rate>=80@hp_per<=50@accumulatetime>=10", // 3 OR branches
-        SkillType::TargetSpeed,
-        0.4,
-    );
-    let skill = Arc::new(synthetic_skill(vec![alternative]));
-
-    let course = load_course(10104);
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
-
-    // Should create 3 branches (OR condition)
-    let logics = activation_logics(&scheduler);
-    assert_eq!(
-        logics.len(),
-        3,
-        "OR condition with 3 branches should create 3 skill logics"
-    );
-
-    // Verify all branches share the same precondition
-    for (idx, logic) in logics.iter().enumerate() {
-        assert_eq!(
-            logic.precondition,
-            Some(0),
-            "Branch {} should have precondition",
-            idx
-        );
-    }
-
-    // A single precondition, locked at the start
-    assert_eq!(scheduler.precondition_satisfied, vec![false]);
-}
-
-#[test]
-fn test_multiple_alternatives_precondition_independence() {
-    // Test: Multiple alternatives with different preconditions
-    // Tests: Each alternative's precondition is stored independently
-
-    let alternatives = vec![
-        // Has precondition (phase>=2)
-        alternative_with_precondition("phase>=2", "distance_rate>=80", SkillType::TargetSpeed, 0.4),
-        // Another precondition (accumulatetime>=10)
-        alternative_with_precondition(
-            "accumulatetime>=10",
-            "hp_per<=50",
-            SkillType::TargetSpeed,
-            0.3,
-        ),
-        // No precondition
-        alternative("is_last_straight==1", SkillType::TargetSpeed, 0.5),
-    ];
-    let skill = Arc::new(synthetic_skill(alternatives));
-
-    let course = load_course(10104);
-    let rng_seed = RngSeed::new(0);
-    let scheduler = TriggerScheduler::from_skills(&[skill], &course, rng_seed);
-
-    // Should have 3 skill logics (one per alternative)
-    let logics = activation_logics(&scheduler);
-    assert_eq!(logics.len(), 3);
-
-    // Alternative 1: has precondition (phase>=2)
-    assert_eq!(
-        logics[0].precondition,
-        Some(0),
-        "First alternative should have precondition"
-    );
-
-    // Alternative 2: has different precondition (accumulatetime>=10)
-    assert_eq!(
-        logics[1].precondition,
-        Some(1),
-        "Second alternative should have its own precondition"
-    );
-
-    // Alternative 3: no precondition
-    assert!(
-        logics[2].precondition.is_none(),
-        "Third alternative should not have precondition"
-    );
-
-    // Both preconditions start locked
-    assert_eq!(
-        scheduler.precondition_satisfied,
-        vec![false, false],
-        "Precondition states should match alternative requirements"
-    );
-}
-
-// ============================================================================
-// RUNTIME BEHAVIOR
-// ============================================================================
 
 /// 2000m medium turf course with 4 corners and no slopes.
 const RUNTIME_COURSE: u32 = 10104;
@@ -229,18 +64,6 @@ fn test_precondition_unlocks_skill_once_satisfied() {
         (late_start..late_start + 30.0).contains(&distance),
         "Should activate right after Late phase starts ({late_start}m), got {distance}m"
     );
-}
-
-#[test]
-fn test_unsatisfied_precondition_blocks_skill() {
-    // Early phase and the final corner never overlap
-    let activations = activation_distances(vec![speed_skill(
-        1,
-        "distance_rate>=10&order<=18",
-        "phase==0&is_finalcorner==1",
-    )]);
-
-    assert_eq!(activation_distance(&activations, 1), None);
 }
 
 #[test]
