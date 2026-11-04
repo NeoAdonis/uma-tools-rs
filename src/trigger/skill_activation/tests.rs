@@ -5,7 +5,9 @@ use crate::condition::parser::{CompOp, Condition};
 use crate::course::geometry::*;
 use crate::race::rng::RngSeed;
 use crate::skill::*;
-use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
+use crate::test_utils::{
+    alternative, assert_close, data_skills, synthetic_course, synthetic_skill,
+};
 use crate::trigger::system::TriggerScheduler;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -544,10 +546,7 @@ fn test_multiple_random_segments_in_a_branch_panic() {
 fn test_skill_data_conditions_compile() {
     // Checks the assertions of `compile_condition` on every skill.
     let course = create_test_course();
-    for skill in Skill::load_all_from_json_file("data/skill_data.json")
-        .unwrap()
-        .values()
-    {
+    for skill in data_skills().skills() {
         for alternative in &skill.alternatives {
             let condition = &alternative.condition;
             let rolls = vec![Some(vec![1000.0]); condition.branches.len()];

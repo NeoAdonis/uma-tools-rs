@@ -26,7 +26,7 @@
 //!
 //! ```
 //! use uma_tools::import::umamoe::UmaMoeBuild;
-//! use uma_tools::{Configuration, Course, RaceSolver, Skill};
+//! use uma_tools::{Configuration, Course, RaceSolver, SkillData};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! let path = "tests/data/umamoe_build.txt";
@@ -35,7 +35,7 @@
 //! let (courses, rails) = ("data/course_data.json", "data/rails");
 //! let course_id = &parameters.course_id;
 //! let course = Course::from_json_files(courses, rails, course_id)?;
-//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
 //!
 //! let mut config = Configuration::default();
 //! build.configure_gates(&mut config);
@@ -57,16 +57,14 @@ use flate2::read::GzDecoder;
 use serde::de::{Error, IntoDeserializer};
 use serde::{Deserialize, Deserializer};
 use serde_with::{TryFromInto, serde_as};
-use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
-use std::sync::Arc;
 
 use crate::configuration::{Assignment, Configuration, DefaultGate};
 use crate::course::{Course, DistanceType, Track};
 use crate::race::parameters::*;
 use crate::race::solver::{Entrant, MAX_TEAM_SIZE};
-use crate::skill::Skill;
+use crate::skill::SkillData;
 use crate::uma::*;
 
 /// Only supported version of the build code format.
@@ -529,7 +527,7 @@ impl UmaMoeBuild {
     pub fn entrants(
         &self,
         course: &Course,
-        all_skills: &HashMap<i32, Arc<Skill>>,
+        all_skills: &SkillData,
     ) -> Result<Vec<Vec<Entrant>>, ResolveSkillsError> {
         let (distance, track) = (course.distance_type(), course.surface);
         self.teams()
@@ -623,6 +621,8 @@ impl UmaMoeRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skill::Skill;
+    use std::sync::Arc;
 
     /// Path to a build code from uma.moe, with 9 runners in 3 teams.
     const BUILD_PATH: &str = "tests/data/umamoe_build.txt";
@@ -889,16 +889,13 @@ mod tests {
         );
         let build = UmaMoeBuild::from_json(&json).unwrap();
         let skill = |id| {
-            (
+            Arc::new(Skill {
                 id,
-                Arc::new(Skill {
-                    id,
-                    group: id,
-                    ..crate::test_utils::synthetic_skill(vec![])
-                }),
-            )
+                group: id,
+                ..crate::test_utils::synthetic_skill(vec![])
+            })
         };
-        let all_skills = HashMap::from([skill(100011), skill(200012)]);
+        let all_skills = SkillData::from_iter([skill(100011), skill(200012)]);
         let course = crate::test_utils::load_course(10101);
         let (distance, track) = (course.distance_type(), course.surface);
 
@@ -921,7 +918,7 @@ mod tests {
         assert_eq!(levels, [(100011, 4), (200012, 1)]);
 
         // Skills missing from the skill data.
-        let error = build.entrants(&course, &HashMap::new()).err();
+        let error = build.entrants(&course, &SkillData::default()).err();
         assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(100011)));
     }
 

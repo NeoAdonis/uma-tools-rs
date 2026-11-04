@@ -14,11 +14,11 @@
 //! that activates at a random point of a corner:
 //!
 //! ```
-//! use uma_tools::Skill;
+//! use uma_tools::{Skill, SkillData};
 //! use uma_tools::condition::variables::VarType;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
 //! let var = VarType::parse("all_corner_random").ok_or("unknown variable")?;
 //! let uses_var = |skill: &Skill| {
 //!     skill
@@ -29,7 +29,7 @@
 //!         .any(|comparison| comparison.var == var)
 //! };
 //! let corner_skills: Vec<i32> = all_skills
-//!     .values()
+//!     .skills()
 //!     .filter(|skill| uses_var(skill))
 //!     .map(|skill| skill.id)
 //!     .collect();

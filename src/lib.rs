@@ -23,7 +23,8 @@
 //!
 //! ```
 //! use uma_tools::{
-//!     Configuration, Course, RaceParametersData, RaceSolver, Skill, UmaData,
+//!     Configuration, Course, RaceParametersData, RaceSolver, SkillData,
+//!     UmaData,
 //! };
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -51,7 +52,7 @@
 //!     "data/rails",
 //!     &parameters.course_id,
 //! )?;
-//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
 //! let entrant = uma.to_entrant(&all_skills)?;
 //!
 //! let config = Configuration {
@@ -94,5 +95,5 @@ pub use course::Course;
 pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::runner::Runner;
 pub use race::solver::{Entrant, RaceSolver, RunnerId};
-pub use skill::Skill;
+pub use skill::{Skill, SkillData, SkillDataError};
 pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData, UmaSkill};

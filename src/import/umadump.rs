@@ -378,7 +378,7 @@ impl UmaDumpData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skill::Skill;
+    use crate::test_utils::data_skills;
 
     /// Path to an Uma exported by umadump, with every field.
     const UMA_PATH: &str = "tests/data/umadump_uma.json";
@@ -536,11 +536,10 @@ mod tests {
 
     #[test]
     fn test_skills_resolve_with_levels() {
-        let all_skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
         let skills = UmaDumpData::from_json_file(UMA_PATH)
             .unwrap()
             .to_uma_data(DistanceType::Mile, Track::Turf)
-            .resolve_skills(&all_skills)
+            .resolve_skills(data_skills())
             .unwrap();
         assert_eq!((skills[0].id, skills[0].level), (100191, 5));
         assert_eq!((skills[1].id, skills[1].level), (200072, 1));

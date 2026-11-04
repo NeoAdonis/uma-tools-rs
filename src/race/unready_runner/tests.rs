@@ -415,11 +415,10 @@ const CONNECT_ID: i32 = 201632;
 const METI_RESONANCE_ID: i32 = 110502211;
 
 /// Run the out-of-gate step of a race on `course_id` with one runner per skill
-/// set, using the skills in `data/skill_data.json`.
+/// set, using skills from `data/skill_data.json`.
 ///
 /// Runners are returned in the order of their skill sets.
 fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
-    let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
     let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
     for (i, ids) in skill_sets.iter().enumerate() {
         // Guts doesn't affect speed, so it tells runners apart.
@@ -427,7 +426,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
             guts: 800 + i as u16,
             ..uma(Style::Pace)
         };
-        let skills = ids.iter().map(|id| skills[id].clone()).collect();
+        let skills = ids.iter().map(|&id| data_skill(id)).collect();
         solver.add_runner(Entrant::new(uma, skills));
     }
     let mut runners = solver.ready_runners().runners;
@@ -541,13 +540,12 @@ fn test_gambler_activation_rate() {
     // As the only runner, she's the most popular: `popularity<=3&random_lot==30`.
     const GAMBLER_ID: i32 = 202441;
     const RACES: u64 = 300;
-    let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
     let course = load_course(10104);
 
     let activations = (0..RACES)
         .filter(|&seed| {
             let mut solver = RaceSolver::new(course.clone(), race_params(), seeded_config(seed));
-            let gambler = skills[&GAMBLER_ID].clone();
+            let gambler = data_skill(GAMBLER_ID);
             solver.add_runner(Entrant::new(uma(Style::Pace), vec![gambler]));
             let runner = &solver.ready_runners().runners[0];
             !race_start_ids(runner.available_skills(), &runner.trigger_scheduler).is_empty()

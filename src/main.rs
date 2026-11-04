@@ -24,7 +24,7 @@ use uma_tools::import::umamoe::UmaMoeBuild;
 use uma_tools::race::last_spurt::LastSpurtCategory;
 use uma_tools::race::parameters::RaceParameters;
 use uma_tools::race::solver::{DELTA_TIME, FINISH_TIME_SCALE};
-use uma_tools::{Configuration, Course, Entrant, RaceParametersData, RaceSolver, Skill};
+use uma_tools::{Configuration, Course, Entrant, RaceParametersData, RaceSolver, SkillData};
 
 /// What a runner did in a single race.
 #[derive(Default)]
@@ -112,8 +112,8 @@ fn main() {
     let mut config =
         Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
     let language = config.language;
-    let skills_map =
-        Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");
+    let all_skills =
+        SkillData::from_json_file("data/skill_data.json").expect("Failed to load skill data");
     let (courses, rails) = ("data/course_data.json", "data/rails");
     let load_course = |parameters: &RaceParametersData| {
         Course::from_json_files(courses, rails, &parameters.course_id)
@@ -136,7 +136,7 @@ fn main() {
         let course = load_course(&parameters);
         let (mut entries, mut teams) = (Vec::new(), Vec::new());
         let entrants = build
-            .entrants(&course, &skills_map)
+            .entrants(&course, &all_skills)
             .expect("Failed to resolve uma skills");
         for team in entrants {
             let start = entries.len();
@@ -165,7 +165,7 @@ fn main() {
             .take(parameters.race.gates as usize)
             .map(|data| {
                 data.to_uma_data(distance, track)
-                    .to_entrant(&skills_map)
+                    .to_entrant(&all_skills)
                     .expect("Failed to resolve uma skills")
             })
             .collect();

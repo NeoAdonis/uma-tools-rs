@@ -273,7 +273,8 @@ fn test_known_variables() {
 
 #[test]
 fn test_all_skill_conditions() {
-    // Every condition in the skill data displays back to itself (without spaces).
+    // Every condition in the skill data displays back to itself (without
+    // spaces). Unsupported ones are reported by `test_skill_data_is_supported`.
     let json = std::fs::read_to_string("data/skill_data.json").unwrap();
     let skills: serde_json::Value = serde_json::from_str(&json).unwrap();
     let alternatives = skills
@@ -284,11 +285,9 @@ fn test_all_skill_conditions() {
     for alternative in alternatives {
         for key in ["condition", "precondition"] {
             let input = alternative[key].as_str().unwrap();
-            if input.is_empty() {
-                continue;
+            if let Ok(condition) = Condition::from_str(input) {
+                assert_eq!(condition.to_string().replace(' ', ""), input);
             }
-            let condition = Condition::from_str(input).unwrap_or_else(|e| panic!("{input}: {e}"));
-            assert_eq!(condition.to_string().replace(' ', ""), input);
         }
     }
 }

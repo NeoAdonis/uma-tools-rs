@@ -1,7 +1,7 @@
 use super::*;
 use crate::race::rng::RngSeed;
 use crate::skill::{PopularityStat as Stat, Skill, SkillType};
-use crate::test_utils::{alternative, assert_close, synthetic_skill};
+use crate::test_utils::{alternative, assert_close, data_skill, synthetic_skill};
 use std::sync::Arc;
 
 /// Create popularity points with the given points added to each stat.
@@ -15,9 +15,6 @@ fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
 
 #[test]
 fn test_skill_popularity_from_data() {
-    let skills =
-        Skill::load_all_from_json_file("data/skill_data.json").expect("Failed to load skill data");
-
     // Expected values are the ones given in-game.
     let cases = [
         (200961, points(&[(Stat::Speed, 30.0)])),
@@ -32,7 +29,7 @@ fn test_skill_popularity_from_data() {
         (900091, points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
     ];
     for (id, expected) in cases {
-        assert_eq!(skill_popularity(&skills[&id]), expected, "skill {id}");
+        assert_eq!(skill_popularity(&data_skill(id)), expected, "skill {id}");
     }
 }
 

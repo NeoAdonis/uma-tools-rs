@@ -11,7 +11,7 @@ use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use crate::units::CourseWidths;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// Assert that two floats are equal, or within `1e-9` of each other.
 ///
@@ -38,6 +38,27 @@ pub(crate) fn load_course(course_id: u32) -> Course {
     let (courses, rails) = ("data/course_data.json", "data/rails");
     Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
+}
+
+/// Skills in `data/skill_data.json`, loaded once per test binary.
+pub(crate) fn data_skills() -> &'static SkillData {
+    static SKILLS: LazyLock<SkillData> =
+        LazyLock::new(|| SkillData::from_json_file("data/skill_data.json").unwrap());
+    &SKILLS
+}
+
+/// Skill from `data/skill_data.json` with the given ID.
+///
+/// # Panics
+///
+/// Panics if it can't be loaded, with the reason.
+pub(crate) fn data_skill(id: i32) -> Arc<Skill> {
+    let skills = data_skills();
+    let reason = skills.unsupported().get(&id);
+    skills
+        .get(id)
+        .unwrap_or_else(|| panic!("skill {id} not loaded: {reason:?}"))
+        .clone()
 }
 
 /// Synthetic 2000m (Medium) turf course at Tokyo with ID 0, without corners,

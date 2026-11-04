@@ -70,7 +70,7 @@
 //! use uma_tools::{Configuration, RaceSolver};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! # use uma_tools::{Course, RaceParametersData, Skill, UmaData};
+//! # use uma_tools::{Course, RaceParametersData, SkillData, UmaData};
 //! # let parameters = RaceParametersData::from_json(
 //! #     r#"{
 //! #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
@@ -88,7 +88,7 @@
 //! # let (courses, rails) = ("data/course_data.json", "data/rails");
 //! # let course =
 //! #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-//! # let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
 //! # let entrant = uma.to_entrant(&all_skills)?;
 //! let mut positions = Vec::new();
 //! for seed in 0..20 {

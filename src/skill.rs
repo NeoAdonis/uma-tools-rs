@@ -6,13 +6,13 @@
 //! upgrade is worth its cost:
 //!
 //! ```
-//! use uma_tools::Skill;
+//! use uma_tools::SkillData;
 //! use uma_tools::skill::SkillType;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let all_skills = Skill::load_all_from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
 //! let target_speed = |id| {
-//!     let skill = all_skills.get(&id)?;
+//!     let skill = all_skills.get(id)?;
 //!     let effect = skill.alternatives.first()?.effects.first()?;
 //!     (effect.skill_type == SkillType::TargetSpeed).then_some(effect.modifier)
 //! };
@@ -27,7 +27,8 @@ use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};
 use serde_repr::Deserialize_repr;
 use serde_with::{BoolFromInt, serde_as};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -771,40 +772,103 @@ impl Skill {
             .flat_map(|alternative| &alternative.effects)
             .any(|effect| matches!(effect.skill_type, SkillType::IgnorePopularity))
     }
+}
 
-    /// Load all skills from a JSON file into a map of skill ID to [`Skill`] object.
+/// Skills by ID, as loaded from skill data, with the skills that couldn't be
+/// loaded.
+///
+/// Skills are loaded one by one, so that a skill the simulator doesn't support
+/// yet (e.g. one using a new condition variable) doesn't prevent using the
+/// others. Resolving an unsupported skill for a runner fails instead (see
+/// [`UmaData::resolve_skills`](crate::uma::UmaData::resolve_skills)).
+///
+/// Skills are shared through [`Arc`], so that every runner with the same skill
+/// can hold it without copying its data.
+#[derive(Clone, Debug, Default)]
+pub struct SkillData {
+    skills: HashMap<i32, Arc<Skill>>,
+    unsupported: BTreeMap<i32, SkillDataError>,
+}
+
+impl SkillData {
+    /// Load the skills in a JSON file.
     ///
     /// # Errors
     ///
     /// Returns an error if the file can't be read, or for the same reasons as
-    /// [`Skill::load_all_from_json`].
+    /// [`SkillData::from_json`].
     ///
     /// See [`UmaData::resolve_skills`](crate::uma::UmaData::resolve_skills) for
     /// an example.
-    pub fn load_all_from_json_file(
+    pub fn from_json_file(
         json_path: impl AsRef<Path>,
-    ) -> Result<HashMap<i32, Arc<Skill>>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let json = std::fs::read_to_string(json_path)?;
-        Ok(Self::load_all_from_json(&json)?)
+        Ok(Self::from_json(&json)?)
     }
 
-    /// Load all skills from a JSON string into a map of skill ID to [`Skill`]
-    /// object, e.g. with skill data fetched by a web page.
-    ///
-    /// Skills are shared through [`Arc`], so that every runner with the same
-    /// skill can hold it without copying its data.
+    /// Load the skills in a JSON string, e.g. with skill data fetched by a web
+    /// page.
     ///
     /// # Errors
     ///
     /// Returns an error if the JSON is invalid or a skill ID isn't a number.
-    pub fn load_all_from_json(json: &str) -> Result<HashMap<i32, Arc<Skill>>, serde_json::Error> {
+    /// Skills that can't be loaded are reported by [`Self::unsupported`]
+    /// instead.
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         // JSON keys are strings, but serde parses them as integers.
-        let skills: HashMap<i32, Skill> = serde_json::from_str(json)?;
+        let raw: HashMap<i32, serde_json::Value> = serde_json::from_str(json)?;
 
-        Ok(skills
-            .into_iter()
-            .map(|(id, skill)| (id, Arc::new(Skill { id, ..skill })))
-            .collect())
+        let mut data = Self::default();
+        for (id, skill) in raw {
+            match Skill::deserialize(skill) {
+                Ok(skill) => drop(data.skills.insert(id, Arc::new(Skill { id, ..skill }))),
+                Err(error) => drop(
+                    data.unsupported
+                        .insert(id, SkillDataError(error.to_string())),
+                ),
+            }
+        }
+        Ok(data)
+    }
+
+    /// Skill with the given ID, if it was loaded.
+    pub fn get(&self, id: i32) -> Option<&Arc<Skill>> {
+        self.skills.get(&id)
+    }
+
+    /// Every loaded skill.
+    pub fn skills(&self) -> impl Iterator<Item = &Arc<Skill>> {
+        self.skills.values()
+    }
+
+    /// Why each skill that couldn't be loaded was rejected, by ID.
+    pub fn unsupported(&self) -> &BTreeMap<i32, SkillDataError> {
+        &self.unsupported
+    }
+}
+
+/// Why a skill in the skill data couldn't be loaded, e.g. a condition with an
+/// unknown variable or an unknown effect type (see [`SkillData::unsupported`]).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SkillDataError(String);
+
+impl fmt::Display for SkillDataError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for SkillDataError {}
+
+/// Collect skills by their [`Skill::id`].
+impl FromIterator<Arc<Skill>> for SkillData {
+    fn from_iter<I: IntoIterator<Item = Arc<Skill>>>(skills: I) -> Self {
+        let skills = skills.into_iter().map(|skill| (skill.id, skill)).collect();
+        Self {
+            skills,
+            ..Self::default()
+        }
     }
 }
 
@@ -1146,33 +1210,54 @@ mod tests {
     }
 
     #[test]
-    fn test_skill_ids_must_be_numeric() {
-        let load = |id: &str| {
-            Skill::load_all_from_json(&format!(
-                r#"{{"{id}": {{"rarity": 1, "alternatives": [], "witCheck": 0,
-                    "group": 1, "groupRate": 1}}}}"#
-            ))
+    fn test_skill_data_from_json() {
+        let skill = |id: &str, rarity: i32| {
+            format!(
+                r#""{id}": {{"rarity": {rarity}, "alternatives": [],
+                    "witCheck": 0, "group": 1, "groupRate": 1}}"#
+            )
         };
-        assert_eq!(load("200012").unwrap()[&200012].id, 200012);
-        assert!(load("speed").is_err());
+        let load = |skills: &[String]| SkillData::from_json(&format!("{{{}}}", skills.join(",")));
+
+        // Skills that can't be loaded are reported, and the others kept.
+        let data = load(&[skill("200012", 1), skill("200013", 99)]).unwrap();
+        assert_eq!(data.get(200012).unwrap().id, 200012);
+        assert!(data.get(200013).is_none());
+        let unsupported: Vec<_> = data.unsupported().keys().collect();
+        assert_eq!(unsupported, [&200013]);
+
+        // Invalid data as a whole is an error.
+        assert!(load(&[skill("speed", 1)]).is_err());
     }
 
     #[test]
-    fn test_skill_data_loads() {
-        // Every condition in the skill data must parse.
-        let skills = Skill::load_all_from_json_file("data/skill_data.json").unwrap();
-        assert!(!skills.is_empty());
+    fn test_skill_data_is_supported() {
+        // Every skill in the data loads (e.g. its conditions only use known
+        // variables). This is the test to check after a data update: other
+        // tests only use the skills that load.
+        let skills = test_utils::data_skills();
+        let unsupported = skills.unsupported();
+        let report: Vec<_> = unsupported
+            .iter()
+            .map(|(id, e)| format!("{id}: {e}"))
+            .collect();
+        assert!(unsupported.is_empty(), "\n{}", report.join("\n"));
+        assert!(skills.skills().next().is_some());
 
         // Activated alternatives are tracked as bits of a mask (see
         // `Runner::activated_alternatives`).
-        for (id, skill) in &skills {
-            assert!(skill.alternatives.len() <= u8::BITS as usize, "{id}");
+        for skill in skills.skills() {
+            assert!(
+                skill.alternatives.len() <= u8::BITS as usize,
+                "{}",
+                skill.id
+            );
         }
 
         // Pre-race effects are applied before the race, where values aren't
         // scaled.
         let effects = skills
-            .values()
+            .skills()
             .flat_map(|skill| &skill.alternatives)
             .flat_map(|alternative| &alternative.effects);
         for effect in effects {
