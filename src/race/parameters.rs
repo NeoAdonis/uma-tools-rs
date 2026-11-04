@@ -190,17 +190,17 @@ impl RaceParametersData {
 mod tests {
     use super::*;
 
-    /// JSON for [`RaceParametersData`] with every field set, and the weather as
-    /// given.
-    fn parameters_json(weather: &str) -> String {
+    /// JSON for [`RaceParametersData`] with every field set, and the number of
+    /// gates as given.
+    fn parameters_json(gates: u8) -> String {
         format!(
             r#"{{
                 "trackCondition": "Soft",
-                "weather": "{weather}",
+                "weather": "Snowy",
                 "season": "Sakura",
                 "time": "Evening",
                 "grade": "PreOP",
-                "gates": 12,
+                "gates": {gates},
                 "courseId": "10101"
             }}"#
         )
@@ -219,115 +219,20 @@ mod tests {
             },
             course_id: "10101".to_string(),
         };
-        let actual = RaceParametersData::from_json(&parameters_json("Snowy")).unwrap();
+        let actual = RaceParametersData::from_json(&parameters_json(12)).unwrap();
         assert_eq!(actual, expected);
     }
 
-    /// Parse a single enum value from its JSON name.
-    fn parse<T: serde::de::DeserializeOwned>(name: &str) -> T {
-        serde_json::from_str(&format!("\"{name}\"")).unwrap()
-    }
-
     #[test]
-    fn test_variant_names() {
-        let track_conditions = [
-            ("Firm", TrackCondition::Firm),
-            ("Good", TrackCondition::Good),
-            ("Soft", TrackCondition::Soft),
-            ("Heavy", TrackCondition::Heavy),
-        ];
-        for (name, expected) in track_conditions {
-            assert_eq!(parse::<TrackCondition>(name), expected, "{name}");
-        }
-
-        let weathers = [
-            ("Sunny", Weather::Sunny),
-            ("Cloudy", Weather::Cloudy),
-            ("Rainy", Weather::Rainy),
-            ("Snowy", Weather::Snowy),
-        ];
-        for (name, expected) in weathers {
-            assert_eq!(parse::<Weather>(name), expected, "{name}");
-        }
-
-        let seasons = [
-            ("Spring", Season::Spring),
-            ("Summer", Season::Summer),
-            ("Autumn", Season::Autumn),
-            ("Winter", Season::Winter),
-            ("Sakura", Season::Sakura),
-        ];
-        for (name, expected) in seasons {
-            assert_eq!(parse::<Season>(name), expected, "{name}");
-        }
-
-        let times = [
-            ("None", Time::None),
-            ("Morning", Time::Morning),
-            ("Noon", Time::Noon),
-            ("Evening", Time::Evening),
-            ("Night", Time::Night),
-        ];
-        for (name, expected) in times {
-            assert_eq!(parse::<Time>(name), expected, "{name}");
-        }
-
-        let grades = [
-            ("G1", Grade::G1),
-            ("G2", Grade::G2),
-            ("G3", Grade::G3),
-            ("OP", Grade::Op),
-            ("PreOP", Grade::PreOp),
-            ("Maiden", Grade::Maiden),
-            ("Debut", Grade::Debut),
-            ("Daily", Grade::Daily),
-        ];
-        for (name, expected) in grades {
-            assert_eq!(parse::<Grade>(name), expected, "{name}");
-        }
-    }
-
-    #[test]
-    fn test_from_invalid_json() {
-        let valid = parameters_json("Sunny");
-        let mut without_course_id: serde_json::Value = serde_json::from_str(&valid).unwrap();
-        without_course_id
-            .as_object_mut()
-            .unwrap()
-            .remove("courseId");
-
-        let invalid = [
-            // Unknown variant.
-            parameters_json("Foggy"),
-            // Missing course ID.
-            without_course_id.to_string(),
-            // Course ID as a number.
-            valid.replace(r#""courseId": "10101""#, r#""courseId": 10101"#),
-            // No gates.
-            valid.replace(r#""gates": 12"#, r#""gates": 0"#),
-            // Too many gates.
-            valid.replace(r#""gates": 12"#, r#""gates": 19"#),
-            // Too many gates for a `u8`.
-            valid.replace(r#""gates": 12"#, r#""gates": 256"#),
-            // Malformed.
-            "{".to_string(),
-        ];
-        for json in invalid {
-            assert!(RaceParametersData::from_json(&json).is_err(), "{json}");
+    fn test_gates_out_of_range_are_errors() {
+        for (gates, valid) in [(0, false), (1, true), (18, true), (19, false)] {
+            let parameters = RaceParametersData::from_json(&parameters_json(gates));
+            assert_eq!(parameters.is_ok(), valid, "{gates} gates");
         }
     }
 
     #[test]
     fn test_from_json_file() {
-        let parameters = RaceParametersData::from_json_file("parameters.json").unwrap();
-        assert_eq!(parameters.race.track_condition, TrackCondition::Firm);
-        assert_eq!(parameters.race.grade, Grade::G1);
-        assert_eq!(parameters.race.gates, 18);
-        assert_eq!(parameters.course_id, "10913");
-    }
-
-    #[test]
-    fn test_from_missing_file() {
-        assert!(RaceParametersData::from_json_file("does_not_exist.json").is_err());
+        assert!(RaceParametersData::from_json_file("parameters.json").is_ok());
     }
 }

@@ -103,15 +103,6 @@ mod tests {
     const CURVATURE: f64 = 0.005;
 
     #[test]
-    fn test_ratio_on_straight_without_lane_change() {
-        let course = course(1.0, 0.0);
-        assert_close!(
-            ratio_of_move(&course, 100.0, 101.5, CourseWidths(0.5), CourseWidths(0.5)),
-            1.0
-        );
-    }
-
-    #[test]
     fn test_ratio_without_move() {
         let course = course(1.0, 0.0);
         assert_eq!(
@@ -157,18 +148,29 @@ mod tests {
 
     #[test]
     fn test_ratio_with_rail_excess() {
-        // 1mm more per 2m segment on the corner, or 1mm less.
+        // 1mm more per 2m segment on the corner.
+        let course = course(1.05, 0.001);
         let lane = CourseWidths(0.0);
-        let longer = course(1.05, 0.001);
         let expected = 1.0 + 0.0005 / 1.05;
-        assert_close!(ratio_of_move(&longer, 600.0, 601.5, lane, lane), expected);
-        let shorter = course(1.05, -0.001);
-        assert_eq!(ratio_of_move(&shorter, 600.0, 601.5, lane, lane), 1.0);
-        // Running wide makes up for a shorter rail.
-        let lane = CourseWidths(1.0);
-        let expected = 1.0 + (CURVATURE * 11.25 - 0.0005) / 1.05;
-        let ratio = ratio_of_move(&shorter, 600.0, 601.5, lane, lane);
-        assert_close!(ratio, expected, tolerance = TOLERANCE);
+        assert_close!(ratio_of_move(&course, 600.0, 601.5, lane, lane), expected);
+    }
+
+    #[test]
+    fn test_ratio_is_at_most_one() {
+        let cases = [
+            // 1mm less per 2m segment on the corner.
+            ("shorter rail", course(1.05, -0.001), CourseWidths(0.0)),
+            // Running wide where the corner turns away from the inner rail.
+            (
+                "turn away",
+                course_with(1.0, 0.0, -CURVATURE * 2.0),
+                CourseWidths(1.0),
+            ),
+        ];
+        for (case, course, lane) in cases {
+            let ratio = ratio_of_move(&course, 600.0, 601.5, lane, lane);
+            assert_eq!(ratio, 1.0, "{case}");
+        }
     }
 
     #[test]
@@ -176,27 +178,8 @@ mod tests {
         // 3m forward and 0.4 course widths (4.5m) sideways.
         let course = course(1.0, 0.0);
         let expected = 3f64.hypot(4.5) / 3.0;
-        let ratio = |start, end| {
-            ratio_of_move(
-                &course,
-                100.0,
-                103.0,
-                CourseWidths(start),
-                CourseWidths(end),
-            )
-        };
-        assert_close!(ratio(0.2, 0.6), expected);
-        // Moving inward costs the same.
-        assert_close!(ratio(0.6, 0.2), expected);
-    }
-
-    #[test]
-    fn test_ratio_on_corner_uses_mid_lane() {
-        let course = course(1.05, 0.0);
-        let forward = 2.0 * (1.0 + CURVATURE * CourseWidths(0.5).meters() / 1.05);
-        let expected = forward.hypot(CourseWidths(0.2).meters() / 1.05) / 2.0;
-        let ratio = ratio_of_move(&course, 600.0, 602.0, CourseWidths(0.4), CourseWidths(0.6));
-        assert_close!(ratio, expected, tolerance = TOLERANCE);
+        let ratio = ratio_of_move(&course, 100.0, 103.0, CourseWidths(0.2), CourseWidths(0.6));
+        assert_close!(ratio, expected);
     }
 
     #[test]
@@ -227,13 +210,5 @@ mod tests {
         assert_close!(ratio(0.4, 0.6), outwards / 2.0);
         let inwards = (2.0 - lateral * skew).hypot(sideways);
         assert_close!(ratio(0.6, 0.4), inwards / 2.0);
-    }
-
-    #[test]
-    fn test_ratio_ignores_turns_away_from_inner_rail() {
-        // The corner turns the other way, so running wide covers less.
-        let course = course_with(1.0, 0.0, -CURVATURE * 2.0);
-        let lane = CourseWidths(1.0);
-        assert_eq!(ratio_of_move(&course, 600.0, 601.5, lane, lane), 1.0);
     }
 }

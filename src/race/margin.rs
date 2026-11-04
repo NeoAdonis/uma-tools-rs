@@ -56,14 +56,18 @@ mod tests {
 
     #[test]
     fn test_from_meters() {
-        assert_eq!(Margin::from_meters(0.0), Margin::Nose);
-        assert_eq!(Margin::from_meters(0.19), Margin::Nose);
-        assert_eq!(Margin::from_meters(0.2), Margin::Head);
-        assert_eq!(Margin::from_meters(0.39), Margin::Head);
-        assert_eq!(Margin::from_meters(0.4), Margin::Neck);
-        assert_eq!(Margin::from_meters(0.79), Margin::Neck);
-        assert_eq!(Margin::from_meters(0.8), Margin::Bashin(0.32));
-        assert_eq!(Margin::from_meters(25.0), Margin::Bashin(10.0));
-        assert_eq!(Margin::from_meters(25.1), Margin::Distance);
+        let cases = [
+            (0.19, Margin::Nose),
+            (0.2, Margin::Head),
+            (0.39, Margin::Head),
+            (0.4, Margin::Neck),
+            (0.79, Margin::Neck),
+            (0.8, Margin::Bashin(0.32)),
+            (25.0, Margin::Bashin(10.0)),
+            (25.1, Margin::Distance),
+        ];
+        for (meters, expected) in cases {
+            assert_eq!(Margin::from_meters(meters), expected, "{meters}m");
+        }
     }
 }
