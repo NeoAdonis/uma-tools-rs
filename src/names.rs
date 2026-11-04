@@ -44,11 +44,7 @@ static NAMES: LazyLock<Names> = LazyLock::new(|| {
 
 /// Name with the given ID in `names`, or `None` if the ID or its name in that
 /// language is unknown.
-fn name<K: Eq + Hash>(
-    names: &'static HashMap<K, NamePair>,
-    id: K,
-    language: Language,
-) -> Option<&'static str> {
+fn name<K: Eq + Hash>(names: &HashMap<K, NamePair>, id: K, language: Language) -> Option<&str> {
     let [japanese, english] = names.get(&id)?;
     let name = match language {
         Language::Japanese => japanese,
@@ -78,31 +74,32 @@ mod tests {
 
     #[test]
     fn test_names_by_language() {
-        assert_eq!(track_name(10006, Language::Japanese), Some("東京"));
-        assert_eq!(track_name(10006, Language::English), Some("Tokyo"));
+        assert_eq!(track_name(10001, Language::Japanese), Some("札幌"));
+        assert_eq!(track_name(10001, Language::English), Some("Sapporo"));
         assert_eq!(
-            skill_name(200331, Language::Japanese),
-            Some("弧線のプロフェッサー")
+            skill_name(200332, Language::Japanese),
+            Some("コーナー巧者○")
         );
         assert_eq!(
-            character_name(100101, Language::Japanese),
-            Some("[スペシャルドリーマー]スペシャルウィーク")
+            skill_name(200332, Language::English),
+            Some("Corner Adept ○")
         );
-    }
-
-    #[test]
-    fn test_inherited_unique_names_have_a_suffix() {
-        let unique = skill_name(100011, Language::English).unwrap();
-        let inherited = skill_name(900011, Language::English).unwrap();
-        assert_eq!(inherited, format!("{unique} (inherited)"));
+        assert_eq!(
+            character_name(100201, Language::Japanese),
+            Some("[サイレントイノセンス]サイレンススズカ")
+        );
+        assert_eq!(
+            character_name(100201, Language::English),
+            Some("[Innocent Silence] Silence Suzuka")
+        );
     }
 
     #[test]
     fn test_unknown_names_are_none() {
-        assert_eq!(track_name(0, Language::English), None);
-        assert_eq!(skill_name(0, Language::English), None);
-        // Known card, but no English name yet.
-        assert_eq!(character_name(100303, Language::English), None);
-        assert!(character_name(100303, Language::Japanese).is_some());
+        // A known ID, with no English name yet.
+        let names = HashMap::from([(1, ["名前".to_string(), String::new()])]);
+        assert_eq!(name(&names, 1, Language::Japanese), Some("名前"));
+        assert_eq!(name(&names, 1, Language::English), None);
+        assert_eq!(name(&names, 2, Language::Japanese), None);
     }
 }

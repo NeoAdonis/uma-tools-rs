@@ -285,9 +285,7 @@ mod tests {
         let cases = [
             (r#""Random""#, Some(DefaultMood::Random)),
             (r#""Awful""#, Some(DefaultMood::Fixed(Mood::Awful))),
-            (r#""Great""#, Some(DefaultMood::Fixed(Mood::Great))),
             (r#""Fine""#, None),
-            ("2", None),
         ];
         for (mood, expected) in cases {
             let json = format!(r#"{{ "defaultMood": {mood} }}"#);

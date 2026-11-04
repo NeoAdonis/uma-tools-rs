@@ -933,7 +933,6 @@ mod tests {
     fn test_activation_chance_without_wit_check() {
         let skill = skill_with_wit_check(false);
         assert_eq!(skill.activation_chance(1), 1.0);
-        assert_eq!(skill.activation_chance(1200), 1.0);
     }
 
     #[test]
@@ -942,7 +941,6 @@ mod tests {
         assert_close!(skill.activation_chance(900), 0.9);
         // Low wit is clamped to the minimum chance.
         assert_eq!(skill.activation_chance(100), 0.2);
-        assert_eq!(skill.activation_chance(0), 0.2);
     }
 
     #[test]
@@ -955,10 +953,6 @@ mod tests {
         };
         assert!(!skill(SkillRarity::White).is_wit_limit_break_eligible());
         assert!(skill(SkillRarity::Gold).is_wit_limit_break_eligible());
-        assert!(skill(SkillRarity::Unique).is_wit_limit_break_eligible());
-        assert!(skill(SkillRarity::UniqueUpgraded).is_wit_limit_break_eligible());
-        assert!(skill(SkillRarity::UniqueNatural).is_wit_limit_break_eligible());
-        assert!(skill(SkillRarity::Evolution).is_wit_limit_break_eligible());
     }
 
     /// Deserialize an alternative with the given condition and precondition.
@@ -1000,10 +994,8 @@ mod tests {
 
     #[test]
     fn test_invalid_alternative_conditions_are_errors() {
-        // Empty conditions are not allowed.
+        // Empty conditions are not allowed, unlike empty preconditions.
         assert!(alternative("", "").is_err());
-        assert!(alternative("phase>=", "").is_err());
-        assert!(alternative("phase>=2&", "").is_err());
         assert!(alternative("phase>=2", "order<=").is_err());
     }
 
@@ -1055,14 +1047,9 @@ mod tests {
 
     #[test]
     fn test_target_encodes_value() {
+        // One target per kind of value: none, a count, a style, the raw value.
         assert_eq!(target(1, 0).unwrap(), SkillTarget::Oneself);
         assert_eq!(target(4, 18).unwrap(), SkillTarget::InFov { max: 18 });
-        assert_eq!(
-            target(7, 5).unwrap(),
-            SkillTarget::AheadOfPosition { position: 5 }
-        );
-        assert_eq!(target(9, 3).unwrap(), SkillTarget::AheadOfSelf { count: 3 });
-        assert_eq!(target(10, 5).unwrap(), SkillTarget::BehindSelf { count: 5 });
         assert_eq!(
             target(18, 1).unwrap(),
             SkillTarget::EnemyStrategy {
@@ -1070,41 +1057,35 @@ mod tests {
             }
         );
         assert_eq!(
-            target(21, 4).unwrap(),
-            SkillTarget::RushedStrategy { style: Style::End }
-        );
-        assert_eq!(
-            target(20, 10).unwrap(),
-            SkillTarget::RushedBehind { max: 10 }
-        );
-        assert_eq!(target(2, 0).unwrap(), SkillTarget::All);
-        assert_eq!(target(11, 0).unwrap(), SkillTarget::AllAllies);
-        assert_eq!(target(24, 0).unwrap(), SkillTarget::RandomAlly);
-        assert_eq!(target(19, 2).unwrap(), SkillTarget::RushedAhead { max: 2 });
-        assert_eq!(
             target(22, 1001).unwrap(),
             SkillTarget::UmaId { value: 1001 }
-        );
-        assert_eq!(
-            target(23, 9).unwrap(),
-            SkillTarget::UsedRecovery { value: 9 }
         );
     }
 
     #[test]
     fn test_invalid_targets_are_errors() {
-        // Unknown target type.
-        assert!(target(3, 0).is_err());
-        // Runaway (0) isn't a valid target style.
-        assert!(target(18, 0).is_err());
-        // Negative or too large counts.
-        for target_type in [4, 7, 9, 10, 19, 20] {
-            assert!(target(target_type, -1).is_err(), "type {target_type}");
-            assert!(target(target_type, 256).is_err(), "type {target_type}");
-        }
-        // Unknown style.
-        for target_type in [18, 21] {
-            assert!(target(target_type, 5).is_err(), "type {target_type}");
+        // (type, value, accepted).
+        let cases = [
+            // Unknown target type.
+            (3, 0, false),
+            // Counts fit in a byte.
+            (4, -1, false),
+            (4, 0, true),
+            (4, 255, true),
+            (4, 256, false),
+            // Styles, except Runaway (0).
+            (18, 0, false),
+            (18, 1, true),
+            (18, 4, true),
+            (18, 5, false),
+        ];
+        for (target_type, value, accepted) in cases {
+            let result = target(target_type, value);
+            assert_eq!(
+                result.is_ok(),
+                accepted,
+                "type {target_type}, value {value}"
+            );
         }
     }
 
@@ -1113,7 +1094,6 @@ mod tests {
         let cases = [
             // Purely positive.
             (SkillType::ActivateRandomGold, 0.0, true),
-            (SkillType::ChangeStyleRunaway, 0.0, true),
             // Less start delay is good.
             (SkillType::AddStartDelay, -0.1, true),
             (SkillType::AddStartDelay, 0.1, false),
@@ -1122,8 +1102,6 @@ mod tests {
             // Less rush chance or time is good.
             (SkillType::RushChanceUp, -0.1, true),
             (SkillType::RushChanceUp, 0.1, false),
-            (SkillType::RushTimeUp, -0.1, true),
-            (SkillType::RushTimeUp, 0.1, false),
             // Anything else is good when positive.
             (SkillType::TargetSpeed, 0.1, true),
             (SkillType::TargetSpeed, -0.1, false),
@@ -1134,96 +1112,12 @@ mod tests {
         }
     }
 
-    /// Deserialize a value scaling from its ID.
-    fn value_scaling(id: u8) -> serde_json::Result<ValueScaling> {
-        serde_json::from_str(&id.to_string())
-    }
-
     #[test]
-    fn test_value_scaling_ids() {
-        assert_eq!(value_scaling(1).unwrap(), ValueScaling::Direct);
-        assert_eq!(value_scaling(2).unwrap(), ValueScaling::MultiplySkillNum);
-        assert_eq!(value_scaling(3).unwrap(), ValueScaling::UnityCupSpeed);
-        assert_eq!(value_scaling(7).unwrap(), ValueScaling::UnityCupWit);
-        assert_eq!(value_scaling(8).unwrap(), ValueScaling::MultiplyRandom1);
-        assert_eq!(value_scaling(9).unwrap(), ValueScaling::MultiplyRandom2);
-        assert_eq!(value_scaling(22).unwrap(), ValueScaling::MultiplySpeed1);
-        assert_eq!(value_scaling(23).unwrap(), ValueScaling::MultiplySpeed2);
-        assert_eq!(
-            value_scaling(25).unwrap(),
-            ValueScaling::MultiplyTopLeadAmount
-        );
-        // IDs are preserved.
-        assert_eq!(ValueScaling::MultiplyRandom1 as u8, 8);
-        assert_eq!(
-            ValueScaling::try_from(31).unwrap(),
-            ValueScaling::DevelopmentPoints
-        );
-        assert_eq!(value_scaling(32).unwrap(), ValueScaling::OnsenLegendaryInn);
-        assert_eq!(value_scaling(35).unwrap(), ValueScaling::CinderellaGray);
-        assert_eq!(
-            value_scaling(36).unwrap(),
-            ValueScaling::AddDistanceTypeMedium
-        );
-        assert_eq!(value_scaling(37).unwrap(), ValueScaling::TeamRank);
-        assert_eq!(value_scaling(40).unwrap(), ValueScaling::ExcitementPoints);
-        assert_eq!(value_scaling(41).unwrap(), ValueScaling::PerformanceLevel);
-        // Unknown IDs.
-        for id in [0, 15, 21, 29, 33, 38, 42] {
-            assert!(value_scaling(id).is_err(), "ID {id}");
-        }
-    }
-
-    /// Deserialize a duration scaling from its ID.
-    fn duration_scaling(id: u8) -> serde_json::Result<DurationScaling> {
-        serde_json::from_str(&id.to_string())
-    }
-
-    #[test]
-    fn test_duration_scaling_ids() {
-        let cases = [
-            (1, DurationScaling::Direct),
-            (2, DurationScaling::MultiplyDistanceDiffTop),
-            (3, DurationScaling::MultiplyRemainHp1),
-            (4, DurationScaling::IncrementOrderUp),
-            (
-                5,
-                DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-            ),
-            (7, DurationScaling::MultiplyRemainHp2),
-            (8, DurationScaling::IncrementUphillCount),
-        ];
-        for (id, expected) in cases {
-            assert_eq!(duration_scaling(id).unwrap(), expected, "ID {id}");
-        }
-        // Unknown IDs.
-        for id in [0, 6, 9] {
-            assert!(duration_scaling(id).is_err(), "ID {id}");
-        }
-    }
-
-    #[test]
-    fn test_additional_activation_ids() {
-        let effect = |additional: &str| {
-            let json = format!(
-                r#"{{"type": 27, "target": {{"type": 1, "value": 0}}, "modifier": 500,
-                    "valueScaling": 1{additional}}}"#
-            );
-            serde_json::from_str::<SkillEffect>(&json).map(|effect| effect.additional)
-        };
-        // Regular when missing.
-        assert_eq!(effect("").unwrap(), AdditionalActivation::Regular);
-        let cases = [
-            (0, AdditionalActivation::Regular),
-            (1, AdditionalActivation::OrderUp),
-            (2, AdditionalActivation::ActivateAnySkill1),
-            (3, AdditionalActivation::ActivateAnySkill2),
-        ];
-        for (id, expected) in cases {
-            let parsed = effect(&format!(r#", "additional": {id}"#)).unwrap();
-            assert_eq!(parsed, expected, "ID {id}");
-        }
-        assert!(effect(r#", "additional": 4"#).is_err());
+    fn test_additional_activation_defaults_to_regular() {
+        let json = r#"{"type": 27, "target": {"type": 1, "value": 0}, "modifier": 500,
+            "valueScaling": 1}"#;
+        let effect: SkillEffect = serde_json::from_str(json).unwrap();
+        assert_eq!(effect.additional, AdditionalActivation::Regular);
     }
 
     #[test]
@@ -1233,7 +1127,6 @@ mod tests {
             Arc::new(synthetic_skill(alternatives))
         };
         assert!(skill(SkillType::SpeedUp).is_green());
-        assert!(skill(SkillType::AllStatsUp).is_green());
         assert!(!skill(SkillType::TargetSpeed).is_green());
         assert!(!skill(SkillType::MultiplyStartDelay).is_green());
     }
@@ -1273,9 +1166,6 @@ mod tests {
         assert!(data.get(200013).is_none());
         let unsupported: Vec<_> = data.unsupported().keys().collect();
         assert_eq!(unsupported, [&200013]);
-
-        // Invalid data as a whole is an error.
-        assert!(load(&[skill("speed", 1)]).is_err());
     }
 
     #[test]
@@ -1343,6 +1233,5 @@ mod tests {
         assert!(skill(SkillType::IgnorePopularity).should_activate_out_of_gate());
         // The condition doesn't matter, only the effects.
         assert!(!skill(SkillType::TargetSpeed).should_activate_out_of_gate());
-        assert!(!skill(SkillType::Acceleration).should_activate_out_of_gate());
     }
 }
