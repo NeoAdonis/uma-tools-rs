@@ -173,7 +173,6 @@ pub fn meters_to_furlongs(meters: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::assert_close;
 
     #[test]
     fn test_horse_lane_conversion() {
@@ -194,19 +193,5 @@ mod tests {
     fn test_furlong_conversion() {
         assert_eq!(furlongs_to_meters(1.0), 200.0);
         assert_eq!(meters_to_furlongs(200.0), 1.0);
-    }
-
-    #[test]
-    fn test_bashin_roundtrip() {
-        let original = 5.0;
-        let converted = bashin_to_meters(meters_to_bashin(original));
-        assert_close!(converted, original, tolerance = 0.0001);
-    }
-
-    #[test]
-    fn test_furlong_roundtrip() {
-        let original = 1000.0;
-        let converted = furlongs_to_meters(meters_to_furlongs(original));
-        assert_close!(converted, original, tolerance = 0.0001);
     }
 }

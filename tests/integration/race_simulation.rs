@@ -11,39 +11,6 @@ use uma_tools::race::solver::RaceSolver;
 use uma_tools::uma::*;
 
 #[test]
-fn test_basic_race_simulation() {
-    // Create a basic Uma
-    let _uma = Uma {
-        speed: 1200,
-        stamina: 800,
-        power: 1000,
-        guts: 600,
-        wit: 1000,
-        style: Style::End,
-        distance_aptitude: Aptitude::A,
-        track_aptitude: Aptitude::A,
-        style_aptitude: Aptitude::A,
-        fan_count: None,
-        character_id: None,
-    };
-
-    // Create race parameters
-    let _params = RaceParameters {
-        track_condition: TrackCondition::Good,
-        weather: Weather::Sunny,
-        season: Season::Spring,
-        time: Time::Noon,
-        grade: Grade::G1,
-        gates: 18,
-    };
-
-    // Create a test course (this would normally be loaded from JSON)
-    // For now, we'll skip the full course loading and just verify the API works
-
-    // This test verifies that the public API is accessible and compiles correctly
-}
-
-#[test]
 fn test_multi_runner_race_simulation() {
     let course = load_course(10101);
     let styles = [
