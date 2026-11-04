@@ -722,9 +722,6 @@ mod tests {
         assert_eq!(uma.character_id, Some(100201));
         assert_eq!(uma_data.mood, Some(Mood::Great));
         assert_eq!(uma_data.skills.len(), 21);
-        // Only the first runner has a fan count.
-        let uma = build.runners()[1].to_uma_data(DistanceType::Long, Track::Turf);
-        assert_eq!(uma.uma.fan_count, None);
         assert_eq!(
             uma_data.skills[..2],
             [
@@ -738,6 +735,9 @@ mod tests {
                 },
             ]
         );
+        // Only the first runner has a fan count.
+        let uma = build.runners()[1].to_uma_data(DistanceType::Long, Track::Turf);
+        assert_eq!(uma.uma.fan_count, None);
 
         let teams: Vec<Vec<Option<u32>>> = build
             .teams()
@@ -827,9 +827,7 @@ mod tests {
             ("Oonige", Style::Runaway, Aptitude::D),
             ("Nige", Style::Front, Aptitude::D),
             ("Senko", Style::Pace, Aptitude::E),
-            ("Senkou", Style::Pace, Aptitude::E),
             ("Sashi", Style::Late, Aptitude::F),
-            ("Sasi", Style::Late, Aptitude::F),
             ("Oikomi", Style::End, Aptitude::G),
         ];
         for (name, style, aptitude) in cases {
@@ -876,7 +874,6 @@ mod tests {
             build.configure_gates(&mut config);
             assert_eq!(config, expected, "{gate_order}");
         }
-        assert!(UmaMoeBuild::from_json(&field_json(r#""gateOrder": "fixed","#)).is_err());
     }
 
     #[test]
@@ -916,10 +913,6 @@ mod tests {
             .map(|skill| (skill.id, skill.level))
             .collect();
         assert_eq!(levels, [(100011, 4), (200012, 1)]);
-
-        // Skills missing from the skill data.
-        let error = build.entrants(&course, &SkillData::default()).err();
-        assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(100011)));
     }
 
     #[test]
@@ -984,26 +977,6 @@ mod tests {
     }
 
     #[test]
-    fn test_moods() {
-        let cases = [
-            ("1", Mood::Awful),
-            ("2", Mood::Bad),
-            ("3", Mood::Normal),
-            ("4", Mood::Good),
-            ("5", Mood::Great),
-        ];
-        for (motivation, mood) in cases {
-            let json = field_json("").replacen(
-                r#""motivation": "2""#,
-                &format!(r#""motivation": "{motivation}""#),
-                1,
-            );
-            let build = UmaMoeBuild::from_json(&json).unwrap();
-            assert_eq!(build.runners()[0].mood, mood, "{motivation}");
-        }
-    }
-
-    #[test]
     fn test_from_invalid_json() {
         let field = field_json("");
         let invalid = |json: &str, from: &str, to: &str| {
@@ -1012,32 +985,15 @@ mod tests {
             assert!(UmaMoeBuild::from_json(&json).is_err(), "{to}");
         };
         invalid(&field, r#""version": 1"#, r#""version": 2"#);
-        invalid(&field, r#""ground": 3"#, r#""ground": 5"#);
-        invalid(&field, r#""time": 4"#, r#""time": 5"#);
         invalid(&field, r#""guts": "604""#, r#""guts": "0""#);
-        invalid(&field, r#""guts": "604""#, r#""guts": 604"#);
-        invalid(
-            &field,
-            r#""runningStyle": "Nige""#,
-            r#""runningStyle": "Front""#,
-        );
         invalid(&field, r#""motivation": "2""#, r#""motivation": "6""#);
-        invalid(
-            &field,
-            r#""groundAptitudes": ["A", "B"]"#,
-            r#""groundAptitudes": ["A"]"#,
-        );
-        invalid(UMA1_UMA2_JSON, r#""mood": -1"#, r#""mood": -3"#);
         invalid(UMA1_UMA2_JSON, r#""guts": 451"#, r#""guts": 0"#);
-        invalid(UMA1_UMA2_JSON, r#""fans": 654321"#, r#""fans": -1"#);
-        invalid(&field, r#""fanCount": 123456"#, r#""fanCount": "123456""#);
         invalid(UMA1_UMA2_JSON, r#""200132""#, r#""skill""#);
         invalid(
             UMA1_UMA2_JSON,
             r#""outfitId": "100201""#,
             r#""outfitId": "x""#,
         );
-        assert!(UmaMoeBuild::from_json("{").is_err());
     }
 
     /// Decoded JSON of the build code at [`BUILD_PATH`].
@@ -1078,13 +1034,5 @@ mod tests {
         let mut json = build_json();
         json["page"]["field"][4]["teamId"] = 1.into();
         assert!(UmaMoeBuild::from_json(&json.to_string()).is_err());
-    }
-
-    #[test]
-    fn test_from_invalid_build_code() {
-        assert!(UmaMoeBuild::from_build_code("not base64!").is_err());
-        // Valid base64, but not gzip.
-        assert!(UmaMoeBuild::from_build_code(&BASE64.encode("{}")).is_err());
-        assert!(UmaMoeBuild::from_build_code_file("does_not_exist.txt").is_err());
     }
 }

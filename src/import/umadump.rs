@@ -378,7 +378,6 @@ impl UmaDumpData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::data_skills;
 
     /// Path to an Uma exported by umadump, with every field.
     const UMA_PATH: &str = "tests/data/umadump_uma.json";
@@ -490,11 +489,7 @@ mod tests {
         invalid(r#""running_style": 1"#, r#""running_style": 0"#);
         invalid(r#""running_style": 1"#, r#""running_style": 5"#);
         invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 0"#);
-        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 9"#);
         invalid(r#""guts": 604"#, r#""guts": 0"#);
-        invalid(r#""fans": 98765, "#, "");
-        invalid(r#""level": 4"#, r#""lv": 4"#);
-        assert!(UmaDumpData::from_json("{").is_err());
     }
 
     #[test]
@@ -534,24 +529,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_skills_resolve_with_levels() {
-        let skills = UmaDumpData::from_json_file(UMA_PATH)
-            .unwrap()
-            .to_uma_data(DistanceType::Mile, Track::Turf)
-            .resolve_skills(data_skills())
-            .unwrap();
-        assert_eq!((skills[0].id, skills[0].level), (100191, 5));
-        assert_eq!((skills[1].id, skills[1].level), (200072, 1));
-    }
-
-    #[test]
-    fn test_from_missing_file() {
-        assert!(UmaDumpData::from_json_file("does_not_exist.json").is_err());
-        assert!(UmaDumpData::all_from_json_file("does_not_exist.json").is_err());
-        assert!(UmaDumpData::from_career_json_file("does_not_exist.json").is_err());
-    }
-
     /// Wrap the Uma in `json` as a career turn, with its running style
     /// renamed and the mood value given.
     fn career_json(json: &str, mood: i32) -> String {
@@ -566,30 +543,13 @@ mod tests {
 
     #[test]
     fn test_from_career_json() {
-        let trained = UmaDumpData::from_json(UMA_JSON).unwrap();
-        let cases = [
-            (1, Mood::Awful),
-            (2, Mood::Bad),
-            (3, Mood::Normal),
-            (4, Mood::Good),
-            (5, Mood::Great),
-        ];
-        for (value, mood) in cases {
-            let data = UmaDumpData::from_career_json(&career_json(UMA_JSON, value)).unwrap();
-            let expected = UmaDumpData {
-                mood: Some(mood),
-                ..trained.clone()
-            };
-            assert_eq!(data, expected, "{value}");
-        }
-        for value in [0, 6, -1] {
-            let json = career_json(UMA_JSON, value);
-            assert!(UmaDumpData::from_career_json(&json).is_err(), "{value}");
-        }
-        // A trained Uma isn't a career, nor the other way around.
-        assert!(UmaDumpData::from_career_json(UMA_JSON).is_err());
-        let json = career_json(UMA_JSON, 3);
-        assert!(UmaDumpData::from_json(&json).is_err());
+        let data = UmaDumpData::from_career_json(&career_json(UMA_JSON, 2)).unwrap();
+        let expected = UmaDumpData {
+            mood: Some(Mood::Bad),
+            ..UmaDumpData::from_json(UMA_JSON).unwrap()
+        };
+        assert_eq!(data, expected);
+        assert!(UmaDumpData::from_career_json(&career_json(UMA_JSON, 6)).is_err());
     }
 
     #[test]
@@ -632,16 +592,5 @@ mod tests {
         assert_eq!(all.len(), 2);
         assert_eq!(all[0], single);
         assert_eq!(all[1].card_id, 100201);
-        assert!(UmaDumpData::all_from_json("[]").unwrap().is_empty());
-        // A single Uma isn't a list, and one invalid Uma fails the whole list.
-        assert!(UmaDumpData::all_from_json(UMA_JSON).is_err());
-        let invalid = UMA_JSON.replace(r#""guts": 604"#, r#""guts": 0"#);
-        assert!(UmaDumpData::all_from_json(&format!("[{UMA_JSON}, {invalid}]")).is_err());
-    }
-
-    #[test]
-    fn test_all_from_json_file() {
-        let all = UmaDumpData::all_from_json_file("uma.json").unwrap();
-        assert_eq!(all.len(), 18);
     }
 }

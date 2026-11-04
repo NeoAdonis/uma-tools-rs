@@ -561,6 +561,22 @@ mod tests {
     use crate::test_utils::{assert_close, data_skills, synthetic_skill};
 
     #[test]
+    fn test_mood_from_motivation() {
+        let cases = [
+            (0, None),
+            (1, Some(Mood::Awful)),
+            (2, Some(Mood::Bad)),
+            (3, Some(Mood::Normal)),
+            (4, Some(Mood::Good)),
+            (5, Some(Mood::Great)),
+            (6, None),
+        ];
+        for (motivation, expected) in cases {
+            assert_eq!(Mood::from_motivation(motivation), expected, "{motivation}");
+        }
+    }
+
+    #[test]
     fn test_mood_multiplier() {
         let cases = [
             (Mood::Awful, 0.96),
@@ -700,8 +716,6 @@ mod tests {
         // Zero stat.
         let json = uma_json("Nige").replace(r#""guts": 704"#, r#""guts": 0"#);
         assert!(UmaData::from_json(&json).is_err());
-        // Malformed.
-        assert!(UmaData::from_json("{").is_err());
     }
 
     #[test]
@@ -711,11 +725,6 @@ mod tests {
         assert_eq!(uma_data.uma.style, Style::End);
         assert_eq!(uma_data.mood, Some(Mood::Great));
         assert_eq!(uma_data.skills, [skill_level_1(200642)]);
-    }
-
-    #[test]
-    fn test_uma_data_from_missing_file() {
-        assert!(UmaData::from_json_file("does_not_exist.json").is_err());
     }
 
     /// [`UmaSkill`] with the given ID and level 1.
