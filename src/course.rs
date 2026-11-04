@@ -836,6 +836,17 @@ mod tests {
     }
 
     #[test]
+    fn test_is_basis_distance() {
+        for (distance, expected) in [(2000, true), (2400, true), (2100, false)] {
+            let course = Course {
+                distance,
+                ..crate::test_utils::synthetic_course()
+            };
+            assert_eq!(course.is_basis_distance(), expected, "{distance}m");
+        }
+    }
+
+    #[test]
     fn test_starting_lane_adjustment_by_racetrack() {
         let lane = CourseWidths::from_horse_lanes;
         // (racetrack, gate roll, expected lane in horse lanes)

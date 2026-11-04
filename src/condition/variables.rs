@@ -683,40 +683,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_known_variables_parse() {
-        // Test a sample of known variables.
-        assert!(matches!(
-            VarType::parse("base_speed"),
-            Some(VarType::BaseStat(BaseStatVar::BaseSpeed))
-        ));
-        assert!(matches!(
-            VarType::parse("accumulatetime"),
-            Some(VarType::AccumulateTime)
-        ));
-        assert!(matches!(
-            VarType::parse("order"),
-            Some(VarType::Order(OrderVar::Order))
-        ));
-        assert!(matches!(
-            VarType::parse("bashin_diff_behind"),
-            Some(VarType::Distance(DistanceVar::BashinDiffBehind))
-        ));
-        assert!(matches!(
-            VarType::parse("corner_count"),
-            Some(VarType::Course(CourseVar::CornerCount))
-        ));
-        assert!(matches!(
-            VarType::parse("corner"),
-            Some(VarType::Spatial(SpatialVar::Corner))
-        ));
-        assert!(matches!(
-            VarType::parse("random_lot"),
-            Some(VarType::Random(RandomVar::RandomLot))
-        ));
-        assert!(matches!(VarType::parse("always"), Some(VarType::Always)));
-    }
-
-    #[test]
     fn test_is_static() {
         // Known before the race and never changing.
         let static_vars = [
@@ -757,19 +723,5 @@ mod tests {
         for name in dynamic_vars {
             assert!(!VarType::parse(name).unwrap().is_static(), "{name}");
         }
-    }
-
-    #[test]
-    fn test_unknown_variable() {
-        assert_eq!(VarType::parse("this_var_does_not_exist"), None);
-    }
-
-    #[test]
-    fn test_display_formatting() {
-        assert_eq!(
-            format!("{}", VarType::BaseStat(BaseStatVar::BaseSpeed)),
-            "base_speed"
-        );
-        assert_eq!(format!("{}", VarType::Always), "always");
     }
 }

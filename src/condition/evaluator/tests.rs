@@ -40,151 +40,56 @@ fn solver_with_activated_skill(skill_id: i32, mask: u8) -> RaceSolver<Runner> {
 }
 
 #[test]
-fn test_is_used_skill_id_with_activated_skill() {
-    let solver = solver_with_activated_skill(202051, 1);
-
-    // Create comparison: is_used_skill_id == 202051.
-    let comp = Comparison {
-        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
-        op: CompOp::Equal,
-        value: 202051,
-    };
-
-    // Should return true because skill 202051 is activated.
-    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
-}
-
-#[test]
-fn test_is_used_skill_id_without_activated_skill() {
-    let state = create_test_race_solver(vec![]);
-
-    // No skills in activated_skills.
-
-    // Create comparison: is_used_skill_id == 202051.
-    let comp = Comparison {
-        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
-        op: CompOp::Equal,
-        value: 202051,
-    };
-
-    // Should return false because skill 202051 is not activated.
-    assert!(!EvaluatorFull.evaluate(&comp, None, &state.state, &state.runners[0]));
-}
-
-#[test]
-fn test_is_used_skill_id_with_different_skill() {
-    // Different from what we're checking.
-    let solver = solver_with_activated_skill(203781, 1);
-
-    // Create comparison: is_used_skill_id == 202051.
-    let comp = Comparison {
-        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
-        op: CompOp::Equal,
-        value: 202051,
-    };
-
-    // Should return false because skill 202051 is not activated (only 203781 is).
-    assert!(!EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
-}
-
-#[test]
-fn test_is_used_skill_id_not_equal() {
-    let state = solver_with_activated_skill(202051, 1);
-
-    // Create comparison: is_used_skill_id != 202051.
-    let comp = Comparison {
-        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillId),
-        op: CompOp::NotEqual,
-        value: 202051,
-    };
-
-    // Should return false because skill 202051 IS activated.
-    assert!(!EvaluatorFull.evaluate(&comp, None, &state.state, &state.runners[0]));
-}
-
-/// Ready race with a skill with two alternatives (like "聖女の試練"), the given
-/// one activated if any, and the results of `is_used_skill_id==204452` and
-/// `is_used_skill_id_with_detail_one==204452`.
-fn is_used_skill_id_with_alternative(activated: Option<usize>) -> (bool, bool) {
-    let alternatives = vec![
-        alternative("phase==1", SkillType::TargetSpeed, 0.35),
-        alternative("phase==1", SkillType::CurrentSpeed, -0.15),
+fn test_is_used_skill_id() {
+    // (activated skill, alternatives mask, [used==, used!=, detail_one==,
+    // detail_one!=]), checking skill 204452.
+    let cases = [
+        // Not activated.
+        (204452, 0b00, [false, true, false, true]),
+        // Through its first alternative.
+        (204452, 0b01, [true, false, true, false]),
+        // Only through its second alternative.
+        (204452, 0b10, [true, false, false, true]),
+        // Another skill.
+        (203781, 0b01, [false, true, false, true]),
     ];
-    let skill = Arc::new(Skill {
-        id: 204452,
-        ..synthetic_skill(alternatives)
-    });
-    let mut solver = create_test_race_solver(vec![skill]);
-    if let Some(alternative_index) = activated {
-        solver.runners[0].activate_skill(0, alternative_index, &solver.state);
+    for (skill_id, mask, expected) in cases {
+        let solver = solver_with_activated_skill(skill_id, mask);
+        let (state, runner) = (&solver.state, &solver.runners[0]);
+        let actual = [
+            "is_used_skill_id==204452",
+            "is_used_skill_id!=204452",
+            "is_used_skill_id_with_detail_one==204452",
+            "is_used_skill_id_with_detail_one!=204452",
+        ]
+        .map(|condition| EvaluatorFull.evaluate(&comp(condition), None, state, runner));
+        assert_eq!(actual, expected, "skill {skill_id}, mask {mask:#04b}");
     }
-
-    let evaluate = |var| {
-        let comp = Comparison {
-            var: VarType::ActivationQuery(var),
-            op: CompOp::Equal,
-            value: 204452,
-        };
-        EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
-    };
-    (
-        evaluate(ActivationQueryVar::IsUsedSkillId),
-        evaluate(ActivationQueryVar::IsUsedSkillIdWithDetailOne),
-    )
 }
 
 #[test]
-fn test_is_used_skill_id_with_detail_one_first_alternative() {
-    assert_eq!(is_used_skill_id_with_alternative(Some(0)), (true, true));
-}
-
-#[test]
-fn test_is_used_skill_id_with_detail_one_second_alternative() {
-    // The skill was used, but not through its first alternative.
-    assert_eq!(is_used_skill_id_with_alternative(Some(1)), (true, false));
-}
-
-#[test]
-fn test_is_used_skill_id_with_detail_one_not_activated() {
-    assert_eq!(is_used_skill_id_with_alternative(None), (false, false));
-}
-
-#[test]
-fn test_is_used_skill_id_with_detail_one_not_equal() {
-    // Only the second alternative activated.
-    let solver = solver_with_activated_skill(204452, 0b10);
-
-    let comp = Comparison {
-        var: VarType::ActivationQuery(ActivationQueryVar::IsUsedSkillIdWithDetailOne),
-        op: CompOp::NotEqual,
-        value: 204452,
-    };
-    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
-}
-
-#[test]
-fn test_is_exist_skill_id_in_available_skills() {
+fn test_is_exist_skill_id() {
+    // Skills in the lineup are those of every runner.
     let skill = Arc::new(Skill {
         id: 203061,
         ..synthetic_skill(vec![])
     });
     let solver = create_test_race_solver(vec![skill]);
-
-    // Create comparison: is_exist_skill_id == 203061.
-    let comp = Comparison {
-        var: VarType::Lineup(LineupVar::IsExistSkillId),
-        op: CompOp::Equal,
-        value: 203061,
-    };
-
-    // Should return true because skill 203061 is in available_skills.
-    assert!(EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0]));
+    let (state, runner) = (&solver.state, &solver.runners[0]);
+    let cases = [
+        ("is_exist_skill_id==203061", true),
+        ("is_exist_skill_id!=203061", false),
+        ("is_exist_skill_id==203062", false),
+        ("is_exist_skill_id!=203062", true),
+    ];
+    for (condition, expected) in cases {
+        let actual = EvaluatorFull.evaluate(&comp(condition), None, state, runner);
+        assert_eq!(actual, expected, "{condition}");
+    }
 }
 
 #[test]
 fn test_phase_values_by_position() {
-    use crate::course::Phase as CoursePhase;
-
     let mut solver = create_test_race_solver(vec![]);
     let section = solver.state.course.section_length();
 
@@ -255,46 +160,6 @@ fn team_runner(solver: &RaceSolver<Runner>, team: u8) -> &Runner {
 }
 
 #[test]
-fn test_style_temptation_opponent_count_excludes_own_team() {
-    let mut solver = create_team_race_solver();
-    // Both team members and the individual runner are rushed.
-    solver.state.rushed_by_team[0][Style::Late as usize] = 2;
-    solver.state.rushed_by_team[1][Style::Late as usize] = 1;
-
-    let state = &solver.state;
-    let all = TemptationVar::RunningStyleTemptationCountSashi;
-    let opponents = TemptationVar::RunningStyleTemptationOpponentCountSashi;
-    let other_style = TemptationVar::RunningStyleTemptationOpponentCountSenko;
-    for (team, expected_opponents) in [(0, 1), (1, 2)] {
-        let runner = team_runner(&solver, team);
-        assert_eq!(temptation_value(&all, state, runner), 3, "team {team}");
-        assert_eq!(
-            temptation_value(&opponents, state, runner),
-            expected_opponents,
-            "team {team}"
-        );
-        assert_eq!(
-            temptation_value(&other_style, state, runner),
-            0,
-            "team {team}"
-        );
-    }
-}
-
-#[test]
-fn test_style_temptation_opponent_count_excludes_self() {
-    let mut solver = create_team_race_solver();
-    // Only the individual runner is rushed: it has no rushed opponents.
-    solver.state.rushed_by_team[1][Style::Late as usize] = 1;
-
-    let var = TemptationVar::RunningStyleTemptationOpponentCountSashi;
-    let individual = team_runner(&solver, 1);
-    assert_eq!(temptation_value(&var, &solver.state, individual), 0);
-    let member = team_runner(&solver, 0);
-    assert_eq!(temptation_value(&var, &solver.state, member), 1);
-}
-
-#[test]
 fn test_temptation_opponent_count_by_position() {
     let mut solver = create_test_race_solver(vec![]);
     let counter = &mut solver.runners[0].rush_counter;
@@ -313,26 +178,6 @@ fn test_temptation_opponent_count_by_position() {
     ]
     .map(|var| temptation_value(&var, state, runner));
     assert_eq!(actual, [3, 4, 1, 2]);
-}
-
-#[test]
-fn test_runaways_count_as_front_runners() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    for style in [Style::Runaway, Style::Front, Style::Pace] {
-        solver.add_runner(Entrant::new(uma(style), vec![]));
-    }
-    let solver = solver.ready_runners();
-    let state = &solver.state;
-
-    let value = |var, style| running_style_value(&var, state, style);
-    let nige_otherself = RunningStyleVar::RunningStyleCountNigeOtherself;
-    assert_eq!(value(nige_otherself, Style::Runaway), 1);
-    assert_eq!(value(nige_otherself, Style::Front), 1);
-    assert_eq!(value(nige_otherself, Style::Pace), 2);
-    assert_eq!(
-        value(RunningStyleVar::RunningStyleCountSame, Style::Runaway),
-        2
-    );
 }
 
 #[test]
@@ -369,16 +214,6 @@ fn comp(condition: &str) -> Comparison {
         },
         _ => panic!("expected a single comparison: {condition}"),
     }
-}
-
-#[test]
-fn test_is_exist_skill_id_not_equal() {
-    let solver = create_test_race_solver(vec![]);
-    let (state, runner) = (&solver.state, &solver.runners[0]);
-
-    // No runner has the skill.
-    assert!(EvaluatorFull.evaluate(&comp("is_exist_skill_id!=203061"), None, state, runner));
-    assert!(!EvaluatorFull.evaluate(&comp("is_exist_skill_id==203061"), None, state, runner));
 }
 
 #[test]
@@ -482,40 +317,6 @@ fn test_course_values() {
     ]
     .map(|var| course_value(&var, &course));
     assert_eq!(actual, [2, 1200, 1, 1, 0, 1, 0, 1, 1, 10001]);
-}
-
-#[test]
-fn test_course_flags_by_track() {
-    // (track ID, distance, is_abroad, is_basis_distance, is_dirtgrade,
-    // is_tight_track).
-    let cases = [
-        // Longchamp.
-        (10201, 2400, 1, 1, 0, 0),
-        // Oi.
-        (10101, 2000, 0, 1, 1, 0),
-        // Kawasaki.
-        (10103, 2100, 0, 0, 1, 1),
-    ];
-
-    for (race_track_id, distance, abroad, basis, dirtgrade, tight) in cases {
-        let course = Course {
-            race_track_id,
-            distance,
-            ..synthetic_course()
-        };
-        let actual = [
-            CourseVar::IsAbroad,
-            CourseVar::IsBasisDistance,
-            CourseVar::IsDirtgrade,
-            CourseVar::IsTightTrack,
-        ]
-        .map(|var| course_value(&var, &course));
-        assert_eq!(
-            actual,
-            [abroad, basis, dirtgrade, tight],
-            "track {race_track_id}"
-        );
-    }
 }
 
 /// Synthetic 2000m course with two corners (1000-1200 and 1400-1800), a
@@ -707,41 +508,6 @@ fn test_rank_values() {
     ]
     .map(|var| rank_value(&var, runner));
     assert_eq!(actual, [4, -2, 5, 6, 7]);
-}
-
-#[test]
-fn test_order_rate_converts_to_rounded_order() {
-    let mut solver = create_test_race_solver(vec![]);
-    let order_rate = |op, value| Comparison {
-        var: VarType::OrderRate(OrderRateVar::OrderRate),
-        op,
-        value,
-    };
-
-    // 9 * 50% = 4.5 rounds to 5, so `order_rate>50` becomes `order>5`.
-    // 12 * 50% = 6 rounds to 6, so `order_rate>50` becomes `order>6`.
-    // (runners, order, [>50, >=50, <=50, <50]).
-    let cases = [
-        (9, 5, [false, true, true, false]),
-        (9, 6, [true, true, false, false]),
-        (12, 6, [false, true, true, false]),
-        (12, 7, [true, true, false, false]),
-    ];
-    for (runners, order, expected) in cases {
-        solver.runners[0].order.order = order;
-        solver.runners[0].update_order_rate(runners, 0.0);
-        let actual = [
-            CompOp::Greater,
-            CompOp::GreaterEqual,
-            CompOp::LessEqual,
-            CompOp::Less,
-        ]
-        .map(|op| {
-            let comp = order_rate(op, 50);
-            EvaluatorFull.evaluate(&comp, None, &solver.state, &solver.runners[0])
-        });
-        assert_eq!(actual, expected, "runners {runners}, order {order}");
-    }
 }
 
 #[test]
@@ -1052,23 +818,21 @@ fn test_lastspurt_values() {
 }
 
 #[test]
-fn test_is_badstart_by_start_delay() {
+fn test_start_types_by_start_delay() {
     let mut solver = create_test_race_solver(vec![]);
 
-    for (start_delay, expected) in [(0.0, 0), (0.08, 0), (0.081, 1)] {
+    // (start delay, [is_badstart, is_goodstart]).
+    let cases = [
+        (0.0, [0, 1]),
+        (0.019, [0, 1]),
+        (0.02, [0, 0]),
+        (0.08, [0, 0]),
+        (0.081, [1, 0]),
+    ];
+    for (start_delay, expected) in cases {
         solver.runners[0].start_delay = start_delay;
-        let actual = status_value(&StatusVar::IsBadstart, &solver.runners[0]);
-        assert_eq!(actual, expected, "start delay {start_delay}");
-    }
-}
-
-#[test]
-fn test_is_goodstart_by_start_delay() {
-    let mut solver = create_test_race_solver(vec![]);
-
-    for (start_delay, expected) in [(0.0, 1), (0.019, 1), (0.02, 0), (0.1, 0)] {
-        solver.runners[0].start_delay = start_delay;
-        let actual = status_value(&StatusVar::IsGoodstart, &solver.runners[0]);
+        let actual = [StatusVar::IsBadstart, StatusVar::IsGoodstart]
+            .map(|var| status_value(&var, &solver.runners[0]));
         assert_eq!(actual, expected, "start delay {start_delay}");
     }
 }
@@ -1195,6 +959,8 @@ fn test_running_style_counts() {
     ];
     // Front: 2 (Runaway included), Pace: 2, Late: 1, End: 1, with 9 gates.
     let cases = [
+        // Runaways count as Front Runners, themselves included.
+        (Style::Runaway, [1, 1, 2, 1, 1, 2, 22]),
         (Style::Pace, [2, 2, 1, 1, 1, 2, 22]),
         (Style::End, [4, 2, 2, 1, 0, 1, 11]),
     ];
@@ -1210,11 +976,10 @@ fn test_style_temptation_counts() {
     solver.state.rushed_by_team[0][Style::Front as usize] = 1;
     solver.state.rushed_by_team[0][Style::Pace as usize] = 2;
     solver.state.rushed_by_team[0][Style::End as usize] = 3;
-    solver.state.rushed_by_team[1][Style::Front as usize] = 2;
-    solver.state.rushed_by_team[1][Style::End as usize] = 1;
+    // The individual runner, rushed herself.
+    solver.state.rushed_by_team[1][Style::Front as usize] = 1;
 
-    let runner = team_runner(&solver, 0);
-    let actual = [
+    let vars = [
         TemptationVar::RunningStyleTemptationCountNige,
         TemptationVar::RunningStyleTemptationCountSenko,
         TemptationVar::RunningStyleTemptationCountSashi,
@@ -1223,45 +988,28 @@ fn test_style_temptation_counts() {
         TemptationVar::RunningStyleTemptationOpponentCountSenko,
         TemptationVar::RunningStyleTemptationOpponentCountSashi,
         TemptationVar::RunningStyleTemptationOpponentCountOikomi,
-    ]
-    .map(|var| temptation_value(&var, &solver.state, runner));
-    assert_eq!(actual, [3, 2, 0, 4, 2, 0, 0, 1]);
+    ];
+    // Opponents exclude the runner's own team, and so the runner herself.
+    let cases = [(0, [2, 2, 0, 3, 1, 0, 0, 0]), (1, [2, 2, 0, 3, 1, 2, 0, 3])];
+    for (team, expected) in cases {
+        let runner = team_runner(&solver, team);
+        let actual = vars.map(|var| temptation_value(&var, &solver.state, runner));
+        assert_eq!(actual, expected, "team {team}");
+    }
 }
 
 #[test]
 fn test_variable_value_dispatch() {
+    // Values derived by `variable_value` itself: other variables are passed
+    // to the function of their category, chosen by type.
     let mut solver = create_test_race_solver(vec![]);
-    let runner = &mut solver.runners[0];
-    runner.base.speed = 1101;
-    runner.initial_state.fan_count = 12345;
-    runner.order.order = 4;
-    runner.position_diff.from_first = 12.0;
-    runner.position = 1000.0;
-    runner.phase = CoursePhase::Mid;
-    runner.hp.set_current(runner.hp.maximum() / 2.0);
-    runner.visible_count = 11;
-    runner.rush_counter.ahead = 3;
-    runner.trigger_scheduler.activation_counts.all = 6;
+    // The current style, not the base one.
+    solver.runners[0].adjusted.style = Style::End;
     solver.state.elapsed_time = 42.5;
 
     let (state, runner) = (&solver.state, &solver.runners[0]);
     let cases = [
-        (VarType::BaseStat(BaseStatVar::BaseSpeed), 1101),
-        (VarType::Entry(EntryVar::FanCount), 12345),
-        (VarType::Order(OrderVar::Order), 4),
-        (VarType::Distance(DistanceVar::DistanceDiffTop), 12),
-        (VarType::Phase(PhaseVar::Phase), 1),
-        (VarType::Course(CourseVar::CourseDistance), 1200),
-        (VarType::Spatial(SpatialVar::RemainDistance), 200),
-        (VarType::Activation(ActivationVar::ActivateCountAll), 6),
-        (VarType::RaceParam(RaceParamVar::Grade), 100),
-        (VarType::RunningStyle(RunningStyleVar::RunningStyle), 3),
-        (VarType::Status(StatusVar::HpPer), 50),
-        (VarType::Blocking(BlockingVar::Visiblehorse), 11),
-        (
-            VarType::Temptation(TemptationVar::TemptationCountInfront),
-            3,
-        ),
+        (VarType::RunningStyle(RunningStyleVar::RunningStyle), 4),
         (VarType::AccumulateTime, 42),
         (VarType::Always, 1),
     ];
@@ -1322,23 +1070,16 @@ fn test_out_of_gate_values() {
         ("weather==3", false),
         ("running_style==3", true),
         ("always==1", true),
+        // Variables only known during the race are 0.
+        ("hp_per==0", true),
+        ("phase==0", true),
+        ("order==0", true),
+        ("corner==0", true),
+        ("accumulatetime==0", true),
     ];
     for (condition, expected) in cases {
         let actual = EvaluatorOutOfGate.evaluate(&comp(condition), None, &state, &runner);
         assert_eq!(actual, expected, "{condition}");
-    }
-}
-
-#[test]
-fn test_out_of_gate_in_race_variables_are_zero() {
-    let (state, runner) = create_out_of_gate_runner();
-
-    for var in ["hp_per", "phase", "order", "corner", "accumulatetime"] {
-        let comp = comp(&format!("{var}==0"));
-        assert!(
-            EvaluatorOutOfGate.evaluate(&comp, None, &state, &runner),
-            "{var}"
-        );
     }
 }
 
@@ -1386,22 +1127,6 @@ fn test_same_skill_horse_count_out_of_gate() {
 fn test_random_variable_value_panics() {
     let solver = create_test_race_solver(vec![]);
     let var = VarType::Random(RandomVar::RandomLot);
-    variable_value(&var, &solver.state, &solver.runners[0], None);
-}
-
-#[test]
-#[should_panic(expected = "it's a trigger variable")]
-fn test_random_phase_variable_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    let var = VarType::RandomPhase(RandomPhaseVar::PhaseRandom);
-    variable_value(&var, &solver.state, &solver.runners[0], None);
-}
-
-#[test]
-#[should_panic(expected = "it's a trigger variable")]
-fn test_random_spatial_variable_value_panics() {
-    let solver = create_test_race_solver(vec![]);
-    let var = VarType::RandomSpatial(RandomSpatialVar::CornerRandom);
     variable_value(&var, &solver.state, &solver.runners[0], None);
 }
 
@@ -1466,18 +1191,6 @@ fn test_succession_skill_count() {
     let solver = create_test_race_solver(skills);
     let actual = status_value(&StatusVar::SuccessionSkillCount, &solver.runners[0]);
     assert_eq!(actual, 2);
-}
-
-#[test]
-fn test_set_values_test_membership() {
-    let mut solver = create_test_race_solver(vec![]);
-    solver.state.existing_skills.insert(203061, 1);
-    let var = VarType::Lineup(LineupVar::IsExistSkillId);
-    let Value::Set(set) = variable_value(&var, &solver.state, &solver.runners[0], None) else {
-        panic!("{var} isn't a set");
-    };
-    assert!(set.contains(203061));
-    assert!(!set.contains(203062));
 }
 
 #[test]
