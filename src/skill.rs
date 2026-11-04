@@ -693,7 +693,7 @@ pub struct Skill {
     /// Popularity points granted by this skill to specific stats.
     ///
     /// `None` when missing from the skill data (outdated data), in which case
-    /// the points are estimated from the skill rarity and effects.
+    /// the skill adds no points.
     #[serde(default)]
     pub popularity: Option<Vec<SkillPopularity>>,
     /// Whether this skill requires a wit check to activate.

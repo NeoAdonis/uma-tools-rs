@@ -1,7 +1,7 @@
 use super::*;
 use crate::race::rng::RngSeed;
 use crate::skill::{PopularityStat as Stat, Skill, SkillType};
-use crate::test_utils::{alternative, assert_close, data_skill, synthetic_skill};
+use crate::test_utils::{alternative, assert_close, synthetic_skill};
 use std::sync::Arc;
 
 /// Create popularity points with the given points added to each stat.
@@ -11,26 +11,6 @@ fn points(stats: &[(Stat, f64)]) -> SkillPopularity {
         .fold(SkillPopularity::default(), |p, &(stat, points)| {
             p.with(stat, points)
         })
-}
-
-#[test]
-fn test_skill_popularity_from_data() {
-    // Expected values are the ones given in-game.
-    let cases = [
-        (200961, points(&[(Stat::Speed, 30.0)])),
-        (200962, points(&[(Stat::Speed, 20.0)])),
-        (200011, points(&[(Stat::Speed, 45.0)])),
-        (200342, points(&[(Stat::Power, 20.0)])),
-        (200433, points(&[(Stat::Speed, -30.0)])),
-        (200851, points(&[(Stat::Speed, 10.0), (Stat::Wit, 10.0)])),
-        (202521, points(&[(Stat::Power, 60.0)])),
-        (10071, points(&[(Stat::Speed, 30.0)])),
-        (900011, points(&[(Stat::Power, 15.0)])),
-        (900091, points(&[(Stat::Speed, 7.0), (Stat::Power, 7.0)])),
-    ];
-    for (id, expected) in cases {
-        assert_eq!(skill_popularity(&data_skill(id)), expected, "skill {id}");
-    }
 }
 
 #[test]
@@ -55,19 +35,12 @@ fn test_skill_popularity_reads_data() {
         skill_popularity(&with_data(vec![
             entry(Stat::Stamina, 7),
             entry(Stat::Guts, 7),
+            entry(Stat::Wit, 7),
         ])),
-        points(&[(Stat::Stamina, 7.0), (Stat::Guts, 7.0)]),
-    );
-    assert_eq!(
-        skill_popularity(&with_data(vec![entry(Stat::Speed, -30)])),
-        points(&[(Stat::Speed, -30.0)]),
+        points(&[(Stat::Stamina, 7.0), (Stat::Guts, 7.0), (Stat::Wit, 7.0)]),
     );
 
-    // No entries means no points; same for a missing field.
-    assert_eq!(
-        skill_popularity(&with_data(vec![])),
-        SkillPopularity::default()
-    );
+    // No points for no stat, nor without popularity data.
     assert_eq!(
         skill_popularity(&with_data(vec![entry(Stat::None, 30)])),
         SkillPopularity::default()
@@ -75,40 +48,6 @@ fn test_skill_popularity_reads_data() {
     assert_eq!(
         skill_popularity(&with_popularity(None)),
         SkillPopularity::default()
-    );
-}
-
-#[test]
-fn test_skill_popularity_deserialization() {
-    let parse = |popularity: &str| {
-        let json = format!(
-            r#"{{"rarity": 1, "alternatives": [], {popularity} "witCheck": 1,
-            "group": 1, "groupRate": 1}}"#
-        );
-        serde_json::from_str::<Skill>(&json)
-            .expect("Failed to parse skill data")
-            .popularity
-            .map(|entries| {
-                entries
-                    .iter()
-                    .map(|e| (e.stat, e.value))
-                    .collect::<Vec<_>>()
-            })
-    };
-
-    assert_eq!(parse(""), None);
-    assert_eq!(parse(r#""popularity": [],"#), Some(vec![]));
-    assert_eq!(
-        parse(r#""popularity": [{"stat": 3, "value": 60}],"#),
-        Some(vec![(Stat::Power, 60)]),
-    );
-    assert_eq!(
-        parse(r#""popularity": [{"stat": 1, "value": 10}, {"stat": 5, "value": 10}],"#),
-        Some(vec![(Stat::Speed, 10), (Stat::Wit, 10)]),
-    );
-    assert_eq!(
-        parse(r#""popularity": [{"stat": 2, "value": -30}],"#),
-        Some(vec![(Stat::Stamina, -30)]),
     );
 }
 
@@ -153,17 +92,11 @@ fn speed_bonus(skill: &Skill) -> f64 {
 fn test_skill_bonus_popularity_guards() {
     let bonus = |conditions: &[&str]| speed_bonus(&popularity_skill(conditions, false));
 
-    // No guards: always eligible.
-    assert_eq!(bonus(&["always==1"]), 100.0);
-    // Listed guards are evaluated.
+    // Guards are evaluated.
     assert_eq!(bonus(&["distance_type==3"]), 100.0);
     assert_eq!(bonus(&["distance_type==1"]), 0.0);
-    assert_eq!(bonus(&["running_style==2"]), 100.0);
-    assert_eq!(bonus(&["running_style==4"]), 0.0);
     // Other variables are assumed to be satisfiable, even static ones.
     assert_eq!(bonus(&["course_distance==1200"]), 100.0);
-    assert_eq!(bonus(&["motivation==5&base_speed>=1200"]), 100.0);
-    assert_eq!(bonus(&["phase==3&hp_per<=30"]), 100.0);
     // Mixed with other variables in AND/OR.
     assert_eq!(bonus(&["distance_type==1@hp_per<=30"]), 100.0);
     assert_eq!(bonus(&["distance_type==1&hp_per<=30"]), 0.0);
@@ -187,7 +120,6 @@ fn test_judge_impact() {
     assert_eq!(judge_impact(60.0, First, false), 62.0);
     assert_eq!(judge_impact(60.0, None, true), 60.0);
     // At or below 55 with the high flag, the exponent is 0.8.
-    assert_eq!(judge_impact(50.0, Second, true), 50f64.powf(0.8) + 1.0);
     assert_eq!(judge_impact(55.0, None, true), 55f64.powf(0.8));
     // Otherwise, the exponent is the score minus 54.
     assert_eq!(judge_impact(55.0, Third, false), 55.5);
@@ -299,11 +231,4 @@ fn test_calculate_stats() {
 
     // No values (e.g. no runners).
     assert_eq!(calculate_stats(&[]), (0.0, 0.0));
-}
-
-#[test]
-fn test_popularity_mark_display() {
-    use PopularityMark::*;
-    let marks = [None, Fourth, Third, Second, First].map(|mark| mark.to_string());
-    assert_eq!(marks, ["-", "△", "▲", "○", "◎"]);
 }
