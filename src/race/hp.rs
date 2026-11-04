@@ -198,3 +198,77 @@ pub(crate) fn estimate_hp_last_spurt(
     );
     hp_per_second * time
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::{assert_close, synthetic_course};
+
+    #[test]
+    fn test_max_hp() {
+        // 2000m course.
+        let max_hp = calculate_max_hp(Style::Pace, 1000, &synthetic_course());
+        assert_close!(max_hp, 0.8 * 0.89 * 1000.0 + 2000.0);
+    }
+
+    #[test]
+    fn test_hp_per_second() {
+        use Phase::*;
+        use Track::*;
+        use TrackCondition::*;
+
+        // At the base speed of the 2000m course (20 m/s) on firm turf, before
+        // the Late race and with no status: 20 HP/s.
+        let cases = [
+            ("base", 20.0, Turf, Firm, Mid, 1.0, 20.0),
+            (
+                "faster",
+                26.0,
+                Turf,
+                Firm,
+                Mid,
+                1.0,
+                20.0 * 18.0 * 18.0 / 144.0,
+            ),
+            // 600 guts: 1 + 200 / 600.
+            (
+                "guts",
+                20.0,
+                Turf,
+                Firm,
+                Late,
+                1.0,
+                20.0 * (1.0 + 1.0 / 3.0),
+            ),
+            ("ground", 20.0, Dirt, Soft, Mid, 1.0, 20.0 * 1.01),
+            ("status", 20.0, Turf, Firm, Mid, 1.6, 20.0 * 1.6),
+        ];
+        for (case, speed, surface, condition, phase, status, expected) in cases {
+            let course = Course {
+                surface,
+                ..synthetic_course()
+            };
+            let actual = calculate_hp_per_second(speed, &course, condition, phase, 600, status);
+            assert_close!(actual, expected, "{case}");
+        }
+    }
+
+    #[test]
+    fn test_recover_is_capped_at_maximum() {
+        let mut hp = HpState::new(1000.0);
+        hp.consume(300.0);
+        hp.recover(500.0);
+        assert_eq!(hp.current(), 1000.0);
+    }
+
+    #[test]
+    fn test_has_emptied_stays_after_recovery() {
+        let mut hp = HpState::new(1000.0);
+        hp.consume(999.0);
+        assert!(!hp.has_emptied());
+        hp.consume(1.0);
+        assert!(hp.is_empty() && hp.has_emptied());
+        hp.recover(100.0);
+        assert!(!hp.is_empty() && hp.has_emptied());
+    }
+}
