@@ -32,7 +32,7 @@ use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::condition::parser::Condition;
+use crate::condition::parser::{Comparison, ComparisonList, Condition};
 use crate::condition::variables::{ActivationVar, VarType};
 use crate::configuration::Language;
 use crate::uma::Style;
@@ -608,9 +608,11 @@ fn deserialize_condition<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Condition, D::Error> {
     let condition = String::deserialize(deserializer)?;
-    condition
-        .parse()
-        .map_err(|e| D::Error::custom(format!("invalid condition '{condition}': {e}")))
+    let invalid =
+        |e: &dyn fmt::Display| D::Error::custom(format!("invalid condition '{condition}': {e}"));
+    let parsed = condition.parse().map_err(|e| invalid(&e))?;
+    check_events(&parsed).map_err(|e| invalid(&e))?;
+    Ok(parsed)
 }
 
 /// Parse a precondition string while deserializing. An empty string means
@@ -622,10 +624,30 @@ fn deserialize_precondition<'de, D: Deserializer<'de>>(
     if precondition.is_empty() {
         return Ok(None);
     }
-    precondition
-        .parse()
-        .map(Some)
-        .map_err(|e| D::Error::custom(format!("invalid precondition '{precondition}': {e}")))
+    let invalid = |e: &dyn fmt::Display| {
+        D::Error::custom(format!("invalid precondition '{precondition}': {e}"))
+    };
+    let parsed: Condition = precondition.parse().map_err(|e| invalid(&e))?;
+    check_events(&parsed).map_err(|e| invalid(&e))?;
+    // Preconditions aren't rolled (see `crate::trigger::skill_activation`).
+    if parsed.branches.iter().flatten().any(Comparison::is_random) {
+        return Err(invalid(
+            &"random variables aren't supported in preconditions",
+        ));
+    }
+    Ok(Some(parsed))
+}
+
+/// Check that no branch of a condition has more than one event (see
+/// [`Comparison::is_event`]): the trigger system checks a branch at the points
+/// of its event, so it can't tell which event they come from.
+fn check_events(condition: &Condition) -> Result<(), &'static str> {
+    let has_many_events =
+        |branch: &ComparisonList| branch.iter().filter(|comp| comp.is_event()).count() > 1;
+    if condition.branches.iter().any(has_many_events) {
+        return Err("more than one event in a branch");
+    }
+    Ok(())
 }
 
 /// Stat that can receive popularity points from a skill.
@@ -849,7 +871,8 @@ impl SkillData {
 }
 
 /// Why a skill in the skill data couldn't be loaded, e.g. a condition with an
-/// unknown variable or an unknown effect type (see [`SkillData::unsupported`]).
+/// unknown variable or more than one event in a branch, or an unknown effect
+/// type (see [`SkillData::unsupported`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SkillDataError(String);
 
@@ -982,6 +1005,31 @@ mod tests {
         assert!(alternative("phase>=", "").is_err());
         assert!(alternative("phase>=2&", "").is_err());
         assert!(alternative("phase>=2", "order<=").is_err());
+    }
+
+    #[test]
+    fn test_alternatives_with_unsupported_events_are_errors() {
+        // (condition, precondition, accepted).
+        let cases = [
+            // Events in separate branches.
+            ("phase_random==1@is_last_straight_onetime==1", "", true),
+            // Activation comparisons that aren't events.
+            ("is_activate_any_skill==0&phase_random==1", "", true),
+            ("is_activate_any_skill==1&phase_random==1", "", false),
+            // Also in the precondition.
+            ("phase>=2", "phase>=2&is_last_straight_onetime==1", true),
+            (
+                "phase>=2",
+                "is_activate_heal_skill==1&is_last_straight_onetime==1",
+                false,
+            ),
+            // Preconditions aren't rolled.
+            ("phase>=2", "random_lot==50", false),
+        ];
+        for (condition, precondition, accepted) in cases {
+            let result = alternative(condition, precondition);
+            assert_eq!(result.is_ok(), accepted, "{condition} / {precondition}");
+        }
     }
 
     #[test]

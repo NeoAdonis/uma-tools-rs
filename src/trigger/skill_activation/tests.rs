@@ -5,9 +5,7 @@ use crate::condition::parser::{CompOp, Condition};
 use crate::course::geometry::*;
 use crate::race::rng::RngSeed;
 use crate::skill::*;
-use crate::test_utils::{
-    alternative, assert_close, data_skills, synthetic_course, synthetic_skill,
-};
+use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
 use crate::trigger::system::TriggerScheduler;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -450,16 +448,6 @@ fn test_branches_use_their_own_rolls() {
     assert_eq!(guards(&branches[0]), vec!["distance_type == 2"]);
 }
 
-// Checked by a debug assertion.
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic(expected = "random variables in a condition without rolls")]
-fn test_random_variables_need_rolls() {
-    // Preconditions aren't rolled.
-    let condition = Condition::from_str("random_lot==50").unwrap();
-    compile_condition(&condition, &[], &create_test_course());
-}
-
 #[test]
 fn test_segments_are_trimmed_to_the_branch() {
     // Corner 3 of the test course is [500-700].
@@ -479,43 +467,6 @@ fn test_segments_are_trimmed_to_the_branch() {
     // No segment on the corner: the branch can never be satisfied.
     let rolls = [Some(vec![95.0, 900.0])];
     assert!(compile_condition(&condition, &rolls, &course).is_empty());
-}
-
-#[test]
-fn test_one_event_per_branch() {
-    // Each branch of an OR can hold its own event.
-    assert_eq!(
-        compile("phase_random==1@is_last_straight_onetime==1").len(),
-        2
-    );
-    // Evaluable activation comparisons aren't events.
-    compile_one("is_activate_any_skill==0&phase_random==1");
-}
-
-// Checked by a debug assertion.
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic(expected = "more than one event in a branch")]
-fn test_multiple_events_in_a_branch_panic() {
-    // With several random variables, the rolled points would be merged, turning
-    // the AND into an OR.
-    compile_one("is_activate_any_skill==1&phase_random==1");
-}
-
-#[test]
-fn test_skill_data_conditions_compile() {
-    // Checks the assertions of `compile_condition` on every skill.
-    let course = create_test_course();
-    for skill in data_skills().skills() {
-        for alternative in &skill.alternatives {
-            let condition = &alternative.condition;
-            let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
-            compile_condition(condition, &rolls, &course);
-            if let Some(precondition) = &alternative.precondition {
-                compile_condition(precondition, &[], &course);
-            }
-        }
-    }
 }
 
 #[test]

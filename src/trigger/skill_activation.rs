@@ -24,7 +24,7 @@
 //! The trigger of a branch is chosen as follows:
 //!
 //! 1. **Event trigger**, if the branch contains an event (at most one per
-//!    branch in the skill data):
+//!    branch: skills with more are rejected when loaded):
 //!    - A random variable: its rolled segments
 //!      ([`TriggerCondition::Segments`]), trimmed to the position range of the
 //!      rest of the branch (see [`random`](crate::trigger::random)), or the
@@ -87,10 +87,8 @@
 //!   whole race instead.
 //! - Unlock logics are added before the logics they unlock, so an event firing
 //!   both unlocks the skill first.
-//! - They aren't rolled: random variables aren't expected in them. Otherwise, a
-//!   branch with a variable rolled into segments is dropped, `random_lot` is
-//!   ignored, and `run_at_full_speed_random` becomes an all-out spurt start
-//!   trigger, rolled during the race like in conditions.
+//! - They aren't rolled: skills with random variables in their preconditions
+//!   are rejected when loaded.
 //!
 //! ## Examples
 //!
@@ -329,10 +327,11 @@ pub(crate) fn compile_condition(
             let points = match rolls.get(idx) {
                 // Failed roll: never satisfied.
                 Some(roll) => roll.as_deref()?,
-                // Not rolled: random variables would be ignored.
+                // Not rolled: random variables would be ignored. Skills with
+                // them in their preconditions are rejected when loaded.
                 None => {
                     debug_assert!(
-                        !comps.iter().any(is_random),
+                        !comps.iter().any(Comparison::is_random),
                         "random variables in a condition without rolls: {comps:?}"
                     );
                     &[]
@@ -349,9 +348,10 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
     use VarType::*;
 
     // The rolled points of a branch don't tell which comparison they come from,
-    // so they can only belong to its single event.
+    // so they can only belong to its single event. Skills with more events in a
+    // branch are rejected when loaded.
     debug_assert!(
-        comps.iter().filter(|comp| is_event(comp)).count() <= 1,
+        comps.iter().filter(|comp| comp.is_event()).count() <= 1,
         "more than one event in a branch: {comps:?}"
     );
 
@@ -389,8 +389,8 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
             // Skill activations: only true on frames where a skill activated.
             // Unlike the events above, these can be evaluated, so they stay as guards.
             Activation(_) | ActivationQuery(_) => {
-                if let Some(activation_event) = activation_event(comp) {
-                    event = Some(activation_event);
+                if comp.is_event() {
+                    event = Some(activation_event(comp));
                 }
                 guards.push(comp.clone());
             }
@@ -442,46 +442,16 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
     Some(CompiledBranch { trigger, guards })
 }
 
-/// Whether a comparison is on a random variable, rolled when building the
-/// scheduler.
-fn is_random(comp: &Comparison) -> bool {
-    use VarType::*;
-
-    matches!(comp.var, Random(_) | RandomSpatial(_) | RandomPhase(_))
-}
-
-/// Whether a comparison is an event: only true at specific points (random
-/// segments, entering the last straight, skill activations), so it's the
-/// trigger of its branch.
-fn is_event(comp: &Comparison) -> bool {
-    use VarType::*;
-
+/// Trigger of an event on skill activations (see [`Comparison::is_event`]).
+fn activation_event(comp: &Comparison) -> TriggerCondition {
     match comp.var {
-        RandomSpatial(_) | RandomPhase(_) | Spatial(SpatialVar::IsLastStraightOnetime) => true,
-        Activation(_) | ActivationQuery(_) => activation_event(comp).is_some(),
-        _ => false,
-    }
-}
-
-/// Trigger of a comparison on skill activations, if it's an event.
-fn activation_event(comp: &Comparison) -> Option<TriggerCondition> {
-    match (&comp.var, comp.op, comp.value) {
-        (VarType::Activation(ActivationVar::IsActivateAnySkill), CompOp::Equal, 1) => {
-            Some(TriggerCondition::AnySkillActivation)
+        VarType::Activation(ActivationVar::IsActivateAnySkill) => {
+            TriggerCondition::AnySkillActivation
         }
-        (VarType::Activation(ActivationVar::IsActivateHealSkill), CompOp::Equal, 1) => {
-            Some(TriggerCondition::HealSkillActivation)
+        VarType::Activation(ActivationVar::IsActivateHealSkill) => {
+            TriggerCondition::HealSkillActivation
         }
-        // The value is the effect type of the advantage skill.
-        (
-            VarType::ActivationQuery(
-                ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill
-                | ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill,
-            ),
-            CompOp::Equal,
-            _,
-        ) => Some(TriggerCondition::BuffSkillActivation),
-        _ => None,
+        _ => TriggerCondition::BuffSkillActivation,
     }
 }
 

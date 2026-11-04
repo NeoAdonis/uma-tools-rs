@@ -49,7 +49,7 @@
 //! ```
 
 use crate::condition::variables::{
-    ActivationQueryVar, LineupVar, RandomSpatialVar, SpatialVar, VarType,
+    ActivationQueryVar, ActivationVar, LineupVar, RandomSpatialVar, SpatialVar, VarType,
 };
 use crate::skill::SkillType;
 use std::fmt;
@@ -196,6 +196,41 @@ fn parse_comparison(input: &str) -> Result<Comparison, ParseError> {
 }
 
 impl Comparison {
+    /// Whether the comparison is on a random variable, rolled when building the
+    /// trigger scheduler (see [`crate::trigger::random`]).
+    pub(crate) fn is_random(&self) -> bool {
+        use VarType::*;
+
+        matches!(self.var, Random(_) | RandomSpatial(_) | RandomPhase(_))
+    }
+
+    /// Whether the comparison is an event: only true at specific points (random
+    /// segments, entering the last straight, skill activations), so it's the
+    /// trigger of its branch (see [`crate::trigger::skill_activation`]).
+    pub(crate) fn is_event(&self) -> bool {
+        use VarType::*;
+
+        match (&self.var, self.op, self.value) {
+            (RandomSpatial(_) | RandomPhase(_), _, _)
+            | (Spatial(SpatialVar::IsLastStraightOnetime), _, _) => true,
+            (
+                Activation(ActivationVar::IsActivateAnySkill | ActivationVar::IsActivateHealSkill),
+                CompOp::Equal,
+                1,
+            ) => true,
+            // The value is the effect type of the advantage skill.
+            (
+                ActivationQuery(
+                    ActivationQueryVar::IsOtherCharacterActivateAdvantageSkill
+                    | ActivationQueryVar::IsPopularityTopCharacterActivateAdvantageSkill,
+                ),
+                CompOp::Equal,
+                _,
+            ) => true,
+            _ => false,
+        }
+    }
+
     /// Whether the evaluator can evaluate this comparison.
     ///
     /// Variables that use the comparison value as parameter (e.g. a skill ID),

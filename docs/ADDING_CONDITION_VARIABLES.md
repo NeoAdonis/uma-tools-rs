@@ -71,10 +71,10 @@ which needs no new code in the runner.
 
 1. Add the variable as a regular variable (steps 1 and 2 above).
 2. Add a `TriggerCondition` variant in `src/trigger/skill_activation.rs`. Make
-   `is_event` return true for the variable, and produce the trigger in
-   `compile_branch`. If the variable can't be evaluated, don't add it to the
-   guards, and make the evaluator panic on it; otherwise, keep it as a guard
-   too, like skill activation events.
+   `Comparison::is_event` (`src/condition/parser.rs`) return true for the
+   variable, and produce the trigger in `compile_branch`. If the variable can't
+   be evaluated, don't add it to the guards, and make the evaluator panic on it;
+   otherwise, keep it as a guard too, like skill activation events.
 3. Store the trigger in the scheduler (`index_trigger` in
    `src/trigger/builder.rs`), in a structure that fits how it fires
    (`WindowQueue` for ranges over a value that never decreases, a list for
