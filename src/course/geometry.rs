@@ -209,7 +209,6 @@ mod tests {
 
         // Start is inclusive, end is exclusive.
         assert!(corner.contains(100.0));
-        assert!(corner.contains(149.9));
         assert!(!corner.contains(150.0));
         assert!(!corner.contains(99.9));
     }

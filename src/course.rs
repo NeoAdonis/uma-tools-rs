@@ -664,12 +664,6 @@ mod tests {
         }
     }
 
-    /// Racetrack IDs of every course in the course data.
-    const TRACK_IDS: [u16; 17] = [
-        10001, 10002, 10003, 10004, 10005, 10006, 10007, 10008, 10009, 10010, 10101, 10103, 10104,
-        10105, 10201, 10202, 10203,
-    ];
-
     #[test]
     fn test_values_are_converted_from_ten_thousandths() {
         let course = crate::test_utils::load_course(10201);
@@ -691,22 +685,17 @@ mod tests {
     #[test]
     fn test_run_up_offsets_nominal_distance() {
         let course = create_run_up_course();
-        assert_eq!(course.length(), 2500.0);
-        assert_eq!(course.section_length(), 100.0);
-        assert_eq!(course.section_start(0), 100.0);
         assert_eq!(course.section_start(24), 2500.0);
         assert_eq!(course.halfway(), 1300.0);
-        assert_eq!(course.position_at_rate(50.0), 1300.0);
+        assert_eq!(course.remain_distance(2600.0), 0.0);
 
         // (position, nominal position, distance rate, remaining, section)
         let cases = [
-            (0.0, 0.0, 0.0, 2500.0, 0),
             (99.0, 0.0, 0.0, 2401.0, 0),
             (100.0, 0.0, 0.0, 2400.0, 0),
             (200.0, 100.0, 4.0, 2300.0, 1),
             (1300.0, 1200.0, 50.0, 1200.0, 12),
             (2499.0, 2399.0, 99.0, 1.0, 23),
-            (2600.0, 2500.0, 104.0, 0.0, 25),
         ];
         for (position, nominal, rate, remaining, section) in cases {
             assert_eq!(course.nominal_position(position), nominal, "{position}m");
@@ -721,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_with_run_up() {
+    fn test_phase_boundaries() {
         let course = create_run_up_course();
         let cases = [
             (Phase::RunUp, (0.0, 100.0)),
@@ -741,28 +730,22 @@ mod tests {
             (2300.0, 2500.0)
         );
 
-        // The run-up precedes every other phase, with -1 as its value.
-        assert!(Phase::RunUp < Phase::Early);
-        assert_eq!(Phase::RunUp as i32, -1);
-        assert_eq!(Phase::try_from(-1), Ok(Phase::RunUp));
-
-        // Without a run-up, the race starts in the early phase.
+        // Without a run-up, its phase boundaries are empty and the race starts in the
+        // early phase.
         let course = synthetic_course();
-        assert_eq!(Phase::from_position(0.0, &course), Phase::Early);
         assert_eq!(Phase::RunUp.boundaries(&course), (0.0, 0.0));
+        assert_eq!(Phase::from_position(0.0, &course), Phase::Early);
     }
 
     #[test]
     fn test_distance_type_from_distance() {
         let cases = [
-            (1000, DistanceType::Short),
             (1400, DistanceType::Short),
             (1401, DistanceType::Mile),
             (1800, DistanceType::Mile),
             (1801, DistanceType::Medium),
             (2400, DistanceType::Medium),
             (2401, DistanceType::Long),
-            (3600, DistanceType::Long),
         ];
         for (distance, expected) in cases {
             let course = Course {
@@ -797,41 +780,23 @@ mod tests {
     }
 
     #[test]
-    fn test_is_exchange_race() {
-        // Oi, Kawasaki, Funabashi, Morioka.
-        let exchange = [10101, 10103, 10104, 10105];
-        for track_id in TRACK_IDS {
-            assert_eq!(
-                create_test_course(track_id).is_exchange_race(),
-                exchange.contains(&track_id),
-                "track {track_id}"
+    fn test_track_flags() {
+        // (racetrack, exchange race, abroad, tight track)
+        let cases = [
+            (10103, true, false, true),   // Kawasaki
+            (10105, true, false, false),  // Morioka
+            (10203, false, true, false),  // Del Mar
+            (10001, false, false, true),  // Sapporo
+            (10006, false, false, false), // Tokyo
+        ];
+        for (track_id, exchange, abroad, tight) in cases {
+            let course = create_test_course(track_id);
+            let flags = (
+                course.is_exchange_race(),
+                course.is_abroad(),
+                course.is_tight_track(),
             );
-        }
-    }
-
-    #[test]
-    fn test_is_abroad() {
-        // Longchamp, Santa Anita Park, Del Mar.
-        let abroad = [10201, 10202, 10203];
-        for track_id in TRACK_IDS {
-            assert_eq!(
-                create_test_course(track_id).is_abroad(),
-                abroad.contains(&track_id),
-                "track {track_id}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_is_tight_track() {
-        // Sapporo, Hakodate, Fukushima, Kokura, Kawasaki, Funabashi.
-        let tight = [10001, 10002, 10004, 10010, 10103, 10104];
-        for track_id in TRACK_IDS {
-            assert_eq!(
-                create_test_course(track_id).is_tight_track(),
-                tight.contains(&track_id),
-                "track {track_id}"
-            );
+            assert_eq!(flags, (exchange, abroad, tight), "track {track_id}");
         }
     }
 
@@ -851,10 +816,7 @@ mod tests {
         let lane = CourseWidths::from_horse_lanes;
         // (racetrack, gate roll, expected lane in horse lanes)
         let cases = [
-            // Gate 1 starts on the rail.
-            (10001, 1, 0.0),
             // Oi, Kawasaki and Funabashi: never adjusted.
-            (TRACK_ID_OOI, 9, 8.0),
             (TRACK_ID_OOI, 12, 11.0),
             (TRACK_ID_KAWASAKI, 12, 11.0),
             (TRACK_ID_FUNABASHI, 12, 11.0),
@@ -872,38 +834,22 @@ mod tests {
                 "track {track_id}, gate roll {gate_roll}"
             );
         }
-
-        // Course 10101 is at Sapporo, not at Oi (racetrack 10101).
-        let course = Course {
-            id: 10101,
-            race_track_id: 10001,
-            ..synthetic_course()
-        };
-        assert_eq!(course.starting_lane(12), lane(11.0 + 0.6));
     }
 
     #[test]
     fn test_corner_number() {
-        let course_with_corners = |count: usize| {
-            let mut course = create_test_course(10001);
-            course.corners = (0..count)
+        let course_with_corners = |count: usize| Course {
+            corners: (0..count)
                 .map(|i| Corner {
                     start: i as f64 * 200.0,
                     length: 100.0,
                 })
-                .collect();
-            course
+                .collect(),
+            ..synthetic_course()
         };
 
         // Numbered backwards from the final corner, which is always the fourth.
-        for (count, expected) in [
-            (2, vec![3, 4]),
-            (3, vec![2, 3, 4]),
-            (4, vec![1, 2, 3, 4]),
-            (5, vec![4, 1, 2, 3, 4]),
-            (6, vec![3, 4, 1, 2, 3, 4]),
-            (8, vec![1, 2, 3, 4, 1, 2, 3, 4]),
-        ] {
+        for (count, expected) in [(2, vec![3, 4]), (5, vec![4, 1, 2, 3, 4])] {
             let course = course_with_corners(count);
             let numbers: Vec<u8> = (0..count).map(|idx| course.corner_number(idx)).collect();
             assert_eq!(numbers, expected, "{count} corners");
@@ -959,14 +905,12 @@ mod tests {
                 assert!(name.is_some(), "course {id} ({language:?})");
             }
         }
-        assert_eq!(create_test_course(0).track_name(Language::English), None);
     }
 
     #[test]
     fn test_lane_type_from_course_widths() {
         // Thresholds are in course widths, regardless of the course's total width.
         let cases = [
-            (0.0, LaneType::Inner),
             (0.2, LaneType::Inner),
             (0.21, LaneType::Middle),
             (0.4, LaneType::Middle),

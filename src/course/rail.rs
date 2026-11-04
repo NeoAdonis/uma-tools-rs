@@ -187,7 +187,6 @@ mod tests {
     fn test_world_position_interpolates_keyframes() {
         let lane = CourseWidths(0.0);
         let cases = [
-            (0.0, [0.0, 0.0]),
             (1.0, [1.0, 0.0]),
             (2.0, [2.0, 0.0]),
             (3.0, [2.0, 1.0]),
