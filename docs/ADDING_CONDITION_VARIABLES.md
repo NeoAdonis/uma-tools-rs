@@ -18,11 +18,11 @@ Whatever the kind, also:
 
 ## Regular Variable
 
-1. Add it to its category enum in `src/condition/variables.rs` (or to a new
-   category in `VarType`), and map its name in `VarType::parse`. The `Display`
-   of category enums is derived from the variant name in snake case, so the
-   variant must mirror the condition name exactly (e.g. `Visiblehorse` for
-   `visiblehorse`).
+1. Add it to its category enum in `src/condition/variables.rs`. Names are
+   parsed and displayed from the variant name in snake case, so the variant
+   must mirror the condition name exactly (e.g. `Visiblehorse` for
+   `visiblehorse`). A new category in `VarType` is defined with `category!`
+   like the others, and added to `VarType::parse`.
 2. If its value is a set whose comparisons test membership (e.g. of a skill
    ID), or the variable is a flag, restrict the operators and values it
    supports in `Comparison::is_supported` (`src/condition/parser.rs`), so that
@@ -47,9 +47,9 @@ Whatever the kind, also:
 ## Random Variable
 
 1. Add it to `RandomPhaseVar` or `RandomSpatialVar` in
-   `src/condition/variables.rs`, and map its name in `VarType::parse`. Pure
-   probability rolls go in `RandomVar` instead, like `random_lot`. The parser
-   already restricts every variable in these categories to `==`.
+   `src/condition/variables.rs`. Pure probability rolls go in `RandomVar`
+   instead, like `random_lot`. The parser already restricts every variable in
+   these categories to `==`.
 2. Roll it in `process_random_comp` (`src/trigger/random.rs`): return the start
    of each picked 10m segment (use `random_segment` /
    `random_segment_in_intervals`), or `None` if it can't be rolled on this
