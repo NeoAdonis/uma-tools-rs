@@ -67,7 +67,7 @@ Tests check behavior, not lines: a test is worth keeping when it asserts somethi
 - **Every test can fail:** A test whose assertions hold whatever the code does is removed. Compile-time checks and `#[should_panic]` tests count.
 - **Game constants:** Where possible, test a constant through a behavior it visibly changes. Otherwise, when a table is the specification, one case per shared arm is enough to guard against typos.
 - **What not to test:** Mappings between our own types, what the compiler already guarantees, behavior the game never produces, and errors from libraries that `?` merely forwards. Code that swallows a library error does so explicitly, and gets a test.
-- **Invalid input:** Test what our code decides is invalid (validation, custom deserializers, fallbacks), with cases on both sides of each boundary.
+- **Invalid input:** Test what our code decides is invalid (validation, custom deserializers, fallbacks), with cases on both sides of each boundary. Assert the reason in the error message (the part our code writes), so a case can't pass by failing for another reason, but not text added by libraries, such as serde's location.
 - **Data assumptions:** Assumptions about data files are checked when loading them, so unsupported data is rejected with an error rather than by a `debug_assert!`. Each data file has a single compatibility test (e.g. `test_skill_data_is_supported`).
 - **No mocks:** Tests use real types and data, building whatever they need.
 

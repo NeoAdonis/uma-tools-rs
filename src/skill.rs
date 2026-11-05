@@ -1005,33 +1005,58 @@ mod tests {
 
     #[test]
     fn test_invalid_alternative_conditions_are_errors() {
+        let error = |condition, precondition| {
+            alternative(condition, precondition)
+                .unwrap_err()
+                .to_string()
+        };
         // Empty conditions are not allowed, unlike empty preconditions.
-        assert!(alternative("", "").is_err());
-        assert!(alternative("phase>=2", "order<=").is_err());
+        assert!(error("", "").contains("invalid condition '': "));
+        assert!(error("phase>=2", "order<=").contains("invalid precondition 'order<=': "));
     }
 
     #[test]
     fn test_alternatives_with_unsupported_events_are_errors() {
-        // (condition, precondition, accepted).
+        const MANY_EVENTS: &str = "more than one event in a branch";
+        // (condition, precondition, reason it's rejected, if it is).
         let cases = [
             // Events in separate branches.
-            ("phase_random==1@is_last_straight_onetime==1", "", true),
+            ("phase_random==1@is_last_straight_onetime==1", "", None),
             // Activation comparisons that aren't events.
-            ("is_activate_any_skill==0&phase_random==1", "", true),
-            ("is_activate_any_skill==1&phase_random==1", "", false),
+            ("is_activate_any_skill==0&phase_random==1", "", None),
+            (
+                "is_activate_any_skill==1&phase_random==1",
+                "",
+                Some(MANY_EVENTS),
+            ),
             // Also in the precondition.
-            ("phase>=2", "phase>=2&is_last_straight_onetime==1", true),
+            ("phase>=2", "phase>=2&is_last_straight_onetime==1", None),
             (
                 "phase>=2",
                 "is_activate_heal_skill==1&is_last_straight_onetime==1",
-                false,
+                Some(MANY_EVENTS),
             ),
             // Preconditions aren't rolled.
-            ("phase>=2", "random_lot==50", false),
+            (
+                "phase>=2",
+                "random_lot==50",
+                Some("random variables aren't supported in preconditions"),
+            ),
         ];
-        for (condition, precondition, accepted) in cases {
-            let result = alternative(condition, precondition);
-            assert_eq!(result.is_ok(), accepted, "{condition} / {precondition}");
+        for (condition, precondition, reason) in cases {
+            let error = alternative(condition, precondition)
+                .err()
+                .map(|e| e.to_string());
+            match (reason, error) {
+                (None, None) => {}
+                (Some(reason), Some(error)) => {
+                    assert!(
+                        error.contains(reason),
+                        "{condition} / {precondition}: {error}"
+                    );
+                }
+                (_, error) => panic!("{condition} / {precondition}: {error:?}"),
+            }
         }
     }
 
