@@ -1656,6 +1656,41 @@ fn test_fov_bonus_extends_visibility_and_overtake_targets() {
     assert_eq!(solver.runners[1].visible_count, 1);
     assert!(solver.runners[1].is_in_overtake_mode());
     assert_close!(solver.runners[0].being_overtake_target_time, DELTA_TIME);
+
+    // Right at the edge of a 30m field of view.
+    let mut solver = far_ahead_solver(10.0);
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[1].visible_count, 1);
+}
+
+#[test]
+fn test_behind_in_checks_only_the_runner_right_behind() {
+    let cases: [(&[(f64, f64)], bool); 3] = [
+        (&[(599.0, 0.2)], true),
+        (&[(599.0, 0.3)], false),
+        (&[(599.0, 0.4), (598.0, 0.1)], false),
+    ];
+    for (behind, expected) in cases {
+        let mut runners = vec![(Style::Pace, 600.0, 0.3)];
+        runners.extend(
+            behind
+                .iter()
+                .map(|&(position, lane)| (Style::Pace, position, lane)),
+        );
+        let mut solver = struggle_solver(&runners, GameVersion::LATEST);
+        solver.update_blocking_status(DELTA_TIME);
+        assert_eq!(solver.runners[0].nearby.behind_in, expected, "{behind:?}");
+    }
+}
+
+#[test]
+fn test_runners_close_behind_are_counted() {
+    let mut solver = struggle_solver(
+        &[(Style::Pace, 600.0, 0.2), (Style::Pace, 596.0, 0.2)],
+        GameVersion::LATEST,
+    );
+    solver.update_blocking_status(DELTA_TIME);
+    assert_eq!(solver.runners[0].nearby.behind_set1_count, 1);
 }
 
 #[test]
