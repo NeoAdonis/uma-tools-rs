@@ -532,7 +532,8 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
         }
         (Spatial(SpatialVar::Furlong), op, value) => {
             let (min, max) = floored_range(op, value);
-            (furlongs_to_meters(min), furlongs_to_meters(max))
+            let position = |furlongs| course.run_up + furlongs_to_meters(furlongs);
+            (position(min), position(max))
         }
 
         // Union of the phases that satisfy the comparison.

@@ -205,6 +205,28 @@ fn test_position_window_ranges() {
 }
 
 #[test]
+fn test_position_windows_start_after_the_run_up() {
+    // Positions are measured from the gate, while these variables measure the
+    // nominal distance, after the run-up.
+    let course = Course {
+        run_up: 100.0,
+        ..create_test_course()
+    };
+    let furlong = crate::units::FURLONG_TO_METERS;
+    let cases = [
+        ("furlong==5", (100.0 + 5.0 * furlong, 100.0 + 6.0 * furlong)),
+        ("distance_rate>=50", (1100.0, f64::INFINITY)),
+    ];
+    for (condition, (min, max)) in cases {
+        let parsed = Condition::from_str(condition).unwrap();
+        let branches = compile_condition(&parsed, &[Some(vec![])], &course);
+        let (_, actual_min, actual_max) = window(&branches[0]);
+        assert_close!(actual_min, min, "{condition}");
+        assert_close!(actual_max, max, "{condition}");
+    }
+}
+
+#[test]
 fn test_time_and_hp_windows() {
     // Used when the branch doesn't depend on the position.
     let cases = [
