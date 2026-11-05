@@ -774,6 +774,62 @@ impl RaceSolver<Runner> {
     ///
     /// Returns whether every runner has finished. Finish margins are recorded
     /// on the frame the last runner finishes, as [`Self::run`] does.
+    ///
+    /// # Examples
+    ///
+    /// Check who leads halfway through the race, which [`Self::run`] can't
+    /// tell, as it only leaves the final results:
+    ///
+    /// ```
+    /// use uma_tools::{
+    ///     Configuration, Course, RaceParametersData, RaceSolver, SkillData,
+    ///     UmaData,
+    /// };
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/rails");
+    /// # let course_id = &parameters.course_id;
+    /// # let course = Course::from_json_files(courses, rails, course_id)?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// // Same stats, but a front runner and an end closer.
+    /// let uma = |strategy| {
+    ///     let json = format!(
+    ///         r#"{{
+    ///             "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    ///             "wisdom": 1200, "strategy": "{strategy}",
+    ///             "distanceAptitude": "S", "surfaceAptitude": "A",
+    ///             "strategyAptitude": "A", "skills": []
+    ///         }}"#
+    ///     );
+    ///     UmaData::from_json(&json)
+    /// };
+    /// let halfway = course.halfway();
+    /// let config = Configuration {
+    ///     seed: Some(42),
+    ///     ..Configuration::default()
+    /// };
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// let front = solver.add_runner(uma("Nige")?.to_entrant(&all_skills)?);
+    /// let closer = solver.add_runner(uma("Oikomi")?.to_entrant(&all_skills)?);
+    /// let mut solver = solver.ready_runners();
+    ///
+    /// // Runners are ordered by position after every frame, leader first.
+    /// while solver.runners()[0].position < halfway {
+    ///     solver.step_frame();
+    /// }
+    /// assert!(solver.runner(front).position > solver.runner(closer).position);
+    ///
+    /// // The rest of the race can still be run at once.
+    /// solver.run();
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn step_frame(&mut self) -> bool {
         if self.runners.iter().all(Runner::has_finished) {
             return true;

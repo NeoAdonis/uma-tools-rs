@@ -865,6 +865,40 @@ impl SkillData {
     }
 
     /// Why each skill that couldn't be loaded was rejected, by ID.
+    ///
+    /// # Examples
+    ///
+    /// Report the skills that won't be simulated, e.g. skills from a newer
+    /// game version whose conditions use variables that aren't supported yet:
+    ///
+    /// ```
+    /// use uma_tools::SkillData;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// // Like Professor of Curvature, but with a new variable.
+    /// let json = r#"{"900001": {
+    ///     "alternatives": [{
+    ///         "baseCooldown": 300000, "baseDuration": 24000,
+    ///         "condition": "new_variable==1", "durationScaling": 1,
+    ///         "effects": [{
+    ///             "modifier": 3500, "target": {"type": 1, "value": 0},
+    ///             "type": 27, "valueScaling": 1
+    ///         }],
+    ///         "precondition": ""
+    ///     }],
+    ///     "group": 90000, "groupRate": 1, "popularity": [],
+    ///     "rarity": 2, "witCheck": 1
+    /// }}"#;
+    /// let all_skills = SkillData::from_json(json)?;
+    /// for (id, reason) in all_skills.unsupported() {
+    ///     println!("Skill {id} won't be simulated: {reason}");
+    /// }
+    /// assert!(all_skills.get(900001).is_none());
+    /// let reason = all_skills.unsupported()[&900001].to_string();
+    /// assert!(reason.contains("new_variable"));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn unsupported(&self) -> &BTreeMap<i32, SkillDataError> {
         &self.unsupported
     }
