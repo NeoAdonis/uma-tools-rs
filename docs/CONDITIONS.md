@@ -632,9 +632,9 @@ Checks if you're currently surrounded.
 
 *Note:* You're being surrounded if there are other uma musume that fulfill the following conditions:
 
-— No more than 3 meters ahead of you, and less than 1.5 lanes difference between you
-— No more than 3 meters behind you, and less than 1.5 lanes difference between you
-— Less than 1.5 meters behind or ahead of you, and less than 3 lanes difference between you, but not the same lane
+- No more than 3 meters ahead of you, and less than 1.5 lanes difference between you
+- No more than 3 meters behind you, and less than 1.5 lanes difference between you
+- Less than 1.5 meters behind or ahead of you, and less than 3 lanes difference between you, but not the same lane
 
 In simpler terms, this will usually mean that there's an uma in front of you, behind you, and next to you. It's technically possible for one girl to fulfill two of these conditions (someone passing you from the adjacent line), so two umas can still surround you.
 
