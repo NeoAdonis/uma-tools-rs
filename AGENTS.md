@@ -7,7 +7,7 @@ This project contains a Rust library with functions and data structures aimed at
 - Worse is better: Prioritize simplicity and ease of implementation over complexity and completeness.
 - DRY (Don't Repeat Yourself) and AHA (Avoid Hasty Abstractions): Avoid redundancy by reusing code wherever possible without adding unnecessary abstraction.
 - Performance: Optimize for speed and efficiency to handle large-scale simulations effectively.
-- Testing: Implement thorough testing to ensure correctness and reliability of the simulations and analyses. Use `cargo llvm-cov` as you deem fit to check coverage.
+- Testing: Test behavior, not lines. Every test asserts something no other test does and can fail; data-driven tests carry the bulk, while focused tests cover exact values, boundaries and errors. Coverage only points at candidates.
 - Refactor freely: the project is early-stage with no backward-compatibility guarantees, so prefer a clean reimplementation over patching, as long as it respects the principles above.
 - Documentation lives with the code: doc comments are the primary documentation, with separate documents only when needed. Document what the code can't say by itself, not what it already says, and keep it up to date. Fix any mismatch you find, after checking which side matches the intended behavior.
 
@@ -20,6 +20,7 @@ Follow the style conventions in [`STYLE.md`](./STYLE.md), especially for code co
 - Prefer line comments (`//`, `///`, `//!`).
 - Comment lines are at most 80 characters long (sigils included, indentation excluded), without exceeding the global line limit. Run `scripts/check_comment_width.pl` to verify it.
 - Follow the API design rules in [`STYLE.md`](./STYLE.md), based on the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/), when changing the public API.
+- Follow the testing rules in [`STYLE.md`](./STYLE.md#testing) when writing or removing tests. When removing them, compare coverage before and after, and give a reason for any newly uncovered line.
 
 ## API design decisions
 

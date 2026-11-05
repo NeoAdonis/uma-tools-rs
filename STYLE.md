@@ -55,6 +55,47 @@ Rules:
 - **Errors** ([C-GOOD-ERR](https://rust-lang.github.io/api-guidelines/interoperability.html#c-good-err)): Public error types implement `std::error::Error` and `Display`, and their messages say what was rejected.
 - **Documentation** ([C-FAILURE](https://rust-lang.github.io/api-guidelines/documentation.html#c-failure)): Public functions that can fail or panic document it in `# Errors` and `# Panics` sections.
 
+## Testing
+
+Tests check behavior, not lines: a test is worth keeping when it asserts something no other test or doc example asserts. Coverage tools show which code runs, not which values are checked, so they can only point at candidates.
+
+### What to test
+
+- **New assertions only:** Before adding a test, check that no other test already asserts the same thing. Repeating an assertion at a different level counts as new: a solver or integration test may check that a unit is wired in, with one case past each threshold, leaving the boundaries to the unit tests.
+- **Broad and focused tests:** Data-driven tests (e.g. every skill in the data) carry the bulk. Focused tests cover what they can't check: exact values, boundaries, formula terms, formatting and errors.
+- **Every test can fail:** A test whose assertions hold whatever the code does is removed. Compile-time checks and `#[should_panic]` tests count.
+- **Game constants:** Where possible, test a constant through a behavior it visibly changes. Otherwise, when a table is the specification, one case per shared arm is enough to guard against typos.
+- **What not to test:** Mappings between our own types, what the compiler already guarantees, behavior the game never produces, and errors from libraries that `?` merely forwards. Code that swallows a library error does so explicitly, and gets a test.
+- **Invalid input:** Test what our code decides is invalid (validation, custom deserializers, fallbacks), with cases on both sides of each boundary.
+- **Data assumptions:** Assumptions about data files are checked when loading them, so unsupported data is rejected with an error rather than by a `debug_assert!`. Each data file has a single compatibility test (e.g. `test_skill_data_is_supported`).
+- **No mocks:** Tests use real types and data, building whatever they need.
+
+### Structure
+
+- One test per behavior, named after it (`test_start_dash_caps_speed_at_its_end`).
+- From about three cases with the same call shape, use a table of `(inputs, expected)` tuples, a loop, and a message naming the inputs (`assert_eq!(actual, expected, "{input:?}")`). Fewer cases use plain assertions. If a table ends up with unrelated rows, split it into tests named after each rule.
+- Sibling one-line formulas may share a test.
+- Use `assert_eq!` for exact values, such as constants, and `assert_close!` for computed floats.
+
+### Data in tests
+
+- Tests may rely on data that doesn't change once released, such as course geometry or names.
+- Data the game revises, such as skill values, is only read through helpers in `test_utils` (e.g. `data_skill`), so a data update breaks tests in one place. When a rule depends on such data, build the data in the test instead.
+
+### Coverage
+
+Full coverage isn't a goal. Code can stay uncovered when a bug there would be harmless or obvious, or when testing it would cost more than the code itself. For example:
+
+- Display-only output.
+- Arms that differ from a tested one only by a constant.
+- Arms the compiler forces but the game never reaches.
+- Code only reached by doc examples, when test data is hard to find.
+- Defensive paths, such as `debug_assert!` failures.
+
+Doc examples count as tests, even though stable `cargo llvm-cov` can't measure them. A unit test may repeat a doc example's behavior only with different data, and only if it checks something new.
+
+When removing tests, compare coverage before and after (see [CONTRIBUTING.md](CONTRIBUTING.md)). Any newly uncovered line needs a reason, either one of the cases above or one stated in the commit message.
+
 ## Commit messages
 
 Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
