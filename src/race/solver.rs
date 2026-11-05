@@ -43,6 +43,12 @@ pub const FINISH_TIME_SCALE: f64 = 1.18;
 /// second).
 pub const DELTA_TIME: f64 = 1.0 / 15.0;
 
+/// Upper bound on a race's duration in seconds, checked in debug builds to
+/// catch races that never end (e.g. a broken speed). The slowest race is the
+/// longest course (3600m) at the minimum speed with 1 guts, about 230s,
+/// rounded up to whole minutes.
+const MAX_RACE_TIME: f64 = 240.0;
+
 /// Speed used to convert scaled finish time differences into margins, in m/s.
 const MARGIN_SPEED: f64 = 15.0;
 
@@ -835,6 +841,10 @@ impl RaceSolver<Runner> {
             return true;
         }
         self.step(DELTA_TIME);
+        debug_assert!(
+            self.state.elapsed_time < MAX_RACE_TIME,
+            "race didn't end in {MAX_RACE_TIME}s"
+        );
         let finished = self.runners.iter().all(Runner::has_finished);
         if finished {
             self.update_finish_margins();
