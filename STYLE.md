@@ -67,6 +67,8 @@ them. Its `--fix` flag fixes most issues, but not line length:
 
 - Lines are at most 80 characters long. Paragraphs and list items are wrapped
   by hand, with list continuations indented to the item's text.
+- Links stay on a single line, so break the line before a link rather than
+  inside it.
 - A line may only go beyond the limit when nothing past it can be wrapped, such
   as a long link.
 
