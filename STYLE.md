@@ -58,6 +58,18 @@ set of lints, so `cargo clippy` can be called as-is. When a lint doesn't apply
 to a specific case, it can be silenced on the affected item with an
 `#[allow(clippy::...)]` attribute.
 
+## Markdown
+
+Markdown documents follow the default
+[markdownlint](https://github.com/DavidAnson/markdownlint) rules, configured in
+`.markdownlint-cli2.jsonc`, so `markdownlint-cli2` can be called as-is to check
+them. Its `--fix` flag fixes most issues, but not line length:
+
+- Lines are at most 80 characters long. Paragraphs and list items are wrapped
+  by hand, with list continuations indented to the item's text.
+- A line may only go beyond the limit when nothing past it can be wrapped, such
+  as a long link.
+
 ## API design
 
 The public API follows the [Rust API

@@ -36,6 +36,8 @@ comments. In short:
 - Comment lines are at most 80 characters long (sigils included, indentation
   excluded), without exceeding the global line limit. Run
   `scripts/check_comment_width.pl` to verify it.
+- Markdown documents follow the default markdownlint rules, with lines wrapped
+  at 80 characters. Run `markdownlint-cli2` to verify them.
 - Follow the API design rules in [`STYLE.md`](./STYLE.md), based on the [Rust
   API Guidelines](https://rust-lang.github.io/api-guidelines/), when changing
   the public API.
