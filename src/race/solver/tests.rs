@@ -982,17 +982,6 @@ fn test_spot_struggle_not_before_first_anniversary() {
     assert_eq!(strugglers(&solver), [false, false]);
 }
 
-/// Solver with one runner per `(style, position)` on a 1200m course, in the
-/// sections where secure lead and compete before spurt can happen.
-fn boost_solver(runners: &[(Style, f64)]) -> RaceSolver<Runner> {
-    let mut solver = positioning_solver(runners, GameVersion::LATEST);
-    for i in 0..solver.runners.len() {
-        let position = solver.runners[i].position;
-        place(&mut solver, i, position, 0.1);
-    }
-    solver
-}
-
 #[test]
 fn test_is_alone_counts_same_style_within_distance() {
     let cases = [
@@ -1003,7 +992,10 @@ fn test_is_alone_counts_same_style_within_distance() {
         (Style::Front, 595.0, 1, false),
     ];
     for (style, position, i, expected) in cases {
-        let solver = boost_solver(&[(Style::Front, 600.0), (style, position)]);
+        let solver = struggle_solver(
+            &[(Style::Front, 600.0, 0.2), (style, position, 0.2)],
+            GameVersion::LATEST,
+        );
         let actual = solver.is_alone(i, 10.0);
         assert_eq!(actual, expected, "{style:?} at {position}m, runner {i}");
     }
@@ -1023,11 +1015,15 @@ fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
             .collect()
     };
     let is_active = |boost: &&TimedBoost| matches!(boost, TimedBoost::Active { .. });
+    let pace_behind = |position| {
+        let runners = [(Style::Front, 600.0, 0.2), (Style::Pace, position, 0.2)];
+        struggle_solver(&runners, GameVersion::LATEST)
+    };
 
-    let mut solver = boost_solver(&[(Style::Front, 600.0), (Style::Pace, 600.0 - lead - 0.1)]);
+    let mut solver = pace_behind(600.0 - lead - 0.1);
     assert!(!checks(&mut solver).iter().any(|boost| is_active(&boost)));
 
-    let mut solver = boost_solver(&[(Style::Front, 600.0), (Style::Pace, 600.0 - lead + 0.1)]);
+    let mut solver = pace_behind(600.0 - lead + 0.1);
     let boost = *checks(&mut solver).iter().find(is_active).unwrap();
     // Alone: the Pace runner has another style.
     let guts = solver.runners[0].adjusted.guts;
@@ -1039,7 +1035,13 @@ fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
 fn test_compete_before_spurt_when_far_from_first() {
     let threshold = compete_before_spurt::lead_threshold(Style::Front, 1200.0);
     for (behind, expected) in [(threshold + 0.1, true), (threshold - 0.1, false)] {
-        let mut solver = boost_solver(&[(Style::Runaway, 610.0), (Style::Front, 610.0 - behind)]);
+        let mut solver = struggle_solver(
+            &[
+                (Style::Runaway, 610.0, 0.2),
+                (Style::Front, 610.0 - behind, 0.2),
+            ],
+            GameVersion::LATEST,
+        );
         for runner in &mut solver.runners {
             // Never enter Stamina Keep, the only random roll.
             runner.stamina_keep.ratio = 0.0;
