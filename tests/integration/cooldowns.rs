@@ -36,13 +36,6 @@ fn run(condition: &str, base_cooldown: f64) -> Runner {
 }
 
 #[test]
-fn test_default_cooldown_activates_once() {
-    // Always true, checked every frame.
-    let runner = run("hp_per<=100", DEFAULT_COOLDOWN);
-    assert_eq!(runner.activated_skills.len(), 1);
-}
-
-#[test]
 fn test_short_cooldown_reactivates() {
     let base_cooldown = 5.0;
     let runner = run("hp_per<=100", base_cooldown);
@@ -73,7 +66,8 @@ fn test_short_cooldown_reactivates() {
 
 #[test]
 fn test_or_branches_share_cooldown() {
-    // Both branches are true for the whole race.
+    // Both branches are true for the whole race, and the default cooldown
+    // outlasts it.
     let runner = run("hp_per<=100@distance_rate>=0", DEFAULT_COOLDOWN);
     assert_eq!(runner.activated_skills.len(), 1);
 }

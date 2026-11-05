@@ -10,9 +10,8 @@ use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::RaceSolver;
 use uma_tools::uma::*;
 
-#[test]
-fn test_multi_runner_race_simulation() {
-    let course = load_course(10101);
+/// Final position and time of every runner of a 9-runner race, in gate order.
+fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
     let styles = [
         Style::Runaway,
         Style::Front,
@@ -24,8 +23,33 @@ fn test_multi_runner_race_simulation() {
         Style::End,
         Style::End,
     ];
+    let params = RaceParameters {
+        gates: styles.len() as u8,
+        ..race_params()
+    };
+    let config = Configuration {
+        game_version,
+        ..seeded_config(seed)
+    };
+    let mut solver = RaceSolver::new(load_course(10101), params, config);
+    for style in styles {
+        solver.add_runner(Entrant::new(uma(style), vec![]));
+    }
+    let mut solver = solver.ready_runners();
+    solver.run();
 
-    // Every game version toggles different components during a full race
+    let mut runners: Vec<_> = solver
+        .runners()
+        .iter()
+        .map(|runner| (runner.gate_roll, runner.position))
+        .collect();
+    runners.sort_by_key(|(gate, _)| *gate);
+    (solver.state.finish_time, runners)
+}
+
+#[test]
+fn test_races_finish_and_are_reproducible() {
+    // Every game version toggles different components during a full race.
     let game_versions = [
         GameVersion::Original,
         GameVersion::FirstAnniversary,
@@ -34,87 +58,24 @@ fn test_multi_runner_race_simulation() {
         GameVersion::MechaUmaUpdate,
         GameVersion::FifthAnniversary,
     ];
-
-    for (game_version, seed) in game_versions
-        .into_iter()
-        .flat_map(|b| (0..5).map(move |s| (b, s)))
-    {
-        let config = Configuration {
-            game_version,
-            ..seeded_config(seed)
-        };
-        let params = RaceParameters {
-            gates: styles.len() as u8,
-            ..race_params()
-        };
-        let mut solver = RaceSolver::new(course.clone(), params, config);
-        for style in styles {
-            solver.add_runner(Entrant::new(uma(style), vec![]));
+    for game_version in game_versions {
+        for seed in 0..5 {
+            let result = race(game_version, seed);
+            assert!(result.0.is_some(), "{game_version:?}, seed {seed}");
+            assert_eq!(
+                result,
+                race(game_version, seed),
+                "{game_version:?}, seed {seed}"
+            );
         }
-        let mut solver = solver.ready_runners();
-        solver.run();
-        assert!(
-            solver.state.finish_time.is_some(),
-            "{game_version:?}, seed {seed}"
-        );
     }
 }
 
+/// Solvers can be moved to and shared between threads, e.g. to simulate races
+/// or analyze results in parallel.
 #[test]
-fn test_same_seed_gives_same_race() {
-    let styles = [
-        Style::Runaway,
-        Style::Front,
-        Style::Front,
-        Style::Pace,
-        Style::Pace,
-        Style::Late,
-        Style::Late,
-        Style::End,
-        Style::End,
-    ];
-
-    // Final position and time of every runner, in gate order
-    let race = |seed: u64| {
-        let course = load_course(10101);
-        let params = RaceParameters {
-            gates: styles.len() as u8,
-            ..race_params()
-        };
-        let config = seeded_config(seed);
-        let mut solver = RaceSolver::new(course, params, config);
-        for style in styles {
-            solver.add_runner(Entrant::new(uma(style), vec![]));
-        }
-        let mut solver = solver.ready_runners();
-        solver.run();
-
-        let mut runners: Vec<_> = solver
-            .runners()
-            .iter()
-            .map(|runner| (runner.gate_roll, runner.position))
-            .collect();
-        runners.sort_by_key(|(gate, _)| *gate);
-        (solver.state.finish_time, runners)
-    };
-
-    for seed in 0..5 {
-        assert_eq!(race(seed), race(seed), "seed {seed}");
-    }
-}
-
-/// Solvers can be moved to other threads, e.g. to simulate races in parallel.
-#[test]
-fn test_solvers_are_send() {
-    fn assert_send<T: Send>() {}
-    assert_send::<RaceSolver<Entrant>>();
-    assert_send::<RaceSolver<Runner>>();
-}
-
-/// Solvers can be shared between threads, e.g. to analyze results in parallel.
-#[test]
-fn test_solvers_are_sync() {
-    fn assert_sync<T: Sync>() {}
-    assert_sync::<RaceSolver<Entrant>>();
-    assert_sync::<RaceSolver<Runner>>();
+fn test_solvers_are_send_and_sync() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<RaceSolver<Entrant>>();
+    assert_send_sync::<RaceSolver<Runner>>();
 }

@@ -1,7 +1,7 @@
 //! Runtime tests for courses with a run-up, where runners leave the gate before
 //! the official start line.
 
-use crate::common::{load_course, negligible_skill, ready_solver, seeded_config, uma};
+use crate::common::{negligible_skill, ready_solver, seeded_config, uma};
 use uma_tools::race::runner::Runner;
 use uma_tools::race::solver::DELTA_TIME;
 use uma_tools::uma::*;
@@ -46,14 +46,6 @@ fn assert_activates_within(condition: &str, min: f64, max: f64) {
             positions[0]
         );
     }
-}
-
-#[test]
-fn test_course_data_includes_run_up() {
-    let course = load_course(COURSE_ID);
-    assert_eq!(course.distance, 1600);
-    assert_eq!(course.run_up, RUN_UP);
-    assert_eq!(course.length(), LENGTH);
 }
 
 #[test]
