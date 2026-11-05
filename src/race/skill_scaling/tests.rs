@@ -53,21 +53,6 @@ fn test_medium_distance_bonus() {
 }
 
 #[test]
-fn test_cinderella_gray_bonus() {
-    let arima = ARIMA_KINEN_COURSE_ID;
-    let cases = [
-        (10101, DistanceType::Mile, 0, 0.1),
-        (10101, DistanceType::Medium, 200000, 0.0),
-        (arima, DistanceType::Long, 146737, 0.0),
-        (arima, DistanceType::Long, 146738, 0.2),
-    ];
-    for (course_id, distance_type, fans, expected) in cases {
-        let actual = cinderella_gray_bonus(course_id, distance_type, fans);
-        assert_eq!(actual, expected, "{course_id} {distance_type:?} {fans}");
-    }
-}
-
-#[test]
 fn test_bashin_from_first_bonus() {
     assert_eq!(bashin_from_first_bonus(7.9), 0.0);
     assert_eq!(bashin_from_first_bonus(8.0), 0.2);

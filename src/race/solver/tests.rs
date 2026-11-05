@@ -2362,6 +2362,40 @@ fn test_continuation_of_out_of_gate_alternative_activates_during_race() {
 }
 
 #[test]
+fn test_later_alternative_activates_again_after_cooldown() {
+    let alternatives = vec![
+        alternative("accumulatetime>=999", SkillType::TargetSpeed, 0.15),
+        SkillAlternative {
+            base_cooldown: 30.0,
+            ..alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15)
+        },
+    ];
+    let skill = Arc::new(synthetic_skill(alternatives));
+    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    solver.run();
+    assert!(solver.runners[0].activated_skills.len() > 1);
+}
+
+#[test]
+fn test_hp_triggers_activate_within_their_range() {
+    // (condition, HP percentage, whether the skill activates).
+    let cases = [
+        ("hp_per>=50", 49.9, false),
+        ("hp_per>=50", 50.0, true),
+        ("hp_per<=30", 30.9, true),
+        ("hp_per<=30", 31.0, false),
+    ];
+    for (condition, percent, activates) in cases {
+        let skills = vec![skill(1, condition, SkillType::TargetSpeed, 0.15)];
+        let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+        set_hp_percent(&mut solver, 0, percent);
+        solver.runners[0].check_skills(&mut solver.state);
+        let activated = !solver.runners[0].activated_skills.is_empty();
+        assert_eq!(activated, activates, "{condition} at {percent}%");
+    }
+}
+
+#[test]
 fn test_forced_activation_disables_other_alternatives() {
     let alternatives = vec![
         alternative("accumulatetime>=999", SkillType::TargetSpeed, 0.15),
@@ -2953,6 +2987,36 @@ fn test_fan_count_scaling() {
 }
 
 #[test]
+fn test_cinderella_gray_scaling() {
+    // "Cinderella Gray" Oguri Cap's unique skill: its first alternative has
+    // the scaling and the second one doesn't, with otherwise equal effects.
+    // (course, fan count, bonus).
+    let cases = [
+        (10502, 1, 0.1),      // Nakayama 1600m (Mile).
+        (10504, 200000, 0.0), // Nakayama 2000m (Medium).
+        (10506, 146737, 0.0), // Arima Kinen, just below the fan count threshold.
+        (10506, 146738, 0.2), // Arima Kinen, just above the fan count threshold.
+    ];
+    for (course_id, fan_count, bonus) in cases {
+        let uma = Uma {
+            fan_count: Some(fan_count),
+            character_id: Some(100603),
+            ..uma(Style::Late)
+        };
+        let skills = vec![data_skill(120061)];
+        let mut solver = ready_solver(course_id, uma, skills, seeded_config(0));
+        let runner = &mut solver.runners[0];
+        let mut gained = |alternative| {
+            let before = runner.skill_modifiers.target_speed;
+            runner.activate_skill(0, alternative, &solver.state);
+            runner.skill_modifiers.target_speed - before
+        };
+        let (scaled, unscaled) = (gained(0), gained(1));
+        assert_close!(scaled - unscaled, bonus, "{course_id} {fan_count}");
+    }
+}
+
+#[test]
 fn test_late_race_corner_overtakes_are_tracked() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
@@ -3071,6 +3135,20 @@ fn test_buffs_scaled_to_zero_still_count() {
     assert_close!(activate_last_skill(&mut solver), 0.0);
     let buffs = &solver.runners[0].activation_flags.buff_activated;
     assert!(buffs.contains(SkillType::TargetSpeed));
+}
+
+#[test]
+fn test_negative_effects_on_oneself_are_not_buffs() {
+    let skills = vec![skill(
+        1,
+        "is_activate_heal_skill==1",
+        SkillType::TargetSpeed,
+        -0.25,
+    )];
+    let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+    assert_close!(activate_last_skill(&mut solver), -0.25);
+    let buffs = &solver.runners[0].activation_flags.buff_activated;
+    assert!(!buffs.contains(SkillType::TargetSpeed));
 }
 
 #[test]
