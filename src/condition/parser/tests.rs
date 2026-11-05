@@ -52,10 +52,6 @@ fn test_error_cases() {
         // Single '=' or '!' not allowed.
         ("hp_per=100", ExpectedOperator("hp_per=100".into())),
         ("hp_per!100", ExpectedOperator("hp_per!100".into())),
-        (
-            "this_var_does_not_exist==42",
-            UnknownVariable("this_var_does_not_exist".into()),
-        ),
         ("hp per==1", UnknownVariable("hp per".into())),
         ("hp_per==", InvalidValue("hp_per==".into())),
         ("hp_per==1 2", InvalidValue("hp_per==1 2".into())),

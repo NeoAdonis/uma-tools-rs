@@ -17,9 +17,18 @@ fn test_start_type_from_delay() {
 fn test_rates_at_order_round_to_nearest() {
     // 9 runners: 5% => 0.45, 6% => 0.54, 16% => 1.44, 17% => 1.53, 50% => 4.5,
     // 61% => 5.49, 100% => 9.
-    let cases = [(0, -5..=5), (1, 6..=16), (5, 50..=61), (9, 95..=105)];
-    for (order, expected) in cases {
-        assert_eq!(rates_at_order(order, 9), expected, "order {order}");
+    // (runners, order, rates).
+    let cases = [
+        (9, 0, -5..=5),
+        (9, 1, 6..=16),
+        (9, 5, 50..=61),
+        (9, 9, 95..=105),
+        (12, 6, 46..=54),
+        (1, 1, 50..=149),
+    ];
+    for (runners, order, expected) in cases {
+        let actual = rates_at_order(order, runners);
+        assert_eq!(actual, expected, "runners {runners}, order {order}");
     }
     // Every rate rounds to a single order.
     for order in 0..9 {
