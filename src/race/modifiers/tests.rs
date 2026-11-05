@@ -74,9 +74,83 @@ fn test_stamina_limit_break_distance_factor() {
 fn test_stamina_limit_break_base_buff() {
     let buff = |stamina, version| stamina_limit_break_base_buff(stamina, 2400, version);
     assert_eq!(buff(1200, GameVersion::LATEST), 0.0);
-    assert_close!(buff(1300, GameVersion::LATEST), 10.0 * 0.0085);
-    // Not in the game yet.
+    // In the game since 2.5 Anniversary.
+    let since = GameVersion::TwoPointFiveAnniversary;
+    assert_close!(buff(1300, since), 10.0 * 0.0085);
     assert_eq!(buff(1300, GameVersion::SecondAnniversary), 0.0);
+}
+
+#[test]
+fn test_base_target_speed() {
+    // 20 m/s base speed, 1000 speed. The speed stat only counts from the Late
+    // race, scaled by distance aptitude (B: 0.9).
+    let late_bonus = f64::sqrt(500.0 * 1000.0) * 0.9 * 0.002;
+    let cases = [
+        (Style::Pace, Phase::Mid, 20.0 * 0.991),
+        (Style::Late, Phase::Late, 20.0 * 0.994 + late_bonus),
+    ];
+    for (style, phase, expected) in cases {
+        let actual = base_target_speed(20.0, style, phase, 1000, Aptitude::B);
+        assert_close!(actual, expected, "{style:?} {phase:?}");
+    }
+}
+
+#[test]
+fn test_section_speed_modifier_range() {
+    use rand::SeedableRng;
+
+    // 1000 wit: up to 1000 * log10(100) / 550000 of the 20 m/s base speed,
+    // and down to 0.0065 less.
+    let max = 20.0 * 2000.0 / 550000.0;
+    let min = max - 20.0 * 0.0065;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let rolls: Vec<f64> = (0..1000)
+        .map(|_| roll_section_speed_modifier(&mut rng, 1000, 20.0))
+        .collect();
+    assert!(rolls.iter().all(|roll| (min..=max).contains(roll)));
+    // Rolls spread over the whole range.
+    let lowest = rolls.iter().copied().fold(f64::MAX, f64::min);
+    let highest = rolls.iter().copied().fold(f64::MIN, f64::max);
+    assert!(
+        lowest < min + 0.01 && highest > max - 0.01,
+        "{lowest}..{highest}"
+    );
+}
+
+#[test]
+fn test_adjusted_power_by_track_condition() {
+    // One row per distinct modifier on each surface.
+    let cases = [
+        (Track::Turf, TrackCondition::Firm, 1000),
+        (Track::Turf, TrackCondition::Soft, 950),
+        (Track::Dirt, TrackCondition::Good, 950),
+        (Track::Dirt, TrackCondition::Heavy, 900),
+    ];
+    for (track, condition, expected) in cases {
+        let actual = calculate_adjusted_power(1000, track, condition);
+        assert_eq!(actual, expected, "{track:?} {condition:?}");
+    }
+}
+
+#[test]
+fn test_adjusted_wit_by_style_aptitude() {
+    for (aptitude, expected) in [(Aptitude::S, 1100), (Aptitude::B, 850)] {
+        let actual = calculate_adjusted_wit(1000, aptitude);
+        assert_eq!(actual, expected, "{aptitude:?}");
+    }
+}
+
+#[test]
+fn test_course_speed_modifier_averages_stat_bonuses() {
+    use crate::test_utils::uma;
+
+    // Speed 1200 (above 900: 0.2) and power 500 (up to 600: 0.1).
+    let base = Uma {
+        power: 500,
+        ..uma(Style::Pace)
+    };
+    let stats = [ThresholdStat::Speed, ThresholdStat::Power];
+    assert_close!(course_speed_modifier(&base, &stats), 1.15);
 }
 
 #[test]

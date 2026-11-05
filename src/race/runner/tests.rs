@@ -184,6 +184,43 @@ fn test_stamina_limit_break_activates_at_last_spurt_speed() {
 }
 
 #[test]
+fn test_acceleration_multipliers() {
+    use crate::test_utils::*;
+
+    // 1000 power on flat ground: 0.0006 * sqrt(500 * 1000), times the style
+    // and phase, track aptitude and distance aptitude multipliers.
+    let base = 0.0006 * f64::sqrt(500.0 * 1000.0);
+    // (style, phase, track aptitude, distance aptitude, multipliers).
+    let cases = [
+        (Style::Pace, Phase::Early, Aptitude::A, Aptitude::A, 0.985),
+        (
+            Style::Front,
+            Phase::Late,
+            Aptitude::B,
+            Aptitude::E,
+            0.996 * 0.9 * 0.6,
+        ),
+    ];
+    for (style, phase, track_aptitude, distance_aptitude, multipliers) in cases {
+        let uma = Uma {
+            track_aptitude,
+            distance_aptitude,
+            ..uma(style)
+        };
+        let mut solver = ready_solver(10101, uma, vec![], seeded_config(0));
+        let runner = &mut solver.runners[0];
+        runner.is_start_dash = false;
+        runner.phase = phase;
+        runner.accelerate(0.0);
+        assert_close!(
+            runner.acceleration,
+            base * multipliers,
+            "{style:?} {phase:?}"
+        );
+    }
+}
+
+#[test]
 fn test_speed_is_capped() {
     use crate::race::solver::DELTA_TIME;
     use crate::test_utils::*;
