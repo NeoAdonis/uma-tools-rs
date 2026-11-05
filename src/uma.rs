@@ -715,7 +715,11 @@ mod tests {
     #[test]
     fn test_zero_stat_is_rejected() {
         let json = uma_json("Nige").replace(r#""guts": 704"#, r#""guts": 0"#);
-        assert!(UmaData::from_json(&json).is_err());
+        let error = UmaData::from_json(&json).unwrap_err().to_string();
+        assert!(
+            error.contains("invalid stat 0: expected at least 1"),
+            "{error}"
+        );
     }
 
     /// [`UmaSkill`] with the given ID and level 1.

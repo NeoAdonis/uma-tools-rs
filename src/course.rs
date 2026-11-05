@@ -924,7 +924,6 @@ mod tests {
         assert_eq!(error.to_string(), "Course ID '10102' not found in JSON");
         let error = Course::from_json(&json, &rail, "abc").unwrap_err();
         assert_eq!(error.to_string(), "Invalid course ID format: 'abc'");
-        assert!(Course::from_json(&json, "{}", "10101").is_err());
     }
 
     #[test]

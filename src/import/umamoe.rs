@@ -931,8 +931,13 @@ mod tests {
         assert_eq!(gates, [Some(2), None]);
 
         // Only as many gates as runners.
-        assert!(with_gate(0).is_err());
-        assert!(with_gate(3).is_err());
+        for gate in [0, 3] {
+            let error = with_gate(gate).unwrap_err().to_string();
+            assert!(
+                error.contains(&format!("invalid gate {gate}: expected 1 to 2")),
+                "{error}"
+            );
+        }
     }
 
     #[test]
@@ -979,24 +984,60 @@ mod tests {
     #[test]
     fn test_from_invalid_json() {
         let field = field_json("");
-        let invalid = |json: &str, from: &str, to: &str| {
+        let stat_zero = "invalid stat 0: expected at least 1";
+        // (JSON, replaced text, replacement, reason it's rejected).
+        let cases = [
+            (
+                &*field,
+                r#""version": 1"#,
+                r#""version": 2"#,
+                "unsupported build code version 2: expected 1",
+            ),
+            (&field, r#""guts": "604""#, r#""guts": "0""#, stat_zero),
+            (
+                &field,
+                r#""guts": "604""#,
+                r#""guts": "x""#,
+                r#"invalid stat "x": expected a number"#,
+            ),
+            (
+                &field,
+                r#""motivation": "2""#,
+                r#""motivation": "0""#,
+                r#"invalid motivation "0": expected 1 to 5"#,
+            ),
+            (
+                &field,
+                r#""motivation": "2""#,
+                r#""motivation": "6""#,
+                r#"invalid motivation "6": expected 1 to 5"#,
+            ),
+            (UMA1_UMA2_JSON, r#""guts": 451"#, r#""guts": 0"#, stat_zero),
+            (
+                UMA1_UMA2_JSON,
+                r#""mood": 2"#,
+                r#""mood": 3"#,
+                "enum `Mood` matches the value `3`",
+            ),
+            (
+                UMA1_UMA2_JSON,
+                r#""200132""#,
+                r#""skill""#,
+                r#"invalid skill ID "skill": expected a number"#,
+            ),
+            (
+                UMA1_UMA2_JSON,
+                r#""outfitId": "100201""#,
+                r#""outfitId": "x""#,
+                r#"invalid outfit ID "x": expected a number"#,
+            ),
+        ];
+        for (json, from, to, reason) in cases {
             assert!(json.contains(from), "{from}");
             let json = json.replacen(from, to, 1);
-            assert!(UmaMoeBuild::from_json(&json).is_err(), "{to}");
-        };
-        invalid(&field, r#""version": 1"#, r#""version": 2"#);
-        invalid(&field, r#""guts": "604""#, r#""guts": "0""#);
-        invalid(&field, r#""guts": "604""#, r#""guts": "x""#);
-        invalid(&field, r#""motivation": "2""#, r#""motivation": "0""#);
-        invalid(&field, r#""motivation": "2""#, r#""motivation": "6""#);
-        invalid(UMA1_UMA2_JSON, r#""guts": 451"#, r#""guts": 0"#);
-        invalid(UMA1_UMA2_JSON, r#""mood": 2"#, r#""mood": 3"#);
-        invalid(UMA1_UMA2_JSON, r#""200132""#, r#""skill""#);
-        invalid(
-            UMA1_UMA2_JSON,
-            r#""outfitId": "100201""#,
-            r#""outfitId": "x""#,
-        );
+            let error = UmaMoeBuild::from_json(&json).unwrap_err().to_string();
+            assert!(error.contains(reason), "{to}: {error}");
+        }
     }
 
     /// Decoded JSON of the build code at [`BUILD_PATH`].
@@ -1012,7 +1053,9 @@ mod tests {
             "version": 1, "courseId": 10506,
             "racedef": { "ground": 1, "weather": 1, "season": 1, "time": 1 }
         }"#;
-        assert!(UmaMoeBuild::from_json(no_runners).is_err());
+        let error = UmaMoeBuild::from_json(no_runners).unwrap_err();
+        let reason = format!("invalid number of runners 0: expected 1 to {MAX_GATES}");
+        assert!(error.to_string().contains(&reason), "{error}");
 
         // Give every runner a team of its own, then fill every gate.
         let mut json = build_json();
@@ -1028,7 +1071,9 @@ mod tests {
         assert_eq!(full.teams().len(), MAX_GATES as usize);
 
         json["page"]["field"].as_array_mut().unwrap().push(extra);
-        assert!(UmaMoeBuild::from_json(&json.to_string()).is_err());
+        let error = UmaMoeBuild::from_json(&json.to_string()).unwrap_err();
+        let reason = format!("invalid number of runners {}", MAX_GATES + 1);
+        assert!(error.to_string().contains(&reason), "{error}");
     }
 
     #[test]
@@ -1036,6 +1081,8 @@ mod tests {
         // Moving the second runner of team 2 to team 1 makes it too large.
         let mut json = build_json();
         json["page"]["field"][4]["teamId"] = 1.into();
-        assert!(UmaMoeBuild::from_json(&json.to_string()).is_err());
+        let error = UmaMoeBuild::from_json(&json.to_string()).unwrap_err();
+        let reason = format!("invalid team 1 of 4 runners: expected up to {MAX_TEAM_SIZE}");
+        assert!(error.to_string().contains(&reason), "{error}");
     }
 }

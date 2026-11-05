@@ -481,16 +481,37 @@ mod tests {
 
     #[test]
     fn test_from_invalid_json() {
-        let invalid = |from: &str, to: &str| {
+        let invalid = |from: &str, to: &str, reason: &str| {
             assert_eq!(UMA_JSON.matches(from).count(), 1, "{from}");
             let json = UMA_JSON.replace(from, to);
-            assert!(UmaDumpData::from_json(&json).is_err(), "{to}");
+            let error = UmaDumpData::from_json(&json).unwrap_err().to_string();
+            assert!(error.contains(reason), "{to}: {error}");
         };
-        invalid(r#""running_style": 1"#, r#""running_style": 0"#);
-        invalid(r#""running_style": 1"#, r#""running_style": 5"#);
-        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 0"#);
-        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 9"#);
-        invalid(r#""guts": 604"#, r#""guts": 0"#);
+        invalid(
+            r#""running_style": 1"#,
+            r#""running_style": 0"#,
+            "invalid running style 0: expected 1 to 4",
+        );
+        invalid(
+            r#""running_style": 1"#,
+            r#""running_style": 5"#,
+            "invalid running style 5: expected 1 to 4",
+        );
+        invalid(
+            r#""proper_ground_turf": 8"#,
+            r#""proper_ground_turf": 0"#,
+            "enum `Aptitude` matches the value `0`",
+        );
+        invalid(
+            r#""proper_ground_turf": 8"#,
+            r#""proper_ground_turf": 9"#,
+            "enum `Aptitude` matches the value `9`",
+        );
+        invalid(
+            r#""guts": 604"#,
+            r#""guts": 0"#,
+            "invalid stat 0: expected at least 1",
+        );
     }
 
     #[test]
@@ -552,10 +573,9 @@ mod tests {
         assert_eq!(data, expected);
         for motivation in [0, 6] {
             let json = career_json(UMA_JSON, motivation);
-            assert!(
-                UmaDumpData::from_career_json(&json).is_err(),
-                "{motivation}"
-            );
+            let error = UmaDumpData::from_career_json(&json).unwrap_err();
+            let reason = format!("invalid motivation {motivation}: expected 1 to 5");
+            assert!(error.to_string().contains(&reason), "{error}");
         }
     }
 

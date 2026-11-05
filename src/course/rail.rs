@@ -254,13 +254,26 @@ mod tests {
         assert_eq!(rail.base_ratio, 1.05);
         assert_eq!(rail.world_position(1.0, CourseWidths(0.0)), [1.0, 0.0]);
         let cases = [
-            r#"{"baseRatio":0,"length":2,"x":[0,2],"z":[0,0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
-            r#"{"baseRatio":1,"length":0,"x":[0,2],"z":[0,0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
-            r#"{"baseRatio":1,"length":2,"x":[0,2],"z":[0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
-            r#"{"baseRatio":1,"length":2,"x":[0],"z":[0],"outwardX":[0],"outwardZ":[1]}"#,
+            (
+                r#"{"baseRatio":0,"length":2,"x":[0,2],"z":[0,0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
+                "non-positive base ratio 0 or length 2",
+            ),
+            (
+                r#"{"baseRatio":1,"length":0,"x":[0,2],"z":[0,0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
+                "non-positive base ratio 1 or length 0",
+            ),
+            (
+                r#"{"baseRatio":1,"length":2,"x":[0,2],"z":[0],"outwardX":[0,0],"outwardZ":[1,1]}"#,
+                "[2, 1, 2, 2] x, z and outward keyframes",
+            ),
+            (
+                r#"{"baseRatio":1,"length":2,"x":[0],"z":[0],"outwardX":[0],"outwardZ":[1]}"#,
+                "[1, 1, 1, 1] x, z and outward keyframes",
+            ),
         ];
-        for json in cases {
-            assert!(parse(json).is_err(), "{json}");
+        for (json, reason) in cases {
+            let error = parse(json).unwrap_err().to_string();
+            assert!(error.contains(reason), "{json}: {error}");
         }
     }
 }

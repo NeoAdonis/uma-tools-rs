@@ -296,7 +296,11 @@ mod tests {
 
     #[test]
     fn test_unknown_fields_are_rejected() {
-        assert!(Configuration::from_json(r#"{ "witCheck": "Always" }"#).is_err());
+        let error = Configuration::from_json(r#"{ "witCheck": "Always" }"#).unwrap_err();
+        assert!(
+            error.to_string().contains("unknown field `witCheck`"),
+            "{error}"
+        );
     }
 
     #[test]
