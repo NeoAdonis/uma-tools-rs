@@ -1009,30 +1009,33 @@ impl RaceSolver<Runner> {
         let runners = &self.runners;
         let source = &runners[caster];
         // Finished runners are skipped before counting targets. Nearest runners first.
+        // Debuff targets may include the caster and her allies at first, but they're
+        // dropped at the end.
         let is_running = |i: &usize| !runners[*i].has_finished();
+        let running = || (0..runners.len()).filter(is_running);
         let ahead = (0..caster).rev().filter(is_running);
         let behind = (caster + 1..runners.len()).filter(is_running);
-        let others = (0..runners.len()).filter(|&i| i != caster && is_running(&i));
         let is_rushed = |i: &usize| runners[*i].is_rushed();
 
         let selected: Vec<usize> = match target {
             SkillTarget::Oneself => vec![caster],
-            SkillTarget::All => (0..runners.len()).filter(is_running).collect(),
+            SkillTarget::All => running().collect(),
             // ? Assume field of view only covers runners ahead, as for visible counts.
             SkillTarget::InFov { max } => ahead
                 .filter(|&i| source.is_visible(&runners[i]))
                 .take(max as usize)
                 .collect(),
             // Index `position - 1` is the runner placed at `position`.
-            SkillTarget::AheadOfPosition { position } => (0..position.saturating_sub(1) as usize)
-                .filter(|&i| i < runners.len() && i != caster && is_running(&i))
-                .collect(),
+            SkillTarget::AheadOfPosition { position } => {
+                let places = (position.saturating_sub(1) as usize).min(runners.len());
+                (0..places).filter(is_running).collect()
+            }
             SkillTarget::AheadOfSelf { count } => ahead.take(count as usize).collect(),
             SkillTarget::BehindSelf { count } => behind.take(count as usize).collect(),
-            SkillTarget::AllAllies => others
-                .filter(|&i| !source.is_opponent(&runners[i]))
+            SkillTarget::AllAllies => running()
+                .filter(|&i| i != caster && !source.is_opponent(&runners[i]))
                 .collect(),
-            SkillTarget::EnemyStrategy { style } => others
+            SkillTarget::EnemyStrategy { style } => running()
                 .filter(|&i| runners[i].base_style() == style)
                 .collect(),
             SkillTarget::RushedAhead { max } => {
@@ -1041,12 +1044,12 @@ impl RaceSolver<Runner> {
             SkillTarget::RushedBehind { max } => {
                 behind.filter(is_rushed).take(max as usize).collect()
             }
-            SkillTarget::RushedStrategy { style } => others
+            SkillTarget::RushedStrategy { style } => running()
                 .filter(|&i| is_rushed(&i) && runners[i].base_style() == style)
                 .collect(),
             // Runners that activated a recovery skill this frame, matching
             // `is_other_character_activate_advantage_skill==9`.
-            SkillTarget::UsedRecovery { .. } => others
+            SkillTarget::UsedRecovery { .. } => running()
                 .filter(|&i| {
                     runners[i]
                         .activation_flags
@@ -1057,10 +1060,7 @@ impl RaceSolver<Runner> {
             // Not used by any skill.
             SkillTarget::UmaId { .. } => Vec::new(),
             SkillTarget::RandomAlly => {
-                let team = || {
-                    (0..runners.len())
-                        .filter(|&i| is_running(&i) && !source.is_opponent(&runners[i]))
-                };
+                let team = || running().filter(|&i| !source.is_opponent(&runners[i]));
                 let team_size = team().count();
                 let pick = (target_roll * team_size as f64) as usize;
                 team().nth(pick.min(team_size - 1)).into_iter().collect()
