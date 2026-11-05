@@ -929,19 +929,25 @@ mod tests {
     #[test]
     fn test_course_data_is_supported() {
         // Every course in the data loads with its rail, which checks the
-        // assumptions of the simulation. This is the test to check after a
-        // data update.
+        // assumptions of the simulation, and has a track name. This is the
+        // test to check after a data update.
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
         let courses: std::collections::HashMap<String, serde_json::Value> =
             serde_json::from_str(&json).unwrap();
         let mut course_ids: Vec<_> = courses.into_keys().collect();
-        let errors: Vec<_> = course_ids
-            .iter()
-            .filter_map(|id| {
-                Course::from_json_files("data/course_data.json", "data/rails", id).err()
-            })
-            .map(|error| error.to_string())
-            .collect();
+        let mut errors = Vec::new();
+        for id in &course_ids {
+            match Course::from_json_files("data/course_data.json", "data/rails", id) {
+                Ok(course) => {
+                    for language in [Language::Japanese, Language::English] {
+                        if course.track_name(language).is_none() {
+                            errors.push(format!("course {id}: no {language:?} track name"));
+                        }
+                    }
+                }
+                Err(error) => errors.push(error.to_string()),
+            }
+        }
         assert!(errors.is_empty(), "\n{}", errors.join("\n"));
 
         // No rail without a course.
@@ -1073,19 +1079,6 @@ mod tests {
             course(1999.0).validate(),
             Err("rail covers 1999m instead of the course's 2000m".to_string())
         );
-    }
-
-    #[test]
-    fn test_every_course_has_a_track_name() {
-        let json = std::fs::read_to_string("data/course_data.json").unwrap();
-        let courses: std::collections::HashMap<String, Course> =
-            serde_json::from_str(&json).unwrap();
-        for (id, course) in courses {
-            for language in [Language::Japanese, Language::English] {
-                let name = course.track_name(language);
-                assert!(name.is_some(), "course {id} ({language:?})");
-            }
-        }
     }
 
     #[test]
