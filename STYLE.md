@@ -54,10 +54,11 @@ Rules:
 - **Naming** ([C-CONV](https://rust-lang.github.io/api-guidelines/naming.html#c-conv), [C-GETTER](https://rust-lang.github.io/api-guidelines/naming.html#c-getter), [C-CTOR](https://rust-lang.github.io/api-guidelines/predictability.html#c-ctor)): Conversions use the `as_`, `to_` and `into_` prefixes according to their cost and ownership, getters have no `get_` prefix, and constructors are named `new` or `from_*`.
 - **Errors** ([C-GOOD-ERR](https://rust-lang.github.io/api-guidelines/interoperability.html#c-good-err)): Public error types implement `std::error::Error` and `Display`, and their messages say what was rejected.
 - **Documentation** ([C-FAILURE](https://rust-lang.github.io/api-guidelines/documentation.html#c-failure)): Public functions that can fail or panic document it in `# Errors` and `# Panics` sections.
+- **Examples** ([C-EXAMPLE](https://rust-lang.github.io/api-guidelines/documentation.html#c-example)): Public items have an example, within reason: a link to another item's example may be enough. Examples show why someone would use the item, rather than how to call it.
 
 ## Testing
 
-Tests check behavior, not lines: a test is worth keeping when it asserts something no other test or doc example asserts. Coverage tools show which code runs, not which values are checked, so they can only point at candidates.
+Tests check behavior, not lines: a test is worth keeping when it asserts something no other test asserts. Coverage tools show which code runs, not which values are checked, so they can only point at candidates.
 
 ### What to test
 
@@ -89,10 +90,9 @@ Full coverage isn't a goal. Code can stay uncovered when a bug there would be ha
 - Display-only output.
 - Arms that differ from a tested one only by a constant.
 - Arms the compiler forces but the game never reaches.
-- Code only reached by doc examples, when test data is hard to find.
 - Defensive paths, such as `debug_assert!` failures.
 
-Doc examples count as tests, even though stable `cargo llvm-cov` can't measure them. A unit test may repeat a doc example's behavior only with different data, and only if it checks something new.
+Doc examples don't count as tests: coverage and mutation testing don't run them, so unit tests also cover what they show, preferably from a different angle or with different data. A test that ends up close to a doc example is fine.
 
 When removing tests, compare coverage before and after (see [CONTRIBUTING.md](CONTRIBUTING.md)). Any newly uncovered line needs a reason, either one of the cases above or one stated in the commit message.
 

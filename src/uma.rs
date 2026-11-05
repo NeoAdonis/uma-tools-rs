@@ -670,6 +670,19 @@ mod tests {
     }
 
     #[test]
+    fn test_uma_data_from_json_file() {
+        let data = UmaData::from_json_file("tests/data/uma_data.json").unwrap();
+        let uma = data.uma;
+        assert_eq!(
+            (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
+            (1500, 800, 1200, 700, 1200)
+        );
+        assert_eq!(uma.style, Style::End);
+        assert_eq!(data.mood, Some(Mood::Great));
+        assert_eq!(data.skills, [skill_level_1(200642)]);
+    }
+
+    #[test]
     fn test_uma_data_style_names() {
         let cases = [
             ("Oonige", Style::Runaway),
