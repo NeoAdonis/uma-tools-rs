@@ -266,12 +266,6 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
                 .map(|activation_distance| vec![activation_distance])
         }
 
-        RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-            // "run_at_full_speed_random==1".
-            // Rolled when the all-out spurt starts, since that can't be known in advance.
-            Some(vec![])
-        }
-
         RandomSpatial(RandomSpatialVar::IsFinalcornerRandom) => {
             // "is_finalcorner_random==1".
             // Picks random segment on final corner.
@@ -374,7 +368,8 @@ fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -
         }
 
         _ => {
-            // Not a random variable, skip.
+            // Nothing to roll here: non-random variables, and `run_at_full_speed_random`,
+            // rolled when the all-out spurt starts since that can't be known in advance.
             Some(vec![])
         }
     }
