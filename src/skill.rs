@@ -10,7 +10,7 @@
 //! use uma_tools::skill::SkillType;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
 //! let target_speed = |id| {
 //!     let skill = all_skills.get(id)?;
 //!     let effect = skill.alternatives.first()?.effects.first()?;
@@ -1240,24 +1240,29 @@ mod tests {
 
     #[test]
     fn test_skill_data_is_supported() {
-        // Every skill in the data loads (e.g. its conditions only use known
-        // variables). This is the test to check after a data update: other
-        // tests only use the skills that load.
-        let skills = test_utils::data_skills();
+        // Every skill in the data of every version loads (e.g. its conditions
+        // only use known variables). This is the test to check after a data
+        // update: other tests only use the skills that load.
+        for path in test_utils::SKILL_DATA_FILES {
+            check_skill_data(&SkillData::from_json_file(path).unwrap(), path);
+        }
+    }
+
+    fn check_skill_data(skills: &SkillData, path: &str) {
         let unsupported = skills.unsupported();
         let report: Vec<_> = unsupported
             .iter()
             .map(|(id, e)| format!("{id}: {e}"))
             .collect();
-        assert!(unsupported.is_empty(), "\n{}", report.join("\n"));
-        assert!(skills.skills().next().is_some());
+        assert!(unsupported.is_empty(), "{path}:\n{}", report.join("\n"));
+        assert!(skills.skills().next().is_some(), "{path}");
 
         // Activated alternatives are tracked as bits of a mask (see
         // `Runner::activated_alternatives`).
         for skill in skills.skills() {
             assert!(
                 skill.alternatives.len() <= u8::BITS as usize,
-                "{}",
+                "{path}: {}",
                 skill.id
             );
         }
@@ -1270,21 +1275,25 @@ mod tests {
             .flat_map(|alternative| &alternative.effects);
         for effect in effects {
             if effect.skill_type.is_pre_race_effect() {
-                assert_eq!(effect.value_scaling, ValueScaling::Direct, "{effect:?}");
+                assert_eq!(
+                    effect.value_scaling,
+                    ValueScaling::Direct,
+                    "{path}: {effect:?}"
+                );
             }
             // Additional effects stack their values while the skill's timed effects
             // are active, so only additive timed effects on oneself are supported.
             if effect.additional != AdditionalActivation::Regular {
                 let skill_type = effect.skill_type;
-                assert!(skill_type.is_timed_effect(), "{effect:?}");
+                assert!(skill_type.is_timed_effect(), "{path}: {effect:?}");
                 assert!(
                     !matches!(
                         skill_type,
                         SkillType::LaneChange | SkillType::ExtendEvolvedDuration
                     ),
-                    "{effect:?}"
+                    "{path}: {effect:?}"
                 );
-                assert_eq!(effect.target, SkillTarget::Oneself, "{effect:?}");
+                assert_eq!(effect.target, SkillTarget::Oneself, "{path}: {effect:?}");
             }
         }
     }

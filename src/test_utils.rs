@@ -38,14 +38,18 @@ pub(crate) fn load_course(course_id: u32) -> Course {
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
-/// Skills in `data/skill_data.json`, loaded once per test binary.
+/// Skill data files of every game version, to validate them all.
+pub(crate) const SKILL_DATA_FILES: [&str; 2] =
+    ["data/skill_data_jp.json", "data/skill_data_en.json"];
+
+/// Skills in `data/skill_data_jp.json`, loaded once per test binary.
 pub(crate) fn data_skills() -> &'static SkillData {
     static SKILLS: LazyLock<SkillData> =
-        LazyLock::new(|| SkillData::from_json_file("data/skill_data.json").unwrap());
+        LazyLock::new(|| SkillData::from_json_file(SKILL_DATA_FILES[0]).unwrap());
     &SKILLS
 }
 
-/// Skill from `data/skill_data.json` with the given ID.
+/// Skill from `data/skill_data_jp.json` with the given ID.
 ///
 /// # Panics
 ///

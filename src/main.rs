@@ -113,7 +113,7 @@ fn main() {
         Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
     let language = config.language;
     let all_skills =
-        SkillData::from_json_file("data/skill_data.json").expect("Failed to load skill data");
+        SkillData::from_json_file("data/skill_data_en.json").expect("Failed to load skill data");
     let (courses, rails) = ("data/course_data.json", "data/rails");
     let load_course = |parameters: &RaceParametersData| {
         Course::from_json_files(courses, rails, &parameters.course_id)

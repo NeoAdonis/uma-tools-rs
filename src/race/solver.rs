@@ -206,7 +206,7 @@ impl Entrant {
 /// let (courses, rails) = ("data/course_data.json", "data/rails");
 /// let course =
 ///     Course::from_json_files(courses, rails, &parameters.course_id)?;
-/// let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+/// let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
 /// let skills = uma.resolve_skills(&all_skills)?;
 ///
 /// let finish_time = |seed, skills: &[Arc<Skill>]| {
@@ -357,7 +357,7 @@ impl RaceSolver<Entrant> {
     /// # let (courses, rails) = ("data/course_data.json", "data/rails");
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
     /// let config = Configuration {
     ///     default_gate: DefaultGate::InOrder,
     ///     ..Configuration::default()
@@ -429,7 +429,7 @@ impl RaceSolver<Entrant> {
     /// # let (courses, rails) = ("data/course_data.json", "data/rails");
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
     /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
@@ -535,7 +535,7 @@ impl RaceSolver<Entrant> {
     /// # let (courses, rails) = ("data/course_data.json", "data/rails");
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
     /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
@@ -735,7 +735,7 @@ impl RaceSolver<Runner> {
     /// # let (courses, rails) = ("data/course_data.json", "data/rails");
     /// # let course =
     /// #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
     /// # let entrant = uma.to_entrant(&all_skills)?;
     /// let config = Configuration::default();
     /// let mut solver = RaceSolver::new(course, parameters.race, config);
@@ -802,7 +802,7 @@ impl RaceSolver<Runner> {
     /// # let (courses, rails) = ("data/course_data.json", "data/rails");
     /// # let course_id = &parameters.course_id;
     /// # let course = Course::from_json_files(courses, rails, course_id)?;
-    /// # let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+    /// # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
     /// // Same stats, but a front runner and an end closer.
     /// let uma = |strategy| {
     ///     let json = format!(

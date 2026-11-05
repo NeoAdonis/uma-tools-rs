@@ -35,7 +35,7 @@
 //! let (courses, rails) = ("data/course_data.json", "data/rails");
 //! let course_id = &parameters.course_id;
 //! let course = Course::from_json_files(courses, rails, course_id)?;
-//! let all_skills = SkillData::from_json_file("data/skill_data.json")?;
+//! let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
 //!
 //! let mut config = Configuration::default();
 //! build.configure_gates(&mut config);

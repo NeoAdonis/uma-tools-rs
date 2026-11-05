@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_utils;
 
 /// Branches of a parsed condition, with each comparison as a string.
 fn branches(input: &str) -> Vec<Vec<String>> {
@@ -129,21 +130,24 @@ fn test_error_display() {
 
 #[test]
 fn test_all_skill_conditions() {
-    // Every valid condition in the skill data displays back to itself (without
-    // spaces), covering the forms of valid conditions. Unsupported ones are
-    // reported by `test_skill_data_is_supported`.
-    let json = std::fs::read_to_string("data/skill_data.json").unwrap();
-    let skills: serde_json::Value = serde_json::from_str(&json).unwrap();
-    let alternatives = skills
-        .as_object()
-        .unwrap()
-        .values()
-        .flat_map(|skill| skill["alternatives"].as_array().unwrap());
-    for alternative in alternatives {
-        for key in ["condition", "precondition"] {
-            let input = alternative[key].as_str().unwrap();
-            if let Ok(condition) = Condition::from_str(input) {
-                assert_eq!(condition.to_string().replace(' ', ""), input);
+    // Every valid condition in the skill data of every version displays back
+    // to itself (without spaces), covering the forms of valid conditions.
+    // Unsupported ones are reported by `test_skill_data_is_supported`.
+    for path in test_utils::SKILL_DATA_FILES {
+        let json = std::fs::read_to_string(path).unwrap();
+        let skills: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let alternatives = skills
+            .as_object()
+            .unwrap()
+            .values()
+            .flat_map(|skill| skill["alternatives"].as_array().unwrap());
+        for alternative in alternatives {
+            for key in ["condition", "precondition"] {
+                let input = alternative[key].as_str().unwrap();
+                if let Ok(condition) = Condition::from_str(input) {
+                    let display = condition.to_string().replace(' ', "");
+                    assert_eq!(display, input, "{path}");
+                }
             }
         }
     }

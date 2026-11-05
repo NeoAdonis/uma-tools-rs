@@ -135,8 +135,9 @@ Documentation, relative to `docs/`:
 
 Data, relative to `data/`:
 
-- `skill_data.json`: skill information (duration, targets, effects, conditions,
-  etc.).
+- `skill_data_jp.json`, `skill_data_en.json`: skill information (duration,
+  targets, effects, conditions, etc.) in the Japanese and English versions of
+  the game.
 - `names.json`: names in Japanese and English, by kind (`characters` by card ID,
   outfit and Uma; `skills` by skill ID; `tracks` by track ID).
 - `course_data.json`: course information (distance, corners, straights, slopes,
@@ -147,8 +148,8 @@ Data, relative to `data/`:
 
 Scripts, relative to `scripts/`:
 
-- `make_skill_data.pl`: generates `skill_data.json` from the game's master
-  database (`master.mdb`).
+- `make_skill_data.pl`: generates `skill_data_jp.json` or `skill_data_en.json`
+  from the game's master database (`master.mdb`) of that version.
 - `make_names.pl`: updates `names.json` from the game's master databases
   (`master.mdb`), keeping names missing from them.
 - `make_skill_level_values.pl`: generates
