@@ -117,16 +117,12 @@ fn test_compete_activation_and_expiry() {
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
 
-    // Boost is applied to target speed.
-    runner.update_target_speed(&state);
-    let boosted = runner.target_speed;
+    // The boost ends after its duration.
     runner.compete_before_spurt.expire(12.0 + DURATION);
     assert!(matches!(
         runner.compete_before_spurt,
         TimedBoost::Idle { .. }
     ));
-    runner.update_target_speed(&state);
-    assert_close!(boosted - runner.target_speed, expected_modifier);
 
     // Nearby runners only: near factor is added to the HP cost.
     let (far_from_lead, is_alone) = (false, false);

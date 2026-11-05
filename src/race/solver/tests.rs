@@ -3265,22 +3265,19 @@ fn test_speed_scaling_uses_adjusted_speed() {
 }
 
 #[test]
-fn test_buffs_scaled_to_zero_still_count() {
+fn test_effects_on_oneself_are_buffs_unless_negative() {
     let mut solver = scaled_skill_solver(
         uma(Style::Late),
         vec![],
         ValueScaling::MultiplySpeed1,
         seeded_config(0),
     );
-    // Too slow for any bonus.
+    // Too slow for any bonus, but scaled to zero still counts.
     solver.runners[0].adjusted.speed = 1600;
     assert_close!(activate_last_skill(&mut solver), 0.0);
     let buffs = &solver.runners[0].activation_flags.buff_activated;
     assert!(buffs.contains(SkillType::TargetSpeed));
-}
 
-#[test]
-fn test_negative_effects_on_oneself_are_not_buffs() {
     let skills = vec![skill(
         1,
         "is_activate_heal_skill==1",

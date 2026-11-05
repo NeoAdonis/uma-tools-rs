@@ -139,11 +139,7 @@ fn test_secure_lead_activation_and_expiry() {
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
     assert_close!(runner.hp.current(), expected_hp);
 
-    // Boost is applied to target speed.
-    runner.update_target_speed(&state);
-    let boosted = runner.target_speed;
+    // The boost ends after its duration.
     runner.secure_lead.expire(elapsed + DURATION);
     assert!(matches!(runner.secure_lead, TimedBoost::Idle { .. }));
-    runner.update_target_speed(&state);
-    assert_close!(boosted - runner.target_speed, expected_modifier);
 }

@@ -179,16 +179,20 @@ fn test_target_speed_adds_modifiers() {
     runner.skill_modifiers.target_speed = 0.2;
     runner.section_speed_modifier = 0.03;
     runner.stamina_limit_break = 0.05;
+    let time = state.elapsed_time;
+    runner.secure_lead = TimedBoost::start(0.07, time, 2.0, 1.0);
+    runner.compete_before_spurt = TimedBoost::start(0.11, time, 2.0, 1.0);
+    runner.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.13 };
     runner.start_duel();
     let (guts, aptitude) = (runner.adjusted.guts, runner.adjusted.style_aptitude);
-    runner.spot_struggle = SpotStruggle::start(guts, aptitude, state.elapsed_time);
-    let bonuses = runner.duel.speed_bonus() + runner.spot_struggle.speed_bonus(state.elapsed_time);
+    runner.spot_struggle = SpotStruggle::start(guts, aptitude, time);
+    let bonuses = runner.duel.speed_bonus() + runner.spot_struggle.speed_bonus(time);
     assert!(bonuses > 0.0);
 
     runner.update_target_speed(state);
     assert_close!(
         runner.target_speed - base,
-        -0.1 + 0.2 + 0.03 + 0.05 + bonuses
+        -0.1 + 0.2 + 0.03 + 0.05 + 0.07 + 0.11 + 0.13 + bonuses
     );
 }
 

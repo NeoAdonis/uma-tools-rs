@@ -98,10 +98,9 @@ fn test_ineligible_runner_never_activates() {
 }
 
 #[test]
-fn test_speed_bonus_increases_target_speed() {
+fn test_speed_bonus_grows_with_skill_acceleration() {
     let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
     enter_last_spurt(&mut solver, 20.0);
-    let target_before = solver.runners[0].target_speed;
 
     let runner = &mut solver.runners[0];
     runner.skill_modifiers.all_out_spurt_acceleration = 0.4;
@@ -109,9 +108,6 @@ fn test_speed_bonus_increases_target_speed() {
 
     let expected = (runner.all_out_spurt_base + 0.04) * DELTA_TIME;
     assert_close!(runner.all_out_spurt.speed_bonus(), expected);
-
-    runner.update_target_speed(&solver.state);
-    assert_close!(runner.target_speed - target_before, expected);
 }
 
 #[test]
