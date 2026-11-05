@@ -9,10 +9,10 @@ later.
 
 ## Formatting
 
-This code base follows the [Rust Style
-Guide](https://doc.rust-lang.org/style-guide/) conventions. Because it uses the
-default style, `cargo fmt` can be called as-is to ensure that the code format is
-in good shape.
+This code base follows the
+[Rust Style Guide](https://doc.rust-lang.org/style-guide/) conventions. Because
+it uses the default style, `cargo fmt` can be called as-is to ensure that the
+code format is in good shape.
 
 Important conventions:
 
@@ -72,12 +72,12 @@ them. Its `--fix` flag fixes most issues, but not line length:
 
 ## API design
 
-The public API follows the [Rust API
-Guidelines](https://rust-lang.github.io/api-guidelines/). The crate isn't
-published and makes no compatibility guarantees yet, so the guidelines about
-stability and publishing apply loosely; the ones about the shape of the API
-still apply. The rules below are the ones most relevant to this code base. Check
-them, and the full guidelines when in doubt, whenever a change:
+The public API follows the
+[Rust API Guidelines](https://rust-lang.github.io/api-guidelines/). The crate
+isn't published and makes no compatibility guarantees yet, so the guidelines
+about stability and publishing apply loosely; the ones about the shape of the
+API still apply. The rules below are the ones most relevant to this code base.
+Check them, and the full guidelines when in doubt, whenever a change:
 
 - Adds or changes a `pub` item, or a re-export in `lib.rs`.
 - Adds a dependency whose types could appear in a public signature.
@@ -202,8 +202,9 @@ either one of the cases above or one stated in the commit message.
 
 ## Commit messages
 
-Commit messages follow the [Conventional
-Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
+Commit messages follow the
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+specification.
 
 ```text
 <type>[(optional scope)]: <description>

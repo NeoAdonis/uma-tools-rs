@@ -36,9 +36,9 @@ are still welcome, as long as you read the following first:
     newly uncovered lines (use the same toolchain for both runs).
   - [`cargo mutants`](https://mutants.rs/) `--in-diff <diff>` (or `-f <file>`),
     to find code whose changes no test notices. It takes a few minutes per file.
-- Write commit messages following [Conventional
-  Commits](https://www.conventionalcommits.org/en/v1.0.0/), as described in
-  [STYLE.md](STYLE.md).
+- Write commit messages following
+  [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), as
+  described in [STYLE.md](STYLE.md).
 
 Since I work on this project in my spare time, reviews may take a while. There's
 no guarantee that every pull request will be merged: it might not fit the

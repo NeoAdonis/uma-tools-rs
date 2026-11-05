@@ -38,9 +38,9 @@ comments. In short:
   `scripts/check_comment_width.pl` to verify it.
 - Markdown documents follow the default markdownlint rules, with lines wrapped
   at 80 characters. Run `markdownlint-cli2` to verify them.
-- Follow the API design rules in [`STYLE.md`](./STYLE.md), based on the [Rust
-  API Guidelines](https://rust-lang.github.io/api-guidelines/), when changing
-  the public API.
+- Follow the API design rules in [`STYLE.md`](./STYLE.md), based on the
+  [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/), when
+  changing the public API.
 - Follow the testing rules in [`STYLE.md`](./STYLE.md#testing) when writing or
   removing tests. When removing them, compare coverage before and after, and
   give a reason for any newly uncovered line.
@@ -69,9 +69,9 @@ of unrelated work:
 
 - Coding agents shouldn't create commits on their own, only when explicitly
   asked by the user.
-- Follow the [Conventional
-  Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification and the
-  50/72 rule, as described in [`STYLE.md`](./STYLE.md).
+- Follow the
+  [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+  specification and the 50/72 rule, as described in [`STYLE.md`](./STYLE.md).
 - If possible, use a tool such as Cocogitto (`cog check`, `cog verify`) to
   validate commit messages.
 - Don't add AI attribution trailers (e.g. "Co-Authored-By", "Generated with") to

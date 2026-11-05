@@ -1,7 +1,8 @@
 # Conditions Reference
 
-*(The following information has been taken from GameTora's [Skill Condition
-Viewer](https://gametora.com/umamusume/skill-condition-viewer) and tweaked.)*
+*(The following information has been taken from GameTora's
+[Skill Condition Viewer](https://gametora.com/umamusume/skill-condition-viewer)
+and tweaked.)*
 
 Each section below describes a variable used in skill conditions, with an
 example comparison and its meaning. See the `condition::parser` module for the

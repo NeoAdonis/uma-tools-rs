@@ -155,8 +155,7 @@ learned from. Take a look at them!
   extractor.
 - [uma.moe](https://uma.moe/): an Umamusume resource hub and collection of tools
   for race analysis.
-- [KuromiAK's Race Mechanics
-  write-up](https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit):
+- [KuromiAK's Race Mechanics write-up](https://docs.google.com/document/d/15VzW9W2tXBBTibBRbZ8IVpW6HaMX8H0RP03kq6Az7Xg/edit):
   an analysis of the game's race mechanics, whose formulas this simulation is
   based on.
 - [Hakuraku's Research Notes](https://hakuraku.moe/notes): research notes on the
