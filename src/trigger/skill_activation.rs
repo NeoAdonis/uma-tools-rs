@@ -372,11 +372,8 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
                 event = Some(TriggerCondition::AllOutSpurtStart);
             }
             RandomSpatial(_) | RandomPhase(_) => {
-                // No activation points rolled: the branch can't be triggered.
-                if points.is_empty() {
-                    return None;
-                }
-                // Filled once the position range of the branch is known.
+                // Filled once the position range of the branch is known. If there are no
+                // points, there are no segments, so the branch is dropped below.
                 event = Some(TriggerCondition::Segments { ranges: Vec::new() });
             }
 
