@@ -132,12 +132,12 @@ impl Slope {
 
     /// Check if the slope is uphill.
     pub fn is_uphill(&self) -> bool {
-        self.grade > 0.0
+        self.slope_type() == SlopeType::Uphill
     }
 
     /// Check if the slope is downhill.
     pub fn is_downhill(&self) -> bool {
-        self.grade < 0.0
+        self.slope_type() == SlopeType::Downhill
     }
 
     /// Get the slope type classification.

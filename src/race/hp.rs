@@ -186,17 +186,7 @@ pub(crate) fn estimate_hp_last_spurt(
     distance: f64,
     guts_stat: u16,
 ) -> f64 {
-    let time = distance / speed;
-    let hp_per_second = calculate_hp_per_second(
-        speed,
-        course,
-        track_condition,
-        Phase::Late,
-        guts_stat,
-        // No special status modifier (not rushed, not pace-down, not downhill).
-        1.0,
-    );
-    hp_per_second * time
+    estimate_hp_per_meter_last_spurt(speed, course, track_condition, guts_stat) * distance
 }
 
 #[cfg(test)]
