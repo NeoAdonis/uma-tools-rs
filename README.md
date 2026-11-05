@@ -139,8 +139,8 @@ welcome! Credit beyond the license's copyright notice isn't required, but a link
 back to this repository is always appreciated.
 
 This is an independent fan project, not affiliated with or endorsed by Cygames,
-Inc. The game's names and any data derived from its files belong to their
-respective owners, and aren't covered by the MIT license.
+Inc. Names from the game, and any data derived from its files, belong to their
+respective owners and aren't covered by the MIT license.
 
 ## Acknowledgments
 
