@@ -191,29 +191,19 @@ impl Runner {
                 self.adjusted.guts,
             );
 
-            // Find last_spurt_distance where total HP consumption
-            // (base segment + spurt segment) equals available HP.
+            // Spurt distance `d` that uses up the HP, running the rest of the calculation
+            // distance at base speed:
             //
-            // current_hp = remaining_at_base * hp_rate_base
-            //   + last_spurt_distance * hp_rate_spurt
-            // calculation_distance = remaining_at_base + last_spurt_distance
+            // current_hp = (calculation_distance - d) * hp_rate_base + d * hp_rate_spurt
             //
-            // Solving for last_spurt_distance:
-            // last_spurt_distance =
-            //   (current_hp - calculation_distance * hp_rate_base)
-            //     / (hp_rate_spurt - hp_rate_base)
+            // Solving for `d` gives:
+            // d = numerator / (hp_rate_spurt - hp_rate_base)
             //
-            // Numerator is pre-calculated above; we only need to compute the rest.
-            let last_spurt_distance = if hp_rate_spurt <= hp_rate_base {
-                calculation_distance
-            } else {
-                // `numerator > 0` (checked above).
-                // `hp_rate_spurt > hp_rate_base` -> `hp_rate_spurt - hp_rate_base > 0`.
-                // Thus, this value is always positive.
-                let calculated = numerator / (hp_rate_spurt - hp_rate_base);
-                // Clamp to calculation distance.
-                calculated.min(calculation_distance)
-            };
+            // HP per meter grows with speed, and candidates are never below the base speed,
+            // so with `numerator > 0` (checked above), `d` is positive, or infinite at the
+            // base speed, before being clamped.
+            let last_spurt_distance =
+                (numerator / (hp_rate_spurt - hp_rate_base)).min(calculation_distance);
 
             // Add back the final 60m that we excluded from calculations.
             let last_spurt_distance_with_final = last_spurt_distance + 60.0;
