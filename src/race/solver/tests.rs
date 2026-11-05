@@ -1364,13 +1364,13 @@ fn test_force_in_applies_only_away_from_inner_fence() {
     let force_in = runner.force_in_modifier;
     assert!(force_in > 0.0);
 
-    // Threshold is 0.12 course widths.
+    // Threshold is 0.12 course widths, exclusive.
     let target_speed_at = |runner: &mut Runner, lane: f64| {
         runner.lane.current = CourseWidths(lane);
         runner.update_target_speed(state);
         runner.target_speed
     };
-    let near_fence = target_speed_at(runner, 0.119);
+    let near_fence = target_speed_at(runner, 0.12);
     let away_from_fence = target_speed_at(runner, 0.121);
     assert_close!(away_from_fence - near_fence, force_in);
     assert_eq!(target_speed_at(runner, 0.0), near_fence);
@@ -1422,7 +1422,7 @@ fn test_skill_target_lane_in_course_widths() {
 }
 
 #[test]
-fn test_move_lane_modifier_requires_lane_movement() {
+fn test_move_lane_modifier_requires_skill_and_lane_movement() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
@@ -1441,6 +1441,11 @@ fn test_move_lane_modifier_requires_lane_movement() {
     runner.update_target_speed(state);
     let expected = (0.0002 * runner.adjusted.power as f64).sqrt();
     assert_close!(runner.target_speed - still_speed, expected);
+
+    // Only with a skill that changes the lane speed.
+    runner.skill_modifiers.lane_speed = 0.0;
+    runner.update_target_speed(state);
+    assert_eq!(runner.target_speed, still_speed);
 }
 
 #[test]

@@ -144,6 +144,55 @@ fn test_start_dash_caps_speed_at_its_end() {
 }
 
 #[test]
+fn test_target_speed_scales_with_positioning_strategy() {
+    use crate::test_utils::*;
+
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let state = &solver.state;
+    let runner = &mut solver.runners[0];
+    // Added after scaling.
+    runner.section_speed_modifier = 0.0;
+    runner.update_target_speed(state);
+    let normal = runner.target_speed;
+
+    let strategy = PositioningStrategy::FrontOvertake;
+    runner.positioning_strategy = strategy;
+    runner.update_target_speed(state);
+    let multiplier = strategy.speed_multiplier(runner.phase, GameVersion::LATEST);
+    assert_close!(runner.target_speed, normal * multiplier);
+}
+
+#[test]
+fn test_target_speed_adds_modifiers() {
+    use crate::test_utils::*;
+
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let state = &solver.state;
+    let runner = &mut solver.runners[0];
+    // Rolled when readying runners.
+    runner.section_speed_modifier = 0.0;
+    runner.update_target_speed(state);
+    let base = runner.target_speed;
+
+    // Distinct values, so that no term can make up for another.
+    runner.slope_speed_modifier = Some(-0.1);
+    runner.skill_modifiers.target_speed = 0.2;
+    runner.section_speed_modifier = 0.03;
+    runner.stamina_limit_break = 0.05;
+    runner.start_duel();
+    let (guts, aptitude) = (runner.adjusted.guts, runner.adjusted.style_aptitude);
+    runner.spot_struggle = SpotStruggle::start(guts, aptitude, state.elapsed_time);
+    let bonuses = runner.duel.speed_bonus() + runner.spot_struggle.speed_bonus(state.elapsed_time);
+    assert!(bonuses > 0.0);
+
+    runner.update_target_speed(state);
+    assert_close!(
+        runner.target_speed - base,
+        -0.1 + 0.2 + 0.03 + 0.05 + bonuses
+    );
+}
+
+#[test]
 fn test_stamina_limit_break_activates_at_last_spurt_speed() {
     use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
     use crate::test_utils::*;
