@@ -3648,18 +3648,34 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
     assert!(solver.runners[0].is_in_downhill_mode());
     assert!(!solver.runners[0].is_going_uphill());
 
-    // After exiting downhill mode, the next check is a second (15 frames) after
-    // entry.
-    solver.runners[0].slope_speed_modifier = None;
-    for frame in 1..15 {
-        move_on_slopes(&mut solver, &course, 100.0 + frame as f64);
-        assert!(!solver.runners[0].is_in_downhill_mode(), "frame {frame}");
+    // After exiting downhill mode, the next checks are every second (15
+    // frames) after entry.
+    for check in [115, 130] {
+        solver.runners[0].slope_speed_modifier = None;
+        for position in check - 14..check {
+            move_on_slopes(&mut solver, &course, position as f64);
+            assert!(
+                !solver.runners[0].is_in_downhill_mode(),
+                "position {position}"
+            );
+        }
+        move_on_slopes(&mut solver, &course, check as f64);
+        assert!(solver.runners[0].is_in_downhill_mode(), "position {check}");
     }
-    move_on_slopes(&mut solver, &course, 115.0);
-    assert!(solver.runners[0].is_in_downhill_mode());
 
     // Exiting the downhill exits downhill mode.
     move_on_slopes(&mut solver, &course, 300.0);
+    assert!(!solver.runners[0].is_in_downhill_mode());
+}
+
+#[test]
+fn test_downhill_mode_chance_scales_with_wit() {
+    // A 0.04% chance with 1 Wit, rather than a guaranteed entry.
+    let mut solver = timed_skill_solver(vec![]);
+    solver.runners[0].adjusted.wit = 1;
+    let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
+    move_on_slopes(&mut solver, &course, 99.0);
+    move_on_slopes(&mut solver, &course, 100.0);
     assert!(!solver.runners[0].is_in_downhill_mode());
 }
 

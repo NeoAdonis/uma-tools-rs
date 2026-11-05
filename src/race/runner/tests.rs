@@ -92,7 +92,9 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         solver.state.elapsed_time = 10.0;
         let runner = &mut solver.runners[0];
         runner.position = position;
-        runner.speed = 20.0;
+        // Current speed skills add to the speed.
+        runner.speed = 19.5;
+        runner.skill_modifiers.current_speed = 0.5;
         runner.lane = LaneState::new(lane);
         runner.last_move = LastMove {
             distance: 1.0,
@@ -194,6 +196,42 @@ fn test_target_speed_adds_modifiers() {
         runner.target_speed - base,
         -0.1 + 0.2 + 0.03 + 0.05 + 0.07 + 0.11 + 0.13 + bonuses
     );
+}
+
+#[test]
+fn test_pace_down_and_downhill_mode_save_hp() {
+    use crate::race::solver::DELTA_TIME;
+    use crate::test_utils::*;
+
+    // (pace down, downhill mode, HP consumption multiplier).
+    let cases = [
+        (false, false, 1.0),
+        (true, false, 0.6),
+        (false, true, 0.4),
+        (true, true, 0.24),
+    ];
+    let mut base = None;
+    for (pace_down, downhill, multiplier) in cases {
+        let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+        let state = &solver.state;
+        let runner = &mut solver.runners[0];
+        runner.speed = 20.0;
+        if pace_down {
+            runner.positioning_strategy = PositioningStrategy::PaceDown(0.0);
+        }
+        if downhill {
+            runner.slope_speed_modifier = Some(0.5);
+        }
+        let before = runner.hp.current();
+        runner.update_hp(DELTA_TIME, state);
+        let consumed = before - runner.hp.current();
+        let base = *base.get_or_insert(consumed);
+        assert_close!(
+            consumed,
+            base * multiplier,
+            "pace down: {pace_down}, downhill: {downhill}"
+        );
+    }
 }
 
 #[test]
