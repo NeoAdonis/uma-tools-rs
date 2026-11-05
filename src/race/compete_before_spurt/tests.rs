@@ -93,6 +93,8 @@ fn test_compete_activation_and_expiry() {
     runner.section = 12;
     // Never enter Stamina Keep.
     runner.stamina_keep.ratio = 0.0;
+    // ? Competing has no chance for now (its formula is unknown), so it starts
+    // on the first check.
 
     // Neither far from lead nor nearby runners.
     let (far_from_lead, is_alone) = (false, true);
@@ -136,6 +138,29 @@ fn test_compete_activation_and_expiry() {
     ));
     let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
+}
+
+#[test]
+fn test_stamina_keep_starts_below_the_hp_to_keep() {
+    // ? The HP required to finish is assumed (see `hp_required_to_finish`).
+    // (HP over the HP to keep, whether she enters Stamina Keep).
+    for (offset, enters) in [(-1.0, true), (1.0, false)] {
+        let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(42));
+        runner.section = 12;
+        runner.position = 700.0;
+        let to_keep = runner.hp_required_to_finish(&state) * runner.stamina_keep.ratio;
+        runner.hp.set_current(to_keep + offset);
+        // Neither far from the lead nor with runners nearby, so she never
+        // competes (which would consume HP). Many checks, so that the wit
+        // roll eventually passes.
+        let (far_from_lead, is_alone) = (false, true);
+        for check in 1..=50 {
+            state.elapsed_time = check as f64 * CHECK_INTERVAL;
+            runner.compete_before_spurt = TimedBoost::Idle { next_check: 0.0 };
+            runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
+        }
+        assert_eq!(runner.stamina_keep.is_active, enters, "{offset} HP over");
+    }
 }
 
 #[test]

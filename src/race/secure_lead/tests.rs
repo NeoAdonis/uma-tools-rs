@@ -143,3 +143,24 @@ fn test_secure_lead_activation_and_expiry() {
     runner.secure_lead.expire(elapsed + DURATION);
     assert!(matches!(runner.secure_lead, TimedBoost::Idle { .. }));
 }
+
+#[test]
+fn test_secure_lead_chance() {
+    // ? The chance should scale with wit, but the formula is unknown: this
+    // pins the 20% assumed for now, and changes with it.
+    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
+    runner.section = 12;
+    let checks = 1000;
+    let mut activations = 0;
+    for check in 0..checks {
+        state.elapsed_time = check as f64 * 10.0;
+        runner.secure_lead = TimedBoost::Idle { next_check: 0.0 };
+        let (lead_insufficient, is_alone) = (true, false);
+        runner.try_secure_lead(lead_insufficient, is_alone, &state);
+        if matches!(runner.secure_lead, TimedBoost::Active { .. }) {
+            activations += 1;
+        }
+    }
+    let rate = activations as f64 / checks as f64;
+    assert!((0.17..0.23).contains(&rate), "{rate}");
+}

@@ -250,6 +250,7 @@ fn test_pacemaker_changed_in_one_point_five_anniversary() {
     // Before, the pacemaker is the frontmost runner with the most aggressive
     // style, not the Pace leader: 2m behind her, a Late runner paces down.
     // From 1.5 Anniv., the pacemaker is the leader, 22m ahead.
+    // ? The leader is an approximation of the current pacemaker.
     for (version, paces_down) in [
         (GameVersion::FirstAnniversary, true),
         (GameVersion::OnePointFiveAnniversary, false),
@@ -940,8 +941,14 @@ fn test_spot_struggle_lateral_exit_in_both_directions() {
     );
     update_struggle(&mut solver);
 
+    // Within 0.416 course widths, even away from the rail.
+    place(&mut solver, 0, 200.0, 0.3);
+    place(&mut solver, 1, 198.0, 0.3);
+    update_struggle(&mut solver);
+    assert_eq!(strugglers(&solver), [true, true]);
+
     // Beyond 0.416 course widths.
-    place(&mut solver, 1, 198.0, 0.42);
+    place(&mut solver, 1, 198.0, 0.72);
     update_struggle(&mut solver);
     assert_eq!(strugglers(&solver), [false, false]);
 }
@@ -1014,12 +1021,17 @@ fn test_spot_struggle_ends_upon_entering_ninth_section() {
 
 #[test]
 fn test_spot_struggle_not_before_first_anniversary() {
-    let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
-        GameVersion::Original,
-    );
-    update_struggle(&mut solver);
-    assert_eq!(strugglers(&solver), [false, false]);
+    for (version, struggle) in [
+        (GameVersion::Original, false),
+        (GameVersion::FirstAnniversary, true),
+    ] {
+        let mut solver = struggle_solver(
+            &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+            version,
+        );
+        update_struggle(&mut solver);
+        assert_eq!(strugglers(&solver), [struggle, struggle], "{version:?}");
+    }
 }
 
 #[test]
@@ -1084,6 +1096,7 @@ fn test_compete_before_spurt_when_far_from_first() {
         );
         for runner in &mut solver.runners {
             // Never enter Stamina Keep, the only random roll.
+            // ? Competing has no chance for now (its formula is unknown).
             runner.stamina_keep.ratio = 0.0;
         }
         solver.update_order_values();
@@ -1176,10 +1189,14 @@ fn test_duel_needs_continuous_proximity() {
 
 #[test]
 fn test_duel_proximity_in_course_widths() {
-    // Lane gap threshold is 0.25 course widths (about 2.8 horse lanes).
-    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 0.249)], GameVersion::LATEST);
-    update_duels(&mut solver, DUEL_FRAMES);
-    assert_eq!(duelists(&solver), [true, true]);
+    // Lane gap threshold is 0.25 course widths (about 2.8 horse lanes), from
+    // the rail or away from it.
+    for lanes in [[0.0, 0.249], [0.5, 0.3]] {
+        let runners = [(1000.0, lanes[0]), (998.0, lanes[1])];
+        let mut solver = duel_solver(&runners, GameVersion::LATEST);
+        update_duels(&mut solver, DUEL_FRAMES);
+        assert_eq!(duelists(&solver), [true, true], "{lanes:?}");
+    }
 }
 
 #[test]
@@ -1345,9 +1362,14 @@ fn test_former_duelists_cannot_duel_again() {
 
 #[test]
 fn test_duel_not_before_first_anniversary() {
-    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::Original);
-    update_duels(&mut solver, DUEL_FRAMES * 2);
-    assert_eq!(duelists(&solver), [false, false]);
+    for (version, duel) in [
+        (GameVersion::Original, false),
+        (GameVersion::FirstAnniversary, true),
+    ] {
+        let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], version);
+        update_duels(&mut solver, DUEL_FRAMES * 2);
+        assert_eq!(duelists(&solver), [duel, duel], "{version:?}");
+    }
 }
 
 #[test]
@@ -1572,9 +1594,11 @@ fn test_pace_down_lane_target() {
 
 #[test]
 fn test_overlap_bumps_outer_runner() {
-    // Bumped 0.4 horse lanes away from the inner runner, ahead or behind.
+    // Bumped 0.4 horse lanes away from the inner runner, ahead or behind. In
+    // the same lane, the runner behind is bumped.
+    // ? Assumed, as the game's choice is unknown.
     let bumped = 0.19 + CourseWidths::from_horse_lanes(0.4).0;
-    for (lanes, outer) in [([0.2, 0.19], 0), ([0.19, 0.2], 1)] {
+    for (lanes, outer) in [([0.2, 0.19], 0), ([0.19, 0.2], 1), ([0.19, 0.19], 1)] {
         let mut solver = struggle_solver(
             &[
                 (Style::Front, 200.0, lanes[0]),
@@ -1588,6 +1612,21 @@ fn test_overlap_bumps_outer_runner() {
         assert_eq!(outer.lane.target, outer.lane.current, "{lanes:?}");
         assert!(outer.should_update_target_lane(), "{lanes:?}");
         assert_eq!(inner.lane.current, CourseWidths(0.19), "{lanes:?}");
+    }
+}
+
+#[test]
+fn test_no_bump_at_the_outer_edge() {
+    // Positioned on course 10101.
+    let edge = load_course(10101).width.0;
+    let mut solver = struggle_solver(
+        &[(Style::Front, 200.0, edge), (Style::Front, 199.8, edge)],
+        GameVersion::LATEST,
+    );
+    // Returns, rather than bumping the runner behind in place forever.
+    solver.resolve_overlaps();
+    for runner in &solver.runners {
+        assert_eq!(runner.lane.current, CourseWidths(edge));
     }
 }
 
@@ -1843,6 +1882,49 @@ fn test_team_exceeding_gates_panics() {
     }
     let member = || Entrant::new(uma(Style::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
+}
+
+#[test]
+fn test_team_can_fill_the_last_gates() {
+    // 9 gates: 6 individual runners leave room for a team of three.
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for _ in 0..6 {
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    }
+    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    solver.add_team(vec![member(), member(), member()]);
+    assert_eq!(solver.runners().len(), 9);
+}
+
+#[test]
+fn test_style_of_the_most_popular_runner() {
+    // A much stronger Late runner is the most popular, whatever the order.
+    for strong_first in [true, false] {
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+        let weak = Uma {
+            speed: 100,
+            stamina: 100,
+            power: 100,
+            guts: 100,
+            wit: 100,
+            ..uma(Style::Pace)
+        };
+        let mut umas = [uma(Style::Late), weak];
+        if !strong_first {
+            umas.reverse();
+        }
+        for uma in umas {
+            solver.add_runner(Entrant::new(uma, vec![]));
+        }
+        let solver = solver.ready_runners();
+        let most_popular = solver
+            .runners
+            .iter()
+            .find(|runner| runner.initial_state.popularity_rank == 1)
+            .unwrap();
+        assert_eq!(most_popular.base.style, Style::Late);
+        assert_eq!(solver.state.style_most_popular, Style::Late);
+    }
 }
 
 /// Put runner `i` in rush state.
@@ -4025,6 +4107,18 @@ fn entrant_at(gate: u8) -> Entrant {
         gate: Some(gate),
         ..Entrant::new(uma(Style::Pace), vec![])
     }
+}
+
+#[test]
+fn test_last_gate_can_be_set() {
+    let params = RaceParameters {
+        gates: MAX_GATES,
+        ..race_params()
+    };
+    let mut solver = RaceSolver::new(load_course(10101), params, seeded_config(0));
+    let id = solver.add_runner(entrant_at(MAX_GATES));
+    let solver = solver.ready_runners();
+    assert_eq!(solver.runner(id).gate_roll, MAX_GATES);
 }
 
 #[test]

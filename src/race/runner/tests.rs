@@ -83,9 +83,9 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         rail: rail_from_turns(1.0, 2000.0, &[0.0; 1000], &turn),
         ..synthetic_course()
     };
-    // Course distance covered in one frame from `position` at `lane`, after a
-    // 1m move at the same lane.
-    let advance = |position: f64, lane: f64| {
+    // Course distance covered in the last of `frames` frames from `position`
+    // at `lane`, after a 1m move at the same lane.
+    let advance = |position: f64, lane: f64, frames: usize| {
         let lane = CourseWidths(lane);
         let mut solver =
             ready_solver_on(course.clone(), uma(Style::Late), vec![], seeded_config(0));
@@ -100,16 +100,51 @@ fn test_update_position_slows_down_off_rail_in_corners() {
             distance: 1.0,
             world: course.rail.world_position(position - 1.0, lane),
         };
-        runner.update_position(0.1, &solver.state);
-        runner.position - position
+        let mut start = position;
+        for _ in 0..frames {
+            start = runner.position;
+            runner.update_position(0.1, &solver.state);
+        }
+        runner.position - start
     };
 
     // Straight before the corner, then within it.
-    assert_close!(advance(300.0, 1.0), 2.0);
-    assert_close!(advance(600.0, 0.0), 2.0);
+    assert_close!(advance(300.0, 1.0, 1), 2.0);
+    assert_close!(advance(600.0, 0.0, 1), 2.0);
     let expected = 2.0 / (1.0 + 0.005 * 11.25);
     // Lanes turn between keyframes rather than evenly.
-    assert_close!(advance(600.0, 1.0), expected, tolerance = 1e-5);
+    assert_close!(advance(600.0, 1.0, 1), expected, tolerance = 1e-5);
+    // Each move sets the next one's world distance, so the next move in the
+    // corner is slowed down the same.
+    assert_close!(advance(600.0, 1.0, 2), expected, tolerance = 1e-5);
+}
+
+#[test]
+fn test_finish_time_is_interpolated_within_the_frame() {
+    use crate::course::rail::rail_from_turns;
+    use crate::race::solver::DELTA_TIME;
+    use crate::test_utils::*;
+
+    // Straight 2000m course, finished 1.5m after the start of the frame, at
+    // 30 m/s (2m per frame).
+    let course = Course {
+        rail: rail_from_turns(1.0, 2000.0, &[0.0], &[0.0]),
+        ..synthetic_course()
+    };
+    let lane = CourseWidths(0.0);
+    let mut solver = ready_solver_on(course.clone(), uma(Style::Late), vec![], seeded_config(0));
+    solver.state.elapsed_time = 10.0;
+    let runner = &mut solver.runners[0];
+    runner.position = 1998.5;
+    runner.speed = 30.0;
+    runner.lane = LaneState::new(lane);
+    runner.last_move = LastMove {
+        distance: 1.0,
+        world: course.rail.world_position(1997.5, lane),
+    };
+    runner.update_position(DELTA_TIME, &solver.state);
+    let expected = 10.0 - DELTA_TIME + 1.5 / 30.0;
+    assert_close!(runner.finish_time.unwrap(), expected);
 }
 
 #[test]
@@ -307,6 +342,54 @@ fn test_acceleration_multipliers() {
             runner.acceleration,
             base * multipliers,
             "{style:?} {phase:?}"
+        );
+    }
+}
+
+#[test]
+fn test_acceleration_adds_modifiers() {
+    use crate::test_utils::*;
+
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
+    let runner = &mut solver.runners[0];
+    runner.is_start_dash = false;
+    runner.accelerate(0.0);
+    let base = runner.acceleration;
+
+    runner.skill_modifiers.acceleration = 0.2;
+    runner.start_duel();
+    let duel = runner.duel.acceleration_bonus();
+    assert!(duel > 0.0);
+    runner.accelerate(0.0);
+    assert_close!(runner.acceleration - base, 0.2 + duel);
+}
+
+#[test]
+fn test_deceleration_by_state() {
+    use crate::test_utils::*;
+
+    // (phase, pacing down, out of HP, deceleration).
+    let cases = [
+        (Phase::Early, false, false, -1.2),
+        (Phase::Mid, false, false, -0.8),
+        (Phase::Late, false, false, -1.0),
+        (Phase::Mid, true, false, -0.5),
+        (Phase::Mid, true, true, -1.2),
+    ];
+    for (phase, pace_down, out_of_hp, expected) in cases {
+        let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
+        let runner = &mut solver.runners[0];
+        runner.phase = phase;
+        if pace_down {
+            runner.positioning_strategy = PositioningStrategy::PaceDown(0.0);
+        }
+        if out_of_hp {
+            runner.hp.set_current(0.0);
+        }
+        runner.decelerate();
+        assert_eq!(
+            runner.acceleration, expected,
+            "{phase:?}, pacing down: {pace_down}, out of HP: {out_of_hp}"
         );
     }
 }
