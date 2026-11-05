@@ -580,8 +580,8 @@ impl Course {
     ///
     /// # Errors
     ///
-    /// Returns an error if a file can't be read, the JSON is invalid, or the
-    /// course ID isn't found in the course data or isn't a valid number.
+    /// Returns an error if a file can't be read, or for the same reasons as
+    /// [`Course::from_json`].
     ///
     /// See [`Course::from_json`] for an example.
     pub fn from_json_files(
@@ -600,8 +600,15 @@ impl Course {
     ///
     /// # Errors
     ///
-    /// Returns an error if the JSON is invalid, or the course ID isn't found in
-    /// the course data or isn't a valid number.
+    /// Returns an error if the JSON is invalid, the course ID isn't found in
+    /// the course data or isn't a valid number, or the course breaks an
+    /// assumption of the simulation:
+    ///
+    /// - Corners, straights and slopes have a positive length, are within the
+    ///   course, and are sorted by start without overlapping others of the
+    ///   same kind (e.g. the last corner is the final corner).
+    /// - Slopes have a non-zero grade.
+    /// - The rail covers the whole course.
     ///
     /// # Examples
     ///
@@ -643,14 +650,61 @@ impl Course {
             .parse::<u16>()
             .map_err(|_| format!("Invalid course ID format: '{}'", course_id))?;
         course.rail = serde_json::from_str(rail_json)?;
+        course
+            .validate()
+            .map_err(|error| format!("Course {course_id}: {error}"))?;
 
         Ok(course)
     }
+
+    /// Check the assumptions listed in [`Course::from_json`].
+    fn validate(&self) -> Result<(), String> {
+        let length = self.length();
+        check_segments("corner", &self.corners, length)?;
+        check_segments("straight", &self.straights, length)?;
+        check_segments("slope", &self.slopes, length)?;
+        if let Some(slope) = self.slopes.iter().find(|slope| slope.grade == 0.0) {
+            return Err(format!("slope at {}m has no grade", slope.start));
+        }
+        let rail_length = self.rail.length;
+        if rail_length != length {
+            return Err(format!(
+                "rail covers {rail_length}m instead of the course's {length}m"
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Check that `segments` have a positive length, are within a course `length`
+/// meters long, and are sorted by start without overlapping.
+fn check_segments<S: Segment>(kind: &str, segments: &[S], length: f64) -> Result<(), String> {
+    let mut previous_end = 0.0;
+    for segment in segments {
+        let (start, end) = segment.range();
+        if start >= end {
+            return Err(format!("{kind} at {start}m has no length"));
+        }
+        if start < previous_end {
+            return Err(format!(
+                "{kind} at {start}m starts before {previous_end}m (the gate or \
+                 the end of the previous {kind})"
+            ));
+        }
+        if end > length {
+            return Err(format!(
+                "{kind} at {start}m ends at {end}m, past the goal at {length}m"
+            ));
+        }
+        previous_end = end;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::course::rail::rail_from_turns;
     use crate::test_utils::synthetic_course;
 
     /// Create a minimal course at the given racetrack.
@@ -874,24 +928,152 @@ mod tests {
     }
 
     #[test]
-    fn test_every_course_has_a_rail() {
+    fn test_course_data_is_supported() {
+        // Every course in the data loads with its rail, which checks the
+        // assumptions of the simulation. This is the test to check after a
+        // data update.
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
-        let courses: std::collections::HashMap<String, Course> =
+        let courses: std::collections::HashMap<String, serde_json::Value> =
             serde_json::from_str(&json).unwrap();
         let mut course_ids: Vec<_> = courses.into_keys().collect();
+        let errors: Vec<_> = course_ids
+            .iter()
+            .filter_map(|id| {
+                Course::from_json_files("data/course_data.json", "data/rails", id).err()
+            })
+            .map(|error| error.to_string())
+            .collect();
+        assert!(errors.is_empty(), "\n{}", errors.join("\n"));
+
+        // No rail without a course.
         let mut rail_ids: Vec<_> = std::fs::read_dir("data/rails")
             .unwrap()
             .map(|entry| {
-                let path = entry.unwrap().path();
-                let json = std::fs::read_to_string(&path).unwrap();
-                let rail = serde_json::from_str::<Rail>(&json);
-                assert!(rail.is_ok(), "{}: {rail:?}", path.display());
-                path.file_stem().unwrap().to_string_lossy().into_owned()
+                entry
+                    .unwrap()
+                    .path()
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
             })
             .collect();
         course_ids.sort();
         rail_ids.sort();
         assert_eq!(course_ids, rail_ids);
+    }
+
+    /// Synthetic 2000m course with a straight rail covering it.
+    fn validated_course() -> Course {
+        Course {
+            rail: rail_from_turns(1.0, 2000.0, &[0.0], &[0.0]),
+            ..synthetic_course()
+        }
+    }
+
+    #[test]
+    fn test_segments_are_validated() {
+        let corner = |start, length| Corner { start, length };
+        let straight = |start, end| Straight {
+            start,
+            end,
+            front_type: FrontType::Audience,
+        };
+        let cases: [(Course, Result<(), &str>); 7] = [
+            // Adjacent segments, the last one ending at the goal.
+            (
+                Course {
+                    corners: vec![corner(0.0, 1000.0), corner(1000.0, 1000.0)],
+                    ..validated_course()
+                },
+                Ok(()),
+            ),
+            (
+                Course {
+                    corners: vec![corner(500.0, 0.0)],
+                    ..validated_course()
+                },
+                Err("corner at 500m has no length"),
+            ),
+            (
+                Course {
+                    corners: vec![corner(0.0, 600.0), corner(599.0, 100.0)],
+                    ..validated_course()
+                },
+                Err(
+                    "corner at 599m starts before 600m (the gate or the end of the \
+                     previous corner)",
+                ),
+            ),
+            // Unsorted.
+            (
+                Course {
+                    straights: vec![straight(1000.0, 1100.0), straight(0.0, 100.0)],
+                    ..validated_course()
+                },
+                Err(
+                    "straight at 0m starts before 1100m (the gate or the end of the \
+                     previous straight)",
+                ),
+            ),
+            (
+                Course {
+                    straights: vec![straight(-1.0, 100.0)],
+                    ..validated_course()
+                },
+                Err(
+                    "straight at -1m starts before 0m (the gate or the end of the \
+                     previous straight)",
+                ),
+            ),
+            (
+                Course {
+                    slopes: vec![Slope::new(1990.0, 11.0, 1.0)],
+                    ..validated_course()
+                },
+                Err("slope at 1990m ends at 2001m, past the goal at 2000m"),
+            ),
+            // The goal is after the run-up.
+            (
+                Course {
+                    run_up: 100.0,
+                    slopes: vec![Slope::new(1990.0, 110.0, 1.0)],
+                    rail: rail_from_turns(1.0, 2100.0, &[0.0], &[0.0]),
+                    ..validated_course()
+                },
+                Ok(()),
+            ),
+        ];
+        for (course, expected) in cases {
+            let expected = expected.map_err(str::to_string);
+            assert_eq!(course.validate(), expected, "{course:?}");
+        }
+    }
+
+    #[test]
+    fn test_flat_slopes_are_errors() {
+        let course = |grade| Course {
+            slopes: vec![Slope::new(100.0, 100.0, grade)],
+            ..validated_course()
+        };
+        assert_eq!(course(-0.5).validate(), Ok(()));
+        assert_eq!(
+            course(0.0).validate(),
+            Err("slope at 100m has no grade".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rail_must_cover_the_course() {
+        let course = |length| Course {
+            rail: rail_from_turns(1.0, length, &[0.0], &[0.0]),
+            ..validated_course()
+        };
+        assert_eq!(course(2000.0).validate(), Ok(()));
+        assert_eq!(
+            course(1999.0).validate(),
+            Err("rail covers 1999m instead of the course's 2000m".to_string())
+        );
     }
 
     #[test]

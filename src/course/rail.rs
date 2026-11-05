@@ -31,6 +31,8 @@ use crate::units::CourseWidths;
 pub struct Rail {
     /// World distance covered along the rail over the first meter.
     pub(crate) base_ratio: f64,
+    /// Course length in meters that the keyframes cover.
+    pub(crate) length: f64,
     /// Keyframes per course meter.
     frames_per_meter: f64,
     /// Keyframes, equally spaced from the gate (first) to the goal (last).
@@ -106,6 +108,7 @@ impl Rail {
         debug_assert!(base_ratio > 0.0 && length > 0.0 && keyframes.len() >= 2);
         Rail {
             base_ratio,
+            length,
             frames_per_meter: (keyframes.len() - 1) as f64 / length,
             keyframes: keyframes.into_boxed_slice(),
         }
