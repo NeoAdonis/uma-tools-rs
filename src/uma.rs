@@ -670,6 +670,19 @@ mod tests {
     }
 
     #[test]
+    fn test_uma_name() {
+        use crate::test_utils::uma;
+        // Also the ID of a skill, with another name.
+        let card = Uma {
+            character_id: Some(100101),
+            ..uma(Style::Late)
+        };
+        let name = card.name(Language::English);
+        assert_eq!(name, Some("[Special Dreamer] Special Week"));
+        assert_eq!(uma(Style::Late).name(Language::English), None);
+    }
+
+    #[test]
     fn test_uma_data_from_json_file() {
         let data = UmaData::from_json_file("tests/data/uma_data.json").unwrap();
         let uma = data.uma;

@@ -908,6 +908,17 @@ mod tests {
     }
 
     #[test]
+    fn test_skill_name() {
+        // Also the ID of a character card, with another name.
+        let skill = Skill {
+            id: 100101,
+            ..synthetic_skill(vec![])
+        };
+        let name = skill.name(Language::English);
+        assert_eq!(name, Some("Shooting for Victory!"));
+    }
+
+    #[test]
     fn test_skill_type_ids_fit_in_set() {
         for id in 0..=u8::MAX {
             if SkillType::try_from(id).is_ok() {
