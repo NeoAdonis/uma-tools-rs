@@ -243,6 +243,45 @@ fn test_pace_up_ex_not_before_one_point_five_anniversary() {
     }
 }
 
+#[test]
+fn test_pacemaker_changed_in_one_point_five_anniversary() {
+    use PositioningStrategy::*;
+
+    // Before, the pacemaker is the frontmost runner with the most aggressive
+    // style, not the Pace leader: 2m behind her, a Late runner paces down.
+    // From 1.5 Anniv., the pacemaker is the leader, 22m ahead.
+    for (version, paces_down) in [
+        (GameVersion::FirstAnniversary, true),
+        (GameVersion::OnePointFiveAnniversary, false),
+    ] {
+        let mut solver = positioning_solver(
+            &[
+                (Style::Pace, 120.0),
+                (Style::Front, 100.0),
+                (Style::Late, 98.0),
+            ],
+            version,
+        );
+        update_positioning_repeatedly(&mut solver);
+        let actual = matches!(strategy_at(&solver, 98.0), PaceDown(_));
+        assert_eq!(actual, paces_down, "{version:?}");
+    }
+
+    // Only the frontmost Front runner: 7.8m behind her is within the range of
+    // a Late runner (7.54m to 8.12m on 1200m), unlike 0.2m ahead of the other.
+    let mut solver = positioning_solver(
+        &[
+            (Style::Pace, 120.0),
+            (Style::Front, 100.0),
+            (Style::Late, 92.2),
+            (Style::Front, 92.0),
+        ],
+        GameVersion::FirstAnniversary,
+    );
+    update_positioning_repeatedly(&mut solver);
+    assert_eq!(strategy_at(&solver, 92.2), Normal);
+}
+
 /// Positioning strategy of the runner at `position`.
 fn strategy_at(solver: &RaceSolver<Runner>, position: f64) -> PositioningStrategy {
     let mut runners = solver.runners.iter();
@@ -279,18 +318,19 @@ fn test_front_speed_up_distance_by_front_runner_count() {
     // A single front runner may keep speeding up while less than 12.5m ahead;
     // otherwise the limit is 4.5m. Runaways and runners acting as front runners
     // because they're rushed don't count as front runners.
-    // (style behind, whether rushed and acting as a front runner, expected).
-    let cases = [
-        (Style::Pace, false, FrontSpeedUp),
-        (Style::Runaway, false, FrontSpeedUp),
-        (Style::Pace, true, FrontSpeedUp),
-        (Style::Front, false, Normal),
+    // (styles behind, whether the first one is rushed and acting as a front
+    // runner, expected).
+    let cases: [(&[Style], bool, PositioningStrategy); 5] = [
+        (&[Style::Pace], false, FrontSpeedUp),
+        (&[Style::Pace, Style::Late], false, FrontSpeedUp),
+        (&[Style::Runaway], false, FrontSpeedUp),
+        (&[Style::Pace], true, FrontSpeedUp),
+        (&[Style::Front], false, Normal),
     ];
     for (behind, rushed, expected) in cases {
-        let mut solver = positioning_solver(
-            &[(Style::Front, 108.0), (behind, 100.0)],
-            GameVersion::LATEST,
-        );
+        let mut runners = vec![(Style::Front, 108.0)];
+        runners.extend(behind.iter().copied().zip([100.0, 90.0]));
+        let mut solver = positioning_solver(&runners, GameVersion::LATEST);
         if rushed {
             set_rushed(&mut solver, 1);
             let rush_state = solver.runners[1].rush_state.as_mut().unwrap();
@@ -1832,8 +1872,9 @@ fn test_rush_counters_by_position_count_opponents() {
         solver.runners[i].position = position;
     }
 
-    // Rushed: the team 0 leader and the team 1 runner.
+    // Rushed: both team 0 runners and the team 1 runner.
     set_rushed(&mut solver, 0);
+    set_rushed(&mut solver, 1);
     set_rushed(&mut solver, 2);
     solver.update_order_values();
 
@@ -1848,14 +1889,15 @@ fn test_rush_counters_by_position_count_opponents() {
     assert_eq!(
         counters,
         [
-            // Team 0 leader: the team 1 runner behind is an opponent.
-            (0, 0, 1, 1),
+            // Team 0 leader: of both runners behind, only the team 1 runner is
+            // an opponent.
+            (0, 0, 2, 1),
             // Team 0 member: the leader ahead is an ally.
             (1, 0, 1, 1),
             // Team 1: does not count itself.
-            (1, 1, 0, 0),
-            // Team 2: both rushed runners ahead are opponents.
             (2, 2, 0, 0),
+            // Team 2: every rushed runner ahead is an opponent.
+            (3, 3, 0, 0),
         ]
     );
 }
@@ -1980,6 +2022,11 @@ fn test_targets_nearest_runners_ahead_and_behind() {
     assert_eq!(
         targets(&solver, 2, SkillTarget::AheadOfPosition { position: 5 }),
         [0, 1, 3]
+    );
+    // More places than runners.
+    assert_eq!(
+        targets(&solver, 2, SkillTarget::AheadOfPosition { position: 10 }),
+        [0, 1, 3, 4, 5]
     );
 }
 
@@ -2130,6 +2177,10 @@ fn test_finished_runners_are_not_counted_as_targets() {
     solver.runners[1].finish_time = Some(60.0);
     assert_eq!(
         targets(&solver, 2, SkillTarget::AheadOfSelf { count: 1 }),
+        [0]
+    );
+    assert_eq!(
+        targets(&solver, 2, SkillTarget::AheadOfPosition { position: 3 }),
         [0]
     );
 }
@@ -3770,18 +3821,28 @@ fn test_lone_runner_has_no_lead() {
 }
 
 #[test]
-fn test_level_field_has_zero_distance_rate() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    for _ in 0..2 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
-    }
-    let mut solver = solver.ready_runners();
-    for runner in &mut solver.runners {
-        runner.position = 0.0;
-    }
-    solver.update_order_values();
-    for runner in &solver.runners {
-        assert_eq!(runner.position_diff.rate_from_first, 0.0);
+fn test_distance_rate_is_relative_to_the_field_spread() {
+    // A spread field, and a level one, where the rate is 0.
+    let cases: [(&[f64], &[f64]); 2] = [
+        (&[500.0, 400.0, 350.0, 100.0], &[0.0, 25.0, 37.5, 100.0]),
+        (&[0.0, 0.0], &[0.0, 0.0]),
+    ];
+    for (positions, expected) in cases {
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+        for _ in positions {
+            solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        }
+        let mut solver = solver.ready_runners();
+        for (runner, &position) in solver.runners.iter_mut().zip(positions) {
+            runner.position = position;
+        }
+        solver.update_order_values();
+        let rates: Vec<_> = solver
+            .runners
+            .iter()
+            .map(|runner| runner.position_diff.rate_from_first)
+            .collect();
+        assert_eq!(rates, expected, "{positions:?}");
     }
 }
 
