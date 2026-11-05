@@ -408,9 +408,9 @@ impl Runner {
         //
         // N.B.: A later alternative could then win over an activation-dependent
         // earlier one. It's assumed that no skill will have such alternatives.
-        let others_activated =
-            self.activated_alternatives[logic.skill_index] & !(1 << logic.alternative_index);
-        if others_activated != 0 && !logic.is_continuation {
+        if self.other_alternative_activated(logic.skill_index, logic.alternative_index)
+            && !logic.is_continuation
+        {
             return false;
         }
         let skill_index = logic.skill_index;
@@ -573,6 +573,16 @@ impl Runner {
         state: &RaceState,
     ) -> bool {
         state.elapsed_time < self.cooldown_until[skill_index][alternative_index]
+    }
+
+    /// Check if a skill has activated through any alternative other than the
+    /// given one.
+    pub(crate) fn other_alternative_activated(
+        &self,
+        skill_index: usize,
+        alternative_index: usize,
+    ) -> bool {
+        self.activated_alternatives[skill_index] & !(1 << alternative_index) != 0
     }
 
     /// Check if any timed effect applied by a skill is still active.

@@ -713,8 +713,7 @@ fn activation_value(
         IsActivateOtherSkillDetail => {
             // Check if another alternative of the same skill has activated.
             logic_ctx.is_some_and(|logic| {
-                runner.activated_alternatives[logic.skill_index] & !(1 << logic.alternative_index)
-                    != 0
+                runner.other_alternative_activated(logic.skill_index, logic.alternative_index)
             }) as i32
         }
 
