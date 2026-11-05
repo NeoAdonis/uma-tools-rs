@@ -315,14 +315,14 @@ impl Runner {
             inside.extend(scheduler.position_windows.advance(position, EPSILON));
             inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
 
-            // HP can recover, so HP windows are never dropped.
+            // HP can recover, so HP windows are never dropped. Unlike positions and
+            // times, the guards evaluate the same HP percentage as the window, so no
+            // epsilon is needed.
             inside.extend(
                 scheduler
                     .hp_windows
                     .iter()
-                    .filter(|window| {
-                        hp >= window.min_threshold - EPSILON && hp <= window.max_threshold + EPSILON
-                    })
+                    .filter(|window| (window.min_threshold..=window.max_threshold).contains(&hp))
                     .map(|window| window.logic_idx),
             );
             if entered_last_straight {
