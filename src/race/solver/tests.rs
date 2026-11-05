@@ -4,6 +4,7 @@ use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
 use crate::race::rush::RushState;
 use crate::race::spot_struggle::SpotStruggle;
+use crate::race::timed_boost::TimedBoost;
 use crate::test_utils::*;
 use crate::trigger::skill_activation::{OvertakeExtension, PendingEffect};
 use crate::units::CourseWidths;
@@ -981,6 +982,78 @@ fn test_spot_struggle_not_before_first_anniversary() {
     assert_eq!(strugglers(&solver), [false, false]);
 }
 
+/// Solver with one runner per `(style, position)` on a 1200m course, in the
+/// sections where secure lead and compete before spurt can happen.
+fn boost_solver(runners: &[(Style, f64)]) -> RaceSolver<Runner> {
+    let mut solver = positioning_solver(runners, GameVersion::LATEST);
+    for i in 0..solver.runners.len() {
+        let position = solver.runners[i].position;
+        place(&mut solver, i, position, 0.1);
+    }
+    solver
+}
+
+#[test]
+fn test_is_alone_counts_same_style_within_distance() {
+    let cases = [
+        (Style::Front, 590.0, 0, false),
+        (Style::Front, 589.9, 0, true),
+        (Style::Pace, 595.0, 0, true),
+        // From the runner behind.
+        (Style::Front, 595.0, 1, false),
+    ];
+    for (style, position, i, expected) in cases {
+        let solver = boost_solver(&[(Style::Front, 600.0), (style, position)]);
+        let actual = solver.is_alone(i, 10.0);
+        assert_eq!(actual, expected, "{style:?} at {position}m, runner {i}");
+    }
+}
+
+#[test]
+fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
+    let lead = secure_lead::desirable_lead(Style::Front, Style::Pace, 1200.0).unwrap();
+    // Secure lead of the leader after each of 50 checks.
+    let checks = |solver: &mut RaceSolver<Runner>| -> Vec<TimedBoost> {
+        (1..=50)
+            .map(|check| {
+                solver.state.elapsed_time = 10.0 + check as f64 * secure_lead::CHECK_INTERVAL;
+                solver.update_secure_lead();
+                solver.runners[0].secure_lead
+            })
+            .collect()
+    };
+    let is_active = |boost: &&TimedBoost| matches!(boost, TimedBoost::Active { .. });
+
+    let mut solver = boost_solver(&[(Style::Front, 600.0), (Style::Pace, 600.0 - lead - 0.1)]);
+    assert!(!checks(&mut solver).iter().any(|boost| is_active(&boost)));
+
+    let mut solver = boost_solver(&[(Style::Front, 600.0), (Style::Pace, 600.0 - lead + 0.1)]);
+    let boost = *checks(&mut solver).iter().find(is_active).unwrap();
+    // Alone: the Pace runner has another style.
+    let guts = solver.runners[0].adjusted.guts;
+    let expected = secure_lead::target_speed_bonus(Style::Front, guts, true, GameVersion::LATEST);
+    assert_eq!(boost.speed_bonus(), expected);
+}
+
+#[test]
+fn test_compete_before_spurt_when_far_from_first() {
+    let threshold = compete_before_spurt::lead_threshold(Style::Front, 1200.0);
+    for (behind, expected) in [(threshold + 0.1, true), (threshold - 0.1, false)] {
+        let mut solver = boost_solver(&[(Style::Runaway, 610.0), (Style::Front, 610.0 - behind)]);
+        for runner in &mut solver.runners {
+            // Never enter Stamina Keep, the only random roll.
+            runner.stamina_keep.ratio = 0.0;
+        }
+        solver.update_order_values();
+        solver.update_compete_before_spurt();
+        let actual = matches!(
+            solver.runners[1].compete_before_spurt,
+            TimedBoost::Active { .. }
+        );
+        assert_eq!(actual, expected, "{behind}m behind");
+    }
+}
+
 /// Frames at 15 FPS until a duel starts: the first frame two runners are close
 /// (frame 0), then 2s worth of frames.
 const DUEL_FRAMES: usize = 31;
@@ -1233,6 +1306,33 @@ fn test_duel_not_before_first_anniversary() {
     let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::Original);
     update_duels(&mut solver, DUEL_FRAMES * 2);
     assert_eq!(duelists(&solver), [false, false]);
+}
+
+#[test]
+fn test_duel_close_time_is_kept_per_pair() {
+    // The first two runners are close from the start, and the last one gets
+    // close to the one ahead of her a frame before they would start dueling.
+    // Gates make the pairs share a slot if the pair index mixes them up.
+    let cases: [(&[f64], &[u8], &[bool]); 2] = [
+        (
+            &[1000.0, 998.0, 960.0, 950.0],
+            &[1, 4, 2, 3],
+            &[true, true, false, false],
+        ),
+        (&[1000.0, 998.0, 990.0], &[1, 3, 2], &[true, true, false]),
+    ];
+    for (positions, gates, expected) in cases {
+        let runners: Vec<_> = positions.iter().map(|&position| (position, 0.1)).collect();
+        let mut solver = duel_solver(&runners, GameVersion::LATEST);
+        for (runner, &gate) in solver.runners.iter_mut().zip(gates) {
+            runner.gate_roll = gate;
+        }
+        update_duels(&mut solver, DUEL_FRAMES - 1);
+        let last = positions.len() - 1;
+        place_on_straight(&mut solver, last, positions[last - 1] - 1.0, 0.1);
+        update_duels(&mut solver, 1);
+        assert_eq!(duelists(&solver), expected, "gates {gates:?}");
+    }
 }
 
 #[test]
