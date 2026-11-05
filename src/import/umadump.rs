@@ -489,6 +489,7 @@ mod tests {
         invalid(r#""running_style": 1"#, r#""running_style": 0"#);
         invalid(r#""running_style": 1"#, r#""running_style": 5"#);
         invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 0"#);
+        invalid(r#""proper_ground_turf": 8"#, r#""proper_ground_turf": 9"#);
         invalid(r#""guts": 604"#, r#""guts": 0"#);
     }
 
@@ -549,7 +550,13 @@ mod tests {
             ..UmaDumpData::from_json(UMA_JSON).unwrap()
         };
         assert_eq!(data, expected);
-        assert!(UmaDumpData::from_career_json(&career_json(UMA_JSON, 6)).is_err());
+        for motivation in [0, 6] {
+            let json = career_json(UMA_JSON, motivation);
+            assert!(
+                UmaDumpData::from_career_json(&json).is_err(),
+                "{motivation}"
+            );
+        }
     }
 
     #[test]
@@ -582,6 +589,16 @@ mod tests {
                 level: 4
             }
         );
+    }
+
+    #[test]
+    fn test_all_from_json_file() {
+        let name = format!("uma_tools_umadump_{}.json", std::process::id());
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, format!("[{UMA_JSON}]")).unwrap();
+        let all = UmaDumpData::all_from_json_file(&path);
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(all.unwrap(), [UmaDumpData::from_json(UMA_JSON).unwrap()]);
     }
 
     #[test]

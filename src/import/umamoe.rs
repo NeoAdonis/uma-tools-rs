@@ -986,8 +986,11 @@ mod tests {
         };
         invalid(&field, r#""version": 1"#, r#""version": 2"#);
         invalid(&field, r#""guts": "604""#, r#""guts": "0""#);
+        invalid(&field, r#""guts": "604""#, r#""guts": "x""#);
+        invalid(&field, r#""motivation": "2""#, r#""motivation": "0""#);
         invalid(&field, r#""motivation": "2""#, r#""motivation": "6""#);
         invalid(UMA1_UMA2_JSON, r#""guts": 451"#, r#""guts": 0"#);
+        invalid(UMA1_UMA2_JSON, r#""mood": 2"#, r#""mood": 3"#);
         invalid(UMA1_UMA2_JSON, r#""200132""#, r#""skill""#);
         invalid(
             UMA1_UMA2_JSON,
