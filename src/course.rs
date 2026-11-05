@@ -705,7 +705,7 @@ fn check_segments<S: Segment>(kind: &str, segments: &[S], length: f64) -> Result
 mod tests {
     use super::*;
     use crate::course::rail::rail_from_turns;
-    use crate::test_utils::synthetic_course;
+    use crate::test_utils::{assert_close, synthetic_course};
 
     /// Create a minimal course at the given racetrack.
     ///
@@ -834,23 +834,37 @@ mod tests {
     }
 
     #[test]
-    fn test_track_flags() {
-        // (racetrack, exchange race, abroad, tight track)
+    fn test_track_name_and_flags() {
+        // (racetrack, name, exchange race, abroad, tight track)
         let cases = [
-            (10103, true, false, true),   // Kawasaki
-            (10105, true, false, false),  // Morioka
-            (10203, false, true, false),  // Del Mar
-            (10001, false, false, true),  // Sapporo
-            (10006, false, false, false), // Tokyo
+            (10103, "Kawasaki", true, false, true),
+            (10105, "Morioka", true, false, false),
+            (10203, "Del Mar", false, true, false),
+            (10001, "Sapporo", false, false, true),
+            (10006, "Tokyo", false, false, false),
         ];
-        for (track_id, exchange, abroad, tight) in cases {
+        for (track_id, name, exchange, abroad, tight) in cases {
             let course = create_test_course(track_id);
-            let flags = (
+            let actual = (
+                course.track_name(Language::English),
                 course.is_exchange_race(),
                 course.is_abroad(),
                 course.is_tight_track(),
             );
-            assert_eq!(flags, (exchange, abroad, tight), "track {track_id}");
+            let expected = (Some(name), exchange, abroad, tight);
+            assert_eq!(actual, expected, "track {track_id}");
+        }
+    }
+
+    #[test]
+    fn test_base_speed() {
+        // 20 m/s at 2000m, 1 m/s less per 1000m more.
+        for (distance, expected) in [(1200, 20.8), (2000, 20.0), (3200, 18.8)] {
+            let course = Course {
+                distance,
+                ..synthetic_course()
+            };
+            assert_close!(course.base_speed(), expected, "{distance}m");
         }
     }
 
