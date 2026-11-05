@@ -182,6 +182,9 @@ fn test_position_window_ranges() {
         ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
         ("phase==1&corner!=0", (section * 4.0, section * 16.0)),
         ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
+        // Only true at 1200m: the remaining distance is 800m there, and the
+        // final corner starts. A single point is a valid range.
+        ("remain_distance>=800&is_finalcorner==1", (1200.0, 1200.0)),
         // Nothing position-based: window covers the whole race.
         ("order<=3", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),

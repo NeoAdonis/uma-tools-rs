@@ -453,6 +453,11 @@ fn activation_event(comp: &Comparison) -> TriggerCondition {
 }
 
 /// Range of values `(min, max)` a variable can take (both inclusive).
+///
+/// It may contain values where the comparisons are false, but never misses one
+/// where they're true, so a single point (`min == max`) isn't empty (e.g.
+/// `remain_distance>=800&is_finalcorner==1` when the final corner starts 800m
+/// before the goal).
 type Range = (f64, f64);
 
 /// Range containing every value.
