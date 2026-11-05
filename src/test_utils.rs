@@ -5,7 +5,7 @@ use crate::course::rail::Rail;
 use crate::course::*;
 use crate::race::parameters::*;
 use crate::race::runner::Runner;
-use crate::race::solver::{Entrant, RaceSolver};
+use crate::race::solver::{Entrant, RaceSolver, RaceState};
 use crate::skill::*;
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -146,6 +146,14 @@ pub(crate) fn ready_solver_on(
     let mut solver = RaceSolver::new(course, race_params(), config);
     solver.add_runner(Entrant::new(uma, skills));
     solver.ready_runners()
+}
+
+/// Single ready runner with the given style on Sapporo turf 1200m (course
+/// 10101), taken out of [`ready_solver`] with the race state.
+pub(crate) fn ready_runner(style: Style, config: Configuration) -> (Runner, RaceState) {
+    let solver = ready_solver(10101, uma(style), vec![], config);
+    let runner = solver.runners.into_iter().next().unwrap();
+    (runner, solver.state)
 }
 
 /// Regular skill effect on oneself with a direct value.

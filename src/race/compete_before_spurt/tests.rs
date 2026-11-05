@@ -1,10 +1,8 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
-use crate::race::runner::Runner;
-use crate::race::solver::RaceState;
 use crate::race::timed_boost::TimedBoost;
 use crate::skill::SkillType;
-use crate::test_utils::{assert_close, effect, ready_solver, seeded_config, uma};
+use crate::test_utils::{assert_close, effect, ready_runner, seeded_config};
 use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
@@ -68,19 +66,9 @@ fn test_stamina_keep_chance() {
     assert_close!(stamina_keep_chance(2500), 1.0);
 }
 
-fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) {
-    let config = Configuration {
-        game_version,
-        ..seeded_config(42)
-    };
-    let solver = ready_solver(10101, uma(style), vec![], config);
-    let runner = solver.runners.into_iter().next().unwrap();
-    (runner, solver.state)
-}
-
 #[test]
 fn test_compete_check_window() {
-    let (mut runner, mut state) = ready_runner(Style::End, GameVersion::LATEST);
+    let (mut runner, mut state) = ready_runner(Style::End, seeded_config(42));
     state.elapsed_time = 100.0;
     for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
@@ -88,7 +76,11 @@ fn test_compete_check_window() {
         assert_eq!(actual, expected, "section {section}");
     }
 
-    let (mut old_runner, mut state) = ready_runner(Style::Pace, GameVersion::SecondAnniversary);
+    let config = Configuration {
+        game_version: GameVersion::SecondAnniversary,
+        ..seeded_config(42)
+    };
+    let (mut old_runner, mut state) = ready_runner(Style::Pace, config);
     state.elapsed_time = 100.0;
     old_runner.section = 12;
     assert!(!old_runner.is_compete_check_due(&state));
@@ -97,7 +89,7 @@ fn test_compete_check_window() {
 
 #[test]
 fn test_compete_activation_and_expiry() {
-    let (mut runner, mut state) = ready_runner(Style::Front, GameVersion::LATEST);
+    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
     runner.section = 12;
     // Never enter Stamina Keep.
     runner.stamina_keep.ratio = 0.0;
@@ -152,7 +144,7 @@ fn test_compete_activation_and_expiry() {
 
 #[test]
 fn test_stamina_keep_blocks_compete_until_recovery() {
-    let (mut runner, mut state) = ready_runner(Style::Late, GameVersion::LATEST);
+    let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(42));
     runner.section = 12;
     runner.position = 700.0;
     runner.hp.set_current(1.0);

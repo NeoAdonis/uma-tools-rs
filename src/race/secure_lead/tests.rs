@@ -1,9 +1,7 @@
 use super::*;
 use crate::configuration::GameVersion;
-use crate::race::runner::Runner;
-use crate::race::solver::RaceState;
 use crate::race::timed_boost::TimedBoost;
-use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
+use crate::test_utils::{assert_close, ready_runner, seeded_config};
 use crate::uma::*;
 
 #[test]
@@ -88,15 +86,9 @@ fn test_hp_cost_style_coefficients() {
     }
 }
 
-fn ready_runner(style: Style) -> (Runner, RaceState) {
-    let solver = ready_solver(10101, uma(style), vec![], seeded_config(42));
-    let runner = solver.runners.into_iter().next().unwrap();
-    (runner, solver.state)
-}
-
 #[test]
 fn test_secure_lead_check_window() {
-    let (mut runner, mut state) = ready_runner(Style::Front);
+    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
     state.elapsed_time = 100.0;
     for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
@@ -104,7 +96,7 @@ fn test_secure_lead_check_window() {
         assert_eq!(actual, expected, "section {section}");
     }
 
-    let (mut end_closer, mut state) = ready_runner(Style::End);
+    let (mut end_closer, mut state) = ready_runner(Style::End, seeded_config(42));
     state.elapsed_time = 100.0;
     end_closer.section = 12;
     assert!(!end_closer.is_secure_lead_check_due(&state));
@@ -112,7 +104,7 @@ fn test_secure_lead_check_window() {
 
 #[test]
 fn test_secure_lead_activation_and_expiry() {
-    let (mut runner, mut state) = ready_runner(Style::Front);
+    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
     runner.section = 12;
 
     // Sufficient lead never triggers.

@@ -5,8 +5,10 @@ use crate::test_utils::synthetic_course;
 use std::str::FromStr;
 
 fn create_test_course() -> Course {
-    create_test_course_with(
-        vec![
+    Course {
+        id: 10001,
+        distance: 2400,
+        corners: vec![
             Corner {
                 start: 100.0,
                 length: 200.0,
@@ -16,37 +18,34 @@ fn create_test_course() -> Course {
                 length: 150.0,
             },
         ],
-        vec![Slope::new(800.0, 100.0, 0.05)],
-        vec![Straight {
+        slopes: vec![Slope::new(800.0, 100.0, 0.05)],
+        straights: vec![Straight {
             start: 0.0,
             end: 100.0,
             front_type: FrontType::Audience,
         }],
-    )
+        ..synthetic_course()
+    }
+}
+
+fn create_test_course_with_corners(corners: Vec<Corner>) -> Course {
+    Course {
+        corners,
+        ..create_test_course()
+    }
 }
 
 fn create_test_course_with_straights(straights: Vec<Straight>) -> Course {
-    let course = create_test_course();
-    create_test_course_with(course.corners.clone(), course.slopes.clone(), straights)
+    Course {
+        straights,
+        ..create_test_course()
+    }
 }
 
 fn create_test_course_with_slopes(slopes: Vec<Slope>) -> Course {
-    let course = create_test_course();
-    create_test_course_with(course.corners.clone(), slopes, course.straights.clone())
-}
-
-fn create_test_course_with(
-    corners: Vec<Corner>,
-    slopes: Vec<Slope>,
-    straights: Vec<Straight>,
-) -> Course {
     Course {
-        id: 10001,
-        distance: 2400,
-        corners,
         slopes,
-        straights,
-        ..synthetic_course()
+        ..create_test_course()
     }
 }
 
@@ -120,7 +119,7 @@ fn test_corner_random_last_lap() {
             length: 100.0,
         })
         .collect();
-    let course = create_test_course_with(corners, vec![], vec![]);
+    let course = create_test_course_with_corners(corners);
 
     for number in 1..=4 {
         // Only the last lap's corner counts.
@@ -301,14 +300,10 @@ fn test_phase_subdivision_random_all_phases() {
 #[test]
 fn test_phase_corner_random_partial_overlap() {
     // Corner [300-700] straddles Early (0-400) and Mid (400-1600).
-    let course = create_test_course_with(
-        vec![Corner {
-            start: 300.0,
-            length: 400.0,
-        }],
-        vec![],
-        vec![],
-    );
+    let course = create_test_course_with_corners(vec![Corner {
+        start: 300.0,
+        length: 400.0,
+    }]);
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
     for (phase, (start, end)) in [(0, (300.0, 400.0)), (1, (400.0, 700.0))] {
@@ -438,20 +433,16 @@ fn test_phase_corner_random_stitched_segments() {
     // Corners [390-425] and [500-530] clipped to Mid: [400-425] and [500-530].
     // Stitched together: 55m, so offsets 0 to 45, which fall on [400-425) and
     // [500-520].
-    let course = create_test_course_with(
-        vec![
-            Corner {
-                start: 390.0,
-                length: 35.0,
-            },
-            Corner {
-                start: 500.0,
-                length: 30.0,
-            },
-        ],
-        vec![],
-        vec![],
-    );
+    let course = create_test_course_with_corners(vec![
+        Corner {
+            start: 390.0,
+            length: 35.0,
+        },
+        Corner {
+            start: 500.0,
+            length: 30.0,
+        },
+    ]);
     let (first, second): (Vec<f64>, Vec<f64>) = rolled_points("phase_corner_random==1", &course)
         .into_iter()
         .partition(|&point| point < 425.0);
@@ -494,7 +485,7 @@ fn test_all_corner_random() {
     );
 
     // No corners on course fails the roll.
-    let course = create_test_course_with(vec![], vec![], vec![]);
+    let course = create_test_course_with_corners(vec![]);
     assert!(roll(&condition, &course, &mut rng).is_none());
 }
 
@@ -504,26 +495,18 @@ fn test_all_corner_random_short_corners() {
     let condition = Condition::from_str("all_corner_random==1").unwrap();
 
     // A 10m corner only fits one segment.
-    let course = create_test_course_with(
-        vec![Corner {
-            start: 500.0,
-            length: 10.0,
-        }],
-        vec![],
-        vec![],
-    );
+    let course = create_test_course_with_corners(vec![Corner {
+        start: 500.0,
+        length: 10.0,
+    }]);
     assert_eq!(roll(&condition, &course, &mut rng), Some(vec![500.0]));
 
     // A 25m corner fits a second segment only if the first one starts within 5m of
     // the corner start, leaving at least 10m after it.
-    let course = create_test_course_with(
-        vec![Corner {
-            start: 500.0,
-            length: 25.0,
-        }],
-        vec![],
-        vec![],
-    );
+    let course = create_test_course_with_corners(vec![Corner {
+        start: 500.0,
+        length: 25.0,
+    }]);
     let (mut one, mut two) = (0, 0);
     for _ in 0..500 {
         let points = roll(&condition, &course, &mut rng).unwrap();
@@ -598,7 +581,7 @@ fn test_is_finalcorner_random() {
     assert_covers(&points, 500.0, 640.0, "final corner");
 
     // No corners on course fails the roll.
-    let course = create_test_course_with(vec![], vec![], course.straights.clone());
+    let course = create_test_course_with_corners(vec![]);
     let condition = Condition::from_str("is_finalcorner_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }

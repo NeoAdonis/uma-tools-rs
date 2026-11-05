@@ -45,8 +45,8 @@ fn create_test_course() -> Course {
     }
 }
 
-/// Compile a condition on the test course, with a single random point at 1000m.
-/// for every branch.
+/// Compile a condition on the test course, with a single random point at
+/// 1000m for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
     let condition = Condition::from_str(condition).unwrap();
     let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
