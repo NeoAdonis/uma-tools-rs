@@ -7,7 +7,8 @@
 //! parameters of `--parameters`), or from an uma.moe build code (`--build`),
 //! which has its own course, race conditions, teams and gates (its gate order
 //! overrides the configured one, if it has one). `--focus` picks the runner
-//! (by field index, 0 by default) whose skills are summarized.
+//! (by field index, 0 by default) whose skills are summarized. Skills come
+//! from `--skills` (the English skill data by default).
 //!
 //! Races are split across `--threads` threads (one per logical CPU by
 //! default); pass `--threads 1` to simulate them all in a single thread, e.g.
@@ -63,6 +64,7 @@ fn main() {
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
     let mut build_path = None;
+    let mut skills_path = PathBuf::from("data/skill_data_en.json");
     let mut focus = 0;
     let mut races: u64 = 1000;
     // One thread per logical CPU by default, or a single one if unknown.
@@ -88,6 +90,10 @@ fn main() {
                 let value = args.next().expect("--build requires a file path");
                 build_path = Some(PathBuf::from(value));
             }
+            "--skills" => {
+                let value = args.next().expect("--skills requires a file path");
+                skills_path = PathBuf::from(value);
+            }
             "--focus" => {
                 let value = args.next().expect("--focus requires a number");
                 focus = value.parse().expect("--focus requires a number");
@@ -112,8 +118,7 @@ fn main() {
     let mut config =
         Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
     let language = config.language;
-    let all_skills =
-        SkillData::from_json_file("data/skill_data_en.json").expect("Failed to load skill data");
+    let all_skills = SkillData::from_json_file(&skills_path).expect("Failed to load skill data");
     let (courses, rails) = ("data/course_data.json", "data/rails");
     let load_course = |parameters: &RaceParametersData| {
         Course::from_json_files(courses, rails, &parameters.course_id)
