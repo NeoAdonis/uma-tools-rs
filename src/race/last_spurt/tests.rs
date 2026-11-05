@@ -196,6 +196,8 @@ fn test_recovery_recalculates_from_late_phase() {
             None,
             &solver.state,
         );
+        // Counted for `activate_count_heal`.
+        assert_eq!(runner.trigger_scheduler.activation_counts.heal, 1);
         let max_speed = runner.last_spurt.unwrap().max_speed;
         assert_eq!(
             max_speed > 0.0,

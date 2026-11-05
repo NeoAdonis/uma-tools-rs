@@ -186,8 +186,9 @@ fn test_position_window_ranges() {
         ("order<=3", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
         ("distance_rate!=50", (0.0, f64::INFINITY)),
-        // Not in a corner: its gaps aren't a range.
+        // Not in a corner or on a slope: their gaps aren't a range.
         ("corner==0", (0.0, f64::INFINITY)),
+        ("slope==0", (0.0, f64::INFINITY)),
         // Evaluable activation comparisons that aren't events.
         ("is_activate_other_skill_detail==1", (0.0, f64::INFINITY)),
     ];

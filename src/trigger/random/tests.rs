@@ -421,8 +421,8 @@ fn test_up_slope_random_later_half() {
     assert_covers(&crossing, 1200.0, 1290.0, "uphill crossing halfway");
     assert_covers(&late, 1800.0, 1890.0, "late uphill");
 
-    // Only uphill [800-900] is in the first half, which fails the roll.
-    let course = create_test_course();
+    // Only uphill [1100-1200] ends at halfway, which fails the roll.
+    let course = create_test_course_with_slopes(vec![Slope::new(1100.0, 100.0, 0.05)]);
     let condition = Condition::from_str("up_slope_random_later_half==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
