@@ -43,9 +43,10 @@ fn late_base_target_speed(solver: &RaceSolver<Runner>) -> f64 {
     )
 }
 
-/// Set HP halfway between what a last spurt needs at late-race base target
-/// speed and at max speed, so that the result is `AboveBase`.
-fn set_hp_above_base(solver: &mut RaceSolver<Runner>) {
+/// Set HP at `share` of the way from what a last spurt needs at late-race base
+/// target speed to what it needs at max speed, so that the result is
+/// `AboveBase` (with `share` in (0, 1)).
+fn set_hp_above_base(solver: &mut RaceSolver<Runner>, share: f64) {
     let base_speed = late_base_target_speed(solver);
     let runner = &solver.runners[0];
     let at_base = spurt_hp_required(runner, &solver.state, base_speed);
@@ -54,7 +55,9 @@ fn set_hp_above_base(solver: &mut RaceSolver<Runner>) {
         &solver.state,
         last_spurt_speed_max(runner, &solver.state),
     );
-    solver.runners[0].hp.set_current((at_base + at_max) / 2.0);
+    solver.runners[0]
+        .hp
+        .set_current(at_base + (at_max - at_base) * share);
 }
 
 /// Placeholder last spurt to detect whether it has been recalculated.
@@ -101,6 +104,34 @@ fn test_speed_max_above_late_base_target_speed() {
 }
 
 #[test]
+fn test_speed_max() {
+    // On a 2000m course (20 m/s base speed), with an End Closer (1.0 Late phase
+    // multiplier). Guts only adds speed from the 1st Anniversary onward.
+    // (version, distance aptitude, speed, guts, max speed).
+    let cases = [
+        (GameVersion::Original, Aptitude::A, 1200, 800, 24.385846),
+        (
+            GameVersion::FirstAnniversary,
+            Aptitude::B,
+            1200,
+            800,
+            24.275807,
+        ),
+    ];
+    let mut solver = solver(1000, GameVersion::Original, 0);
+    for (game_version, distance_aptitude, speed, guts, expected) in cases {
+        solver.state.config.game_version = game_version;
+        let runner = &mut solver.runners[0];
+        runner.adjusted.style = Style::End;
+        runner.adjusted.distance_aptitude = distance_aptitude;
+        runner.adjusted.speed = speed;
+        runner.adjusted.guts = guts;
+        let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
+        assert_close!(max, expected, tolerance = 1e-6, "{game_version:?}");
+    }
+}
+
+#[test]
 fn test_calculated_on_entering_late_phase() {
     let mut solver = solver(1000, GameVersion::LATEST, 0);
 
@@ -122,7 +153,7 @@ fn test_calculated_on_entering_late_phase() {
 fn test_uses_hp_at_late_phase_entry() {
     let mut solver = solver(1000, GameVersion::LATEST, 0);
     move_to_section(&mut solver, 15);
-    set_hp_above_base(&mut solver);
+    set_hp_above_base(&mut solver, 0.5);
     move_to_section(&mut solver, 16);
     let last_spurt = solver.runners[0].last_spurt.as_ref().unwrap();
     assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
@@ -133,6 +164,9 @@ fn test_uses_hp_at_late_phase_entry() {
     move_to_section(&mut low_hp, 16);
     let last_spurt = low_hp.runners[0].last_spurt.as_ref().unwrap();
     assert_eq!(last_spurt.category, LastSpurtCategory::CannotFinish);
+    // Only the final 60m.
+    let goal = low_hp.state.course.length();
+    assert_close!(last_spurt.target_distance, goal - 60.0);
 }
 
 #[test]
@@ -140,7 +174,7 @@ fn test_candidate_speeds_are_steps_from_max() {
     for rng_seed in 0..20 {
         let mut solver = solver(300, GameVersion::LATEST, rng_seed);
         move_to_section(&mut solver, 16);
-        set_hp_above_base(&mut solver);
+        set_hp_above_base(&mut solver, 0.5);
         let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
         let base = late_base_target_speed(&solver);
         let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
@@ -166,13 +200,49 @@ fn test_high_wit_always_accepts_best_candidate() {
         .map(|rng_seed| {
             let mut solver = solver(2400, GameVersion::LATEST, rng_seed);
             move_to_section(&mut solver, 16);
-            set_hp_above_base(&mut solver);
+            set_hp_above_base(&mut solver, 0.5);
             let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
             assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
             (last_spurt.max_speed, last_spurt.target_distance)
         })
         .collect();
     assert!(results.iter().all(|result| *result == results[0]));
+}
+
+#[test]
+fn test_best_candidate_uses_up_hp() {
+    // With high wit, the best candidate is always accepted. With more HP, a
+    // longer spurt at a lower speed can finish first.
+    // (HP share from base to max speed, whether the best is the max speed).
+    for (share, is_max) in [(0.5, true), (0.75, false)] {
+        let mut solver = solver(2400, GameVersion::LATEST, 0);
+        move_to_section(&mut solver, 16);
+        set_hp_above_base(&mut solver, share);
+        let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
+        let last_spurt = solver.runners[0].calculate_last_spurt(&solver.state);
+        assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
+        assert_eq!(last_spurt.max_speed == max, is_max, "{share} HP share");
+
+        // The spurt uses up the HP, running the rest at late-race base target
+        // speed (both until 60m before the goal line).
+        let course = &solver.state.course;
+        let spurt_distance = course.length() - 60.0 - last_spurt.target_distance;
+        let remaining = remaining_spurt_distance(&solver.runners[0], course) - 60.0;
+        let base_distance = remaining - spurt_distance;
+        // Otherwise, the distance would be clamped, leaving HP unused.
+        assert!(base_distance > 0.0, "{share} HP share: whole distance");
+        let hp = |speed, distance| {
+            let condition = solver.state.params.track_condition;
+            let guts = solver.runners[0].adjusted.guts;
+            estimate_hp_last_spurt(speed, course, condition, distance, guts)
+        };
+        let base_speed = late_base_target_speed(&solver);
+        assert_close!(
+            hp(base_speed, base_distance) + hp(last_spurt.max_speed, spurt_distance),
+            solver.runners[0].hp.current(),
+            "{share} HP share"
+        );
+    }
 }
 
 #[test]
@@ -237,7 +307,7 @@ fn test_slowest_candidate_when_every_check_fails() {
     for rng_seed in 0..1000 {
         let mut solver = solver(50, GameVersion::LATEST, rng_seed);
         move_to_section(&mut solver, 16);
-        set_hp_above_base(&mut solver);
+        set_hp_above_base(&mut solver, 0.5);
 
         // Replay the checks, one per candidate, with a copy of the RNG.
         let runner = &solver.runners[0];
@@ -257,7 +327,49 @@ fn test_slowest_candidate_when_every_check_fails() {
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
         let slowest = max - 0.1 * (candidates - 1) as f64;
         assert_close!(last_spurt.max_speed, slowest, "seed {rng_seed}");
+        // Not enough HP to spurt any later at that speed.
+        let position = solver.runners[0].position;
+        assert_close!(last_spurt.target_distance, position, "seed {rng_seed}");
         return;
     }
     panic!("every check should fail for some seed");
+}
+
+#[test]
+fn test_hp_required_to_finish() {
+    let mut solver = solver(1000, GameVersion::LATEST, 0);
+    move_to_section(&mut solver, 16);
+
+    // From the Late phase, it's the HP needed for a full last spurt.
+    // (HP over the required HP, last spurt category).
+    let required = solver.runners[0].hp_required_to_finish(&solver.state);
+    let cases = [
+        (0.0, LastSpurtCategory::Full),
+        (-1.0, LastSpurtCategory::AboveBase),
+    ];
+    for (offset, category) in cases {
+        let runner = &mut solver.runners[0];
+        runner.hp.set_current(required + offset);
+        let last_spurt = runner.calculate_last_spurt(&solver.state);
+        assert_eq!(last_spurt.category, category, "{offset} HP over");
+    }
+
+    // Before it, the rest of the Mid phase is run at its base target speed.
+    let late_start = Phase::Late.boundaries(&solver.state.course).0;
+    let runner = &mut solver.runners[0];
+    runner.position = late_start;
+    let at_late_start = runner.hp_required_to_finish(&solver.state);
+    runner.position = late_start - 100.0;
+    let before = runner.hp_required_to_finish(&solver.state);
+    // 0.998 Mid phase multiplier for a Late Surger.
+    let mid_speed = 0.998 * solver.state.course.base_speed();
+    let hp_per_second = calculate_hp_per_second(
+        mid_speed,
+        &solver.state.course,
+        solver.state.params.track_condition,
+        Phase::Mid,
+        runner.adjusted.guts,
+        1.0,
+    );
+    assert_close!(before - at_late_start, hp_per_second * 100.0 / mid_speed);
 }
