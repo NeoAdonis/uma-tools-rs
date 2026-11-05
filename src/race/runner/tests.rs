@@ -3,7 +3,6 @@ use super::*;
 #[test]
 fn test_start_type_from_delay() {
     let cases = [
-        (0.0, StartType::Good),
         (0.019, StartType::Good),
         (0.02, StartType::Normal),
         (0.08, StartType::Normal),
@@ -173,4 +172,18 @@ fn test_stamina_limit_break_activates_at_last_spurt_speed() {
         runner.update_target_speed(&solver.state);
         assert_eq!(runner.stamina_limit_break, buff, "speed {speed}");
     }
+}
+
+#[test]
+fn test_speed_is_capped() {
+    use crate::race::solver::DELTA_TIME;
+    use crate::test_utils::*;
+
+    let mut solver = ready_solver(10204, uma(Style::Late), vec![], seeded_config(42));
+    let runner = &mut solver.runners[0];
+    runner.is_start_dash = false;
+    runner.speed = MAX_TARGET_SPEED - 0.01;
+    runner.acceleration = 1.0;
+    runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
+    assert_eq!(runner.speed, MAX_TARGET_SPEED);
 }

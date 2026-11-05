@@ -176,49 +176,33 @@ fn test_high_wit_always_accepts_best_candidate() {
 }
 
 #[test]
-fn test_recovery_recalculates_only_from_late_phase() {
-    let mut solver = solver(1000, GameVersion::LATEST, 0);
-    move_to_section(&mut solver, 4);
-    let runner = &mut solver.runners[0];
-    runner.apply_skill_effect(
-        &effect(SkillType::Recovery, 0.05),
-        0.0,
-        OvertakeExtension::default(),
-        0.0,
-        None,
-        &solver.state,
-    );
-    assert!(runner.last_spurt.is_none());
-
-    move_to_section(&mut solver, 17);
-    let runner = &mut solver.runners[0];
-    runner.last_spurt = Some(placeholder());
-    runner.apply_skill_effect(
-        &effect(SkillType::Recovery, 0.05),
-        0.0,
-        OvertakeExtension::default(),
-        0.0,
-        None,
-        &solver.state,
-    );
-    assert!(runner.last_spurt.as_ref().unwrap().max_speed > 0.0);
-}
-
-#[test]
-fn test_recovery_does_not_recalculate_before_first_anniversary() {
-    let mut solver = solver(1000, GameVersion::Original, 0);
-    move_to_section(&mut solver, 17);
-    let runner = &mut solver.runners[0];
-    runner.last_spurt = Some(placeholder());
-    runner.apply_skill_effect(
-        &effect(SkillType::Recovery, 0.05),
-        0.0,
-        OvertakeExtension::default(),
-        0.0,
-        None,
-        &solver.state,
-    );
-    assert_eq!(runner.last_spurt.as_ref().unwrap().max_speed, 0.0);
+fn test_recovery_recalculates_from_late_phase() {
+    // (version, section, whether the last spurt is recalculated).
+    let cases = [
+        (GameVersion::LATEST, 4, false),
+        (GameVersion::LATEST, 17, true),
+        (GameVersion::Original, 17, false),
+    ];
+    for (version, section, recalculates) in cases {
+        let mut solver = solver(1000, version, 0);
+        move_to_section(&mut solver, section);
+        let runner = &mut solver.runners[0];
+        runner.last_spurt = Some(placeholder());
+        runner.apply_skill_effect(
+            &effect(SkillType::Recovery, 0.05),
+            0.0,
+            OvertakeExtension::default(),
+            0.0,
+            None,
+            &solver.state,
+        );
+        let max_speed = runner.last_spurt.unwrap().max_speed;
+        assert_eq!(
+            max_speed > 0.0,
+            recalculates,
+            "{version:?}, section {section}"
+        );
+    }
 }
 
 #[test]

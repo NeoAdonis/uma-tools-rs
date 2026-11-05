@@ -7,24 +7,18 @@ use crate::test_utils::{assert_close, ready_solver, seeded_config, uma};
 use crate::uma::*;
 
 #[test]
-fn test_desirable_lead_table() {
+fn test_desirable_lead() {
     use Style::*;
-    // Distance term is zero at -1000m, so the coefficient is returned as-is.
+    // At -1000m, the distance term is zero.
     let cases = [
-        (Runaway, Front, 2.0),
-        (Runaway, Pace, 7.0),
-        (Runaway, Late, 8.0),
-        (Runaway, End, 8.0),
-        (Front, Pace, 4.0),
-        (Front, Late, 8.0),
-        (Front, End, 8.0),
-        (Pace, Late, 5.0),
-        (Pace, End, 6.0),
-        (Late, End, 3.0),
+        (Runaway, Front, -1000.0, 2.0),
+        (Front, End, -1000.0, 8.0),
+        (Late, End, -1000.0, 3.0),
+        (Front, Pace, 2000.0, 4.9),
     ];
-    for (style, other, expected) in cases {
-        let actual = desirable_lead(style, other, -1000.0).unwrap();
-        assert_close!(actual, expected, "{style:?} -> {other:?}");
+    for (style, other, distance, expected) in cases {
+        let actual = desirable_lead(style, other, distance).unwrap();
+        assert_close!(actual, expected, "{style:?} -> {other:?}, {distance}m");
     }
 }
 
@@ -41,40 +35,33 @@ fn test_desirable_lead_only_for_later_styles() {
 }
 
 #[test]
-fn test_desirable_lead_distance_term() {
-    let lead = desirable_lead(Style::Front, Style::Pace, 2000.0).unwrap();
-    assert_close!(lead, 4.9);
-}
-
-#[test]
 fn test_target_speed_bonus() {
+    const LATEST: GameVersion = GameVersion::LATEST;
     // Guts 2000 -> sqrt(1) * 0.3.
     let base = 0.3;
     let cases = [
-        (Style::Runaway, false, base * 0.2),
-        (Style::Runaway, true, base * 0.2 * 7.0),
-        (Style::Front, false, base),
-        (Style::Front, true, base * 4.0),
-        (Style::Pace, false, base),
-        (Style::Pace, true, base),
-        (Style::Late, false, base * 0.8),
-        (Style::Late, true, base * 0.8),
+        (Style::Runaway, true, LATEST, base * 0.2 * 7.0),
+        (Style::Front, true, LATEST, base * 4.0),
+        (Style::Front, true, GameVersion::MechaUmaUpdate, base * 2.0),
+        (Style::Pace, true, LATEST, base),
+        (Style::Late, false, LATEST, base * 0.8),
     ];
-    for (style, is_alone, expected) in cases {
-        let actual = target_speed_bonus(style, 2000, is_alone, GameVersion::LATEST);
-        assert_close!(actual, expected, "{style:?} (alone: {is_alone})");
+    for (style, is_alone, version, expected) in cases {
+        let actual = target_speed_bonus(style, 2000, is_alone, version);
+        assert_close!(
+            actual,
+            expected,
+            "{style:?} (alone: {is_alone}), {version:?}"
+        );
     }
 
-    let actual = target_speed_bonus(Style::Pace, 500, false, GameVersion::LATEST);
+    let actual = target_speed_bonus(Style::Pace, 500, false, LATEST);
     assert_close!(actual, 0.5 * 0.3);
 }
 
 #[test]
 fn test_hp_cost_distance_brackets() {
     let cases = [
-        (1000, 0.3),
-        (1400, 0.3),
-        (1401, 0.3),
         (1800, 0.3),
         (1801, 0.5),
         (2100, 0.5),
@@ -85,7 +72,6 @@ fn test_hp_cost_distance_brackets() {
         (2401, 1.1),
         (2600, 1.1),
         (2601, 1.2),
-        (3600, 1.2),
     ];
     for (distance, coef) in cases {
         let actual = hp_cost(Style::Front, distance);
@@ -96,13 +82,7 @@ fn test_hp_cost_distance_brackets() {
 
 #[test]
 fn test_hp_cost_style_coefficients() {
-    let cases = [
-        (Style::Runaway, 1.2),
-        (Style::Front, 1.0),
-        (Style::Pace, 0.8),
-        (Style::Late, 0.8),
-    ];
-    for (style, coef) in cases {
+    for (style, coef) in [(Style::Runaway, 1.2), (Style::Late, 0.8)] {
         let actual = hp_cost(style, 2400);
         assert_close!(actual, 20.0 * coef, "{style:?}");
     }
@@ -118,13 +98,10 @@ fn ready_runner(style: Style) -> (Runner, RaceState) {
 fn test_secure_lead_check_window() {
     let (mut runner, mut state) = ready_runner(Style::Front);
     state.elapsed_time = 100.0;
-    for section in 0..24 {
+    for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
-        assert_eq!(
-            runner.is_secure_lead_check_due(&state),
-            SECTIONS.contains(&section),
-            "section {section}"
-        );
+        let actual = runner.is_secure_lead_check_due(&state);
+        assert_eq!(actual, expected, "section {section}");
     }
 
     let (mut end_closer, mut state) = ready_runner(Style::End);

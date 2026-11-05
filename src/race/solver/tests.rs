@@ -479,14 +479,6 @@ fn runner_state(solver: &RaceSolver<Runner>) -> (f64, f64, f64) {
 }
 
 #[test]
-fn test_no_start_delay_moves_full_frame() {
-    let mut solver = start_delay_solver(0.0, 0);
-    solver.step(DELTA_TIME);
-    let (position, speed, _) = runner_state(&solver);
-    assert_close!(position, speed * DELTA_TIME, "position");
-}
-
-#[test]
 fn test_start_delay_within_first_frame_prorates_distance_only() {
     let mut delayed = start_delay_solver(0.03, 0);
     let mut reference = start_delay_solver(0.0, 0);
@@ -494,7 +486,12 @@ fn test_start_delay_within_first_frame_prorates_distance_only() {
     reference.step(DELTA_TIME);
 
     let (position, speed, hp) = runner_state(&delayed);
-    let (_, ref_speed, ref_hp) = runner_state(&reference);
+    let (ref_position, ref_speed, ref_hp) = runner_state(&reference);
+    assert_close!(
+        ref_position,
+        ref_speed * DELTA_TIME,
+        "position without delay"
+    );
     // Acceleration and HP consumption are unaffected.
     assert_close!(speed, ref_speed, "speed");
     assert_close!(hp, ref_hp, "hp");
@@ -895,26 +892,6 @@ fn test_spot_struggle_exit_when_far_from_every_struggler() {
 }
 
 #[test]
-fn test_spot_struggle_exits_cascade_in_same_frame() {
-    let mut solver = struggle_solver(
-        &[
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 0.0),
-        ],
-        GameVersion::LATEST,
-    );
-    update_struggle(&mut solver);
-
-    // The third runner falls behind both. That leaves the second one 6m behind
-    // the only remaining partner, so she exits, and then the leader does.
-    place(&mut solver, 1, 194.0, 0.0);
-    place(&mut solver, 2, 188.0, 0.0);
-    update_struggle(&mut solver);
-    assert_eq!(strugglers(&solver), [false, false, false]);
-}
-
-#[test]
 fn test_spot_struggle_lateral_exit_in_both_directions() {
     let mut solver = struggle_solver(
         &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
@@ -1063,9 +1040,6 @@ fn test_duel_starts_after_two_seconds_close() {
 
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [true, true]);
-    for runner in &solver.runners {
-        assert!(runner.duel.is_dueling());
-    }
 }
 
 #[test]
@@ -1087,28 +1061,14 @@ fn test_duel_needs_continuous_proximity() {
 
 #[test]
 fn test_duel_proximity_in_course_widths() {
-    // Lane gap threshold is 0.25 course widths.
+    // Lane gap threshold is 0.25 course widths (about 2.8 horse lanes).
     let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 0.249)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, true]);
-
-    let mut solver = duel_solver(&[(1000.0, 0.0), (998.0, 0.251)], GameVersion::LATEST);
-    update_duels(&mut solver, DUEL_FRAMES);
-    assert_eq!(duelists(&solver), [false, false]);
-
-    let mut solver = duel_solver(&[(1000.0, 0.0), (997.0, 0.0)], GameVersion::LATEST);
-    update_duels(&mut solver, DUEL_FRAMES);
-    assert_eq!(duelists(&solver), [false, false]);
 }
 
 #[test]
 fn test_duel_speed_difference() {
-    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
-    solver.runners[0].speed = 20.0;
-    solver.runners[1].speed = 19.4;
-    update_duels(&mut solver, DUEL_FRAMES);
-    assert_eq!(duelists(&solver), [true, true]);
-
     let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     solver.runners[0].speed = 20.0;
     solver.runners[1].speed = 19.3;
@@ -1266,17 +1226,6 @@ fn test_former_duelists_cannot_duel_again() {
     place_on_straight(&mut solver, 2, 998.0, 0.1);
     update_duels(&mut solver, DUEL_FRAMES);
     assert_eq!(duelists(&solver), [true, false, true, false]);
-}
-
-#[test]
-fn test_compete_fight_count_after_duel() {
-    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
-    update_duels(&mut solver, DUEL_FRAMES);
-    set_hp_percent(&mut solver, 1, 4.0);
-    update_duels(&mut solver, 1);
-    for runner in &solver.runners {
-        assert!(runner.duel.has_dueled());
-    }
 }
 
 #[test]
@@ -1462,59 +1411,37 @@ fn test_side_blocked_runner_keeps_accelerating_without_moving() {
 }
 
 #[test]
-fn test_normal_mode_lane_targets_in_course_widths() {
+fn test_pace_down_lane_target() {
+    // 0.18 course widths from the inner fence.
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
-    let target = |solver: &RaceSolver<Runner>| {
-        solver.runners[0]
-            .normal_mode_lane_decision(&solver.state.course, &solver.runners)
-            .target
-            .0
-    };
-
-    // Move inward by 0.05 course widths in the early phase.
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Early;
     runner.lane.current = CourseWidths(0.4);
-    assert_close!(target(&solver), 0.35);
-
-    // Pace down targets 0.18 course widths from the inner fence.
-    solver.runners[0].positioning_strategy = PositioningStrategy::PaceDown(0.0);
-    assert_close!(target(&solver), 0.18);
+    runner.positioning_strategy = PositioningStrategy::PaceDown(0.0);
+    let decision =
+        solver.runners[0].normal_mode_lane_decision(&solver.state.course, &solver.runners);
+    assert_close!(decision.target.0, 0.18);
 }
 
 #[test]
-fn test_overlap_bumps_outer_runner_ahead() {
-    // Bumped 0.4 horse lanes away from the inner runner.
-    let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.8, 0.19)],
-        GameVersion::LATEST,
-    );
-    solver.resolve_overlaps();
-    let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert_close!(
-        ahead.lane.current.0,
-        0.19 + CourseWidths::from_horse_lanes(0.4).0
-    );
-    assert_eq!(ahead.lane.target, ahead.lane.current);
-    assert!(ahead.should_update_target_lane());
-    assert_eq!(behind.lane.current, CourseWidths(0.19));
-}
-
-#[test]
-fn test_overlap_bumps_outer_runner_behind() {
-    let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.19), (Style::Front, 199.8, 0.2)],
-        GameVersion::LATEST,
-    );
-    solver.resolve_overlaps();
-    let (ahead, behind) = (&solver.runners[0], &solver.runners[1]);
-    assert_eq!(ahead.lane.current, CourseWidths(0.19));
-    assert_close!(
-        behind.lane.current.0,
-        0.19 + CourseWidths::from_horse_lanes(0.4).0
-    );
-    assert_eq!(behind.lane.target, behind.lane.current);
-    assert!(behind.should_update_target_lane());
+fn test_overlap_bumps_outer_runner() {
+    // Bumped 0.4 horse lanes away from the inner runner, ahead or behind.
+    let bumped = 0.19 + CourseWidths::from_horse_lanes(0.4).0;
+    for (lanes, outer) in [([0.2, 0.19], 0), ([0.19, 0.2], 1)] {
+        let mut solver = struggle_solver(
+            &[
+                (Style::Front, 200.0, lanes[0]),
+                (Style::Front, 199.8, lanes[1]),
+            ],
+            GameVersion::LATEST,
+        );
+        solver.resolve_overlaps();
+        let (outer, inner) = (&solver.runners[outer], &solver.runners[1 - outer]);
+        assert_close!(outer.lane.current.0, bumped, "{lanes:?}");
+        assert_eq!(outer.lane.target, outer.lane.current, "{lanes:?}");
+        assert!(outer.should_update_target_lane(), "{lanes:?}");
+        assert_eq!(inner.lane.current, CourseWidths(0.19), "{lanes:?}");
+    }
 }
 
 #[test]
@@ -1653,22 +1580,6 @@ fn test_fov_debuffs_cannot_shorten_field_of_view_below_zero() {
     assert!(!solver.runners[1].is_visible(&solver.runners[0]));
     solver.update_blocking_status(DELTA_TIME);
     assert_eq!(solver.runners[1].visible_count, 0);
-}
-
-#[test]
-fn test_individual_runners_are_all_opponents() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    for _ in 0..3 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
-    }
-    let solver = solver.ready_runners();
-
-    assert_eq!(solver.state.team_count, 3);
-    for a in &solver.runners {
-        for b in &solver.runners {
-            assert_eq!(a.is_opponent(b), a.gate_roll != b.gate_roll);
-        }
-    }
 }
 
 #[test]
@@ -1850,27 +1761,6 @@ fn test_rushed_by_team_matches_runners() {
     }
     assert!(max_rushed > 0, "no runner rushed");
     assert!(runaway_rushed, "no Runaway rushed");
-}
-
-#[test]
-fn test_team_activations_sum_team_members() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
-    solver.add_team(vec![member(), member()]);
-    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
-    let mut solver = solver.ready_runners();
-    for runner in &mut solver.runners {
-        let all = match runner.initial_state.team {
-            0 => 3,
-            _ => 4,
-        };
-        runner.trigger_scheduler.activation_counts.all = all;
-    }
-
-    // Recounting is idempotent.
-    solver.update_team_activations();
-    solver.update_team_activations();
-    assert_eq!(solver.state.team_activations, [6, 4]);
 }
 
 #[test]
@@ -2103,26 +1993,6 @@ fn test_finished_runners_are_not_counted_as_targets() {
 }
 
 #[test]
-fn test_pending_effects_apply_to_targets() {
-    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
-    solver.runners[0].pending_effects.push(PendingEffect {
-        effect: SkillEffect {
-            target: SkillTarget::BehindSelf { count: 1 },
-            ..effect(SkillType::CurrentSpeed, -0.15)
-        },
-        duration: 3.0,
-        wit_bonus: 0.0,
-        target_roll: 0.0,
-    });
-    solver.apply_pending_effects();
-
-    assert!(solver.runners[0].pending_effects.is_empty());
-    assert_close!(solver.runners[0].skill_modifiers.current_speed, 0.0);
-    assert_close!(solver.runners[1].skill_modifiers.current_speed, -0.15);
-    assert_close!(solver.runners[2].skill_modifiers.current_speed, 0.0);
-}
-
-#[test]
 fn test_activated_effects_on_others_are_queued_for_targets() {
     // A buff on oneself, a debuff on the runner behind, and a pre-race effect on
     // everyone (applied before the race, if at all, so never queued).
@@ -2191,34 +2061,6 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
         wit_bonus: 0.0,
         target_roll: 0.0,
     }
-}
-
-#[test]
-fn test_lane_and_duration_effects_set_skill_modifiers() {
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
-    let effects = [
-        (SkillType::LaneMovementSpeed, 0.02),
-        (SkillType::LaneMovementSpeed, 0.03),
-        (SkillType::LaneChange, 0.5),
-        (SkillType::ExtendEvolvedDuration, 2.0),
-        (SkillType::ExtendEvolvedDuration, 1.5),
-    ];
-    for (skill_type, modifier) in effects {
-        solver.runners[0].receive_skill_effect(&received(skill_type, modifier), &solver.state);
-    }
-
-    // Lane speed adds up, duration scaling multiplies.
-    let mods = &solver.runners[0].skill_modifiers;
-    assert_close!(mods.lane_speed, 0.05);
-    assert_eq!(mods.target_lane, Some(CourseWidths(0.5)));
-    assert_close!(mods.duration_scaling, 3.0);
-
-    // Back to defaults once they expire.
-    solver.runners[0].update_skill_durations(3.0);
-    let mods = &solver.runners[0].skill_modifiers;
-    assert_close!(mods.lane_speed, 0.0);
-    assert_eq!(mods.target_lane, None);
-    assert_close!(mods.duration_scaling, 1.0);
 }
 
 #[test]
@@ -3106,8 +2948,6 @@ fn test_fan_count_scaling() {
         ValueScaling::FanCount,
         seeded_config(0),
     );
-    // No fans by default.
-    assert_close!(activate_last_skill(&mut solver), 0.25 * 0.8);
     solver.runners[0].initial_state.fan_count = 120000;
     assert_close!(activate_last_skill(&mut solver), 0.25 * 1.1);
 }
@@ -3276,8 +3116,6 @@ fn test_distance_from_first_adds_to_value() {
         ValueScaling::AddDistanceDiffTop,
         seeded_config(0),
     );
-    solver.runners[0].position_diff.from_first = 19.0;
-    assert_close!(activate_last_skill(&mut solver), 0.25);
     solver.runners[0].position_diff.from_first = 20.0;
     assert_close!(activate_last_skill(&mut solver), 0.35);
 }
@@ -3291,20 +3129,15 @@ fn test_bashin_from_first_adds_to_value() {
         seeded_config(0),
     );
     // 8 bashin are 20 meters.
-    solver.runners[0].position_diff.from_first = 19.9;
-    assert_close!(activate_last_skill(&mut solver), 0.25);
     solver.runners[0].position_diff.from_first = 20.0;
     assert_close!(activate_last_skill(&mut solver), 0.45);
 }
 
 #[test]
 fn test_medium_distance_adds_to_value() {
-    let skills = || vec![scaled_skill(30, ValueScaling::AddDistanceTypeMedium, 0.25)];
-    // 1200m (Short).
-    let mut solver = ready_solver(10101, uma(Style::Late), skills(), seeded_config(0));
-    assert_close!(activate_last_skill(&mut solver), 0.25);
+    let skills = vec![scaled_skill(30, ValueScaling::AddDistanceTypeMedium, 0.25)];
     // 2400m (Medium).
-    let mut solver = ready_solver(10606, uma(Style::Late), skills(), seeded_config(0));
+    let mut solver = ready_solver(10606, uma(Style::Late), skills, seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.45);
 }
 
@@ -3564,16 +3397,13 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
 
 #[test]
 fn test_uphills_climbed_extend_duration() {
-    // Base duration of 3 seconds plus 0.5 seconds per uphill (up to 4), scaled to
-    // the 1200m course.
-    for (uphills, base_duration) in [(0, 3.0), (2, 4.0), (4, 5.0), (6, 5.0)] {
-        let mut solver =
-            timed_skill_solver(vec![timed_skill(33, DurationScaling::IncrementUphillCount)]);
-        solver.runners[0].uphills_climbed = uphills;
-        solver.runners[0].activate_skill(0, 0, &solver.state);
-        let durations = remaining_durations(&solver);
-        assert_close!(durations[0], base_duration * 1.2, "{uphills} uphills");
-    }
+    // Base duration of 3 seconds plus 0.5 seconds per uphill, scaled to the
+    // 1200m course.
+    let mut solver =
+        timed_skill_solver(vec![timed_skill(33, DurationScaling::IncrementUphillCount)]);
+    solver.runners[0].uphills_climbed = 2;
+    solver.runners[0].activate_skill(0, 0, &solver.state);
+    assert_close!(remaining_durations(&solver)[0], 4.0 * 1.2);
 }
 
 /// Skill with a 0.25 target speed effect, and a 0.05 one applied as

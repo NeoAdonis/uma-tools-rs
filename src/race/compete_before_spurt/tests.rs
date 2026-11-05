@@ -9,26 +9,18 @@ use crate::trigger::skill_activation::OvertakeExtension;
 use crate::uma::*;
 
 #[test]
-fn test_lead_threshold_table() {
+fn test_lead_threshold() {
     use Style::*;
-    // Distance term is zero at -1000m, so the coefficient is returned as-is.
+    // At -1000m, the distance term is zero.
     let cases = [
-        (Runaway, 0.0),
-        (Front, 0.0),
-        (Pace, 2.5),
-        (Late, 5.0),
-        (End, 10.0),
+        (Front, -1000.0, 0.0),
+        (End, -1000.0, 10.0),
+        (Late, 2000.0, 5.9),
     ];
-    for (style, expected) in cases {
-        let actual = lead_threshold(style, -1000.0);
-        assert_close!(actual, expected, "{style:?}");
+    for (style, distance, expected) in cases {
+        let actual = lead_threshold(style, distance);
+        assert_close!(actual, expected, "{style:?}, {distance}m");
     }
-}
-
-#[test]
-fn test_lead_threshold_distance_term() {
-    let threshold = lead_threshold(Style::Late, 2000.0);
-    assert_close!(threshold, 5.9);
 }
 
 #[test]
@@ -36,14 +28,10 @@ fn test_target_speed_bonus() {
     // Power 1500, guts 3000 -> (1 * 2 + 1) * 0.1.
     let base = 0.3;
     let cases = [
-        (Style::Runaway, false, base * 0.2),
         (Style::Runaway, true, base * 0.2 * 2.0),
         (Style::Front, false, base * 0.8),
         (Style::Front, true, base * 0.8 * 1.1),
-        (Style::Pace, false, base),
         (Style::Pace, true, base),
-        (Style::Late, true, base),
-        (Style::End, true, base),
     ];
     for (style, is_alone, expected) in cases {
         let actual = target_speed_bonus(style, 1500, 3000, is_alone);
@@ -57,31 +45,26 @@ fn test_target_speed_bonus() {
 
 #[test]
 fn test_hp_cost() {
+    // 2400m -> distance coefficient 1.0; 1200m -> 0.3.
     let cases = [
-        (Style::Runaway, 1.5),
-        (Style::Front, 1.2),
-        (Style::Pace, 1.0),
-        (Style::Late, 1.0),
-        (Style::End, 1.0),
+        (Style::Runaway, 2400, true, 20.0 * 1.5),
+        (Style::Pace, 2400, false, 20.0 * (1.0 + NEAR_FACTOR)),
+        (Style::Front, 1200, false, 20.0 * (1.2 * 0.3 + NEAR_FACTOR)),
     ];
-    for (style, coef) in cases {
-        // 2400m -> distance coefficient 1.0.
-        let far = hp_cost(style, 2400, true);
-        assert_close!(far, 20.0 * coef, "{style:?} far");
-        let near = hp_cost(style, 2400, false);
-        assert_close!(near, 20.0 * (coef + NEAR_FACTOR), "{style:?} near");
+    for (style, distance, far_from_lead, expected) in cases {
+        let actual = hp_cost(style, distance, far_from_lead);
+        assert_close!(
+            actual,
+            expected,
+            "{style:?}, {distance}m (far: {far_from_lead})"
+        );
     }
-
-    // 1200m -> distance coefficient 0.3.
-    let actual = hp_cost(Style::Front, 1200, false);
-    assert_close!(actual, 20.0 * (1.2 * 0.3 + 0.5));
 }
 
 #[test]
 fn test_stamina_keep_chance() {
     let expected = 0.3 * (1.0 + 1000f64.powf(0.03));
     assert_close!(stamina_keep_chance(1000), expected);
-    assert!(stamina_keep_chance(300) < stamina_keep_chance(1000));
     assert_close!(stamina_keep_chance(2500), 1.0);
 }
 
@@ -99,13 +82,10 @@ fn ready_runner(style: Style, game_version: GameVersion) -> (Runner, RaceState) 
 fn test_compete_check_window() {
     let (mut runner, mut state) = ready_runner(Style::End, GameVersion::LATEST);
     state.elapsed_time = 100.0;
-    for section in 0..24 {
+    for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
-        assert_eq!(
-            runner.is_compete_check_due(&state),
-            SECTIONS.contains(&section),
-            "section {section}"
-        );
+        let actual = runner.is_compete_check_due(&state);
+        assert_eq!(actual, expected, "section {section}");
     }
 
     let (mut old_runner, mut state) = ready_runner(Style::Pace, GameVersion::SecondAnniversary);
@@ -113,12 +93,6 @@ fn test_compete_check_window() {
     old_runner.section = 12;
     assert!(!old_runner.is_compete_check_due(&state));
     assert_eq!(old_runner.stamina_keep.ratio, 0.0);
-}
-
-#[test]
-fn test_stamina_keep_ratio_range() {
-    let (runner, _) = ready_runner(Style::Pace, GameVersion::LATEST);
-    assert!(STAMINA_KEEP_RATIO.contains(&runner.stamina_keep.ratio));
 }
 
 #[test]

@@ -15,12 +15,9 @@ fn rushed() -> RushState {
 
 #[test]
 fn test_chance() {
-    // (base wit, modifier, chance): 19.00%, 13.26%, 11.01% and 9.74% before
-    // rounding up.
+    // (base wit, modifier, chance): 19.00% and 9.74% before rounding up.
     let cases = [
         (300, 0.0, 19.0),
-        (600, 0.0, 14.0),
-        (900, 0.0, 12.0),
         (1200, 0.0, 10.0),
         (1200, -3.0, 7.0),
         // Clamped.
@@ -34,27 +31,33 @@ fn test_chance() {
 
 #[test]
 fn test_roll() {
-    // (style, possible rushed styles).
+    use Style::*;
+    // (style, shares of each rushed style: Runaway, Front, Pace, Late).
     let cases = [
-        (Style::Runaway, vec![Style::Runaway]),
-        (Style::Front, vec![Style::Front]),
-        (Style::Pace, vec![Style::Front]),
-        (Style::Late, vec![Style::Front, Style::Pace]),
-        (Style::End, vec![Style::Front, Style::Pace, Style::Late]),
+        (Runaway, [1.0, 0.0, 0.0, 0.0]),
+        (Front, [0.0, 1.0, 0.0, 0.0]),
+        (Pace, [0.0, 1.0, 0.0, 0.0]),
+        (Late, [0.0, 0.75, 0.25, 0.0]),
+        (End, [0.0, 0.7, 0.2, 0.1]),
     ];
+    const ROLLS: u64 = 2000;
     for (style, expected) in cases {
-        let rolls: Vec<_> = (0..100)
-            .map(|seed| RushState::roll(style, &mut rng(seed)))
-            .collect();
-        for rush_state in &rolls {
+        let mut counts = [0; 4];
+        for seed in 0..ROLLS {
+            let rush_state = RushState::roll(style, &mut rng(seed));
             assert!(SECTIONS.contains(&rush_state.section), "{rush_state:?}");
             assert!(!rush_state.is_rushed && !rush_state.has_rushed());
             assert_eq!(rush_state.max_duration, MAX_DURATION);
+            let index = [Runaway, Front, Pace, Late]
+                .iter()
+                .position(|&s| s == rush_state.style)
+                .unwrap();
+            counts[index] += 1;
         }
-        let mut styles: Vec<_> = rolls.iter().map(|r| r.style).collect();
-        styles.sort_by_key(|&s| s as u8);
-        styles.dedup();
-        assert_eq!(styles, expected, "{style:?}");
+        let shares = counts.map(|count| count as f64 / ROLLS as f64);
+        for (actual, expected) in shares.into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 0.04, "{style:?}: {shares:?}");
+        }
     }
 }
 

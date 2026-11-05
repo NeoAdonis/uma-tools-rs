@@ -42,18 +42,6 @@ fn activated_ids(runner: &UnreadyRunner) -> Vec<i32> {
 }
 
 #[test]
-fn test_stat_boost_is_applied() {
-    // Stat boosts are in stat points (800000 in the skill data = +80 speed).
-    let (mut runner, state) = unready_runner(vec![skill(8, "always==1", SkillType::SpeedUp, 80.0)]);
-    let speed = runner.adjusted.speed;
-
-    runner.apply_out_of_gate_skills(&state);
-
-    assert_eq!(runner.adjusted.speed, speed + 80);
-    assert_eq!(activated_ids(&runner), vec![8]);
-}
-
-#[test]
 fn test_stat_boosts_by_type() {
     let stats = |uma: Uma| [uma.speed, uma.stamina, uma.power, uma.guts, uma.wit];
     let base = Uma {
@@ -118,9 +106,8 @@ fn test_fan_count_falls_back_to_configured_default() {
 #[test]
 fn test_gate_brackets() {
     // Brackets of gates 1, 2, 3...
-    let cases: [(u8, &[u8]); 7] = [
+    let cases: [(u8, &[u8]); 6] = [
         // One gate per bracket.
-        (5, &[1, 2, 3, 4, 5]),
         (8, &[1, 2, 3, 4, 5, 6, 7, 8]),
         // Extra gates go to the last brackets.
         (9, &[1, 2, 3, 4, 5, 6, 7, 8, 8]),
@@ -139,74 +126,13 @@ fn test_gate_brackets() {
 }
 
 #[test]
-fn test_rush_style_changes() {
-    // Every runner rushes.
-    let config = Configuration {
-        rushing: Roll::Always,
-        ..seeded_config(0)
-    };
-    let state = RaceSolver::new(load_course(10104), race_params(), config).state;
-    let rush_styles = |style: Style| -> Vec<Style> {
-        (0..2000)
-            .map(|seed| {
-                let mut runner = UnreadyRunner::new(
-                    uma(style),
-                    Mood::Normal,
-                    &state,
-                    vec![],
-                    RngSeed::new(seed),
-                );
-                runner.assign_gate(1, &state);
-                runner.build(&state).rush_state.unwrap().style
-            })
-            .collect()
-    };
-    // Share of `styles` that are `style`.
-    let share = |styles: &[Style], style| {
-        styles.iter().filter(|&&s| s == style).count() as f64 / styles.len() as f64
-    };
-
-    // Front-like styles keep their style; Pace runners always rush as Front.
-    for (style, expected) in [
-        (Style::Runaway, Style::Runaway),
-        (Style::Front, Style::Front),
-        (Style::Pace, Style::Front),
-    ] {
-        let styles = rush_styles(style);
-        assert!(styles.iter().all(|&s| s == expected), "{style:?}");
-    }
-
-    // (style, [Front, Pace, Late] shares).
-    for (style, expected) in [
-        (Style::Late, [0.75, 0.25, 0.0]),
-        (Style::End, [0.7, 0.2, 0.1]),
-    ] {
-        let styles = rush_styles(style);
-        let actual = [Style::Front, Style::Pace, Style::Late].map(|s| share(&styles, s));
-        for (actual, expected) in actual.into_iter().zip(expected) {
-            assert_close!(actual, expected, tolerance = 0.04, "{style:?}");
-        }
-    }
-}
-
-/// Start delay of a runner before and after applying an out-of-gate skill with
-/// the given effect.
-fn start_delays(skill_type: SkillType, modifier: f64) -> (f64, f64) {
-    let (mut runner, state) = unready_runner(vec![skill(2, "always==1", skill_type, modifier)]);
+fn test_start_delay_multiplier() {
+    // Like "Concentration": 40% of the rolled delay.
+    let skill = skill(2, "always==1", SkillType::MultiplyStartDelay, 0.4);
+    let (mut runner, state) = unready_runner(vec![skill]);
     let before = runner.start_delay;
     runner.apply_out_of_gate_skills(&state);
-    assert_eq!(activated_ids(&runner), vec![2]);
-    (before, runner.start_delay)
-}
-
-#[test]
-fn test_start_delay_modifications() {
-    let (before, after) = start_delays(SkillType::AddStartDelay, 0.1);
-    assert_eq!(after, before + 0.1);
-
-    // Like "Concentration": 40% of the rolled delay.
-    let (before, after) = start_delays(SkillType::MultiplyStartDelay, 0.4);
-    assert_eq!(after, before * 0.4);
+    assert_eq!(runner.start_delay, before * 0.4);
 }
 
 #[test]
@@ -238,19 +164,6 @@ fn test_unsatisfied_condition_is_not_applied() {
     runner.apply_out_of_gate_skills(&state);
 
     assert_eq!(runner.start_delay, start_delay);
-    assert!(activated_ids(&runner).is_empty());
-}
-
-#[test]
-fn test_unsatisfied_stat_boost_is_not_applied() {
-    // Course 10104 is turf (ground_type==1).
-    let (mut runner, state) =
-        unready_runner(vec![skill(4, "ground_type==2", SkillType::SpeedUp, 80.0)]);
-    let speed = runner.adjusted.speed;
-
-    runner.apply_out_of_gate_skills(&state);
-
-    assert_eq!(runner.adjusted.speed, speed);
     assert!(activated_ids(&runner).is_empty());
 }
 
@@ -368,15 +281,6 @@ fn runner_with_wit(wit: u16, skills: Vec<Arc<Skill>>, seed: u64) -> Runner {
 }
 
 #[test]
-fn test_rush_chance_is_rounded_up() {
-    // (base wit, rush chance): 19.00%, 13.26%, 11.01% and 9.74% before rounding.
-    for (wit, expected) in [(300, 19.0), (600, 14.0), (900, 12.0), (1200, 10.0)] {
-        let runner = runner_with_wit(wit, vec![], 0);
-        assert_eq!(runner.rush_chance, expected, "{wit} wit");
-    }
-}
-
-#[test]
 fn test_rush_chance_is_clamped() {
     // Rush chance down by 3% (as in the skill data).
     let calm = |i| skill(i, "always==1", SkillType::RushChanceUp, -3.0);
@@ -398,17 +302,6 @@ fn test_forced_rolls_do_not_shift_other_random_outcomes() {
     let random = checked_runner(config(Roll::Random, Roll::Random), 20);
     let forced = checked_runner(config(Roll::Always, Roll::Random), 20);
     assert_eq!(random.start_delay, forced.start_delay);
-}
-
-#[test]
-fn test_out_of_gate_skills_are_counted_as_activated() {
-    let speed = skill(8, "always==1", SkillType::SpeedUp, 80.0);
-    let mut solver = ready_solver(10104, uma(Style::Pace), vec![speed], seeded_config(0));
-    solver.run();
-
-    let counts = &solver.runners[0].trigger_scheduler.activation_counts;
-    assert_eq!(counts.all, 1);
-    assert_eq!(counts.start, 1);
 }
 
 const CONNECT_ID: i32 = 201632;

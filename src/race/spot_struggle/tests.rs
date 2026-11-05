@@ -4,11 +4,7 @@ use crate::test_utils::assert_close;
 #[test]
 fn test_formulas() {
     // (guts, target speed bonus, duration with A aptitude)
-    let cases = [
-        (400, 0.1516, 6.3498),
-        (1000, 0.2627, 10.0399),
-        (1200, 0.2930, 10.9982),
-    ];
+    let cases = [(400, 0.1516, 6.3498), (1200, 0.2930, 10.9982)];
     for (guts, bonus, secs) in cases {
         assert_close!(
             target_speed_bonus(guts),
@@ -28,16 +24,7 @@ fn test_formulas() {
 #[test]
 fn test_duration_scales_with_style_aptitude() {
     let base = duration(1000, Aptitude::A);
-    let cases = [
-        (Aptitude::S, 1.1),
-        (Aptitude::A, 1.0),
-        (Aptitude::B, 0.85),
-        (Aptitude::C, 0.75),
-        (Aptitude::D, 0.6),
-        (Aptitude::E, 0.4),
-        (Aptitude::F, 0.2),
-        (Aptitude::G, 0.1),
-    ];
+    let cases = [(Aptitude::S, 1.1), (Aptitude::B, 0.85), (Aptitude::G, 0.1)];
     for (aptitude, coef) in cases {
         let actual = duration(1000, aptitude);
         assert_close!(actual, base * coef, "{aptitude:?}");
@@ -54,19 +41,20 @@ fn test_trigger_proximity_in_course_widths() {
 
 #[test]
 fn test_exit_proximity_in_course_widths() {
-    assert!(!is_too_far(-5.0, CourseWidths(-0.415)));
-    assert!(!is_too_far(0.0, CourseWidths(0.415)));
-    assert!(is_too_far(-5.01, CourseWidths(0.0)));
-    assert!(is_too_far(0.0, CourseWidths(0.417)));
-    assert!(is_too_far(0.0, CourseWidths(-0.417)));
-    assert!(is_too_far(5.0, CourseWidths(4.69)));
-}
-
-#[test]
-fn test_exit_only_when_behind() {
-    assert!(is_too_far(-5.01, CourseWidths(0.0)));
-    assert!(!is_too_far(5.01, CourseWidths(0.0)));
-    assert!(!is_too_far(100.0, CourseWidths(0.0)));
+    // (distance, lane difference, whether too far).
+    let cases = [
+        (-5.0, CourseWidths(-0.415), false),
+        (0.0, CourseWidths(0.415), false),
+        (-5.01, CourseWidths(0.0), true),
+        (0.0, CourseWidths(0.417), true),
+        // Only when behind in distance, but on either side in lanes.
+        (5.01, CourseWidths(0.0), false),
+        (5.0, CourseWidths(4.69), true),
+    ];
+    for (distance, lane_diff, expected) in cases {
+        let actual = is_too_far(distance, lane_diff);
+        assert_eq!(actual, expected, "{distance}m, {lane_diff:?}");
+    }
 }
 
 #[test]

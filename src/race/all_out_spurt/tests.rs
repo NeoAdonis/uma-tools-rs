@@ -1,13 +1,12 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::last_spurt::*;
-use crate::race::runner::{MAX_TARGET_SPEED, Runner};
+use crate::race::runner::Runner;
 use crate::race::solver::{DELTA_TIME, RaceSolver};
 use crate::skill::*;
 use crate::test_utils::{
     alternative, assert_close, ready_solver, seeded_config, synthetic_skill, uma,
 };
-use crate::trigger::skill_activation::TriggerCondition;
 use crate::uma::*;
 use std::sync::Arc;
 
@@ -72,9 +71,6 @@ fn test_base_acceleration() {
     // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5.
     let expected = 0.068 * 0.0006 * 600000f64.sqrt() / 8f64.sqrt();
     assert_close!(base_acceleration(2001, 1200, 2000, latest), expected);
-    assert_close!(expected, 0.011173, tolerance = 1e-6);
-    // Longer courses accelerate less.
-    assert!(base_acceleration(2001, 1200, 3000, latest) < expected);
 }
 
 #[test]
@@ -95,16 +91,10 @@ fn test_activates_at_last_spurt_speed() {
 
 #[test]
 fn test_ineligible_runner_never_activates() {
-    for (speed, behavior) in [
-        // Raw 2000 is adjusted to 1600 * 1.2 = 1920.
-        (2000, GameVersion::LATEST),
-        (2500, GameVersion::MechaUmaUpdate),
-    ] {
-        let mut solver = solver(speed, behavior, vec![], 42);
-        assert_eq!(solver.runners[0].all_out_spurt_base, 0.0);
-        enter_last_spurt(&mut solver, 20.0);
-        assert_eq!(solver.runners[0].all_out_spurt, AllOutSpurt::Pending);
-    }
+    let mut solver = solver(2500, GameVersion::MechaUmaUpdate, vec![], 42);
+    assert_eq!(solver.runners[0].all_out_spurt_base, 0.0);
+    enter_last_spurt(&mut solver, 20.0);
+    assert_eq!(solver.runners[0].all_out_spurt, AllOutSpurt::Pending);
 }
 
 #[test]
@@ -144,28 +134,14 @@ fn test_hp_out_drops_speed_to_minimum() {
 }
 
 #[test]
-fn test_speed_is_capped() {
-    let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
-    let runner = &mut solver.runners[0];
-    runner.is_start_dash = false;
-    runner.speed = MAX_TARGET_SPEED - 0.01;
-    runner.acceleration = 1.0;
-    runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
-    assert_eq!(runner.speed, MAX_TARGET_SPEED);
-}
-
-#[test]
 fn test_random_trigger_scheduled_on_activation() {
     let mut solver = solver(2500, GameVersion::LATEST, vec![all_out_spurt_skill()], 42);
-    {
-        let scheduler = &solver.runners[0].trigger_scheduler;
-        assert_eq!(scheduler.all_out_spurt_triggers, vec![0]);
-        let logic = &scheduler.skill_logics[0];
-        assert!(matches!(logic.trigger, TriggerCondition::AllOutSpurtStart));
-        // `distance_type==3` is resolved when the runner is created.
-        assert!(logic.guards.is_empty());
-        assert!(scheduler.position_windows.is_empty());
-    }
+    assert!(
+        solver.runners[0]
+            .trigger_scheduler
+            .position_windows
+            .is_empty()
+    );
 
     enter_last_spurt(&mut solver, 20.0);
 

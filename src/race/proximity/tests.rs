@@ -17,33 +17,38 @@ fn test_is_near_by() {
 }
 
 #[test]
-fn test_is_near() {
+fn test_is_near_by_version() {
     let lane = CourseWidths::from_horse_lanes;
-    let version = GameVersion::LATEST;
-    assert!(is_near(2.9, lane(2.9), version));
-    assert!(is_near(2.9, -lane(2.9), version));
-    assert!(!is_near(3.0, CourseWidths(0.0), version));
-    assert!(!is_near(0.0, lane(3.0), version));
-    assert!(!is_near(0.0, -lane(3.0), version));
+    // (version, distance, whether near), with as many lanes as meters apart.
+    let cases = [
+        (GameVersion::Original, 1.4, true),
+        (GameVersion::Original, 1.5, false),
+        (GameVersion::LATEST, 2.9, true),
+        (GameVersion::LATEST, 3.0, false),
+    ];
+    for (version, distance, expected) in cases {
+        let actual = is_near(distance, lane(distance - 0.1), version);
+        assert_eq!(actual, expected, "{version:?} {distance}m");
+    }
 }
 
 #[test]
-fn test_check_front_blocked_lane_side() {
-    let lane = CourseWidths::from_horse_lanes;
-    assert!(check_front_blocked(0.01, lane(0.7)));
-    assert!(check_front_blocked(0.01, -lane(0.7)));
-    assert!(!check_front_blocked(0.01, lane(0.8)));
-    assert!(!check_front_blocked(0.01, -lane(0.8)));
-}
-
-#[test]
-fn test_check_front_blocked_distance() {
+fn test_check_front_blocked() {
     let lane = CourseWidths::from_horse_lanes;
     // Lane threshold shrinks from 0.75 lanes (touching) to 0.3 lanes (2m).
-    assert!(check_front_blocked(1.0, lane(0.52)));
-    assert!(!check_front_blocked(1.0, lane(0.53)));
-    assert!(check_front_blocked(1.99, lane(0.3)));
-    // Only strictly between 0m and 2m.
-    assert!(!check_front_blocked(0.0, CourseWidths(0.0)));
-    assert!(!check_front_blocked(2.0, CourseWidths(0.0)));
+    let cases = [
+        (0.01, lane(0.7), true),
+        (0.01, -lane(0.7), true),
+        (0.01, lane(0.8), false),
+        (1.0, lane(0.52), true),
+        (1.0, lane(0.53), false),
+        (1.99, lane(0.3), true),
+        // Only strictly between 0m and 2m.
+        (0.0, CourseWidths(0.0), false),
+        (2.0, CourseWidths(0.0), false),
+    ];
+    for (distance, lane_diff, expected) in cases {
+        let actual = check_front_blocked(distance, lane_diff);
+        assert_eq!(actual, expected, "{distance}m, {lane_diff:?}");
+    }
 }

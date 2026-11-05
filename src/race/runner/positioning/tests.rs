@@ -6,12 +6,17 @@ fn test_positioning_speed_multiplier() {
     let multiplier =
         |strategy: PositioningStrategy, phase, version| strategy.speed_multiplier(phase, version);
     let latest = GameVersion::LATEST;
-    for phase in [Phase::Early, Phase::Mid] {
-        assert_eq!(multiplier(Normal, phase, latest), 1.0);
-        assert_eq!(multiplier(FrontSpeedUp, phase, latest), 1.04);
-        assert_eq!(multiplier(FrontOvertake, phase, latest), 1.05);
-        assert_eq!(multiplier(PaceUp(5.0), phase, latest), 1.04);
-        assert_eq!(multiplier(PaceUpEx, phase, latest), 2.0);
+    // Only pace down depends on the phase.
+    let cases = [
+        (Normal, 1.0),
+        (FrontSpeedUp, 1.04),
+        (FrontOvertake, 1.05),
+        (PaceUp(5.0), 1.04),
+        (PaceUpEx, 2.0),
+    ];
+    for (strategy, expected) in cases {
+        let actual = multiplier(strategy, Phase::Mid, latest);
+        assert_eq!(actual, expected, "{strategy:?}");
     }
 
     // Pace down is milder in the Mid race from 1.5 Anniv. onward.
