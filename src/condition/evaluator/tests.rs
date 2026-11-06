@@ -184,10 +184,7 @@ fn test_most_popular_runaway_counts_as_front_runner() {
     let runner = &solver.runners[0];
 
     let var = RunningStyleVar::RunningStyleEqualPopularityOne;
-    assert_eq!(
-        running_style_value(&var, &solver.state, runner.adjusted.style),
-        1
-    );
+    assert_eq!(running_style_value(&var, &solver.state, runner.style), 1);
 }
 
 #[test]
@@ -217,13 +214,13 @@ fn comp(condition: &str) -> Comparison {
 #[test]
 fn test_base_stat_values() {
     let mut solver = create_test_race_solver(vec![]);
-    solver.runners[0].base = Uma {
-        speed: 1101,
-        stamina: 902,
-        power: 803,
-        guts: 704,
-        wit: 605,
-        ..uma(Style::Late)
+    // Fractions are truncated.
+    solver.runners[0].base = Stats {
+        speed: 1101.9,
+        stamina: 902.0,
+        power: 803.5,
+        guts: 704.0,
+        wit: 605.1,
     };
 
     let base = &solver.runners[0].base;
@@ -866,7 +863,11 @@ fn test_compete_fight_count_by_duel_state() {
     let mut solver = create_test_race_solver(vec![]);
 
     // Still counts after leaving the duel.
-    for (duel, expected) in [(Duel::Pending, 0), (Duel::start(800), 1), (Duel::Ended, 1)] {
+    for (duel, expected) in [
+        (Duel::Pending, 0),
+        (Duel::start(800.0), 1),
+        (Duel::Ended, 1),
+    ] {
         solver.runners[0].duel = duel;
         let var = ActivationVar::CompeteFightCount;
         let actual = activation_value(&var, &solver.state, &solver.runners[0], None);
@@ -947,7 +948,7 @@ fn test_variable_value_dispatch() {
     // to the function of their category, chosen by type.
     let mut solver = create_test_race_solver(vec![]);
     // The current style, not the base one.
-    solver.runners[0].adjusted.style = Style::End;
+    solver.runners[0].style = Style::End;
     solver.state.elapsed_time = 42.5;
 
     let (state, runner) = (&solver.state, &solver.runners[0]);
@@ -996,7 +997,7 @@ fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
         RngSeed::new(0),
     );
     runner.assign_gate(1, &state);
-    runner.base.speed = 1101;
+    runner.base.speed = 1101.0;
     (state, runner)
 }
 

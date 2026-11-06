@@ -45,7 +45,7 @@ fn test_target_speed_bonus() {
         (Style::Late, false, LATEST, base * 0.8),
     ];
     for (style, is_alone, version, expected) in cases {
-        let actual = target_speed_bonus(style, 2000, is_alone, version);
+        let actual = target_speed_bonus(style, 2000.0, is_alone, version);
         assert_close!(
             actual,
             expected,
@@ -53,7 +53,7 @@ fn test_target_speed_bonus() {
         );
     }
 
-    let actual = target_speed_bonus(Style::Pace, 500, false, LATEST);
+    let actual = target_speed_bonus(Style::Pace, 500.0, false, LATEST);
     assert_close!(actual, 0.5 * 0.3);
 }
 

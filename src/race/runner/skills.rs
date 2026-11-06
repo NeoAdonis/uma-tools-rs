@@ -479,7 +479,7 @@ impl Runner {
         let wit_bonus = if state.config.game_version >= GameVersion::FifthAnniversary
             && self.skills[skill_index].is_wit_limit_break_eligible()
         {
-            wit_limit_break_phase_coefficient(self.adjusted.style, self.phase)
+            wit_limit_break_phase_coefficient(self.style, self.phase)
                 * wit_limit_break_multiplier(self.adjusted.wit)
         } else {
             0.0

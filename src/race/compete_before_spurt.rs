@@ -75,7 +75,7 @@ pub(crate) fn lead_threshold(style: Style, course_distance: f64) -> f64 {
 /// `is_alone` is whether no other runner with the same style is within
 /// `ALONE_DISTANCE`. It only has an effect on front-like runners.
 // ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
-pub(crate) fn target_speed_bonus(style: Style, power: u16, guts: u16, is_alone: bool) -> f64 {
+pub(crate) fn target_speed_bonus(style: Style, power: f64, guts: f64, is_alone: bool) -> f64 {
     let style_coef = match style {
         Style::Runaway => 0.2,
         Style::Front => 0.8,
@@ -86,10 +86,7 @@ pub(crate) fn target_speed_bonus(style: Style, power: u16, guts: u16, is_alone: 
         (Style::Front, true) => 1.1,
         _ => 1.0,
     };
-    ((power as f64 / 1500.0).sqrt() * 2.0 + (guts as f64 / 3000.0).powf(0.2))
-        * 0.1
-        * style_coef
-        * alone_coef
+    ((power / 1500.0).sqrt() * 2.0 + (guts / 3000.0).powf(0.2)) * 0.1 * style_coef * alone_coef
 }
 
 /// HP consumed upon competing.
@@ -108,8 +105,7 @@ pub(crate) fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -
 
 /// Chance of noticing the lack of HP and entering Stamina Keep on each check.
 // ? Highly speculative.
-pub(crate) fn stamina_keep_chance(wit: u16) -> f64 {
-    let wit = wit as f64;
+pub(crate) fn stamina_keep_chance(wit: f64) -> f64 {
     (0.3 * (wit / 1000.0 + wit.powf(0.03))).min(1.0)
 }
 

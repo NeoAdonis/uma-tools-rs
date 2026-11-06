@@ -9,7 +9,7 @@ use rand::{Rng, RngExt};
 use crate::configuration::GameVersion;
 use crate::course::{Phase, ThresholdStat, Track};
 use crate::race::parameters::TrackCondition;
-use crate::uma::{Aptitude, Style, Uma};
+use crate::uma::{Aptitude, Stats, Style};
 
 /// Calculate acceleration strategy phase multiplier based on running style.
 pub(crate) fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
@@ -35,14 +35,18 @@ pub(crate) fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase)
 /// Wit multiplier for the wit limit break buff (5th Anniversary onward).
 ///
 /// Zero at 1200 wit or less; it then grows in brackets up to a maximum of 1.12.
-pub(crate) fn wit_limit_break_multiplier(wit: u16) -> f64 {
-    let brackets = |from: u16, step: f64| ((wit - from) as f64 / step).ceil();
-    match wit {
-        0..=1200 => 0.0,
-        1201..=1400 => brackets(1200, 20.0) * 0.02,
-        1401..=1600 => 0.2 + brackets(1400, 20.0) * 0.06,
-        1601..=2000 => 0.8 + brackets(1600, 20.0) * 0.01,
-        _ => (1.0 + brackets(2000, 100.0) * 0.01).min(1.12),
+pub(crate) fn wit_limit_break_multiplier(wit: f64) -> f64 {
+    let brackets = |from: f64, step: f64| ((wit - from) / step).ceil();
+    if wit <= 1200.0 {
+        0.0
+    } else if wit <= 1400.0 {
+        brackets(1200.0, 20.0) * 0.02
+    } else if wit <= 1600.0 {
+        0.2 + brackets(1400.0, 20.0) * 0.06
+    } else if wit <= 2000.0 {
+        0.8 + brackets(1600.0, 20.0) * 0.01
+    } else {
+        (1.0 + brackets(2000.0, 100.0) * 0.01).min(1.12)
     }
 }
 
@@ -84,16 +88,14 @@ pub(crate) fn stamina_limit_break_distance_factor(distance: i32, game_version: G
 ///
 /// Zero at 1200 stamina or below, or on courses up to 2100m.
 pub(crate) fn stamina_limit_break_base_buff(
-    stamina: u16,
+    stamina: f64,
     distance: i32,
     game_version: GameVersion,
 ) -> f64 {
-    if game_version < GameVersion::TwoPointFiveAnniversary || stamina <= 1200 {
+    if game_version < GameVersion::TwoPointFiveAnniversary || stamina <= 1200.0 {
         return 0.0;
     }
-    ((stamina - 1200) as f64).sqrt()
-        * 0.0085
-        * stamina_limit_break_distance_factor(distance, game_version)
+    (stamina - 1200.0).sqrt() * 0.0085 * stamina_limit_break_distance_factor(distance, game_version)
 }
 
 /// Random factor of the Stamina Limit Break buff.
@@ -174,7 +176,7 @@ pub(crate) fn base_target_speed(
     base_speed: f64,
     style: Style,
     phase: Phase,
-    speed_stat: u16,
+    speed_stat: f64,
     distance_aptitude: Aptitude,
 ) -> f64 {
     let base = base_speed * strategy_phase_multiplier(style, phase);
@@ -182,7 +184,7 @@ pub(crate) fn base_target_speed(
     match phase {
         Phase::RunUp | Phase::Early | Phase::Mid => base,
         Phase::Late | Phase::Last => {
-            let speed_modifier = (500.0 * speed_stat as f64).sqrt()
+            let speed_modifier = (500.0 * speed_stat).sqrt()
                 * distance_proficiency_multiplier(distance_aptitude)
                 * 0.002;
             base + speed_modifier
@@ -199,40 +201,40 @@ pub(crate) fn downhill_speed_modifier(slope: f64) -> f64 {
 
 /// Target speed modifier (m/s) on an uphill `slope` (percent), given the power
 /// stat. It's negative, as uphills reduce speed.
-pub(crate) fn uphill_speed_modifier(slope: f64, power: u16) -> f64 {
-    -slope * 200.0 / power as f64
+pub(crate) fn uphill_speed_modifier(slope: f64, power: f64) -> f64 {
+    -slope * 200.0 / power
 }
 
 /// Roll section speed modifier range randomly based on wit stat.
 pub(crate) fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng: &mut R,
-    wit_stat: u16,
+    wit_stat: f64,
     base_speed: f64,
 ) -> f64 {
-    let max = wit_stat as f64 * (wit_stat as f64 * 0.1).log10() / 550000.0;
+    let max = wit_stat * (wit_stat * 0.1).log10() / 550000.0;
     let min = max - 0.0065;
     rng.random_range(min..=max) * base_speed
 }
 
 /// Calculate track speed modifier based on track condition.
-pub(crate) fn track_speed_modifier(track_condition: TrackCondition) -> u16 {
+pub(crate) fn track_speed_modifier(track_condition: TrackCondition) -> f64 {
     match track_condition {
-        TrackCondition::Heavy => 50,
-        _ => 0,
+        TrackCondition::Heavy => 50.0,
+        _ => 0.0,
     }
 }
 
 /// Calculate track power modifier based on track type and condition.
-pub(crate) fn track_power_modifier(track: Track, track_condition: TrackCondition) -> u16 {
+pub(crate) fn track_power_modifier(track: Track, track_condition: TrackCondition) -> f64 {
     match (track, track_condition) {
-        (Track::Turf, TrackCondition::Firm) => 0,
-        (Track::Turf, TrackCondition::Good) => 50,
-        (Track::Turf, TrackCondition::Soft) => 50,
-        (Track::Turf, TrackCondition::Heavy) => 50,
-        (Track::Dirt, TrackCondition::Firm) => 100,
-        (Track::Dirt, TrackCondition::Good) => 50,
-        (Track::Dirt, TrackCondition::Soft) => 100,
-        (Track::Dirt, TrackCondition::Heavy) => 100,
+        (Track::Turf, TrackCondition::Firm) => 0.0,
+        (Track::Turf, TrackCondition::Good) => 50.0,
+        (Track::Turf, TrackCondition::Soft) => 50.0,
+        (Track::Turf, TrackCondition::Heavy) => 50.0,
+        (Track::Dirt, TrackCondition::Firm) => 100.0,
+        (Track::Dirt, TrackCondition::Good) => 50.0,
+        (Track::Dirt, TrackCondition::Soft) => 100.0,
+        (Track::Dirt, TrackCondition::Heavy) => 100.0,
     }
 }
 
@@ -252,39 +254,36 @@ pub(crate) fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
     }
 }
 
-/// Calculate adjusted speed after applying course and track modifiers.
+/// Calculate adjusted speed after applying course and track modifiers, at
+/// least 1.
 pub(crate) fn calculate_adjusted_speed(
-    base_speed: u16,
+    base_speed: f64,
     track_condition: TrackCondition,
     course_modifier: f64,
-) -> u16 {
-    let modified_speed = (base_speed as f64 * course_modifier) as u16;
-    let track_modifier = track_speed_modifier(track_condition);
-    modified_speed.saturating_sub(track_modifier).max(1)
+) -> f64 {
+    (base_speed * course_modifier - track_speed_modifier(track_condition)).max(1.0)
 }
 
-/// Calculate adjusted power after applying track modifier.
+/// Calculate adjusted power after applying track modifier, at least 1.
 pub(crate) fn calculate_adjusted_power(
-    base_power: u16,
+    base_power: f64,
     track: Track,
     track_condition: TrackCondition,
-) -> u16 {
-    let modifier = track_power_modifier(track, track_condition);
-    base_power.saturating_sub(modifier).max(1)
+) -> f64 {
+    (base_power - track_power_modifier(track, track_condition)).max(1.0)
 }
 
-/// Calculate adjusted wit after applying style aptitude modifier.
-pub(crate) fn calculate_adjusted_wit(base_wit: u16, style_aptitude: Aptitude) -> u16 {
-    let aptitude_mod = strategy_proficiency_multiplier(style_aptitude);
-    ((base_wit as f64 * aptitude_mod) as u16).max(1)
+/// Calculate adjusted wit after applying style aptitude modifier, at least 1.
+pub(crate) fn calculate_adjusted_wit(base_wit: f64, style_aptitude: Aptitude) -> f64 {
+    (base_wit * strategy_proficiency_multiplier(style_aptitude)).max(1.0)
 }
 
 /// Calculate course speed modifier based on course set status.
 ///
-/// Each course has a set of stats that provide bonuses if the [`Uma`]'s
-/// corresponding base stats exceed certain thresholds. If multiple stats are
+/// Each course has a set of stats that provide bonuses if the corresponding
+/// base stats exceed certain thresholds. If multiple stats are
 /// present, their bonuses are averaged.
-pub(crate) fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdStat]) -> f64 {
+pub(crate) fn course_speed_modifier(base: &Stats, course_set_status: &[ThresholdStat]) -> f64 {
     if course_set_status.is_empty() {
         return 1.0;
     }
@@ -302,12 +301,12 @@ pub(crate) fn course_speed_modifier(base: &Uma, course_set_status: &[ThresholdSt
 }
 
 /// Calculate bonus multiplier based on threshold stat value.
-fn threshold_stat_bonus(stat_value: u16) -> f64 {
-    if stat_value <= 300 {
+fn threshold_stat_bonus(stat_value: f64) -> f64 {
+    if stat_value <= 300.0 {
         0.05
-    } else if stat_value <= 600 {
+    } else if stat_value <= 600.0 {
         0.1
-    } else if stat_value <= 900 {
+    } else if stat_value <= 900.0 {
         0.15
     } else {
         0.2

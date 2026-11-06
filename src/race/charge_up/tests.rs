@@ -69,10 +69,10 @@ fn enter_last_spurt(solver: &mut RaceSolver<Runner>, conserved: f64) {
 #[test]
 fn test_charge_power() {
     // Raw 1600: base 1400 + 0.5 * 400.
-    assert_eq!(charge_power(1400, 1600, 0), 1600.0);
-    assert_eq!(charge_power(1400, 1600, 60), 1660.0);
+    assert_eq!(charge_power(1400.0, 1600, 0), 1600.0);
+    assert_eq!(charge_power(1400.0, 1600, 60), 1660.0);
     // Below 1200 the raw term is zero.
-    assert_eq!(charge_power(1000, 1000, 0), 1000.0);
+    assert_eq!(charge_power(1000.0, 1000, 0), 1000.0);
 }
 
 #[test]

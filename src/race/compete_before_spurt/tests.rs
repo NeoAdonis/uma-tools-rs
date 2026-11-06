@@ -32,12 +32,12 @@ fn test_target_speed_bonus() {
         (Style::Pace, true, base),
     ];
     for (style, is_alone, expected) in cases {
-        let actual = target_speed_bonus(style, 1500, 3000, is_alone);
+        let actual = target_speed_bonus(style, 1500.0, 3000.0, is_alone);
         assert_close!(actual, expected, "{style:?} (alone: {is_alone})");
     }
 
     // Power 375 -> sqrt(0.25) * 2 = 1; guts 3000 * 2^-5 -> 0.5.
-    let actual = target_speed_bonus(Style::Pace, 375, 3000 / 32, false);
+    let actual = target_speed_bonus(Style::Pace, 375.0, 3000.0 / 32.0, false);
     assert_close!(actual, 1.5 * 0.1, tolerance = 1e-3);
 }
 
@@ -62,8 +62,8 @@ fn test_hp_cost() {
 #[test]
 fn test_stamina_keep_chance() {
     let expected = 0.3 * (1.0 + 1000f64.powf(0.03));
-    assert_close!(stamina_keep_chance(1000), expected);
-    assert_close!(stamina_keep_chance(2500), 1.0);
+    assert_close!(stamina_keep_chance(1000.0), expected);
+    assert_close!(stamina_keep_chance(2500.0), 1.0);
 }
 
 #[test]

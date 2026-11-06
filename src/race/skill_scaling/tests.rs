@@ -86,20 +86,20 @@ fn test_mid_side_blocked_time_multiplier() {
 #[test]
 fn test_speed_multipliers() {
     let cases = [
-        (1699, 0.0),
-        (1700, 1.0),
-        (1799, 1.0),
-        (1800, 2.0),
-        (1899, 2.0),
-        (1900, 3.0),
-        (1999, 3.0),
-        (2000, 4.0),
+        (1699.0, 0.0),
+        (1700.0, 1.0),
+        (1799.0, 1.0),
+        (1800.0, 2.0),
+        (1899.0, 2.0),
+        (1900.0, 3.0),
+        (1999.0, 3.0),
+        (2000.0, 4.0),
     ];
     for (speed, expected) in cases {
         assert_eq!(speed_multiplier_1(speed), expected, "speed {speed}");
     }
 
-    let cases = [(1399, 1.0), (1400, 2.0), (1599, 2.0), (1600, 3.0)];
+    let cases = [(1399.0, 1.0), (1400.0, 2.0), (1599.0, 2.0), (1600.0, 3.0)];
     for (speed, expected) in cases {
         assert_eq!(speed_multiplier_2(speed), expected, "speed {speed}");
     }

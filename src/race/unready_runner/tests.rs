@@ -43,43 +43,74 @@ fn activated_ids(runner: &UnreadyRunner) -> Vec<i32> {
 
 #[test]
 fn test_stat_boosts_by_type() {
-    let stats = |uma: Uma| [uma.speed, uma.stamina, uma.power, uma.guts, uma.wit];
-    let base = Uma {
-        speed: 1000,
-        stamina: 900,
-        power: 800,
-        guts: 700,
-        wit: 600,
-        ..uma(Style::Pace)
+    let stats = |stats: Stats| {
+        [
+            stats.speed,
+            stats.stamina,
+            stats.power,
+            stats.guts,
+            stats.wit,
+        ]
+    };
+    let base = Stats {
+        speed: 1000.0,
+        stamina: 900.0,
+        power: 800.0,
+        guts: 700.0,
+        wit: 600.0,
     };
 
     // (effect, modifier, [speed, stamina, power, guts, wit]).
     let cases = [
-        (SkillType::SpeedUp, 60.0, [1060, 900, 800, 700, 600]),
-        (SkillType::StaminaUp, 60.0, [1000, 960, 800, 700, 600]),
-        (SkillType::PowerUp, 60.0, [1000, 900, 860, 700, 600]),
-        (SkillType::GutsUp, 60.0, [1000, 900, 800, 760, 600]),
-        (SkillType::WitUp, 60.0, [1000, 900, 800, 700, 660]),
-        (SkillType::AllStatsUp, 60.0, [1060, 960, 860, 760, 660]),
+        (
+            SkillType::SpeedUp,
+            60.0,
+            [1060.0, 900.0, 800.0, 700.0, 600.0],
+        ),
+        (
+            SkillType::StaminaUp,
+            60.0,
+            [1000.0, 960.0, 800.0, 700.0, 600.0],
+        ),
+        (
+            SkillType::PowerUp,
+            60.0,
+            [1000.0, 900.0, 860.0, 700.0, 600.0],
+        ),
+        (
+            SkillType::GutsUp,
+            60.0,
+            [1000.0, 900.0, 800.0, 760.0, 600.0],
+        ),
+        (SkillType::WitUp, 60.0, [1000.0, 900.0, 800.0, 700.0, 660.0]),
+        (
+            SkillType::AllStatsUp,
+            60.0,
+            [1060.0, 960.0, 860.0, 760.0, 660.0],
+        ),
         // Negative boosts lower stats, down to 1.
-        (SkillType::AllStatsUp, -50.0, [950, 850, 750, 650, 550]),
-        (SkillType::SpeedUp, -2000.0, [1, 900, 800, 700, 600]),
+        (
+            SkillType::AllStatsUp,
+            -50.0,
+            [950.0, 850.0, 750.0, 650.0, 550.0],
+        ),
+        (
+            SkillType::SpeedUp,
+            -2000.0,
+            [1.0, 900.0, 800.0, 700.0, 600.0],
+        ),
         // Not a stat boost.
-        (SkillType::TargetSpeed, 60.0, [1000, 900, 800, 700, 600]),
+        (
+            SkillType::TargetSpeed,
+            60.0,
+            [1000.0, 900.0, 800.0, 700.0, 600.0],
+        ),
     ];
     for (skill_type, modifier, expected) in cases {
-        let mut uma = base;
-        apply_stat_boost(&mut uma, &skill_type, modifier);
-        assert_eq!(stats(uma), expected, "{skill_type:?} {modifier}");
+        let mut boosted = base;
+        apply_stat_boost(&mut boosted, &skill_type, modifier);
+        assert_eq!(stats(boosted), expected, "{skill_type:?} {modifier}");
     }
-
-    // Stats never overflow.
-    let mut uma = Uma {
-        speed: u16::MAX - 10,
-        ..base
-    };
-    apply_stat_boost(&mut uma, &SkillType::SpeedUp, 60.0);
-    assert_eq!(uma.speed, u16::MAX);
 }
 
 #[test]
@@ -185,7 +216,7 @@ fn test_first_satisfied_alternative_is_applied() {
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.adjusted.speed, speed + 40);
+    assert_eq!(runner.adjusted.speed, speed + 40.0);
     assert_eq!(activated_ids(&runner), vec![8]);
 }
 
@@ -323,7 +354,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
         solver.add_runner(Entrant::new(uma, skills));
     }
     let mut runners = solver.ready_runners().runners;
-    runners.sort_by_key(|runner| runner.base.guts);
+    runners.sort_by(|a, b| a.base.guts.total_cmp(&b.base.guts));
     runners
 }
 
@@ -357,16 +388,16 @@ fn test_connect_activates_sympathy_for_every_runner_with_it() {
 
     // "Connect" gives +60 speed and "Sympathy" +40 speed.
     let speed = runners[2].adjusted.speed;
-    assert_eq!(runners[0].adjusted.speed, speed + 60);
-    assert_eq!(runners[1].adjusted.speed, speed + 40);
-    assert_eq!(runners[3].adjusted.speed, speed + 40);
+    assert_eq!(runners[0].adjusted.speed, speed + 60.0);
+    assert_eq!(runners[1].adjusted.speed, speed + 40.0);
+    assert_eq!(runners[3].adjusted.speed, speed + 40.0);
 }
 
 #[test]
 fn test_connect_activates_own_sympathy() {
     let runners = sympathy_runners(10104, &[&[CONNECT_ID, SYMPATHY_ID], &[]]);
     assert_eq!(sympathy_activations(&runners), vec![1, 0]);
-    assert_eq!(runners[0].adjusted.speed, runners[1].adjusted.speed + 100);
+    assert_eq!(runners[0].adjusted.speed, runners[1].adjusted.speed + 100.0);
 }
 
 #[test]
@@ -405,7 +436,7 @@ fn test_random_lot_is_rolled_before_the_race() {
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.adjusted.speed, speed + 80);
+    assert_eq!(runner.adjusted.speed, speed + 80.0);
     assert_eq!(activated_ids(&runner), vec![1]);
 }
 
@@ -424,7 +455,7 @@ fn test_failed_random_lot_falls_through_to_next_alternative() {
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.adjusted.speed, speed + 40);
+    assert_eq!(runner.adjusted.speed, speed + 40.0);
     assert_eq!(activated_ids(&runner), vec![8]);
 }
 
@@ -465,7 +496,7 @@ fn test_out_of_gate_skill_activates_once_with_several_satisfied_branches() {
 
     runner.apply_out_of_gate_skills(&state);
 
-    assert_eq!(runner.adjusted.speed, speed + 40);
+    assert_eq!(runner.adjusted.speed, speed + 40.0);
     assert_eq!(activated_ids(&runner), vec![8]);
 }
 
@@ -497,7 +528,8 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
             runner.assign_gate(1, &state);
             let speed = runner.adjusted.speed;
             runner.apply_out_of_gate_skills(&state);
-            runner.adjusted.speed - speed
+            // Whole stat points, so that they can be collected in a set.
+            (runner.adjusted.speed - speed) as u16
         })
         .collect()
 }
@@ -526,7 +558,7 @@ fn alternative_with_precondition(
 
 /// Speed gained before the race by a runner with the given skill alternatives,
 /// on a 2000m turf course (10104).
-fn out_of_gate_speed_gain(alternatives: Vec<SkillAlternative>) -> u16 {
+fn out_of_gate_speed_gain(alternatives: Vec<SkillAlternative>) -> f64 {
     let skill = Arc::new(Skill {
         id: 8,
         ..synthetic_skill(alternatives)
@@ -547,10 +579,10 @@ fn test_out_of_gate_precondition_is_required() {
             40.0,
         )])
     };
-    assert_eq!(gain("ground_type==2"), 0);
-    assert_eq!(gain("ground_type==1"), 40);
+    assert_eq!(gain("ground_type==2"), 0.0);
+    assert_eq!(gain("ground_type==1"), 40.0);
     // Like "Long or Extended distance" preconditions: any OR branch suffices.
-    assert_eq!(gain("distance_type==3@distance_type==4"), 40);
+    assert_eq!(gain("distance_type==3@distance_type==4"), 40.0);
 }
 
 #[test]
@@ -561,7 +593,7 @@ fn test_out_of_gate_condition_is_required_with_satisfied_precondition() {
         "ground_type==2",
         40.0,
     )]);
-    assert_eq!(gain, 0);
+    assert_eq!(gain, 0.0);
 }
 
 #[test]
@@ -571,7 +603,7 @@ fn test_unsatisfied_precondition_falls_through_to_next_alternative() {
         alternative_with_precondition("ground_type==2", "always==1", 100.0),
         alternative("always==1", SkillType::SpeedUp, 40.0),
     ]);
-    assert_eq!(gain, 40);
+    assert_eq!(gain, 40.0);
 }
 
 #[test]
@@ -606,7 +638,7 @@ fn test_min_speed_scales_with_guts() {
     let runner = ready_solver(10104, uma, vec![], seeded_config(0))
         .runners
         .remove(0);
-    assert_eq!(runner.adjusted.guts, 800);
+    assert_eq!(runner.adjusted.guts, 800.0);
     assert_close!(runner.min_speed, 17.0 + 0.4);
 }
 
@@ -631,6 +663,6 @@ fn test_heavy_track_lowers_adjusted_speed() {
     };
     assert_eq!(
         adjusted_speed(TrackCondition::Heavy),
-        adjusted_speed(TrackCondition::Firm) - 50
+        adjusted_speed(TrackCondition::Firm) - 50.0
     );
 }

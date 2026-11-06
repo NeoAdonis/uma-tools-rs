@@ -47,7 +47,7 @@ pub(crate) fn desirable_lead(style: Style, other: Style, course_distance: f64) -
 // ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
 pub(crate) fn target_speed_bonus(
     style: Style,
-    guts: u16,
+    guts: f64,
     is_alone: bool,
     game_version: GameVersion,
 ) -> f64 {
@@ -63,7 +63,7 @@ pub(crate) fn target_speed_bonus(
         (Style::Front, true) => 2.0,
         _ => 1.0,
     };
-    (guts as f64 / 2000.0).sqrt() * 0.3 * style_coef * alone_coef
+    (guts / 2000.0).sqrt() * 0.3 * style_coef * alone_coef
 }
 
 /// HP consumed upon securing the lead.

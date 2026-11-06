@@ -17,12 +17,12 @@ fn rushed() -> RushState {
 fn test_chance() {
     // (base wit, modifier, chance): 19.00% and 9.74% before rounding up.
     let cases = [
-        (300, 0.0, 19.0),
-        (1200, 0.0, 10.0),
-        (1200, -3.0, 7.0),
+        (300.0, 0.0, 19.0),
+        (1200.0, 0.0, 10.0),
+        (1200.0, -3.0, 7.0),
         // Clamped.
-        (1, 0.0, 100.0),
-        (1200, -20.0, 0.0),
+        (1.0, 0.0, 100.0),
+        (1200.0, -20.0, 0.0),
     ];
     for (wit, modifier, expected) in cases {
         assert_eq!(chance(wit, modifier), expected, "{wit} wit, {modifier}");

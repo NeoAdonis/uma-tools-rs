@@ -63,20 +63,20 @@ fn enter_last_spurt(solver: &mut RaceSolver<Runner>, speed: f64) {
 #[test]
 fn test_base_acceleration() {
     let latest = GameVersion::LATEST;
-    assert_eq!(base_acceleration(2000, 1200, 2000, latest), 0.0);
+    assert_eq!(base_acceleration(2000.0, 1200.0, 2000, latest), 0.0);
     assert_eq!(
-        base_acceleration(2200, 1200, 2000, GameVersion::MechaUmaUpdate),
+        base_acceleration(2200.0, 1200.0, 2000, GameVersion::MechaUmaUpdate),
         0.0
     );
     // 0.068 * 0.0006 * sqrt(500 * 1200) / 2^1.5.
     let expected = 0.068 * 0.0006 * 600000f64.sqrt() / 8f64.sqrt();
-    assert_close!(base_acceleration(2001, 1200, 2000, latest), expected);
+    assert_close!(base_acceleration(2001.0, 1200.0, 2000, latest), expected);
 }
 
 #[test]
 fn test_activates_at_last_spurt_speed() {
     let mut solver = solver(2500, GameVersion::LATEST, vec![], 42);
-    assert_eq!(solver.runners[0].adjusted.speed, 2220);
+    assert_close!(solver.runners[0].adjusted.speed, 2220.0);
     assert!(solver.runners[0].all_out_spurt_base > 0.0);
 
     enter_last_spurt(&mut solver, 19.9);

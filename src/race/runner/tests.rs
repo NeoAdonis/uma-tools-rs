@@ -221,7 +221,7 @@ fn test_target_speed_adds_modifiers() {
     runner.compete_before_spurt = TimedBoost::start(0.11, time, 2.0, 1.0);
     runner.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.13 };
     runner.start_duel();
-    let (guts, aptitude) = (runner.adjusted.guts, runner.adjusted.style_aptitude);
+    let (guts, aptitude) = (runner.adjusted.guts, runner.raw.style_aptitude);
     runner.spot_struggle = SpotStruggle::start(guts, aptitude, time);
     let bonuses = runner.duel.speed_bonus() + runner.spot_struggle.speed_bonus(time);
     assert!(bonuses > 0.0);

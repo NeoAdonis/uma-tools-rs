@@ -48,7 +48,7 @@ pub enum SpotStruggle {
 
 impl SpotStruggle {
     /// Start the spot struggle at `elapsed_time`.
-    pub(crate) fn start(guts: u16, style_aptitude: Aptitude, elapsed_time: f64) -> Self {
+    pub(crate) fn start(guts: f64, style_aptitude: Aptitude, elapsed_time: f64) -> Self {
         SpotStruggle::Active {
             speed_bonus: target_speed_bonus(guts),
             expires_at: elapsed_time + duration(guts, style_aptitude),
@@ -106,13 +106,13 @@ pub(crate) fn is_too_far(distance: f64, lane_diff: CourseWidths) -> bool {
 }
 
 /// Target speed increase (m/s) during the spot struggle.
-pub(crate) fn target_speed_bonus(guts: u16) -> f64 {
-    (500.0 * guts as f64).powf(0.6) * 0.0001
+pub(crate) fn target_speed_bonus(guts: f64) -> f64 {
+    (500.0 * guts).powf(0.6) * 0.0001
 }
 
 /// Duration of the spot struggle in seconds.
-pub(crate) fn duration(guts: u16, style_aptitude: Aptitude) -> f64 {
-    (700.0 * guts as f64).sqrt() * 0.012 * strategy_proficiency_multiplier(style_aptitude)
+pub(crate) fn duration(guts: f64, style_aptitude: Aptitude) -> f64 {
+    (700.0 * guts).sqrt() * 0.012 * strategy_proficiency_multiplier(style_aptitude)
 }
 
 /// HP consumption multiplier during the spot struggle.

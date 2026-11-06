@@ -33,13 +33,13 @@ fn move_to_section(solver: &mut RaceSolver<Runner>, section: u8) {
 
 /// Late-race base target speed of the solver's runner.
 fn late_base_target_speed(solver: &RaceSolver<Runner>) -> f64 {
-    let uma = &solver.runners[0].adjusted;
+    let runner = &solver.runners[0];
     base_target_speed(
         solver.state.course.base_speed(),
-        uma.style,
+        runner.style,
         Phase::Late,
-        uma.speed,
-        uma.distance_aptitude,
+        runner.adjusted.speed,
+        runner.raw.distance_aptitude,
     )
 }
 
@@ -85,10 +85,10 @@ fn test_speed_max_above_late_base_target_speed() {
         solver.state.config.game_version = game_version;
         for style in styles {
             for distance_aptitude in aptitudes {
-                for stat in [1, 100, 600, 1200, 2000] {
+                for stat in [1.0, 100.0, 600.0, 1200.0, 2000.0] {
                     let runner = &mut solver.runners[0];
-                    runner.adjusted.style = style;
-                    runner.adjusted.distance_aptitude = distance_aptitude;
+                    runner.style = style;
+                    runner.raw.distance_aptitude = distance_aptitude;
                     runner.adjusted.speed = stat;
                     runner.adjusted.guts = stat;
                     let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
@@ -109,12 +109,12 @@ fn test_speed_max() {
     // multiplier). Guts only adds speed from the 1st Anniversary onward.
     // (version, distance aptitude, speed, guts, max speed).
     let cases = [
-        (GameVersion::Original, Aptitude::A, 1200, 800, 24.385846),
+        (GameVersion::Original, Aptitude::A, 1200.0, 800.0, 24.385846),
         (
             GameVersion::FirstAnniversary,
             Aptitude::B,
-            1200,
-            800,
+            1200.0,
+            800.0,
             24.275807,
         ),
     ];
@@ -122,8 +122,8 @@ fn test_speed_max() {
     for (game_version, distance_aptitude, speed, guts, expected) in cases {
         solver.state.config.game_version = game_version;
         let runner = &mut solver.runners[0];
-        runner.adjusted.style = Style::End;
-        runner.adjusted.distance_aptitude = distance_aptitude;
+        runner.style = Style::End;
+        runner.raw.distance_aptitude = distance_aptitude;
         runner.adjusted.speed = speed;
         runner.adjusted.guts = guts;
         let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
@@ -316,7 +316,7 @@ fn test_slowest_candidate_when_every_check_fails() {
         let candidates = (0..)
             .take_while(|&step| max - 0.1 * step as f64 >= base)
             .count();
-        let chance = 0.15 + 0.0005 * runner.adjusted.wit as f64;
+        let chance = 0.15 + 0.0005 * runner.adjusted.wit;
         let mut rng = runner.rng.last_spurt.clone();
         if (0..candidates).any(|_| rng.random_bool(chance)) {
             continue;

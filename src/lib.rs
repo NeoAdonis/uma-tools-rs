@@ -96,4 +96,4 @@ pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::runner::Runner;
 pub use race::solver::{Entrant, RaceSolver, RunnerId};
 pub use skill::{Skill, SkillData, SkillDataError};
-pub use uma::{Aptitude, Mood, ResolveSkillsError, Style, Uma, UmaData, UmaSkill};
+pub use uma::{Aptitude, Mood, ResolveSkillsError, Stats, Style, Uma, UmaData, UmaSkill};

@@ -97,8 +97,8 @@ impl RushState {
 ///
 /// The game rolls integer percentages, so it's rounded up. Very low wit and
 /// rush chance effects can push it out of range, so it's clamped.
-pub(crate) fn chance(wit: u16, modifier: f64) -> f64 {
-    ((6.5 / (0.1 * wit as f64 + 1.0).log10()).powf(2.0) + modifier)
+pub(crate) fn chance(wit: f64, modifier: f64) -> f64 {
+    ((6.5 / (0.1 * wit + 1.0).log10()).powf(2.0) + modifier)
         .ceil()
         .clamp(0.0, 100.0)
 }

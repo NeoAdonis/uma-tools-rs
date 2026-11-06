@@ -25,11 +25,11 @@
 //!     fan_count: None,
 //!     character_id: None,
 //! };
-//! let base_speeds: Vec<u16> = (1000..=1500)
+//! let base_speeds: Vec<f64> = (1000..=1500)
 //!     .step_by(100)
 //!     .map(|speed| Uma { speed, ..uma }.to_base(Mood::Normal).speed)
 //!     .collect();
-//! assert_eq!(base_speeds, [1000, 1100, 1200, 1250, 1300, 1350]);
+//! assert_eq!(base_speeds, [1000.0, 1100.0, 1200.0, 1250.0, 1300.0, 1350.0]);
 //! ```
 
 use num_enum::TryFromPrimitive;
@@ -164,7 +164,7 @@ pub enum Mood {
     Great,
 }
 
-/// Core stats for an Umamusume.
+/// Core stats for an Umamusume, with raw stats.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Uma {
@@ -219,6 +219,35 @@ pub struct Uma {
     ///
     /// `None` if unknown.
     pub character_id: Option<u32>,
+}
+
+/// Stats used in races, which keep their fraction once mood and other
+/// multipliers apply to [`Uma`]'s raw stats (see [`Uma::to_base`]).
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct Stats {
+    /// See [`Uma::speed`].
+    pub speed: f64,
+    /// See [`Uma::stamina`].
+    pub stamina: f64,
+    /// See [`Uma::power`].
+    pub power: f64,
+    /// See [`Uma::guts`].
+    pub guts: f64,
+    /// See [`Uma::wit`].
+    pub wit: f64,
+}
+
+impl Stats {
+    /// Get the stat of `self` corresponding to a [`ThresholdStat`].
+    pub fn stat(&self, stat: ThresholdStat) -> f64 {
+        match stat {
+            ThresholdStat::Speed => self.speed,
+            ThresholdStat::Stamina => self.stamina,
+            ThresholdStat::Power => self.power,
+            ThresholdStat::Guts => self.guts,
+            ThresholdStat::Wit => self.wit,
+        }
+    }
 }
 
 /// Deserialize a stat, rejecting zero.
@@ -463,15 +492,13 @@ impl std::error::Error for ResolveSkillsError {
     }
 }
 
-/// Calculate base stat and apply mood multiplier.
-///
-/// Any stat above 1200 has its excess halved before applying multiplier.
-pub(crate) fn calculate_base_stat(stat: u16, multiplier: f64) -> u16 {
-    let mut computed = stat;
-    if computed > 1200 {
-        computed = 1200 + (computed - 1200) / 2;
+/// Halve the excess of a raw `stat` above 1200, keeping the fraction.
+fn halve_above_1200(stat: f64) -> f64 {
+    if stat > 1200.0 {
+        1200.0 + (stat - 1200.0) / 2.0
+    } else {
+        stat
     }
-    ((computed).max(1) as f64 * multiplier) as u16
 }
 
 impl Mood {
@@ -497,15 +524,16 @@ impl Uma {
         crate::names::character_name(self.character_id?, language)
     }
 
-    /// Convert `self`, holding raw stats, to base stats using the mood
+    /// Convert the raw stats of `self` to base stats using the mood
     /// multiplier.
     ///
     /// Base stats are the ones that race formulas and course set status checks
-    /// use. Stats above 1200 only count half of their excess.
+    /// use. Stats above 1200 only count half of their excess, and base stats
+    /// keep their fraction.
     ///
     /// # Examples
     ///
-    /// See how much 400 speed above 1200 is worth in a race, and how mood
+    /// See how much 401 speed above 1200 is worth in a race, and how mood
     /// changes it:
     ///
     /// ```
@@ -513,7 +541,7 @@ impl Uma {
     /// use uma_tools::{Aptitude, Mood, Style, Uma};
     ///
     /// let raw = Uma {
-    ///     speed: 1600,
+    ///     speed: 1601,
     ///     stamina: 800,
     ///     power: 1000,
     ///     guts: 600,
@@ -525,32 +553,21 @@ impl Uma {
     ///     fan_count: None,
     ///     character_id: None,
     /// };
-    /// assert_eq!(raw.to_base(Mood::Normal).speed, 1400);
-    /// assert_eq!(raw.to_base(Mood::Great).speed, 1456);
-    /// assert_eq!(raw.to_base(Mood::Awful).stat(ThresholdStat::Speed), 1344);
+    /// assert_eq!(raw.to_base(Mood::Normal).speed, 1400.5);
+    /// assert_eq!(raw.to_base(Mood::Great).speed, 1456.52);
+    /// assert_eq!(raw.to_base(Mood::Awful).stat(ThresholdStat::Speed), 1344.48);
     /// ```
-    pub fn to_base(self, mood: Mood) -> Self {
+    pub fn to_base(&self, mood: Mood) -> Stats {
         // N.B. In the Unity Cup (アオハル杯) scenario, a bonus is applied before mood
         // multiplier based on team rank. This is out of scope for this simulator.
-        let mood_multiplier = mood.multiplier();
-        Uma {
-            speed: calculate_base_stat(self.speed, mood_multiplier),
-            stamina: calculate_base_stat(self.stamina, mood_multiplier),
-            power: calculate_base_stat(self.power, mood_multiplier),
-            guts: calculate_base_stat(self.guts, mood_multiplier),
-            wit: calculate_base_stat(self.wit, mood_multiplier),
-            ..self
-        }
-    }
-
-    /// Get the stat of `self` corresponding to a [`ThresholdStat`].
-    pub fn stat(&self, stat: ThresholdStat) -> u16 {
-        match stat {
-            ThresholdStat::Speed => self.speed,
-            ThresholdStat::Stamina => self.stamina,
-            ThresholdStat::Power => self.power,
-            ThresholdStat::Guts => self.guts,
-            ThresholdStat::Wit => self.wit,
+        let multiplier = mood.multiplier();
+        let base = |stat: u16| halve_above_1200(stat.into()) * multiplier;
+        Stats {
+            speed: base(self.speed),
+            stamina: base(self.stamina),
+            power: base(self.power),
+            guts: base(self.guts),
+            wit: base(self.wit),
         }
     }
 }
@@ -558,7 +575,7 @@ impl Uma {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{data_skills, synthetic_skill};
+    use crate::test_utils::{assert_close, data_skills, synthetic_skill};
 
     #[test]
     fn test_mood_from_motivation() {
@@ -574,51 +591,24 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_base_stat() {
-        // (raw stat, mood, base stat).
-        let cases = [
-            (1200, Mood::Normal, 1200),
-            // Excess above 1200 is halved, rounding down.
-            (1201, Mood::Normal, 1200),
-            // Multiplier is applied after halving, truncating.
-            (1500, Mood::Great, 1404),
-            (1199, Mood::Good, 1222),
-            (1199, Mood::Bad, 1175),
-            // Stats are at least 1.
-            (0, Mood::Normal, 1),
-        ];
-        for (stat, mood, expected) in cases {
-            let actual = calculate_base_stat(stat, mood.multiplier());
-            assert_eq!(actual, expected, "{stat} with {mood:?}");
-        }
-    }
-
-    #[test]
     fn test_to_base() {
         let raw = Uma {
-            speed: 1500,
+            speed: 1501,
             stamina: 800,
             power: 1200,
-            guts: 700,
+            guts: 701,
             wit: 1300,
-            style: Style::End,
-            distance_aptitude: Aptitude::S,
-            track_aptitude: Aptitude::B,
-            style_aptitude: Aptitude::C,
-            fan_count: Some(120000),
-            character_id: Some(101901),
+            ..crate::test_utils::uma(Style::End)
         };
-
-        // Style, aptitudes and fan count are kept.
-        let expected = Uma {
-            speed: 1404,
-            stamina: 832,
-            power: 1248,
-            guts: 728,
-            wit: 1300,
-            ..raw
-        };
-        assert_eq!(raw.to_base(Mood::Great), expected);
+        // The excess above 1200 is halved, then every stat is multiplied, keeping
+        // the fraction.
+        let base = raw.to_base(Mood::Bad);
+        let stats = [base.speed, base.stamina, base.power, base.guts, base.wit];
+        let halved = [1350.5, 800.0, 1200.0, 701.0, 1250.0];
+        for (actual, halved) in stats.into_iter().zip(halved) {
+            assert_close!(actual, halved * 0.98);
+        }
+        assert_close!(base.guts, 686.98);
     }
 
     /// JSON for [`UmaData`] with every field set, and the style as given.

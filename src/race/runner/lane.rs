@@ -120,10 +120,8 @@ impl Runner {
         } else {
             1.0
         };
-        let target_speed = 0.02
-            * (0.3 + 0.001 * self.adjusted.power as f64)
-            * first_move_modifier
-            * order_modifier;
+        let target_speed =
+            0.02 * (0.3 + 0.001 * self.adjusted.power) * first_move_modifier * order_modifier;
 
         // Current speed keeps changing towards the target speed even when blocked.
         let speed_step = LANE_ACCELERATION * delta_time;

@@ -208,7 +208,7 @@ pub(crate) fn skill_bonus<'a>(
         .filter(|skill| is_popularity_eligible(skill, state, runner))
         .fold(SkillPopularity::default(), |total, skill| {
             let points = skill_popularity(skill);
-            let chance = skill.activation_chance(runner.raw.wit);
+            let chance = skill.activation_chance(runner.raw.wit.into());
             SkillPopularity {
                 speed: total.speed + points.speed * chance,
                 stamina: total.stamina + points.stamina * chance,

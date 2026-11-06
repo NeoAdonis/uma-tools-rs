@@ -769,11 +769,11 @@ impl Skill {
     ///
     /// Skills that don't require a wit check always pass; otherwise the chance
     /// depends on the runner's base wit (minimum 20%).
-    pub(crate) fn activation_chance(&self, base_wit: u16) -> f64 {
+    pub(crate) fn activation_chance(&self, base_wit: f64) -> f64 {
         if !self.wit_check {
             return 1.0;
         }
-        (1.0 - 90.0 / base_wit as f64).max(0.2)
+        (1.0 - 90.0 / base_wit).max(0.2)
     }
 
     /// Check if this skill should activate out of gate (before race begins).
@@ -977,15 +977,15 @@ mod tests {
     #[test]
     fn test_activation_chance_without_wit_check() {
         let skill = skill_with_wit_check(false);
-        assert_eq!(skill.activation_chance(1), 1.0);
+        assert_eq!(skill.activation_chance(1.0), 1.0);
     }
 
     #[test]
     fn test_activation_chance_with_wit_check() {
         let skill = skill_with_wit_check(true);
-        assert_close!(skill.activation_chance(900), 0.9);
+        assert_close!(skill.activation_chance(900.0), 0.9);
         // Low wit is clamped to the minimum chance.
-        assert_eq!(skill.activation_chance(100), 0.2);
+        assert_eq!(skill.activation_chance(100.0), 0.2);
     }
 
     #[test]

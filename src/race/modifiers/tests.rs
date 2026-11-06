@@ -7,21 +7,21 @@ use crate::uma::Style;
 #[test]
 fn test_wit_limit_break_multiplier_brackets() {
     let cases = [
-        (1200, 0.0),
-        (1201, 0.02),
-        (1220, 0.02),
-        (1221, 0.04),
-        (1400, 0.2),
-        (1401, 0.26),
-        (1600, 0.8),
-        (1601, 0.81),
-        (2000, 1.0),
-        (2001, 1.01),
-        (2100, 1.01),
-        (2101, 1.02),
-        (3200, 1.12),
+        (1200.0, 0.0),
+        (1201.0, 0.02),
+        (1220.0, 0.02),
+        (1221.0, 0.04),
+        (1400.0, 0.2),
+        (1401.0, 0.26),
+        (1600.0, 0.8),
+        (1601.0, 0.81),
+        (2000.0, 1.0),
+        (2001.0, 1.01),
+        (2100.0, 1.01),
+        (2101.0, 1.02),
+        (3200.0, 1.12),
         // Capped from here.
-        (3201, 1.12),
+        (3201.0, 1.12),
     ];
     for (wit, expected) in cases {
         let actual = wit_limit_break_multiplier(wit);
@@ -73,11 +73,11 @@ fn test_stamina_limit_break_distance_factor() {
 #[test]
 fn test_stamina_limit_break_base_buff() {
     let buff = |stamina, version| stamina_limit_break_base_buff(stamina, 2400, version);
-    assert_eq!(buff(1200, GameVersion::LATEST), 0.0);
+    assert_eq!(buff(1200.0, GameVersion::LATEST), 0.0);
     // In the game since 2.5 Anniversary.
     let since = GameVersion::TwoPointFiveAnniversary;
-    assert_close!(buff(1300, since), 10.0 * 0.0085);
-    assert_eq!(buff(1300, GameVersion::SecondAnniversary), 0.0);
+    assert_close!(buff(1300.0, since), 10.0 * 0.0085);
+    assert_eq!(buff(1300.0, GameVersion::SecondAnniversary), 0.0);
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn test_base_target_speed() {
         (Style::Late, Phase::Late, 20.0 * 0.994 + late_bonus),
     ];
     for (style, phase, expected) in cases {
-        let actual = base_target_speed(20.0, style, phase, 1000, Aptitude::B);
+        let actual = base_target_speed(20.0, style, phase, 1000.0, Aptitude::B);
         assert_close!(actual, expected, "{style:?} {phase:?}");
     }
 }
@@ -105,7 +105,7 @@ fn test_section_speed_modifier_range() {
     let min = max - 20.0 * 0.0065;
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     let rolls: Vec<f64> = (0..1000)
-        .map(|_| roll_section_speed_modifier(&mut rng, 1000, 20.0))
+        .map(|_| roll_section_speed_modifier(&mut rng, 1000.0, 20.0))
         .collect();
     assert!(rolls.iter().all(|roll| (min..=max).contains(roll)));
     // Rolls spread over the whole range.
@@ -121,33 +121,32 @@ fn test_section_speed_modifier_range() {
 fn test_adjusted_power_by_track_condition() {
     // One row per distinct modifier on each surface.
     let cases = [
-        (Track::Turf, TrackCondition::Firm, 1000),
-        (Track::Turf, TrackCondition::Soft, 950),
-        (Track::Dirt, TrackCondition::Good, 950),
-        (Track::Dirt, TrackCondition::Heavy, 900),
+        (Track::Turf, TrackCondition::Firm, 1000.0),
+        (Track::Turf, TrackCondition::Soft, 950.0),
+        (Track::Dirt, TrackCondition::Good, 950.0),
+        (Track::Dirt, TrackCondition::Heavy, 900.0),
     ];
     for (track, condition, expected) in cases {
-        let actual = calculate_adjusted_power(1000, track, condition);
+        let actual = calculate_adjusted_power(1000.0, track, condition);
         assert_eq!(actual, expected, "{track:?} {condition:?}");
     }
 }
 
 #[test]
 fn test_adjusted_wit_by_style_aptitude() {
-    for (aptitude, expected) in [(Aptitude::S, 1100), (Aptitude::B, 850)] {
-        let actual = calculate_adjusted_wit(1000, aptitude);
+    for (aptitude, expected) in [(Aptitude::S, 1100.0), (Aptitude::B, 850.0)] {
+        let actual = calculate_adjusted_wit(1000.0, aptitude);
         assert_eq!(actual, expected, "{aptitude:?}");
     }
 }
 
 #[test]
 fn test_course_speed_modifier_averages_stat_bonuses() {
-    use crate::test_utils::uma;
-
     // Speed 1200 (above 900: 0.2) and power 500 (up to 600: 0.1).
-    let base = Uma {
-        power: 500,
-        ..uma(Style::Pace)
+    let base = Stats {
+        speed: 1200.0,
+        power: 500.0,
+        ..Stats::default()
     };
     let stats = [ThresholdStat::Speed, ThresholdStat::Power];
     assert_close!(course_speed_modifier(&base, &stats), 1.15);
@@ -160,7 +159,7 @@ fn test_slope_speed_modifiers() {
         assert_close!(downhill_speed_modifier(slope), expected, "slope {slope}");
     }
     // (slope percent, power, uphill modifier).
-    for (slope, power, expected) in [(1.0, 1000, -0.2), (2.0, 800, -0.5)] {
+    for (slope, power, expected) in [(1.0, 1000.0, -0.2), (2.0, 800.0, -0.5)] {
         let actual = uphill_speed_modifier(slope, power);
         assert_close!(actual, expected, "slope {slope}, power {power}");
     }

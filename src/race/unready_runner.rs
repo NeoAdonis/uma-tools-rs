@@ -90,26 +90,30 @@ use crate::race::transitions::*;
 use crate::race::world_distance::LastMove;
 use crate::skill::{SYMPATHY_ID, Skill, SkillType};
 use crate::trigger::system::*;
-use crate::uma::{Mood, Style, Uma};
+use crate::uma::{Aptitude, Mood, Stats, Style, Uma};
 
-/// Adjust base stats according to course and race parameters.
-fn adjust_stats(uma: &Uma, course: &Course, parameters: &RaceParameters) -> Uma {
-    let course_modifier = course_speed_modifier(uma, &course.course_set_status);
+/// Adjust base stats according to course, race parameters and style aptitude.
+fn adjust_stats(
+    base: &Stats,
+    style_aptitude: Aptitude,
+    course: &Course,
+    parameters: &RaceParameters,
+) -> Stats {
+    let course_modifier = course_speed_modifier(base, &course.course_set_status);
     // N.B. In single mode, all uma gain 400 on stats after adjustment.
     // This is not implemented here.
-    Uma {
-        speed: calculate_adjusted_speed(uma.speed, parameters.track_condition, course_modifier),
-        power: calculate_adjusted_power(uma.power, course.surface, parameters.track_condition),
-        wit: calculate_adjusted_wit(uma.wit, uma.style_aptitude),
-        ..*uma
+    Stats {
+        speed: calculate_adjusted_speed(base.speed, parameters.track_condition, course_modifier),
+        power: calculate_adjusted_power(base.power, course.surface, parameters.track_condition),
+        wit: calculate_adjusted_wit(base.wit, style_aptitude),
+        ..*base
     }
 }
 
-/// Apply a stat boost effect to an [`Uma`]'s stats.
+/// Apply a stat boost effect to `uma`.
 ///
 /// `modifier` is in stat points.
-fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: f64) {
-    let modifier = modifier as i32;
+fn apply_stat_boost(uma: &mut Stats, effect_type: &SkillType, modifier: f64) {
     match effect_type {
         SkillType::SpeedUp => modify_stat(&mut uma.speed, modifier),
         SkillType::StaminaUp => modify_stat(&mut uma.stamina, modifier),
@@ -129,12 +133,8 @@ fn apply_stat_boost(uma: &mut Uma, effect_type: &SkillType, modifier: f64) {
 }
 
 /// Modify a stat value, ensuring it doesn't go below 1.
-fn modify_stat(stat: &mut u16, modifier: i32) {
-    *stat = if modifier >= 0 {
-        stat.saturating_add(modifier as u16)
-    } else {
-        stat.saturating_sub((-modifier) as u16).max(1)
-    };
+fn modify_stat(stat: &mut f64, modifier: f64) {
+    *stat = (*stat + modifier).max(1.0);
 }
 
 /// A data structure that holds all information needed to initialize a
@@ -146,8 +146,9 @@ pub struct UnreadyRunner {
     // === Immutable context ===
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
     /// skills.
-    pub base: Uma,
-    /// Raw stats before halving and adjustments. Used for popularity and Charge Up.
+    pub base: Stats,
+    /// Raw stats before halving and adjustments, with the style and aptitudes.
+    /// Used for popularity and Charge Up.
     pub raw: Uma,
     /// Gate number (1-indexed), which determines her starting lane position.
     /// `None` until assigned (see `Self::assign_gate`).
@@ -158,7 +159,9 @@ pub struct UnreadyRunner {
     pub initial_state: InitialState,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
-    adjusted: Uma,
+    adjusted: Stats,
+    /// Running style, which out-of-gate skills may change from the raw one.
+    style: Style,
     /// Start delay (i.e. time taken to leave the gate) in seconds.
     start_delay: f64,
     /// Rush chance modifier from out-of-gate skills.
@@ -213,7 +216,7 @@ impl UnreadyRunner {
         let params = &state.params;
 
         // Calculate base stats.
-        let base_uma = uma.to_base(mood);
+        let base = uma.to_base(mood);
 
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
@@ -221,23 +224,24 @@ impl UnreadyRunner {
         let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
             state.config.wit_checks.resolve(
                 &mut rng_seed.rng(Stream::WitCheck(skill.id)),
-                skill.activation_chance(base_uma.wit),
+                skill.activation_chance(base.wit),
             )
         });
 
         let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, rng_seed);
 
         // Calculate adjusted stats (before out-of-gate skills).
-        let adjusted_uma = adjust_stats(&base_uma, course, params);
+        let adjusted = adjust_stats(&base, uma.style_aptitude, course, params);
 
         // Determine start delay (0.0 to 0.1 seconds).
         let start_delay = rng_seed.rng(Stream::StartDelay).random_range(0.0..=0.1);
 
         UnreadyRunner {
-            base: base_uma,
+            base,
             raw: uma,
             gate: None,
-            adjusted: adjusted_uma,
+            adjusted,
+            style: uma.style,
             initial_state: InitialState {
                 mood,
                 // Assigned with the gate.
@@ -304,7 +308,7 @@ impl UnreadyRunner {
             }
             // Apply style changes.
             else if let Some(style) = effect_type.style_change() {
-                self.adjusted.style = style;
+                self.style = style;
             }
             // Apply rush chance modifications.
             else if effect_type.is_rush_chance_effect() {
@@ -448,7 +452,7 @@ impl UnreadyRunner {
         let game_version = state.config.game_version;
 
         // Convert stamina to HP using adjusted stats after out-of-gate boosts.
-        let max_hp = calculate_max_hp(self.adjusted.style, self.adjusted.stamina, course);
+        let max_hp = calculate_max_hp(self.style, self.adjusted.stamina, course);
 
         // Skills that failed the wit check go last, so that the indices of those
         // that passed (used by the trigger logics) stay the same.
@@ -468,7 +472,7 @@ impl UnreadyRunner {
             .config
             .rushing
             .resolve(&mut rng.rush, rush_chance / 100.0);
-        let rush_state = can_rush.then(|| RushState::roll(self.adjusted.style, &mut rng.rush));
+        let rush_state = can_rush.then(|| RushState::roll(self.style, &mut rng.rush));
 
         // Calculate section modifier for base speed adjustment.
         let section_speed_modifier = roll_section_speed_modifier(
@@ -481,7 +485,7 @@ impl UnreadyRunner {
         let move_lane_modifier = if game_version < GameVersion::FirstAnniversary {
             0.0
         } else {
-            (0.0002 * self.adjusted.power as f64).sqrt()
+            (0.0002 * self.adjusted.power).sqrt()
         };
 
         // Calculate force-in modifier based on style and randomness.
@@ -489,7 +493,7 @@ impl UnreadyRunner {
             0.0
         } else {
             rng.keyed(Stream::ForceIn).random_range(0.0..0.1)
-                + match self.adjusted.style {
+                + match self.style {
                     Style::Runaway | Style::Front => 0.02,
                     Style::Pace | Style::Late => 0.01,
                     Style::End => 0.03,
@@ -504,12 +508,12 @@ impl UnreadyRunner {
             base: self.base,
             raw: self.raw,
             adjusted: self.adjusted,
+            style: self.style,
             initial_state: self.initial_state,
             speed: 3.0,
             // Start dash acceleration is applied separately.
             acceleration: 0.0,
-            min_speed: 0.85 * course.base_speed()
-                + (200.0 * self.adjusted.guts as f64).sqrt() * 0.001,
+            min_speed: 0.85 * course.base_speed() + (200.0 * self.adjusted.guts).sqrt() * 0.001,
             target_speed: 0.85 * course.base_speed(),
             move_lane_modifier,
             force_in_modifier,

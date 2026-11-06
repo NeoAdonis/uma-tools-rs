@@ -4,7 +4,7 @@ use crate::test_utils::assert_close;
 #[test]
 fn test_formulas() {
     // (guts, target speed bonus, acceleration bonus)
-    let cases = [(400, 0.2961, 0.0685), (1200, 0.6445, 0.1310)];
+    let cases = [(400.0, 0.2961, 0.0685), (1200.0, 0.6445, 0.1310)];
     for (guts, speed, acceleration) in cases {
         assert_close!(
             target_speed_bonus(guts),
@@ -61,12 +61,12 @@ fn test_pending_has_no_effect() {
 
 #[test]
 fn test_active_applies_bonuses() {
-    let duel = Duel::start(1000);
+    let duel = Duel::start(1000.0);
     assert!(duel.is_dueling());
     assert!(duel.has_dueled());
     assert!(!duel.has_ended());
-    assert_eq!(duel.speed_bonus(), target_speed_bonus(1000));
-    assert_eq!(duel.acceleration_bonus(), acceleration_bonus(1000));
+    assert_eq!(duel.speed_bonus(), target_speed_bonus(1000.0));
+    assert_eq!(duel.acceleration_bonus(), acceleration_bonus(1000.0));
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn test_stop_ends_only_active_duels() {
     duel.stop();
     assert_eq!(duel, Duel::Pending);
 
-    let mut duel = Duel::start(1000);
+    let mut duel = Duel::start(1000.0);
     duel.stop();
     assert_eq!(duel, Duel::Ended);
     assert!(duel.has_dueled());

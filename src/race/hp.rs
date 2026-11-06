@@ -104,8 +104,8 @@ fn hp_ground_modifier(track: Track, track_condition: TrackCondition) -> f64 {
     }
 }
 
-fn hp_guts_modifier(guts_stat: u16) -> f64 {
-    1.0 + (200.0 / (600.0 * guts_stat as f64).sqrt())
+fn hp_guts_modifier(guts_stat: f64) -> f64 {
+    1.0 + (200.0 / (600.0 * guts_stat).sqrt())
 }
 
 fn hp_style_multiplier(style: Style) -> f64 {
@@ -121,8 +121,8 @@ fn hp_style_multiplier(style: Style) -> f64 {
 /// Calculate maximum HP from the stamina stat, running style and course.
 ///
 /// Stats should already include any adjustments applied before the race starts.
-pub(crate) fn calculate_max_hp(style: Style, stamina_stat: u16, course: &Course) -> f64 {
-    0.8 * hp_style_multiplier(style) * stamina_stat as f64 + course.distance as f64
+pub(crate) fn calculate_max_hp(style: Style, stamina_stat: f64, course: &Course) -> f64 {
+    0.8 * hp_style_multiplier(style) * stamina_stat + course.distance as f64
 }
 
 /// Calculate HP consumption per second.
@@ -136,7 +136,7 @@ pub(crate) fn calculate_hp_per_second(
     course: &Course,
     track_condition: TrackCondition,
     phase: Phase,
-    guts_stat: u16,
+    guts_stat: f64,
     status_modifier: f64,
 ) -> f64 {
     let speed_diff = current_speed - course.base_speed() + 12.0;
@@ -162,7 +162,7 @@ pub(crate) fn estimate_hp_per_meter_last_spurt(
     speed: f64,
     course: &Course,
     track_condition: TrackCondition,
-    guts_stat: u16,
+    guts_stat: f64,
 ) -> f64 {
     let hp_per_second = calculate_hp_per_second(
         speed,
@@ -184,7 +184,7 @@ pub(crate) fn estimate_hp_last_spurt(
     course: &Course,
     track_condition: TrackCondition,
     distance: f64,
-    guts_stat: u16,
+    guts_stat: f64,
 ) -> f64 {
     estimate_hp_per_meter_last_spurt(speed, course, track_condition, guts_stat) * distance
 }
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn test_max_hp() {
         // 2000m course.
-        let max_hp = calculate_max_hp(Style::Pace, 1000, &synthetic_course());
+        let max_hp = calculate_max_hp(Style::Pace, 1000.0, &synthetic_course());
         assert_close!(max_hp, 0.8 * 0.89 * 1000.0 + 2000.0);
     }
 
@@ -238,7 +238,7 @@ mod tests {
                 surface,
                 ..synthetic_course()
             };
-            let actual = calculate_hp_per_second(speed, &course, condition, phase, 600, status);
+            let actual = calculate_hp_per_second(speed, &course, condition, phase, 600.0, status);
             assert_close!(actual, expected, "{case}");
         }
     }

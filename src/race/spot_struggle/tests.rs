@@ -4,7 +4,7 @@ use crate::test_utils::assert_close;
 #[test]
 fn test_formulas() {
     // (guts, target speed bonus, duration with A aptitude)
-    let cases = [(400, 0.1516, 6.3498), (1200, 0.2930, 10.9982)];
+    let cases = [(400.0, 0.1516, 6.3498), (1200.0, 0.2930, 10.9982)];
     for (guts, bonus, secs) in cases {
         assert_close!(
             target_speed_bonus(guts),
@@ -23,10 +23,10 @@ fn test_formulas() {
 
 #[test]
 fn test_duration_scales_with_style_aptitude() {
-    let base = duration(1000, Aptitude::A);
+    let base = duration(1000.0, Aptitude::A);
     let cases = [(Aptitude::S, 1.1), (Aptitude::B, 0.85), (Aptitude::G, 0.1)];
     for (aptitude, coef) in cases {
-        let actual = duration(1000, aptitude);
+        let actual = duration(1000.0, aptitude);
         assert_close!(actual, base * coef, "{aptitude:?}");
     }
 }
@@ -76,7 +76,7 @@ fn test_pending_has_no_effect() {
 
 #[test]
 fn test_speed_bonus_expires() {
-    let guts = 800;
+    let guts = 800.0;
     let state = SpotStruggle::start(guts, Aptitude::A, 10.0);
     let expires_at = 10.0 + duration(guts, Aptitude::A);
     assert!(state.has_struggled());
@@ -94,7 +94,7 @@ fn test_speed_bonus_expires() {
 
 #[test]
 fn test_stop() {
-    let mut state = SpotStruggle::start(800, Aptitude::A, 10.0);
+    let mut state = SpotStruggle::start(800.0, Aptitude::A, 10.0);
     state.stop();
     assert_eq!(state, SpotStruggle::Ended);
     assert!(state.has_struggled());

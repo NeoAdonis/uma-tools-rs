@@ -45,22 +45,22 @@ struct LastSpurtCandidate {
 /// Calculate the maximum possible last spurt speed for a runner.
 fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
     let base_speed = state.course.base_speed();
-    let uma = &runner.adjusted;
+    let stats = &runner.adjusted;
+    let distance_aptitude = runner.raw.distance_aptitude;
     let base_target_late = base_target_speed(
         base_speed,
-        uma.style,
+        runner.style,
         Phase::Late,
-        uma.speed,
-        uma.distance_aptitude,
+        stats.speed,
+        distance_aptitude,
     );
     let base_component = (base_target_late + 0.01 * base_speed) * 1.05;
-    let speed_component = (500.0 * uma.speed as f64).sqrt()
-        * distance_proficiency_multiplier(uma.distance_aptitude)
-        * 0.002;
+    let speed_component =
+        (500.0 * stats.speed).sqrt() * distance_proficiency_multiplier(distance_aptitude) * 0.002;
     let guts_component = if state.config.game_version < GameVersion::FirstAnniversary {
         0.0
     } else {
-        (450.0 * uma.guts as f64).powf(0.597) * 0.0001
+        (450.0 * stats.guts).powf(0.597) * 0.0001
     };
     base_component + speed_component + guts_component
 }
@@ -94,10 +94,10 @@ impl Runner {
         let mid_distance = (Phase::Late.boundaries(course).0 - self.position).max(0.0);
         let mid_speed = base_target_speed(
             course.base_speed(),
-            self.adjusted.style,
+            self.style,
             Phase::Mid,
             self.adjusted.speed,
-            self.adjusted.distance_aptitude,
+            self.raw.distance_aptitude,
         );
         let mid_hp = calculate_hp_per_second(
             mid_speed,
@@ -150,10 +150,10 @@ impl Runner {
         // Use late-race base target speed as minimum speed.
         let late_base_target_speed = base_target_speed(
             course.base_speed(),
-            self.adjusted.style,
+            self.style,
             Phase::Late,
             self.adjusted.speed,
-            self.adjusted.distance_aptitude,
+            self.raw.distance_aptitude,
         );
 
         let hp_rate_base = estimate_hp_per_meter_last_spurt(
@@ -223,7 +223,7 @@ impl Runner {
             });
         }
 
-        let acceptance_chance = (0.15 + 0.0005 * self.adjusted.wit as f64).min(1.0);
+        let acceptance_chance = (0.15 + 0.0005 * self.adjusted.wit).min(1.0);
         let rng = &mut self.rng;
 
         // Try each candidate from best to worst.

@@ -350,9 +350,7 @@ pub fn variable_value<'a>(
         Spatial(location_var) => Int(location_value(location_var, &state.course, runner)),
         Activation(act_var) => Int(activation_value(act_var, state, runner, logic_ctx)),
         RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => {
-            Int(running_style_value(style_var, state, runner.adjusted.style))
-        }
+        RunningStyle(style_var) => Int(running_style_value(style_var, state, runner.style)),
         Status(status_var) => Int(status_value(status_var, runner)),
         Blocking(blocking_var) => Int(blocking_value(blocking_var, runner)),
         Temptation(tempt_var) => Int(temptation_value(tempt_var, state, runner)),
@@ -393,7 +391,7 @@ pub fn variable_value_out_of_gate<'a>(
         Entry(entry_var) => Int(entry_value(entry_var, &builder.initial_state)),
         Course(course_var) => Int(course_value(course_var, &state.course)),
         RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => Int(running_style_value(style_var, state, builder.base.style)),
+        RunningStyle(style_var) => Int(running_style_value(style_var, state, builder.raw.style)),
         Lineup(lineup_var) => lineup_value(lineup_var, state, builder.evaluated_skill_id),
         // "random_lot==X" means X% chance. It should be drawn every time it's
         // read, but it's never read twice for the same skill in practice, so it
@@ -414,15 +412,15 @@ fn lot_hits(draw: f64) -> Value<'static> {
     Value::Range(draw.floor() as i32 + 1..=i32::MAX)
 }
 
-/// Get base stat value.
-fn base_stat(stat: &BaseStatVar, uma: &Uma) -> i32 {
+/// Get base stat value, truncated to compare it with whole numbers.
+fn base_stat(stat: &BaseStatVar, base: &Stats) -> i32 {
     use BaseStatVar::*;
     match stat {
-        BaseSpeed => uma.speed as i32,
-        BaseStamina => uma.stamina as i32,
-        BasePower => uma.power as i32,
-        BaseGuts => uma.guts as i32,
-        BaseWiz => uma.wit as i32,
+        BaseSpeed => base.speed as i32,
+        BaseStamina => base.stamina as i32,
+        BasePower => base.power as i32,
+        BaseGuts => base.guts as i32,
+        BaseWiz => base.wit as i32,
     }
 }
 

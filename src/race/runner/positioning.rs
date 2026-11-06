@@ -98,7 +98,7 @@ impl Runner {
         if self.is_rushed() {
             self.rush_state.as_ref().unwrap().style
         } else {
-            self.adjusted.style
+            self.style
         }
     }
 
@@ -162,7 +162,7 @@ impl Runner {
 
                 // Use original style to determine if runner was originally a front-runner that
                 // should speed up.
-                if self.is_rushed() && self.adjusted.style.is_front_like() {
+                if self.is_rushed() && self.style.is_front_like() {
                     self.enter_positioning(PositioningStrategy::FrontSpeedUp, state);
                     return;
                 }
@@ -346,7 +346,7 @@ impl Runner {
     /// Roll a wit check to change positioning strategy, with a chance of
     /// `coef * log10(wit * 0.1)`.
     fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
-        let chance = coef * (self.adjusted.wit as f64 * 0.1).log10();
+        let chance = coef * (self.adjusted.wit * 0.1).log10();
         self.rng.positioning.random_bool(chance)
     }
 }

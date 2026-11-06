@@ -210,22 +210,28 @@ pub(crate) fn mid_side_blocked_time_multiplier(time: f64) -> f64 {
 }
 
 /// Multiplier from the runner's adjusted speed, first variant.
-pub(crate) fn speed_multiplier_1(speed: u16) -> f64 {
-    match speed {
-        ..1700 => 0.0,
-        1700..1800 => 1.0,
-        1800..1900 => 2.0,
-        1900..2000 => 3.0,
-        2000.. => 4.0,
+pub(crate) fn speed_multiplier_1(speed: f64) -> f64 {
+    if speed < 1700.0 {
+        0.0
+    } else if speed < 1800.0 {
+        1.0
+    } else if speed < 1900.0 {
+        2.0
+    } else if speed < 2000.0 {
+        3.0
+    } else {
+        4.0
     }
 }
 
 /// Multiplier from the runner's adjusted speed, second variant.
-pub(crate) fn speed_multiplier_2(speed: u16) -> f64 {
-    match speed {
-        ..1400 => 1.0,
-        1400..1600 => 2.0,
-        1600.. => 3.0,
+pub(crate) fn speed_multiplier_2(speed: f64) -> f64 {
+    if speed < 1400.0 {
+        1.0
+    } else if speed < 1600.0 {
+        2.0
+    } else {
+        3.0
     }
 }
 

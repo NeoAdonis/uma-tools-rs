@@ -121,7 +121,7 @@ fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> Ra
     for &(style, position) in runners {
         let i = unplaced
             .iter()
-            .position(|runner| runner.adjusted.style == style)
+            .position(|runner| runner.style == style)
             .unwrap();
         unplaced.swap_remove(i).position = position;
     }
@@ -139,7 +139,7 @@ fn runner_with_style(solver: &mut RaceSolver<Runner>, style: Style) -> &mut Runn
     solver
         .runners
         .iter_mut()
-        .find(|runner| runner.base.style == style)
+        .find(|runner| runner.raw.style == style)
         .unwrap()
 }
 
@@ -1535,7 +1535,7 @@ fn test_move_lane_modifier_requires_skill_and_lane_movement() {
     runner.update_lane(&state.course, DELTA_TIME);
     assert!(runner.lane.speed > 0.0);
     runner.update_target_speed(state);
-    let expected = (0.0002 * runner.adjusted.power as f64).sqrt();
+    let expected = (0.0002 * runner.adjusted.power).sqrt();
     assert_close!(runner.target_speed - still_speed, expected);
 
     // Only with a skill that changes the lane speed.
@@ -1954,7 +1954,7 @@ fn test_style_of_the_most_popular_runner() {
             .iter()
             .find(|runner| runner.initial_state.popularity_rank == 1)
             .unwrap();
-        assert_eq!(most_popular.base.style, Style::Late);
+        assert_eq!(most_popular.raw.style, Style::Late);
         assert_eq!(solver.state.style_most_popular, Style::Late);
     }
 }
@@ -2047,7 +2047,7 @@ fn test_rushed_by_team_matches_runners() {
         for runner in solver.runners.iter().filter(|r| r.is_rushed()) {
             // Runaways count as Front runners.
             expected[runner.initial_state.team as usize][runner.base_style() as usize] += 1;
-            runaway_rushed |= runner.base.style == Style::Runaway;
+            runaway_rushed |= runner.raw.style == Style::Runaway;
         }
         assert_eq!(
             solver.state.rushed_by_team, expected,
@@ -2108,8 +2108,8 @@ fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
     solver.state.elapsed_time = 10.0;
     // Runners are built in gate order, so assign everything here.
     for (i, (runner, &(style, team))) in solver.runners.iter_mut().zip(runners).enumerate() {
-        runner.base.style = style;
-        runner.adjusted.style = style;
+        runner.raw.style = style;
+        runner.style = style;
         runner.initial_state.team = team;
         runner.position = 1000.0 - 10.0 * i as f64;
     }
@@ -2882,7 +2882,7 @@ fn test_out_of_gate_style_change_is_applied_before_the_race() {
     // Like "Great Escape".
     let escape = skill(11, "running_style==1", SkillType::ChangeStyleRunaway, 0.0);
     let solver = ready_solver(10101, uma(Style::Front), vec![escape], seeded_config(0));
-    assert_eq!(solver.runners[0].adjusted.style, Style::Runaway);
+    assert_eq!(solver.runners[0].style, Style::Runaway);
 }
 
 /// Gold skill with the given condition.
@@ -3417,8 +3417,8 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
 #[test]
 fn test_speed_scaling_uses_adjusted_speed() {
     let cases = [
-        (ValueScaling::MultiplySpeed1, 1850, 2.0),
-        (ValueScaling::MultiplySpeed2, 1500, 2.0),
+        (ValueScaling::MultiplySpeed1, 1850.0, 2.0),
+        (ValueScaling::MultiplySpeed2, 1500.0, 2.0),
     ];
     for (value_scaling, speed, multiplier) in cases {
         let mut solver =
@@ -3438,7 +3438,7 @@ fn test_effects_on_oneself_are_buffs_unless_negative() {
         seeded_config(0),
     );
     // Too slow for any bonus, but scaled to zero still counts.
-    solver.runners[0].adjusted.speed = 1600;
+    solver.runners[0].adjusted.speed = 1600.0;
     assert_close!(activate_last_skill(&mut solver), 0.0);
     let buffs = &solver.runners[0].activation_flags.buff_activated;
     assert!(buffs.contains(SkillType::TargetSpeed));
@@ -3569,7 +3569,7 @@ fn test_largest_lead_before_late_race_is_tracked() {
     let mut solver = solver.ready_runners();
     let update = |solver: &mut RaceSolver<Runner>, front, late, phase| {
         for runner in &mut solver.runners {
-            let is_front = runner.base.style == Style::Front;
+            let is_front = runner.raw.style == Style::Front;
             runner.position = if is_front { front } else { late };
             runner.phase = phase;
         }
@@ -3754,7 +3754,7 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
     move_on_slopes(&mut solver, &uphill, 90.0);
 
     // Guaranteed to enter downhill mode on every check.
-    solver.runners[0].adjusted.wit = 2500;
+    solver.runners[0].adjusted.wit = 2500.0;
 
     move_on_slopes(&mut solver, &course, 99.0);
     assert!(!solver.runners[0].is_in_downhill_mode());
@@ -3787,7 +3787,7 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
 fn test_downhill_mode_chance_scales_with_wit() {
     // A 0.04% chance with 1 Wit, rather than a guaranteed entry.
     let mut solver = timed_skill_solver(vec![]);
-    solver.runners[0].adjusted.wit = 1;
+    solver.runners[0].adjusted.wit = 1.0;
     let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
     move_on_slopes(&mut solver, &course, 99.0);
     move_on_slopes(&mut solver, &course, 100.0);

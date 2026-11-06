@@ -585,7 +585,7 @@ impl RaceSolver<Entrant> {
             builder.initial_state.popularity_rank = rank;
             builder.initial_state.judge_scores = judge_scores;
             if builder.initial_state.popularity_rank == 1 {
-                state.style_most_popular = builder.base.style.base_style();
+                state.style_most_popular = builder.raw.style.base_style();
             }
         }
 
@@ -1338,7 +1338,7 @@ impl RaceSolver<Runner> {
         let front_runner_count = self
             .runners
             .iter()
-            .filter(|runner| runner.adjusted.style == Style::Front)
+            .filter(|runner| runner.style == Style::Front)
             .count();
 
         // Find pacemaker.
@@ -1441,9 +1441,9 @@ impl RaceSolver<Runner> {
             }
 
             let runner = &self.runners[i];
-            let style = runner.adjusted.style;
+            let style = runner.style;
             let lead_insufficient = self.runners.iter().any(|other| {
-                secure_lead::desirable_lead(style, other.adjusted.style, course_distance)
+                secure_lead::desirable_lead(style, other.style, course_distance)
                     .is_some_and(|desirable| runner.position - other.position < desirable)
             });
             let is_alone = self.is_alone(i, 10.0);
@@ -1463,7 +1463,7 @@ impl RaceSolver<Runner> {
             let has_struggled = self
                 .runners
                 .iter()
-                .any(|r| r.adjusted.style == style && r.spot_struggle.has_struggled());
+                .any(|r| r.style == style && r.spot_struggle.has_struggled());
             if has_struggled {
                 self.exit_spot_struggle(style);
             } else {
@@ -1475,7 +1475,7 @@ impl RaceSolver<Runner> {
     /// Start a spot struggle between the frontmost runner with `style` and every
     /// runner with the same style close behind her, if any.
     fn try_start_spot_struggle(&mut self, style: Style) {
-        let Some(leader_index) = self.runners.iter().position(|r| r.adjusted.style == style) else {
+        let Some(leader_index) = self.runners.iter().position(|r| r.style == style) else {
             return;
         };
         // Any runner past the minimum position will do; the first one is the furthest.
@@ -1484,10 +1484,7 @@ impl RaceSolver<Runner> {
         }
         let leader = &self.runners[leader_index];
         // Can't start if a runner whose strategy should be behind is ahead.
-        if self.runners[..leader_index]
-            .iter()
-            .any(|r| r.adjusted.style > style)
-        {
+        if self.runners[..leader_index].iter().any(|r| r.style > style) {
             return;
         }
 
@@ -1495,7 +1492,7 @@ impl RaceSolver<Runner> {
         let members: Vec<usize> = (leader_index + 1..self.runners.len())
             .filter(|&j| {
                 let other = &self.runners[j];
-                other.adjusted.style == style
+                other.style == style
                     && (leader_in_sections || spot_struggle::SECTIONS.contains(&other.section))
                     && spot_struggle::is_close_to_leader(
                         leader.position - other.position,
@@ -1525,7 +1522,7 @@ impl RaceSolver<Runner> {
             let strugglers: Vec<usize> = (0..self.runners.len())
                 .filter(|&i| {
                     let runner = &self.runners[i];
-                    runner.adjusted.style == style && runner.spot_struggle.is_struggler()
+                    runner.style == style && runner.spot_struggle.is_struggler()
                 })
                 .collect();
             // Decide every exit before applying them, so that the order doesn't matter.
@@ -1665,8 +1662,7 @@ impl RaceSolver<Runner> {
             }
 
             let runner = &self.runners[i];
-            let threshold =
-                compete_before_spurt::lead_threshold(runner.adjusted.style, course_distance);
+            let threshold = compete_before_spurt::lead_threshold(runner.style, course_distance);
             let far_from_lead = runner.position_diff.from_first > threshold;
             let is_alone = self.is_alone(i, compete_before_spurt::ALONE_DISTANCE);
 
@@ -1680,7 +1676,7 @@ impl RaceSolver<Runner> {
         let runner = &self.runners[i];
         self.runners.iter().enumerate().all(|(j, other)| {
             i == j
-                || other.adjusted.style != runner.adjusted.style
+                || other.style != runner.style
                 || (runner.position - other.position).abs() > distance
         })
     }

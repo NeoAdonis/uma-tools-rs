@@ -267,12 +267,15 @@ pub struct Runner {
     pub gate_roll: u8,
     /// Base stats before adjustments. After calculating the adjusted stats,
     /// the base stats are only used to evaluate some skill conditions.
-    pub base: Uma,
-    /// Raw stats, before halving and mood multiplier. Used for skill value scaling.
+    pub base: Stats,
+    /// Raw stats before halving and mood multiplier, with the aptitudes and the
+    /// style before out-of-gate skills. Used for skill value scaling.
     pub raw: Uma,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
-    pub adjusted: Uma,
+    pub adjusted: Stats,
+    /// Running style, after out-of-gate skills that change it.
+    pub style: Style,
     /// Set of static values related to the runner at the start of the race.
     pub initial_state: InitialState,
     /// Start delay (i.e. time taken to leave the gate) in seconds.
@@ -473,7 +476,7 @@ impl Runner {
 
     /// Get the base style, treating Runaway as a variant of Front.
     pub fn base_style(&self) -> Style {
-        self.adjusted.style.base_style()
+        self.style.base_style()
     }
 
     /// Number of skills the runner has, including those that failed the wit check.
@@ -519,12 +522,11 @@ impl Runner {
             0.0006
         };
 
-        let power_component = (500.0 * self.adjusted.power as f64).sqrt();
-        let strategy_multiplier =
-            acceleration_strategy_phase_multiplier(self.adjusted.style, self.phase);
-        let ground_multiplier = ground_type_proficiency_multiplier(self.adjusted.track_aptitude);
+        let power_component = (500.0 * self.adjusted.power).sqrt();
+        let strategy_multiplier = acceleration_strategy_phase_multiplier(self.style, self.phase);
+        let ground_multiplier = ground_type_proficiency_multiplier(self.raw.track_aptitude);
         let distance_multiplier =
-            acceleration_distance_proficiency_multiplier(self.adjusted.distance_aptitude);
+            acceleration_distance_proficiency_multiplier(self.raw.distance_aptitude);
 
         let base_acceleration = base_accel
             * power_component
@@ -642,10 +644,10 @@ impl Runner {
                 .speed_multiplier(self.phase, game_version);
             let base_target_speed = base_target_speed(
                 state.course.base_speed(),
-                self.adjusted.style,
+                self.style,
                 self.phase,
                 self.adjusted.speed,
-                self.adjusted.distance_aptitude,
+                self.raw.distance_aptitude,
             );
 
             base_target_speed * position_multiplier
@@ -794,7 +796,7 @@ impl Runner {
             charge_up::activity_coefficient(self.spot_struggle.has_struggled(), self.has_rushed());
         if let Some(charge_up) = &mut self.charge_up {
             charge_up.release(
-                self.adjusted.style,
+                self.style,
                 &state.course,
                 activity,
                 state.elapsed_time,
@@ -820,7 +822,7 @@ impl Runner {
                     | PositioningStrategy::PaceUp(_)
                     | PositioningStrategy::PaceUpEx
             );
-        let rate = charge_up::conservation_rate(self.is_pace_down(), self.adjusted.style);
+        let rate = charge_up::conservation_rate(self.is_pace_down(), self.style);
         if let Some(charge_up) = &mut self.charge_up {
             charge_up.conserve(rate, blocked, delta_time, elapsed_time);
         }
@@ -834,7 +836,7 @@ impl Runner {
     /// the current speed.
     pub(crate) fn update_hp(&mut self, delta_time: f64, start_dash: bool, state: &RaceState) {
         let mut multiplier = if self.spot_struggle.is_active(state.elapsed_time) {
-            spot_struggle::hp_multiplier(self.adjusted.style, self.is_rushed())
+            spot_struggle::hp_multiplier(self.style, self.is_rushed())
         } else if self.is_rushed() {
             rush::HP_MULTIPLIER
         } else {
@@ -936,11 +938,8 @@ impl Runner {
         if self.spot_struggle.has_struggled() {
             return;
         }
-        self.spot_struggle = SpotStruggle::start(
-            self.adjusted.guts,
-            self.adjusted.style_aptitude,
-            elapsed_time,
-        );
+        self.spot_struggle =
+            SpotStruggle::start(self.adjusted.guts, self.raw.style_aptitude, elapsed_time);
         if let Some(charge) = &mut self.charge_up {
             charge.penalize(charge_up::STRUGGLE_PENALTY);
         }
@@ -948,7 +947,7 @@ impl Runner {
 
     /// Check if the runner should check whether to secure the lead on this frame.
     pub(crate) fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
-        self.adjusted.style != Style::End
+        self.style != Style::End
             && self.is_boost_check_due(&self.secure_lead, &secure_lead::SECTIONS, state)
     }
 
@@ -973,7 +972,7 @@ impl Runner {
             return;
         }
 
-        let style = self.adjusted.style;
+        let style = self.style;
         let speed_bonus = secure_lead::target_speed_bonus(
             style,
             self.adjusted.guts,
@@ -1048,7 +1047,7 @@ impl Runner {
             return;
         }
 
-        let style = self.adjusted.style;
+        let style = self.style;
         let speed_bonus = compete_before_spurt::target_speed_bonus(
             style,
             self.adjusted.power,
@@ -1131,7 +1130,7 @@ impl Runner {
                 self.slope_speed_modifier = None;
             }
         } else {
-            let chance = (self.adjusted.wit as f64 * 0.0004).min(1.0);
+            let chance = (self.adjusted.wit * 0.0004).min(1.0);
             if rng.random_bool(chance) {
                 self.slope_speed_modifier = Some(downhill_speed_modifier(slope.grade));
             }

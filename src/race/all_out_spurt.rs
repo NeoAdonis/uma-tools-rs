@@ -9,7 +9,7 @@
 use crate::configuration::GameVersion;
 
 /// Adjusted speed stat that must be exceeded to be eligible.
-pub(crate) const SPEED_THRESHOLD: u16 = 2000;
+pub(crate) const SPEED_THRESHOLD: f64 = 2000.0;
 /// Fraction of the listed value of all-out spurt acceleration skills (type 48)
 /// that is actually applied.
 // ? Observed to be close to 10%; the reason is unknown.
@@ -49,15 +49,15 @@ impl AllOutSpurt {
 // ? The maximum gain should scale with speed, but it seems to never be reached,
 // ? so it is not modeled (the global max speed still applies).
 pub(crate) fn base_acceleration(
-    speed: u16,
-    power: u16,
+    speed: f64,
+    power: f64,
     course_distance: i32,
     game_version: GameVersion,
 ) -> f64 {
     if game_version < GameVersion::FifthAnniversary || speed <= SPEED_THRESHOLD {
         return 0.0;
     }
-    let acceleration_from_power = 0.0006 * (500.0 * power as f64).sqrt();
+    let acceleration_from_power = 0.0006 * (500.0 * power).sqrt();
     0.068 * acceleration_from_power / (course_distance as f64 / 1000.0).powf(1.5)
 }
 

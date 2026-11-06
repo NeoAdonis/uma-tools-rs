@@ -83,7 +83,7 @@ fn test_wit_limit_break_bonus_by_skill() {
     for (rarity, skill_type, boosted) in cases {
         let mut solver = high_wit_race(rarity, skill_type);
         let runner = &mut solver.runners[0];
-        let bonus = wit_limit_break_phase_coefficient(runner.adjusted.style, runner.phase)
+        let bonus = wit_limit_break_phase_coefficient(runner.style, runner.phase)
             * wit_limit_break_multiplier(runner.adjusted.wit);
         assert!(bonus > 0.0);
         runner.activate_skill(0, 0, &solver.state);
