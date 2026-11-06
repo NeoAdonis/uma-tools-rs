@@ -219,6 +219,38 @@ fn test_pace_up_ex_non_front_depends_on_pacemaker() {
 }
 
 #[test]
+fn test_positioning_is_first_checked_at_the_gate() {
+    // A late surger leaves the gate first, but positioning is first checked
+    // before anyone moves: nobody is ahead, so both pace down instead of the pace
+    // chaser entering Pace Up Ex behind her.
+    let config = Configuration {
+        rushing: Roll::Never,
+        ..seeded_config(0)
+    };
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
+    for style in [Style::Late, Style::Pace] {
+        solver.add_runner(Entrant::new(uma(style), vec![]));
+    }
+    let mut solver = solver.ready_runners();
+    for runner in &mut solver.runners {
+        runner.start_delay = if runner.style == Style::Late {
+            0.0
+        } else {
+            0.05
+        };
+    }
+    solver.step_frame();
+    for runner in &solver.runners {
+        let strategy = runner.positioning_strategy;
+        assert!(
+            matches!(strategy, PositioningStrategy::PaceDown(_)),
+            "{:?}: {strategy:?}",
+            runner.style
+        );
+    }
+}
+
+#[test]
 fn test_pace_up_ex_waits_for_the_next_check() {
     // Behind an End runner: Pace Up Ex is due, but only checked from the
     // normal strategy (not interrupting her Pace Down, 10m from the pacemaker

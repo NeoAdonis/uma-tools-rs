@@ -875,6 +875,10 @@ impl RaceSolver<Runner> {
     ///
     /// Each step has two main stages: skill activation and state update.
     ///
+    /// Before both, **positioning strategies** are checked from the state reached
+    /// at the end of the previous step, so the first check happens before anyone
+    /// moves, with every runner still at the gate.
+    ///
     /// For **skills**, every runner that moves during this step (i.e. leaves the
     /// gate by its end, so that her first frame of movement is checked too)
     /// [checks her skills](Runner::check_skills) before time advances. Nothing is
@@ -900,6 +904,7 @@ impl RaceSolver<Runner> {
     /// `run_at_full_speed_random` segments, rolled when the all-out spurt starts
     /// during the target speed update).
     fn step(&mut self, delta_time: f64) {
+        self.update_positioning_strategy();
         self.update_team_activations();
         self.state.buffs_activated.clear();
         self.state.popularity_top_activations = SkillActivationFlags::default();
@@ -963,7 +968,6 @@ impl RaceSolver<Runner> {
         self.update_blocking_status(delta_time);
         self.update_spot_struggle();
         self.update_duels(delta_time);
-        self.update_positioning_strategy();
         self.update_secure_lead();
         self.update_compete_before_spurt();
     }
@@ -1364,15 +1368,22 @@ impl RaceSolver<Runner> {
 
         let has_pace_up_ex = self.state.config.game_version >= GameVersion::OnePointFiveAnniversary;
         let pacemaker_style = self.runners[0].positioning_style();
-        // Most passive style among runners ahead of the current one. Runaways
-        // count as front runners, so neither should be behind the other.
+        // Most passive style among runners strictly ahead of the current one, so
+        // that nobody is ahead of anybody at the start. Runaways count as front
+        // runners, so neither should be behind the other.
         let mut max_style_ahead: Option<Style> = None;
+        let mut ahead = 0;
 
         for i in 0..self.runners.len() {
+            let position = self.runners[i].position;
+            while self.runners[ahead].position > position {
+                let style = self.runners[ahead].positioning_style().base_style();
+                max_style_ahead = max_style_ahead.max(Some(style));
+                ahead += 1;
+            }
             let style = self.runners[i].positioning_style();
             let base_style = style.base_style();
             let passive_ahead = max_style_ahead > Some(base_style);
-            max_style_ahead = max_style_ahead.max(Some(base_style));
             // No strategy starts after the first 10 sections, but one already
             // underway goes on until it ends.
             if self.runners[i].section >= POSITIONING_END_SECTION
@@ -1385,7 +1396,7 @@ impl RaceSolver<Runner> {
                     enter: if style.is_front_like() {
                         passive_ahead
                     } else {
-                        pacemaker_style > style
+                        pacemaker_position > position && pacemaker_style > style
                     },
                     exit: !passive_ahead,
                 }

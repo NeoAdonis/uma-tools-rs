@@ -539,7 +539,7 @@ impl UnreadyRunner {
             rush_chance,
             rush_state,
             is_start_dash: true,
-            next_positioning_check: self.start_delay,
+            next_positioning_check: 0.0,
             positioning_strategy: PositioningStrategy::Normal,
             positioning_end: f64::INFINITY,
             slope_speed_modifier: None,
