@@ -499,8 +499,8 @@ fn course_value(var: &CourseVar, course: &Course) -> i32 {
         // Is exchange race (dirt grade): races at Oi, Kawasaki, Funabashi or Morioka.
         IsDirtgrade => course.is_exchange_race() as i32,
 
-        // Is held at a racetrack with tight turns.
-        IsTightTrack => course.is_tight_track() as i32,
+        // Is held on a course with tight corners.
+        IsTightTrack => course.tight_track as i32,
 
         // Rotation: 1=clockwise, 2=counterclockwise, 4=straight.
         Rotation => course.direction as i32,

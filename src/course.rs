@@ -43,12 +43,6 @@ use serde::{Deserialize, Deserializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
 
-// Track IDs for special handling.
-const TRACK_ID_OOI: u16 = 10101;
-const TRACK_ID_KAWASAKI: u16 = 10103;
-const TRACK_ID_FUNABASHI: u16 = 10104;
-const TRACK_ID_LONGCHAMP: u16 = 10201;
-
 /// Represents the phase of a race based on the position on the course.
 ///
 /// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
@@ -240,6 +234,25 @@ pub enum ThresholdStat {
     Wit = 5,
 }
 
+/// How the starting gates are spread across the course, from the racetrack's
+/// `initial_lane_type` in the game data.
+///
+/// Gates are one horse lane apart, but some racetracks leave extra space
+/// between two of them.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum InitialLaneType {
+    /// 0.6 horse lanes of extra space after gate 9.
+    ExtraSpaceAfter9 = 1,
+    /// No extra space.
+    Equidistant = 2,
+    /// Only at Longchamp; its name in the game is unknown.
+    // ? Assume 1.86 horse lanes of extra space after gate 14 (unconfirmed).
+    ExtraSpaceAfter14 = 3,
+    /// 0.6 horse lanes of extra space after gate 8.
+    ExtraSpaceAfter8 = 4,
+}
+
 /// Lane type an Uma is running in.
 ///
 /// Used mainly by skill conditions.
@@ -312,6 +325,11 @@ pub struct Course {
     pub move_lane_point: Option<f64>,
     /// Race track ID associated with this course.
     pub race_track_id: u16,
+    /// How the starting gates of the racetrack are spread.
+    pub initial_lane_type: InitialLaneType,
+    /// Whether the course has tight corners, as checked by the
+    /// `is_tight_track` skill condition.
+    pub tight_track: bool,
     /// Minimum finish time that can be displayed on the scoreboard in seconds.
     ///
     /// Stored in 10000ths of a second in the course data, and converted when
@@ -522,22 +540,16 @@ impl Course {
     /// Get the starting lane position in course widths based on the gate roll
     /// (1-indexed), with gate 1 on the rail.
     pub(crate) fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
-        let adjustor = match self.race_track_id {
-            TRACK_ID_OOI | TRACK_ID_KAWASAKI | TRACK_ID_FUNABASHI => 0.0,
-            TRACK_ID_LONGCHAMP => {
-                if gate_roll >= 15 {
-                    1.86
-                } else {
-                    0.0
-                }
-            }
-            _ => {
-                if gate_roll >= 10 {
-                    0.6
-                } else {
-                    0.0
-                }
-            }
+        let (last_gate_before_space, extra_space) = match self.initial_lane_type {
+            InitialLaneType::ExtraSpaceAfter9 => (9, 0.6),
+            InitialLaneType::Equidistant => (u8::MAX, 0.0),
+            InitialLaneType::ExtraSpaceAfter14 => (14, 1.86),
+            InitialLaneType::ExtraSpaceAfter8 => (8, 0.6),
+        };
+        let adjustor = if gate_roll > last_gate_before_space {
+            extra_space
+        } else {
+            0.0
         };
         CourseWidths::from_horse_lanes((gate_roll - 1) as f64 + adjustor)
     }
@@ -561,17 +573,6 @@ impl Course {
     /// Abroad tracks include Longchamp, Santa Anita Park and Del Mar.
     pub fn is_abroad(&self) -> bool {
         matches!(self.race_track_id, 10201..=10203)
-    }
-
-    /// Check if the race is held at a racetrack with tight turns.
-    ///
-    /// Tight tracks include Sapporo, Hakodate, Fukushima, Kokura, Kawasaki or
-    /// Funabashi.
-    pub fn is_tight_track(&self) -> bool {
-        matches!(
-            self.race_track_id,
-            10001 | 10002 | 10004 | 10010 | 10103 | 10104
-        )
     }
 
     /// Load a specific course by ID from the course data JSON file
@@ -835,23 +836,21 @@ mod tests {
 
     #[test]
     fn test_track_name_and_flags() {
-        // (racetrack, name, exchange race, abroad, tight track)
+        // (racetrack, name, exchange race, abroad)
         let cases = [
-            (10103, "Kawasaki", true, false, true),
-            (10105, "Morioka", true, false, false),
-            (10203, "Del Mar", false, true, false),
-            (10001, "Sapporo", false, false, true),
-            (10006, "Tokyo", false, false, false),
+            (10103, "Kawasaki", true, false),
+            (10105, "Morioka", true, false),
+            (10203, "Del Mar", false, true),
+            (10006, "Tokyo", false, false),
         ];
-        for (track_id, name, exchange, abroad, tight) in cases {
+        for (track_id, name, exchange, abroad) in cases {
             let course = create_test_course(track_id);
             let actual = (
                 course.track_name(Language::English),
                 course.is_exchange_race(),
                 course.is_abroad(),
-                course.is_tight_track(),
             );
-            let expected = (Some(name), exchange, abroad, tight);
+            let expected = (Some(name), exchange, abroad);
             assert_eq!(actual, expected, "track {track_id}");
         }
     }
@@ -880,27 +879,47 @@ mod tests {
     }
 
     #[test]
-    fn test_starting_lane_adjustment_by_racetrack() {
+    fn test_starting_lane_by_initial_lane_type() {
+        use InitialLaneType::*;
         let lane = CourseWidths::from_horse_lanes;
-        // (racetrack, gate roll, expected lane in horse lanes)
+        // (initial lane type, gate roll, expected lane in horse lanes)
         let cases = [
-            // Oi, Kawasaki and Funabashi: never adjusted.
-            (TRACK_ID_OOI, 12, 11.0),
-            (TRACK_ID_KAWASAKI, 12, 11.0),
-            (TRACK_ID_FUNABASHI, 12, 11.0),
-            // Longchamp: adjusted from gate roll 15.
-            (TRACK_ID_LONGCHAMP, 14, 13.0),
-            (TRACK_ID_LONGCHAMP, 15, 14.0 + 1.86),
-            // Anywhere else: adjusted from gate roll 10.
-            (10001, 9, 8.0),
-            (10001, 10, 9.0 + 0.6),
+            (Equidistant, 12, 11.0),
+            (ExtraSpaceAfter9, 9, 8.0),
+            (ExtraSpaceAfter9, 10, 9.0 + 0.6),
+            (ExtraSpaceAfter8, 8, 7.0),
+            (ExtraSpaceAfter8, 9, 8.0 + 0.6),
+            (ExtraSpaceAfter14, 14, 13.0),
+            (ExtraSpaceAfter14, 15, 14.0 + 1.86),
         ];
-        for (track_id, gate_roll, expected) in cases {
+        for (initial_lane_type, gate_roll, expected) in cases {
+            let course = Course {
+                initial_lane_type,
+                ..synthetic_course()
+            };
             assert_eq!(
-                create_test_course(track_id).starting_lane(gate_roll),
+                course.starting_lane(gate_roll),
                 lane(expected),
-                "track {track_id}, gate roll {gate_roll}"
+                "{initial_lane_type:?}, gate roll {gate_roll}"
             );
+        }
+    }
+
+    #[test]
+    fn test_gates_and_tight_corners_come_from_each_course() {
+        use crate::test_utils::load_course;
+        // (course, initial lane type, tight track): Nakayama's inner and outer
+        // turf circuits differ, unlike Santa Anita Park's courses.
+        let cases = [
+            (10504, InitialLaneType::ExtraSpaceAfter9, true),
+            (10505, InitialLaneType::ExtraSpaceAfter9, false),
+            (11613, InitialLaneType::Equidistant, true),
+            (11502, InitialLaneType::ExtraSpaceAfter8, false),
+        ];
+        for (id, initial_lane_type, tight_track) in cases {
+            let course = load_course(id);
+            let actual = (course.initial_lane_type, course.tight_track);
+            assert_eq!(actual, (initial_lane_type, tight_track), "course {id}");
         }
     }
 

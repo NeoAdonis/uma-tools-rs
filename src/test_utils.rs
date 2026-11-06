@@ -80,6 +80,8 @@ pub(crate) fn synthetic_course() -> Course {
         move_lane_point: None,
         run_up: 0.0,
         race_track_id: 10006,
+        initial_lane_type: InitialLaneType::ExtraSpaceAfter9,
+        tight_track: false,
         finish_time_min: 117.1,
         finish_time_max: 123.0,
         width: CourseWidths(1.0),

@@ -726,10 +726,11 @@ Checks if you're currently rushing.
 
 ## is_tight_track
 
-Check whether the racetrack has tight corners.
+Check whether the course has tight corners.
 
-*Note:* So far, this applies to Sapporo, Hakodate, Fukushima, Kokura, Kawasaki,
-and Funabashi.
+*Note:* Each course sets it in the game data. So far, it applies to every course
+at Sapporo, Hakodate, Fukushima, Kokura, Kawasaki, Funabashi, Santa Anita Park
+and Del Mar, and to the inner turf and dirt courses at Niigata and Nakayama.
 
 *Example*: `is_tight_track==1`
 
