@@ -1141,9 +1141,9 @@ fn test_compete_before_spurt_when_far_from_first() {
     }
 }
 
-/// Frames at 15 FPS until a duel starts: the first frame two runners are close
-/// (frame 0), then 2s worth of frames.
-const DUEL_FRAMES: usize = 31;
+/// Frames until a duel starts: the first frame two runners are close (frame
+/// 0), then the 31 frames it takes to add up to 2s.
+const DUEL_FRAMES: usize = 32;
 
 /// Solver with one runner per `(position, lane)` on a 1200m course, whose final
 /// straight starts at 934m. Runners must be given in descending position order.
@@ -1168,7 +1168,7 @@ fn place_on_straight(solver: &mut RaceSolver<Runner>, i: usize, position: f64, l
     runner.segments.update(runner.position, &state.course);
 }
 
-/// Run `frames` duel updates at 15 FPS, with up-to-date order rates.
+/// Run `frames` duel updates, with up-to-date order rates.
 fn update_duels(solver: &mut RaceSolver<Runner>, frames: usize) {
     for _ in 0..frames {
         solver.assert_runners_sorted();
@@ -3762,11 +3762,12 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
     assert!(solver.runners[0].is_in_downhill_mode());
     assert!(!solver.runners[0].is_going_uphill());
 
-    // After exiting downhill mode, the next checks are every second (15
-    // frames) after entry.
-    for check in [115, 130] {
+    // After exiting downhill mode, the next checks are every second after
+    // entry: 16 frames, since 15 fall short of it, then 15 more thanks to the
+    // time left over.
+    for (check, frames) in [(116, 16), (131, 15)] {
         solver.runners[0].slope_speed_modifier = None;
-        for position in check - 14..check {
+        for position in check - frames + 1..check {
             move_on_slopes(&mut solver, &course, position as f64);
             assert!(
                 !solver.runners[0].is_in_downhill_mode(),

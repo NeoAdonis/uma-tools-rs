@@ -28,8 +28,8 @@ pub(crate) const EXIT_HP_PERCENT: f64 = 5.0;
 pub(crate) const EXIT_DISTANCE: f64 = 5.0;
 
 /// Tolerance for floating-point rounding errors in the trigger checks, so that
-/// e.g. 30 frames at 15 FPS reach `TRIGGER_TIME`, and a speed difference a hair
-/// over `MAX_SPEED_DIFF` still counts.
+/// accumulated frame times aren't thrown off by them, and a speed difference a
+/// hair over `MAX_SPEED_DIFF` still counts.
 const TOLERANCE: f64 = 1e-6;
 
 /// Duel state.

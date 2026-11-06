@@ -1117,7 +1117,7 @@ impl Runner {
             rng.slope = rng.keyed(Stream::Slope(slope_idx));
         } else {
             self.downhill_check_timer += delta_time;
-            // Accumulated frame times fall slightly short of whole seconds.
+            // Absorb rounding errors in accumulated frame times.
             if self.downhill_check_timer < 1.0 - EPSILON {
                 return;
             }

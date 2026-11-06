@@ -39,9 +39,9 @@ use crate::units::CourseWidths;
 /// Scale applied to raw finish times to get displayed times.
 pub const FINISH_TIME_SCALE: f64 = 1.18;
 
-/// Duration of a single frame in seconds (race state is updated 15 times per
-/// second).
-pub const DELTA_TIME: f64 = 1.0 / 15.0;
+/// Duration of a single frame in seconds (race state is updated about 15 times
+/// per second).
+pub const DELTA_TIME: f64 = 0.0666;
 
 /// Upper bound on a race's duration in seconds, checked in debug builds to
 /// catch races that never end (e.g. a broken speed). The slowest race is the

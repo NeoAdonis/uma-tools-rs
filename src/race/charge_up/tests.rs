@@ -165,19 +165,20 @@ fn test_conserve_and_penalize() {
 #[test]
 fn test_conservation_rate() {
     let mut late_surger = eligible_solver();
+    // Rates per second, over the time the whole frames add up to.
     let runner = &mut late_surger.runners[0];
-    conserve_for(runner, 0.0, 1.0);
-    assert_close!(conserved(runner), 4.2, tolerance = 1e-6);
+    let time = conserve_for(runner, 0.0, 1.0);
+    assert_close!(conserved(runner), 4.2 * time, tolerance = 1e-6);
 
     runner.charge_up.as_mut().unwrap().conserved = 0.0;
     runner.positioning_strategy = PositioningStrategy::PaceDown(5.0);
-    conserve_for(runner, 1.0, 1.0);
-    assert_close!(conserved(runner), 6.7, tolerance = 1e-6);
+    let time = conserve_for(runner, 1.0, 1.0) - 1.0;
+    assert_close!(conserved(runner), 6.7 * time, tolerance = 1e-6);
 
     let mut end_closer = solver(1600, Style::End, Mood::Normal, GameVersion::LATEST, 42);
     let runner = &mut end_closer.runners[0];
-    conserve_for(runner, 0.0, 1.0);
-    assert_close!(conserved(runner), 4.2 * 0.7, tolerance = 1e-6);
+    let time = conserve_for(runner, 0.0, 1.0);
+    assert_close!(conserved(runner), 4.2 * 0.7 * time, tolerance = 1e-6);
 }
 
 #[test]
