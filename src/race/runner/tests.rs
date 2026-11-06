@@ -258,7 +258,7 @@ fn test_pace_down_and_downhill_mode_save_hp() {
             runner.slope_speed_modifier = Some(0.5);
         }
         let before = runner.hp.current();
-        runner.update_hp(DELTA_TIME, state);
+        runner.update_hp(DELTA_TIME, false, state);
         let consumed = before - runner.hp.current();
         let base = *base.get_or_insert(consumed);
         assert_close!(

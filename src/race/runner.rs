@@ -827,7 +827,12 @@ impl Runner {
     }
 
     /// Update HP based on current speed, phase, and modifiers.
-    pub(crate) fn update_hp(&mut self, delta_time: f64, state: &RaceState) {
+    ///
+    /// `start_dash` tells whether the runner was in the start dash when the
+    /// frame began, so the frame that reaches its threshold still counts. During
+    /// the start dash, HP is consumed as if running at the base speed, whatever
+    /// the current speed.
+    pub(crate) fn update_hp(&mut self, delta_time: f64, start_dash: bool, state: &RaceState) {
         let mut multiplier = if self.spot_struggle.is_active(state.elapsed_time) {
             spot_struggle::hp_multiplier(self.adjusted.style, self.is_rushed())
         } else if self.is_rushed() {
@@ -841,9 +846,14 @@ impl Runner {
         if self.is_in_downhill_mode() {
             multiplier *= 0.4;
         }
+        let speed = if start_dash {
+            state.course.base_speed()
+        } else {
+            self.speed
+        };
         self.hp.consume(
             calculate_hp_per_second(
-                self.speed,
+                speed,
                 &state.course,
                 state.params.track_condition,
                 self.phase,

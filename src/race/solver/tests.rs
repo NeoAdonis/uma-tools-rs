@@ -3991,6 +3991,41 @@ fn test_lone_runner_keeps_regular_pace() {
 }
 
 #[test]
+fn test_start_dash_consumes_hp_at_base_speed() {
+    // A lone runner on firm turf never paces down, and consumes 20 HP/s at
+    // the base speed in the early race.
+    let config = Configuration {
+        rushing: Roll::Never,
+        ..seeded_config(0)
+    };
+    let mut solver = ready_solver(10101, uma(Style::Front), vec![], config);
+    let base_speed = solver.state.course.base_speed();
+    let mut dash_frames = 0;
+    loop {
+        let runner = &solver.runners[0];
+        let (start_dash, hp) = (runner.is_start_dash, runner.hp.current());
+        let has_started = runner.start_delay <= solver.state.elapsed_time + DELTA_TIME;
+        solver.step_frame();
+        let runner = &solver.runners[0];
+        let consumed = hp - runner.hp.current();
+        if !has_started {
+            assert_eq!(consumed, 0.0);
+        } else if start_dash {
+            // Whatever the current speed, including the frame that ends it.
+            assert_close!(consumed, 20.0 * DELTA_TIME);
+            dash_frames += 1;
+        } else {
+            // Then, the current speed is used again, which consumes less.
+            let speed_diff = runner.speed - base_speed + 12.0;
+            assert_close!(consumed, 20.0 * speed_diff.powi(2) / 144.0 * DELTA_TIME);
+            assert!(runner.speed < base_speed);
+            break;
+        }
+    }
+    assert!(dash_frames > 1);
+}
+
+#[test]
 fn test_step_frame_matches_run() {
     let new_solver = || {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
