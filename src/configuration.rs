@@ -54,7 +54,7 @@ pub enum GameVersion {
     /// to the pacemaker smaller, and let a lone front runner keep speeding up to
     /// stay ahead with a larger lead.
     OnePointFiveAnniversary,
-    /// After the 2nd anniversary update in Japan.
+    /// After the 2nd anniversary update in Japan (1 year after release in global).
     ///
     /// This update introduces charge up mechanics.
     SecondAnniversary,
