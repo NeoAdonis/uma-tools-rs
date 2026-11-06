@@ -17,7 +17,7 @@ fn test_speed_effects_stop_pacing_down() {
         runner.skill_modifiers.current_speed = current;
         runner.skill_modifiers.target_speed = target;
         // Not yet beyond the threshold.
-        runner.update_positioning_non_front(5.0, &state);
+        runner.update_positioning_non_front(5.0, Default::default(), &state);
         let pacing_down = matches!(
             runner.positioning_strategy,
             PositioningStrategy::PaceDown(_)
@@ -32,7 +32,7 @@ fn test_speed_effects_stop_pacing_down() {
         state.elapsed_time = 10.0;
         runner.next_positioning_check = 0.0;
         runner.skill_modifiers.target_speed = target;
-        runner.update_positioning_non_front(0.0, &state);
+        runner.update_positioning_non_front(0.0, Default::default(), &state);
         let pacing_down = matches!(
             runner.positioning_strategy,
             PositioningStrategy::PaceDown(_)
@@ -60,7 +60,7 @@ fn test_positioning_speed_multiplier() {
         assert_eq!(actual, expected, "{strategy:?}");
     }
 
-    // Pace down is milder in the Mid race from 1.5 Anniv. onward.
+    // Pace down is milder in the Mid race from 1.5 anniv. onward.
     let cases = [
         (Phase::Early, GameVersion::FirstAnniversary, 0.915),
         (Phase::Mid, GameVersion::FirstAnniversary, 0.915),

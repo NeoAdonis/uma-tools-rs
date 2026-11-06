@@ -9,7 +9,8 @@
 //!   spot struggle, Charge Up or dueling.
 //! - `lane`: lane movement, overtake target tracking and target lane
 //!   decisions.
-//! - `positioning`: positioning strategies during the first 10 sections.
+//! - `positioning`: positioning strategies, which start during the first 10
+//!   sections.
 //! - `surroundings`: field of view and blocking, surrounding and nearby state.
 //! - `skills`: skill trigger checks, activation and active effects.
 //!
@@ -106,7 +107,7 @@ mod surroundings;
 
 pub use lane::LaneState;
 pub(crate) use lane::OvertakeState;
-pub(crate) use positioning::{POSITIONING_END_SECTION, PositioningStrategy};
+pub(crate) use positioning::{POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy};
 pub use skills::SkillActivationFlags;
 pub(crate) use skills::SkillModifiers;
 pub(crate) use surroundings::{BlockedState, NearbyState, SurroundState};
@@ -375,7 +376,8 @@ pub struct Runner {
     pub(crate) surrounded: SurroundState,
     /// Number of runners ahead and behind currently rushing.
     pub(crate) rush_counter: RushCounter,
-    /// Current positioning strategy during the first 10 sections of the race.
+    /// Current positioning strategy, which starts during the first 10 sections
+    /// of the race.
     pub(crate) positioning_strategy: PositioningStrategy,
     /// Next time to check positioning strategy conditions, in seconds.
     pub(crate) next_positioning_check: f64,

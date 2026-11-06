@@ -1,4 +1,5 @@
-//! Positioning strategies during the first 10 sections of the race.
+//! Positioning strategies, which start during the first 10 sections of the
+//! race.
 
 use rand::prelude::*;
 
@@ -9,7 +10,8 @@ use crate::uma::*;
 
 use super::Runner;
 
-/// First section where positioning strategies no longer apply.
+/// First section where positioning strategies no longer start (those already
+/// underway go on until they end).
 pub(crate) const POSITIONING_END_SECTION: u8 = 10;
 /// Interval (s) between checks to enter a positioning strategy.
 const CHECK_INTERVAL: f64 = 2.0;
@@ -17,15 +19,16 @@ const CHECK_INTERVAL: f64 = 2.0;
 /// interval starts.
 const EXIT_COOLDOWN: f64 = 1.0;
 
-/// Positioning strategy during the first 10 sections (5/12) of the race.
+/// Positioning strategy, which starts during the first 10 sections (5/12) of
+/// the race.
 ///
 /// For front-runners, it determines the pacing behavior to stay ahead or catch
 /// up. For non-front-runners, it determines the pacing behavior to keep their
 /// distance from the pacemaker.
 ///
-/// Every strategy other than `Normal` and `PaceUpEx` ends once its exit
-/// conditions are met or after running the length of a section in it (three
-/// for runaways), followed by a 1s cooldown before checks resume.
+/// Every strategy other than `Normal` ends once its exit conditions are met or
+/// the runner has run the length of a section in it (three for runaways),
+/// followed by a 1s cooldown before checks resume.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PositioningStrategy {
     /// Run at regular pace.
@@ -43,13 +46,25 @@ pub(crate) enum PositioningStrategy {
     /// *(Non-front-runners only.)*
     /// Try to fall back within a certain distance from pacemaker by pacing down.
     PaceDown(f64),
-    /// *Introduced by 1.5 Anniversary update in Japan.* Speed up if there is
+    /// *Introduced by 1.5 anniversary update in Japan.* Speed up if there is
     /// another runner ahead whose strategy should actually position her behind.
     /// Front-runners enter it when any such runner is ahead; other runners enter it
     /// when the pacemaker is such a runner. Exits once no such runner is ahead.
     /// Runaways and front runners count as the same strategy here. Takes
-    /// priority over all other strategies.
+    /// priority over all other strategies at each check from `Normal`, without
+    /// a wit check, but like them, it doesn't interrupt another strategy.
     PaceUpEx,
+}
+
+/// Whether [`PositioningStrategy::PaceUpEx`]'s conditions are met for a runner.
+/// Both are false before the 1.5 anniversary update.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct PaceUpExConditions {
+    /// Front runners: a runner whose style should be behind her is ahead.
+    /// Others: the pacemaker's style should be behind hers.
+    pub(crate) enter: bool,
+    /// No runner whose style should be behind her is ahead.
+    pub(crate) exit: bool,
 }
 
 impl PositioningStrategy {
@@ -105,10 +120,10 @@ impl Runner {
         distance_ahead < distance_threshold
     }
 
-    /// Update positioning strategy for front-runners during the first 10 sections
-    /// (5/12 of the race). The strategy determines whether to pace up to stay ahead
-    /// (Speed Up) or to catch up with the first runner of the same strategy
-    /// (Overtake).
+    /// Update positioning strategy for front-runners, which starts during the
+    /// first 10 sections (5/12 of the race). The strategy determines whether to
+    /// pace up to stay ahead (Speed Up) or to catch up with the first runner of
+    /// the same strategy (Overtake).
     ///
     /// `lead` is the distance to the runner behind if this runner is first
     /// overall, or `None` otherwise. `strategy_lead` is the distance to the next
@@ -120,6 +135,7 @@ impl Runner {
         lead: Option<f64>,
         strategy_lead: Option<f64>,
         is_single_front_runner: bool,
+        pace_up_ex: PaceUpExConditions,
         state: &RaceState,
     ) {
         let elapsed_time = state.elapsed_time;
@@ -133,6 +149,12 @@ impl Runner {
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
+                    return;
+                }
+
+                // Pace Up Ex goes first, without a wit check.
+                if pace_up_ex.enter {
+                    self.enter_positioning(PositioningStrategy::PaceUpEx, state);
                     return;
                 }
 
@@ -174,21 +196,31 @@ impl Runner {
                     self.exit_positioning(elapsed_time);
                 }
             }
+            PositioningStrategy::PaceUpEx => {
+                if pace_up_ex.exit {
+                    self.exit_positioning(elapsed_time);
+                }
+            }
             _ => {
                 debug_assert!(false, "BUG: Invalid positioning strategy for front runner")
             }
         }
     }
 
-    /// Update positioning strategy for non-front-runners during the first 10
-    /// sections (5/12 of the race).
+    /// Update positioning strategy for non-front-runners, which starts during
+    /// the first 10 sections (5/12 of the race).
     ///
     /// The strategy determines whether to pace up or down to keep distance from the
     /// pacemaker.
     ///
     /// `distance_behind` is the distance from the pacemaker in meters (0 if we are
     /// the pacemaker).
-    pub(crate) fn update_positioning_non_front(&mut self, distance_behind: f64, state: &RaceState) {
+    pub(crate) fn update_positioning_non_front(
+        &mut self,
+        distance_behind: f64,
+        pace_up_ex: PaceUpExConditions,
+        state: &RaceState,
+    ) {
         let elapsed_time = state.elapsed_time;
         let course_length = state.course.distance as f64;
         if self.has_positioning_ended(elapsed_time) {
@@ -197,6 +229,11 @@ impl Runner {
         match self.positioning_strategy {
             PositioningStrategy::Normal => {
                 if elapsed_time < self.next_positioning_check {
+                    return;
+                }
+                // Pace Up Ex goes first, without a wit check.
+                if pace_up_ex.enter {
+                    self.enter_positioning(PositioningStrategy::PaceUpEx, state);
                     return;
                 }
 
@@ -254,6 +291,11 @@ impl Runner {
                     self.exit_positioning(elapsed_time);
                 }
             }
+            PositioningStrategy::PaceUpEx => {
+                if pace_up_ex.exit {
+                    self.exit_positioning(elapsed_time);
+                }
+            }
             _ => {
                 debug_assert!(
                     false,
@@ -306,40 +348,6 @@ impl Runner {
     fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
         let chance = coef * (self.adjusted.wit as f64 * 0.1).log10();
         self.rng.positioning.random_bool(chance)
-    }
-
-    /// Enter or exit [`PositioningStrategy::PaceUpEx`] (1.5 anniversary and later).
-    ///
-    /// Returns `true` if the runner is in Pace Up Ex, in which case the regular
-    /// positioning update must be skipped.
-    ///
-    /// `passive_ahead` tells whether any runner ahead has a style that should
-    /// position her behind this runner.
-    pub(crate) fn update_pace_up_ex(
-        &mut self,
-        passive_ahead: bool,
-        pacemaker_style: Style,
-        state: &RaceState,
-    ) -> bool {
-        if matches!(self.positioning_strategy, PositioningStrategy::PaceUpEx) {
-            if !passive_ahead {
-                self.reset_positioning(state.elapsed_time);
-                return false;
-            }
-            return true;
-        }
-
-        let style = self.positioning_style();
-        let should_enter = if style.is_front_like() {
-            passive_ahead
-        } else {
-            pacemaker_style > style
-        };
-        if should_enter {
-            // Overrides any other strategy.
-            self.positioning_strategy = PositioningStrategy::PaceUpEx;
-        }
-        should_enter
     }
 }
 

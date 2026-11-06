@@ -164,10 +164,14 @@ fn test_pace_up_ex_front_runner_enters_and_exits() {
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Front));
 
+    // Checked again after a 1s cooldown and the 2s interval.
     runner_with_style(&mut solver, Style::Front).position = 120.0;
     sort_by_position(&mut solver);
     solver.update_positioning_strategy();
-    assert!(!is_pace_up_ex(&mut solver, Style::Front));
+    let next_check = solver.state.elapsed_time + 3.0;
+    let runner = runner_with_style(&mut solver, Style::Front);
+    assert_eq!(runner.positioning_strategy, PositioningStrategy::Normal);
+    assert_eq!(runner.next_positioning_check, next_check);
 }
 
 #[test]
@@ -215,13 +219,27 @@ fn test_pace_up_ex_non_front_depends_on_pacemaker() {
 }
 
 #[test]
-fn test_pace_up_ex_overrides_other_strategies() {
+fn test_pace_up_ex_waits_for_the_next_check() {
+    // Behind an End runner: Pace Up Ex is due, but only checked from the
+    // normal strategy (not interrupting her Pace Down, 10m from the pacemaker
+    // and below its 20m threshold), once her next check is due.
     let mut solver = positioning_solver(
         &[(Style::Pace, 100.0), (Style::End, 110.0)],
         GameVersion::LATEST,
     );
-    runner_with_style(&mut solver, Style::Pace).positioning_strategy =
-        PositioningStrategy::PaceDown(3.0);
+    let pace_down = PositioningStrategy::PaceDown(20.0);
+    runner_with_style(&mut solver, Style::Pace).positioning_strategy = pace_down;
+    solver.update_positioning_strategy();
+    let next_check = solver.state.elapsed_time + 0.1;
+    let runner = runner_with_style(&mut solver, Style::Pace);
+    assert_eq!(runner.positioning_strategy, pace_down);
+
+    runner.positioning_strategy = PositioningStrategy::Normal;
+    runner.next_positioning_check = next_check;
+    solver.update_positioning_strategy();
+    assert!(!is_pace_up_ex(&mut solver, Style::Pace));
+
+    solver.state.elapsed_time += 0.1;
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Pace));
 }
@@ -249,7 +267,7 @@ fn test_pacemaker_changed_in_one_point_five_anniversary() {
 
     // Before, the pacemaker is the frontmost runner with the most aggressive
     // style, not the Pace leader: 2m behind her, a Late runner paces down.
-    // From 1.5 Anniv., the pacemaker is the leader, 22m ahead.
+    // From 1.5 anniv., the pacemaker is the leader, 22m ahead.
     // ? The leader is an approximation of the current pacemaker.
     for (version, paces_down) in [
         (GameVersion::FirstAnniversary, true),
@@ -351,7 +369,7 @@ fn test_front_speed_up_distance_by_front_runner_count() {
 fn test_front_speed_up_only_exits_when_far_ahead() {
     use PositioningStrategy::*;
 
-    // Overtaken: stays (before 1.5 Anniv., so that Pace Up Ex doesn't apply).
+    // Overtaken: stays (before 1.5 anniv., so that Pace Up Ex doesn't apply).
     let mut solver = positioning_solver(
         &[(Style::Front, 100.0), (Style::Pace, 110.0)],
         GameVersion::FirstAnniversary,
@@ -386,7 +404,7 @@ fn test_front_speed_up_only_exits_when_far_ahead() {
 fn test_front_overtake_when_not_first_in_strategy() {
     use PositioningStrategy::*;
 
-    // Before 1.5 Anniv., so that Pace Up Ex doesn't apply. The Pace runner is
+    // Before 1.5 anniv., so that Pace Up Ex doesn't apply. The Pace runner is
     // first overall, so no front runner can speed up.
     let mut solver = positioning_solver(
         &[
@@ -450,7 +468,7 @@ fn test_front_overtake_exits_when_far_ahead_in_strategy() {
 }
 
 #[test]
-fn test_positioning_ends_after_first_ten_sections() {
+fn test_positioning_only_starts_in_first_ten_sections() {
     let mut solver = positioning_solver(
         &[(Style::Front, 100.0), (Style::End, 110.0)],
         GameVersion::LATEST,
@@ -458,27 +476,41 @@ fn test_positioning_ends_after_first_ten_sections() {
     solver.update_positioning_strategy();
     assert!(is_pace_up_ex(&mut solver, Style::Front));
 
+    // Still underway after the first 10 sections, until it ends.
     runner_with_style(&mut solver, Style::Front).section = POSITIONING_END_SECTION;
     solver.update_positioning_strategy();
-    assert!(matches!(
+    assert!(is_pace_up_ex(&mut solver, Style::Front));
+
+    runner_with_style(&mut solver, Style::Front).position = 120.0;
+    sort_by_position(&mut solver);
+    solver.update_positioning_strategy();
+    assert!(!is_pace_up_ex(&mut solver, Style::Front));
+
+    // Behind the End runner again, once checks would have resumed.
+    runner_with_style(&mut solver, Style::Front).position = 100.0;
+    sort_by_position(&mut solver);
+    solver.state.elapsed_time += 10.0;
+    solver.update_positioning_strategy();
+    assert_eq!(
         runner_with_style(&mut solver, Style::Front).positioning_strategy,
         PositioningStrategy::Normal
-    ));
+    );
 }
 
 #[test]
 fn test_positioning_lasts_one_section_at_most() {
     // Far behind a runner ahead whose strategy keeps her in hers: a Pace runner
-    // paces up and a Runaway overtakes, until they've run the length of a
-    // section (50m), or three for runaways.
-    for (style, ahead, length) in [
-        (Style::Pace, Style::Front, 50.0),
-        (Style::Runaway, Style::Runaway, 150.0),
+    // paces up, a Runaway overtakes, and either front runner paces up (Ex)
+    // behind an End runner, until they've run the length of a section (50m),
+    // or three for runaways.
+    let (old, latest) = (GameVersion::FirstAnniversary, GameVersion::LATEST);
+    for (style, ahead, version, length) in [
+        (Style::Pace, Style::Front, old, 50.0),
+        (Style::Runaway, Style::Runaway, old, 150.0),
+        (Style::Front, Style::End, latest, 50.0),
+        (Style::Runaway, Style::End, latest, 150.0),
     ] {
-        let mut solver = positioning_solver(
-            &[(ahead, 300.0), (style, 100.0)],
-            GameVersion::FirstAnniversary,
-        );
+        let mut solver = positioning_solver(&[(ahead, 300.0), (style, 100.0)], version);
         update_positioning_repeatedly(&mut solver);
         let i = solver.runners.iter().position(|r| r.position == 100.0);
         let i = i.unwrap();

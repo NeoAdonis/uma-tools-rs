@@ -27,7 +27,7 @@ use crate::race::popularity::calculate_popularity;
 use crate::race::proximity;
 use crate::race::rng::{RngSeed, Stream};
 use crate::race::runner::{
-    POSITIONING_END_SECTION, PositioningStrategy, Runner, SkillActivationFlags,
+    POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy, Runner, SkillActivationFlags,
 };
 use crate::race::secure_lead;
 use crate::race::spot_struggle;
@@ -1370,15 +1370,25 @@ impl RaceSolver<Runner> {
             let base_style = style.base_style();
             let passive_ahead = max_style_ahead > Some(base_style);
             max_style_ahead = max_style_ahead.max(Some(base_style));
-            if self.runners[i].section >= POSITIONING_END_SECTION {
-                self.runners[i].positioning_strategy = PositioningStrategy::Normal;
-                continue;
-            }
-            if has_pace_up_ex
-                && self.runners[i].update_pace_up_ex(passive_ahead, pacemaker_style, &self.state)
+            // No strategy starts after the first 10 sections, but one already
+            // underway goes on until it ends.
+            if self.runners[i].section >= POSITIONING_END_SECTION
+                && self.runners[i].positioning_strategy == PositioningStrategy::Normal
             {
                 continue;
             }
+            let pace_up_ex = if has_pace_up_ex {
+                PaceUpExConditions {
+                    enter: if style.is_front_like() {
+                        passive_ahead
+                    } else {
+                        pacemaker_style > style
+                    },
+                    exit: !passive_ahead,
+                }
+            } else {
+                PaceUpExConditions::default()
+            };
 
             let runner = &self.runners[i];
             if style.is_front_like() {
@@ -1404,13 +1414,14 @@ impl RaceSolver<Runner> {
                     lead,
                     strategy_lead,
                     front_runner_count == 1,
+                    pace_up_ex,
                     &self.state,
                 )
             } else {
                 // Determine distance behind pacemaker.
                 let distance_behind = pacemaker_position - runner.position;
                 let runner = &mut self.runners[i];
-                runner.update_positioning_non_front(distance_behind, &self.state)
+                runner.update_positioning_non_front(distance_behind, pace_up_ex, &self.state)
             }
         }
     }
