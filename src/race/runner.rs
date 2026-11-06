@@ -584,12 +584,17 @@ impl Runner {
 
     /// Update the runner's speed based on acceleration and constraints.
     pub(crate) fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
-        // Update speed based on acceleration.
-        self.speed += self.acceleration * delta_time;
+        // Accelerate or decelerate towards the target speed, without passing it.
+        self.speed = if self.speed <= self.target_speed {
+            (self.speed + self.acceleration * delta_time).min(self.target_speed)
+        } else {
+            (self.speed + self.acceleration * delta_time).max(self.target_speed)
+        };
 
         // Handle start dash end and min speed. The start dash ends once speed
         // reaches its threshold, which caps speed so that the start dash
-        // acceleration isn't carried over.
+        // acceleration isn't carried over. A target speed below the threshold
+        // keeps the runner in the start dash, below the minimum speed.
         let start_dash_speed = 0.85 * course_base_speed;
         if self.is_start_dash {
             if self.speed >= start_dash_speed {
@@ -599,9 +604,6 @@ impl Runner {
         } else if self.speed < self.min_speed {
             self.speed = self.min_speed;
         }
-        // Cap speed along with target speed to avoid overshooting due to acceleration.
-        // ? Is overshooting allowed? Cap it for now to avoid spikes.
-        self.speed = self.speed.min(MAX_TARGET_SPEED);
         // Front blocking caps speed, even below the minimum speed.
         // ? Unknown whether the minimum speed takes precedence.
         if let Some(speed_limit) = self.blocked.speed_limit {
