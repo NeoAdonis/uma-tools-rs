@@ -708,35 +708,6 @@ fn test_blocking_values_when_free() {
 }
 
 #[test]
-fn test_continue_times_start_at_0() {
-    use crate::race::solver::DELTA_TIME;
-    const TIMERS: [BlockingVar; 6] = [
-        BlockingVar::BlockedFrontContinuetime,
-        BlockingVar::BlockedSideContinuetime,
-        BlockingVar::BlockedAllContinuetime,
-        BlockingVar::InfrontNearLaneTime,
-        BlockingVar::BehindNearLaneTime,
-        BlockingVar::BehindNearLaneTimeSet1,
-    ];
-    // The first of 16 updates reads 0, so a second (15 × 0.0666 s) isn't
-    // reached until the 17th.
-    for (updates, expected) in [(16.0, 0), (17.0, 1)] {
-        let mut solver = create_test_race_solver(vec![]);
-        let runner = &mut solver.runners[0];
-        let timer = updates * DELTA_TIME;
-        runner.blocked.front_time = timer;
-        runner.blocked.side_time = timer;
-        runner.nearby.ahead_same_lane_time = timer;
-        runner.nearby.behind_same_lane_time = timer;
-        runner.nearby.behind_set1_time = timer;
-
-        let runner = &solver.runners[0];
-        let actual = TIMERS.map(|var| blocking_value(&var, runner));
-        assert_eq!(actual, [expected; 6], "{updates} updates");
-    }
-}
-
-#[test]
 fn test_hp_values() {
     let mut solver = create_test_race_solver(vec![]);
     let hp = &mut solver.runners[0].hp;

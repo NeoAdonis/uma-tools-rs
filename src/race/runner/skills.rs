@@ -97,7 +97,7 @@ use crate::trigger::skill_activation::{
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::units::{CourseWidths, meters_to_bashin};
 
-use super::{EPSILON, Runner, continue_time};
+use super::{EPSILON, Runner};
 
 /// Skill modifiers that are applied during race calculations.
 #[derive(Debug, Clone, PartialEq)]
@@ -752,7 +752,7 @@ impl Runner {
                 base * skill_scaling::remaining_hp_duration_multiplier_2(self.hp.current())
             }
             MultiplyBlockedSideMaxContinueTimePhaseMiddleRun => {
-                let time = continue_time(self.blocked.max_mid_side_time);
+                let time = self.blocked.max_mid_side_time;
                 base * skill_scaling::mid_side_blocked_time_multiplier(time)
             }
             IncrementUphillCount => {
@@ -815,7 +815,7 @@ impl Runner {
                 modifier + skill_scaling::bashin_from_first_bonus(bashin)
             }
             MultiplyBlockedSideMaxTimeMidRace => {
-                let time = continue_time(self.blocked.max_mid_side_time);
+                let time = self.blocked.max_mid_side_time;
                 modifier * skill_scaling::mid_side_blocked_time_multiplier(time)
             }
             MultiplySpeed1 => modifier * skill_scaling::speed_multiplier_1(self.adjusted.speed),

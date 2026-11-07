@@ -3594,8 +3594,8 @@ fn test_longest_mid_race_side_block_is_tracked() {
     block(runner, Phase::Late, true, false, 10.0);
     assert_close!(runner.blocked.max_mid_side_time, 2.0);
 
-    // The first update counts as 0, so this is just short of 2 s.
-    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.0);
+    // The longest blocking (2 s) reaches the second band.
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 2.0);
 }
 
 #[test]
@@ -3680,9 +3680,8 @@ fn test_duration_scaling_by_runner_situation() {
         (DurationScaling::MultiplyRemainHp2, |_| {}, 3.0),
         (
             DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-            // Just short of 4 s, since the first update counts as 0.
             |runner| runner.blocked.max_mid_side_time = 4.0,
-            2.0,
+            3.0,
         ),
         // Only extended later, by overtaking.
         (DurationScaling::IncrementOrderUp, |_| {}, 1.0),
@@ -3981,7 +3980,6 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
             runner.speed = speed;
             runner.is_start_dash = false;
         }
-        solver.update_blocking_status(DELTA_TIME);
         solver.step(DELTA_TIME);
 
         let speed = |gate| {
@@ -4000,6 +3998,59 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
         let blocker_speed = if blocker_moves_first { new_speed } else { 16.0 };
         assert_close!(speed(behind_gate), 0.994 * blocker_speed);
     }
+}
+
+/// Ready race on a 1200m course with two Pace runners having `skills`.
+fn pair_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for _ in 0..2 {
+        solver.add_runner(Entrant::new(uma(Style::Pace), skills.clone()));
+    }
+    solver.ready_runners()
+}
+
+/// Assert that every runner first activated a skill at `expected` seconds.
+fn assert_first_activations(solver: &RaceSolver<Runner>, expected: f64) {
+    for runner in &solver.runners {
+        let record = runner.activated_skills.first().expect("a skill activated");
+        assert_close!(record.time, expected);
+    }
+}
+
+#[test]
+fn test_skills_see_nearby_state_from_a_frame_earlier() {
+    // The runner behind closes in by about 0.13m per frame, so she's near (less
+    // than 3m away) after the first step. Blocking and nearby state is only
+    // updated after skill checks, so they see it a step later.
+    let mut solver = pair_solver(vec![negligible_skill("near_count>=1")]);
+    solver.state.elapsed_time = 10.0;
+    for (i, (position, speed)) in [(203.05, 14.0), (200.0, 20.0)].into_iter().enumerate() {
+        place(&mut solver, i, position, 0.2);
+        let runner = &mut solver.runners[i];
+        runner.speed = speed;
+        runner.is_start_dash = false;
+    }
+
+    for _ in 0..3 {
+        solver.step(DELTA_TIME);
+    }
+    assert_first_activations(&solver, 10.0 + 2.0 * DELTA_TIME);
+}
+
+#[test]
+fn test_blocked_time_counts_from_the_first_move() {
+    // Identical runners side by side from the gate stay side-blocked. Nothing
+    // is updated before they move, so 1s of blocking is only reached on the
+    // 17th frame (15 frames after the first update).
+    let mut solver = pair_solver(vec![negligible_skill("blocked_side_continuetime>=1")]);
+    for runner in &mut solver.runners {
+        runner.start_delay = 0.0;
+    }
+
+    for _ in 0..18 {
+        solver.step(DELTA_TIME);
+    }
+    assert_first_activations(&solver, 17.0 * DELTA_TIME);
 }
 
 #[test]

@@ -87,7 +87,7 @@ use crate::course::Course;
 use crate::course::geometry::Segment;
 use crate::race::parameters::RaceParameters;
 use crate::race::runner::InitialState;
-use crate::race::runner::{OrderState, Runner, SkillActivationFlags, StartType, continue_time};
+use crate::race::runner::{OrderState, Runner, SkillActivationFlags, StartType};
 use crate::race::solver::RaceState;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::SkillType;
@@ -888,19 +888,17 @@ fn blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     match var {
         // Blocking checks.
         BlockedFront => runner.is_front_blocked() as i32,
-        BlockedFrontContinuetime => continue_time(runner.blocked.front_time) as i32,
-        BlockedSideContinuetime => continue_time(runner.blocked.side_time) as i32,
-        BlockedAllContinuetime => {
-            continue_time(runner.blocked.front_time.min(runner.blocked.side_time)) as i32
-        }
+        BlockedFrontContinuetime => runner.blocked.front_time as i32,
+        BlockedSideContinuetime => runner.blocked.side_time as i32,
+        BlockedAllContinuetime => runner.blocked.front_time.min(runner.blocked.side_time) as i32,
         IsSurrounded => runner.is_surrounded() as i32,
 
         // Near counts.
         NearCount => runner.nearby.count as i32,
         NearInfrontCount => runner.nearby.ahead_same_lane_count as i32,
-        InfrontNearLaneTime => continue_time(runner.nearby.ahead_same_lane_time).floor() as i32,
-        BehindNearLaneTime => continue_time(runner.nearby.behind_same_lane_time).floor() as i32,
-        BehindNearLaneTimeSet1 => continue_time(runner.nearby.behind_set1_time).floor() as i32,
+        InfrontNearLaneTime => runner.nearby.ahead_same_lane_time.floor() as i32,
+        BehindNearLaneTime => runner.nearby.behind_same_lane_time.floor() as i32,
+        BehindNearLaneTimeSet1 => runner.nearby.behind_set1_time.floor() as i32,
         IsBehindIn => runner.nearby.behind_in as i32,
 
         // Target overtake times.

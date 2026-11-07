@@ -930,8 +930,12 @@ impl RaceSolver<Runner> {
     /// gate by its end, so that her first frame of movement is checked too)
     /// [checks her skills](Runner::check_skills) before time advances. Nothing is
     /// updated in between, so every check sees the same state: the one reached at
-    /// the end of the previous step, including multi-runner values (order,
-    /// blocking...).
+    /// the end of the previous step, including multi-runner values such as order.
+    /// The exception is blocking and nearby state (blocking, surrounding, nearby
+    /// runners, visibility and overtake targets, and their times): it's only
+    /// updated after skill checks, so checks see it from the positions a frame
+    /// earlier. So does the competition before the spurt, which counts nearby
+    /// runners at the end of the step.
     ///
     /// Once every runner has checked her skills, the buff (advantage) skill
     /// types activated this frame are counted, along with the activations of the
@@ -940,11 +944,14 @@ impl RaceSolver<Runner> {
     /// every runner are checked, so that the result doesn't depend on which
     /// runner checked first. Then, effects targeting other runners are applied.
     ///
-    /// After that, the **state is updated**: time advances, then each runner (in
-    /// gate order) moves and updates everything derived from her position (phase,
-    /// corners, straights, slopes), her lane and HP, and her active effects. Only
-    /// front blocking reads another runner then: the blocker's speed, already
-    /// updated if her gate is lower. Multi-runner values are updated last.
+    /// After that, the **state is updated**. Blocking and nearby state (along with
+    /// target lanes) comes first, from the current positions, unless nobody has
+    /// moved yet. Then time advances, and each runner (in gate order) moves and
+    /// updates everything derived from her position (phase, corners, straights,
+    /// slopes), her lane and HP, and her active effects. Only front blocking reads
+    /// another runner then: the blocker's speed, already updated if her gate is
+    /// lower. The other multi-runner values (order, overlaps, duels...) are
+    /// updated last.
     ///
     /// Events detected during the update (e.g. entering a straight) are stored
     /// and handled by the next skill check. Update functions never check skills
@@ -973,6 +980,12 @@ impl RaceSolver<Runner> {
         }
         self.check_advantage_triggers(delta_time);
         self.apply_pending_effects();
+
+        // ? Assume there's no update before anyone moves, so it doesn't count
+        // towards blocked and nearby times.
+        if self.state.elapsed_time > 0.0 {
+            self.update_blocking_status(delta_time);
+        }
 
         self.state.elapsed_time += delta_time;
 
@@ -1022,7 +1035,6 @@ impl RaceSolver<Runner> {
 
         self.update_order_values();
         self.resolve_overlaps();
-        self.update_blocking_status(delta_time);
         self.update_spot_struggle();
         self.update_duels(delta_time);
         self.update_secure_lead();
