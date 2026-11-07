@@ -123,256 +123,157 @@ impl<'a> RandomRolls<'a> {
 /// (empty for non-positional rolls), or `None` if the roll failed or the
 /// condition is invalid.
 fn process_random_comp(comp: &Comparison, course: &Course, rng: &mut impl Rng) -> Option<Vec<f64>> {
-    use VarType::*;
-
     match &comp.var {
         // Pure probability roll.
         // N.B. Both are only used by out-of-gate skills, which are evaluated before
         // the race instead (see `UnreadyRunner::apply_out_of_gate_skills`). Here,
         // they're shared by comparison, like any other random variable.
-        Random(RandomVar::RandomLot | RandomVar::RandomLotShared) => {
+        VarType::Random(RandomVar::RandomLot | RandomVar::RandomLotShared) => {
             // "random_lot==X" means X% chance of activation.
             let chance = comp.value as f64 / 100.0;
-            if rng.random_bool(chance) {
-                // Success, no activation point.
-                Some(vec![])
-            } else {
-                // Failed roll.
-                None
+            // Success has no activation point.
+            rng.random_bool(chance).then(Vec::new)
+        }
+        _ => match random_area(comp, course)? {
+            Area::Anywhere => Some(vec![]),
+            Area::Interval(start, end) => Some(vec![random_segment(start, end, rng)]),
+            Area::Stitched(intervals) => {
+                random_segment_in_intervals(&intervals, rng).map(|p| vec![p])
             }
-        }
+            Area::OneOf(intervals) => intervals
+                .choose(rng)
+                .map(|&(start, end)| vec![random_segment(start, end, rng)]),
+            Area::AllCorners(corners) => Some(random_all_corner_segments(corners, rng)),
+        },
+    }
+}
 
-        // Random point during a phase.
+/// Where the segments of a random variable can be, and how they're picked.
+#[derive(Debug, Clone, PartialEq)]
+enum Area {
+    /// No position constraint: non-random variables, random lots, and
+    /// `run_at_full_speed_random`, rolled when the all-out spurt starts since
+    /// that can't be known in advance.
+    Anywhere,
+    /// A segment anywhere in `(start, end)`.
+    Interval(f64, f64),
+    /// A segment anywhere in the intervals, stitched together end to end (see
+    /// [`random_segment_in_intervals`]).
+    Stitched(Vec<(f64, f64)>),
+    /// A segment in one of the intervals, all with the same chance regardless
+    /// of their length.
+    OneOf(Vec<(f64, f64)>),
+    /// Up to 4 segments on the corners (see [`random_all_corner_segments`]).
+    AllCorners(Vec<(f64, f64)>),
+}
+
+/// Area of a comparison that might contain a random variable, or `None` if
+/// it's empty (e.g. `corner_random==4` without a 4th corner) or the condition
+/// is invalid.
+fn random_area(comp: &Comparison, course: &Course) -> Option<Area> {
+    use VarType::*;
+
+    // Parts of `features` (as `(start, end)`) within `(start, end)`, or `None` if
+    // there are none.
+    let within = |features: Vec<(f64, f64)>, (start, end)| {
+        let parts: Vec<_> = features
+            .into_iter()
+            .filter_map(|feature| intersect_intervals(feature, (start, end)))
+            .collect();
+        (!parts.is_empty()).then_some(parts)
+    };
+    let phase = || CoursePhase::try_from(comp.value as i8).ok();
+    let corners = || {
+        course
+            .corners
+            .iter()
+            .map(Segment::range)
+            .collect::<Vec<_>>()
+    };
+    let straights = || course.straights.iter().map(|s| (s.start, s.end)).collect();
+    let slopes = |uphill: bool| {
+        course
+            .slopes
+            .iter()
+            .filter(|slope| {
+                if uphill {
+                    slope.is_uphill()
+                } else {
+                    slope.is_downhill()
+                }
+            })
+            .map(|slope| (slope.start, slope.end()))
+            .collect::<Vec<_>>()
+    };
+    let non_empty = |intervals: Vec<(f64, f64)>| (!intervals.is_empty()).then_some(intervals);
+
+    let area = match &comp.var {
+        // Random point during a phase (0=Early, 1=Mid, 2=Late, 3=Last).
         RandomPhase(RandomPhaseVar::PhaseRandom) => {
-            // "phase_random==X" where X is phase (0=Early, 1=Mid, 2=Late, 3=Last).
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries(course);
-
-            Some(vec![random_segment(start, end, rng)])
+            let (start, end) = phase()?.boundaries(course);
+            Area::Interval(start, end)
         }
-
         RandomPhase(RandomPhaseVar::PhaseFirsthalfRandom) => {
-            // "phase_firsthalf_random==X" where X is phase.
-            // Activates at random point during first half of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries_first_half(course);
-
-            Some(vec![random_segment(start, end, rng)])
+            let (start, end) = phase()?.boundaries_first_half(course);
+            Area::Interval(start, end)
         }
-
         RandomPhase(RandomPhaseVar::PhaseFirstquarterRandom) => {
-            // "phase_firstquarter_random==X" where X is phase.
-            // Activates at random point during first quarter of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries_first_quarter(course);
-
-            Some(vec![random_segment(start, end, rng)])
+            let (start, end) = phase()?.boundaries_first_quarter(course);
+            Area::Interval(start, end)
         }
-
         RandomPhase(RandomPhaseVar::PhaseLaterhalfRandom) => {
-            // "phase_laterhalf_random==X" where X is phase.
-            // Activates at random point during second half of specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries_second_half(course);
-
-            Some(vec![random_segment(start, end, rng)])
+            let (start, end) = phase()?.boundaries_second_half(course);
+            Area::Interval(start, end)
         }
-
+        // Random point on the corners or straights within a phase, or part of it.
         RandomPhase(RandomPhaseVar::PhaseCornerRandom) => {
-            // "phase_corner_random==X" where X is phase.
-            // Picks random point during a corner in specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries(course);
-
-            // Find all corner segments that intersect with this phase.
-            let corner_intervals: Vec<(f64, f64)> = course
-                .corners
-                .iter()
-                .filter_map(|corner| {
-                    intersect_intervals((corner.start, corner.end()), (start, end))
-                })
-                .collect();
-
-            // No corners in this phase fails the roll.
-            random_segment_in_intervals(&corner_intervals, rng)
-                .map(|activation_distance| vec![activation_distance])
+            Area::Stitched(within(corners(), phase()?.boundaries(course))?)
         }
-
         RandomPhase(RandomPhaseVar::PhaseStraightRandom) => {
-            // "phase_straight_random==X" where X is phase.
-            // Picks random point during a straight in specified phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries(course);
-
-            // Find all straight segments that intersect with this phase.
-            let straight_intervals: Vec<(f64, f64)> = course
-                .straights
-                .iter()
-                .filter_map(|straight| {
-                    intersect_intervals((straight.start, straight.end), (start, end))
-                })
-                .collect();
-
-            // No straights in this phase fails the roll.
-            random_segment_in_intervals(&straight_intervals, rng)
-                .map(|activation_distance| vec![activation_distance])
+            Area::Stitched(within(straights(), phase()?.boundaries(course))?)
         }
-
         RandomPhase(RandomPhaseVar::PhaseFirstHalfStraightRandom) => {
-            // "phase_first_half_straight_random==X" where X is phase.
-            // Picks random point during a straight in first half of set phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries_first_half(course);
-
-            // Find all straight segments that intersect with the first half of the phase.
-            let straight_intervals: Vec<(f64, f64)> = course
-                .straights
-                .iter()
-                .filter_map(|straight| {
-                    intersect_intervals((straight.start, straight.end), (start, end))
-                })
-                .collect();
-
-            // No straights found fails the roll.
-            random_segment_in_intervals(&straight_intervals, rng)
-                .map(|activation_distance| vec![activation_distance])
+            Area::Stitched(within(straights(), phase()?.boundaries_first_half(course))?)
         }
-
-        RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => {
-            // "phase_latter_half_straight_random==X" where X is phase.
-            // Picks random point during a straight in second half of set phase.
-            let (start, end) = CoursePhase::try_from(comp.value as i8)
-                .ok()?
-                .boundaries_second_half(course);
-
-            // Find all straight segments that intersect with the second half of the phase.
-            let straight_intervals: Vec<(f64, f64)> = course
-                .straights
-                .iter()
-                .filter_map(|straight| {
-                    intersect_intervals((straight.start, straight.end), (start, end))
-                })
-                .collect();
-
-            // No straights found fails the roll.
-            random_segment_in_intervals(&straight_intervals, rng)
-                .map(|activation_distance| vec![activation_distance])
-        }
+        RandomPhase(RandomPhaseVar::PhaseLatterHalfStraightRandom) => Area::Stitched(within(
+            straights(),
+            phase()?.boundaries_second_half(course),
+        )?),
 
         RandomSpatial(RandomSpatialVar::IsFinalcornerRandom) => {
-            // "is_finalcorner_random==1".
-            // Picks random segment on final corner.
-            // No corners on course fails the roll.
-            course
-                .corners
-                .last()
-                .map(|last_corner| vec![random_segment(last_corner.start, last_corner.end(), rng)])
+            let last_corner = course.corners.last()?;
+            Area::Interval(last_corner.start, last_corner.end())
         }
-
         RandomSpatial(RandomSpatialVar::CornerRandom) => {
             // "corner_random==X" where X is corner number (1-4).
             // If the race goes through corner X multiple times, only the last occurrence
             // counts.
-            // Invalid corner number or corner not on course fails the roll.
             let corner_idx = (0..course.corners.len())
                 .rev()
                 .find(|&idx| course.corner_number(idx) as i32 == comp.value)?;
             let corner = &course.corners[corner_idx];
-            Some(vec![random_segment(corner.start, corner.end(), rng)])
+            Area::Interval(corner.start, corner.end())
         }
-
-        RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
-            // "all_corner_random==1".
-            // Picks up to 4 random segments on corners (see `random_all_corner_segments`).
-            // No corners on course fails the roll.
-            let points = random_all_corner_segments(course, rng);
-            (!points.is_empty()).then_some(points)
-        }
-
-        RandomSpatial(RandomSpatialVar::StraightRandom) => {
-            // "straight_random==1".
-            // Picks random straight, then random segment on it.
-            // All straights have the same chance to be picked regardless of length.
-            // No straights on course fails the roll (should be rare/unlikely).
-            course
-                .straights
-                .choose(rng)
-                .map(|straight| vec![random_segment(straight.start, straight.end, rng)])
-        }
-
+        RandomSpatial(RandomSpatialVar::AllCornerRandom) => Area::AllCorners(non_empty(corners())?),
+        RandomSpatial(RandomSpatialVar::StraightRandom) => Area::OneOf(non_empty(straights())?),
         RandomSpatial(RandomSpatialVar::LastStraightRandom) => {
-            // "last_straight_random==1".
-            // Picks random segment on final straight.
-            // No straights on course fails the roll (should be rare/unlikely).
-            course.straights.last().map(|last_straight| {
-                vec![random_segment(last_straight.start, last_straight.end, rng)]
-            })
+            let last_straight = course.straights.last()?;
+            Area::Interval(last_straight.start, last_straight.end)
         }
-
-        RandomSpatial(RandomSpatialVar::UpSlopeRandom) => {
-            // "up_slope_random==1".
-            // Picks random segment on any uphill.
-            let uphills: Vec<_> = course.slopes.iter().filter(|s| s.is_uphill()).collect();
-
-            // No uphills on course fails the roll.
-            uphills
-                .choose(rng)
-                .map(|slope| vec![random_segment(slope.start, slope.end(), rng)])
-        }
-
+        RandomSpatial(RandomSpatialVar::UpSlopeRandom) => Area::OneOf(non_empty(slopes(true))?),
         RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
-            // "up_slope_random_later_half==1".
-            // Picks random segment on any uphill in second half of race.
             // Uphills crossing the halfway point only count from there onwards.
-            let halfway = course.halfway();
-            let late_uphills: Vec<_> = course
-                .slopes
-                .iter()
-                .filter(|s| s.is_uphill())
-                .filter_map(|s| intersect_intervals((s.start, s.end()), (halfway, course.length())))
-                .collect();
-
-            // No uphills after halfway on course fails the roll.
-            late_uphills
-                .choose(rng)
-                .map(|&(start, end)| vec![random_segment(start, end, rng)])
+            Area::OneOf(within(slopes(true), (course.halfway(), course.length()))?)
         }
-
-        RandomSpatial(RandomSpatialVar::DownSlopeRandom) => {
-            // "down_slope_random==1".
-            // Picks random segment on any downhill.
-            let downhills: Vec<_> = course.slopes.iter().filter(|s| s.is_downhill()).collect();
-
-            // No downhills on course fails the roll.
-            downhills
-                .choose(rng)
-                .map(|slope| vec![random_segment(slope.start, slope.end(), rng)])
-        }
-
+        RandomSpatial(RandomSpatialVar::DownSlopeRandom) => Area::OneOf(non_empty(slopes(false))?),
         RandomSpatial(RandomSpatialVar::DistanceRateAfterRandom) => {
             // "distance_rate_after_random==X" where X is percentage.
-            // Picks random segment after X% of the race.
-            let threshold_distance = course.position_at_rate(comp.value as f64);
-            Some(vec![random_segment(
-                threshold_distance,
-                course.length(),
-                rng,
-            )])
+            Area::Interval(course.position_at_rate(comp.value as f64), course.length())
         }
 
-        _ => {
-            // Nothing to roll here: non-random variables, and `run_at_full_speed_random`,
-            // rolled when the all-out spurt starts since that can't be known in advance.
-            Some(vec![])
-        }
-    }
+        _ => Area::Anywhere,
+    };
+    Some(area)
 }
 
 /// Calculate intersection of two intervals `a` and `b`, each given as
@@ -433,9 +334,9 @@ fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> 
 
 /// Pick the segments of `all_corner_random`, in race order.
 ///
-/// Returns up to 4 points, or none if the course has no corners.
+/// Returns up to 4 points, from `corners` (as `(start, end)`, in race order).
 ///
-/// 1. All corners start as candidates.
+/// 1. All `corners` start as candidates.
 /// 2. Pick a candidate, all with the same chance regardless of their length.
 /// 3. Pick a random 10m segment on it (see [`random_segment`]).
 /// 4. If at least 10m remain from the end of the segment to the end of the
@@ -443,10 +344,10 @@ fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> 
 ///    it's discarded.
 /// 5. Discard all candidates before the picked one.
 /// 6. Repeat from 2 until 4 segments are picked or no candidates remain.
-fn random_all_corner_segments(course: &Course, rng: &mut impl Rng) -> Vec<f64> {
+fn random_all_corner_segments(corners: Vec<(f64, f64)>, rng: &mut impl Rng) -> Vec<f64> {
     const MAX_SEGMENTS: usize = 4;
 
-    let mut candidates: Vec<(f64, f64)> = course.corners.iter().map(Segment::range).collect();
+    let mut candidates = corners;
     let mut points = Vec::with_capacity(MAX_SEGMENTS);
 
     while points.len() < MAX_SEGMENTS && !candidates.is_empty() {
