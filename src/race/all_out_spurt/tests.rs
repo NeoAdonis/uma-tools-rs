@@ -106,7 +106,7 @@ fn test_speed_bonus_grows_with_skill_acceleration() {
 
     let runner = &mut solver.runners[0];
     runner.skill_modifiers.all_out_spurt_acceleration = 0.4;
-    runner.update_speed(DELTA_TIME, solver.state.course.base_speed());
+    runner.update_speed(DELTA_TIME, solver.state.course.base_speed(), None);
 
     let expected = (runner.all_out_spurt_base + 0.04) * DELTA_TIME;
     assert_close!(runner.all_out_spurt.speed_bonus(), expected);

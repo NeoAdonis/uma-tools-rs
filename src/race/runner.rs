@@ -619,8 +619,14 @@ impl Runner {
         self.speed + self.skill_modifiers.current_speed
     }
 
-    /// Update the runner's speed based on acceleration and constraints.
-    pub(crate) fn update_speed(&mut self, delta_time: f64, course_base_speed: f64) {
+    /// Update the runner's speed based on acceleration and constraints,
+    /// including the `speed_limit` set by front blocking, if any.
+    pub(crate) fn update_speed(
+        &mut self,
+        delta_time: f64,
+        course_base_speed: f64,
+        speed_limit: Option<f64>,
+    ) {
         // Accelerate or decelerate towards the target speed, without passing it.
         self.speed = if self.speed <= self.target_speed {
             (self.speed + self.acceleration * delta_time).min(self.target_speed)
@@ -643,7 +649,7 @@ impl Runner {
         }
         // Front blocking caps speed, even below the minimum speed.
         // ? Unknown whether the minimum speed takes precedence.
-        if let Some(speed_limit) = self.blocked.speed_limit {
+        if let Some(speed_limit) = speed_limit {
             self.speed = self.speed.min(speed_limit);
         }
 

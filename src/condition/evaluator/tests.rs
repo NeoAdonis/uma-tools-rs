@@ -673,7 +673,7 @@ const BLOCKING_VARS: [BlockingVar; 14] = [
 fn test_blocking_values() {
     let mut solver = create_test_race_solver(vec![]);
     let runner = &mut solver.runners[0];
-    runner.blocked.speed_limit = Some(10.0);
+    runner.blocked.speed_ratio = Some(0.99);
     runner.blocked.front_time = 3.7;
     runner.blocked.side_time = 5.2;
     runner.surrounded.front = true;

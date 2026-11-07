@@ -940,10 +940,11 @@ impl RaceSolver<Runner> {
     /// every runner are checked, so that the result doesn't depend on which
     /// runner checked first. Then, effects targeting other runners are applied.
     ///
-    /// After that, the **state is updated**: time advances, then each runner moves
-    /// and updates everything derived from her position (phase, corners, straights,
-    /// slopes), her lane and HP, and her active effects. Multi-runner values are
-    /// updated last.
+    /// After that, the **state is updated**: time advances, then each runner (in
+    /// gate order) moves and updates everything derived from her position (phase,
+    /// corners, straights, slopes), her lane and HP, and her active effects. Only
+    /// front blocking reads another runner then: the blocker's speed, already
+    /// updated if her gate is lower. Multi-runner values are updated last.
     ///
     /// Events detected during the update (e.g. entering a straight) are stored
     /// and handled by the next skill check. Update functions never check skills
@@ -975,17 +976,25 @@ impl RaceSolver<Runner> {
 
         self.state.elapsed_time += delta_time;
 
-        for runner in &mut self.runners {
-            if runner.start_delay > self.state.elapsed_time {
+        // Runners move in gate order, so a front blocker with a lower gate limits
+        // speed with her new speed, and one with a higher gate with her old one.
+        let mut index_by_gate = [None; MAX_GATES as usize + 1];
+        for (index, runner) in self.runners.iter().enumerate() {
+            index_by_gate[runner.gate_roll as usize] = Some(index);
+        }
+        for index in index_by_gate.into_iter().flatten() {
+            if self.runners[index].start_delay > self.state.elapsed_time {
                 continue;
             }
+            let speed_limit = self.front_blocking_limit(index, &index_by_gate);
+            let runner = &mut self.runners[index];
             runner.update_rush_state(&mut self.state);
             runner.update_target_speed(&self.state);
             runner.update_acceleration(self.state.elapsed_time);
             // The start dash may end during the speed update, but that frame
             // still counts as part of it for HP consumption.
             let start_dash = runner.is_start_dash;
-            runner.update_speed(delta_time, self.state.course.base_speed());
+            runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
                 self.state.finish_time = Some(self.state.elapsed_time);
@@ -1018,6 +1027,16 @@ impl RaceSolver<Runner> {
         self.update_duels(delta_time);
         self.update_secure_lead();
         self.update_compete_before_spurt();
+    }
+
+    /// Speed limit of the runner at `index` set by front blocking, if any, from
+    /// her blocker's current speed. `index_by_gate` has the index of the runner
+    /// with each gate.
+    fn front_blocking_limit(&self, index: usize, index_by_gate: &[Option<usize>]) -> Option<f64> {
+        let blocked = &self.runners[index].blocked;
+        let ratio = blocked.speed_ratio?;
+        let blocker = index_by_gate[blocked.front_blocker? as usize]?;
+        Some(ratio * self.runners[blocker].speed)
     }
 
     /// Check `is_other_character_activate_advantage_skill` and

@@ -17,9 +17,9 @@ pub(crate) struct SurroundState {
 /// Blocking state information.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct BlockedState {
-    /// Speed limit imposed by front blocking, if any.
-    /// This also determines whether the runner is front-blocked.
-    pub(crate) speed_limit: Option<f64>,
+    /// Share of the closest front blocker's speed the runner is limited to, if
+    /// she's front-blocked.
+    pub(crate) speed_ratio: Option<f64>,
     /// Gate roll of the closest runner blocking from the front, if any.
     pub(crate) front_blocker: Option<u8>,
     /// Whether the runner is currently side-blocked towards the inside.
@@ -90,13 +90,14 @@ impl Runner {
     }
 
     /// Mark this runner as blocked from the front by `ahead`, limiting her speed
-    /// to 98.8% of `ahead`'s speed when touching, up to 100% at 2m.
+    /// to 98.8% of `ahead`'s speed when touching, up to 100% at 2m. The ratio
+    /// is set now, but applies to `ahead`'s speed when this runner moves.
     ///
     /// Runners ahead must be checked from the furthest to the closest, so that
     /// the closest one prevails.
     pub(crate) fn update_front_blocked_by(&mut self, ahead: &Self) {
         let distance = (ahead.position - self.position).abs();
-        self.blocked.speed_limit = Some((0.988 + 0.012 * distance / 2.0) * ahead.speed);
+        self.blocked.speed_ratio = Some(0.988 + 0.012 * distance / 2.0);
         self.blocked.front_blocker = Some(ahead.gate_roll);
     }
 
@@ -143,7 +144,7 @@ impl Runner {
 
     /// Check if this runner is front-blocked.
     pub fn is_front_blocked(&self) -> bool {
-        self.blocked.speed_limit.is_some()
+        self.blocked.speed_ratio.is_some()
     }
 
     /// Check if this runner is surrounded on all sides.
@@ -159,7 +160,7 @@ impl Runner {
         self.nearby.ahead_same_lane_count = 0;
         self.nearby.behind_same_lane_count = 0;
         self.nearby.behind_set1_count = 0;
-        self.blocked.speed_limit = None;
+        self.blocked.speed_ratio = None;
         self.blocked.front_blocker = None;
         self.blocked.side_in = false;
         self.blocked.side_out = false;

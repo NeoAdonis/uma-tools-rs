@@ -165,18 +165,18 @@ fn test_start_dash_caps_speed_at_its_end() {
     // Below the threshold, the start dash goes on, ignoring the minimum speed.
     runner.speed = 15.0;
     runner.acceleration = 24.5;
-    runner.update_speed(DELTA_TIME, base_speed);
+    runner.update_speed(DELTA_TIME, base_speed, None);
     assert!(runner.is_start_dash);
     assert_close!(runner.speed, 15.0 + 24.5 * DELTA_TIME);
 
     // Reaching it ends the start dash without carrying its acceleration over.
-    runner.update_speed(DELTA_TIME, base_speed);
+    runner.update_speed(DELTA_TIME, base_speed, None);
     assert!(!runner.is_start_dash);
     assert_eq!(runner.speed, 17.0);
 
     // Speed is then raised to the minimum speed.
     runner.acceleration = 0.4;
-    runner.update_speed(DELTA_TIME, base_speed);
+    runner.update_speed(DELTA_TIME, base_speed, None);
     assert_close!(runner.speed, 17.4);
 
     // A target speed below the threshold holds speed there, so the start dash
@@ -184,7 +184,7 @@ fn test_start_dash_caps_speed_at_its_end() {
     runner.is_start_dash = true;
     (runner.speed, runner.acceleration) = (16.0, 24.5);
     runner.target_speed = 16.97;
-    runner.update_speed(DELTA_TIME, base_speed);
+    runner.update_speed(DELTA_TIME, base_speed, None);
     assert!(runner.is_start_dash);
     assert_eq!(runner.speed, 16.97);
 }
@@ -423,7 +423,7 @@ fn test_speed_stops_at_target_speed() {
     for (speed, acceleration, target_speed, expected) in cases {
         (runner.speed, runner.acceleration) = (speed, acceleration);
         runner.target_speed = target_speed;
-        runner.update_speed(DELTA_TIME, base_speed);
+        runner.update_speed(DELTA_TIME, base_speed, None);
         assert_close!(runner.speed, expected, "from {speed} at {acceleration}");
     }
 
@@ -433,6 +433,6 @@ fn test_speed_stops_at_target_speed() {
     let runner = &mut solver.runners[0];
     assert_eq!(runner.target_speed, MAX_TARGET_SPEED);
     (runner.speed, runner.acceleration) = (MAX_TARGET_SPEED - 0.01, 1.0);
-    runner.update_speed(DELTA_TIME, base_speed);
+    runner.update_speed(DELTA_TIME, base_speed, None);
     assert_eq!(runner.speed, MAX_TARGET_SPEED);
 }

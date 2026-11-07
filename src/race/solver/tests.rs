@@ -3953,10 +3953,53 @@ fn test_front_blocker_limits_speed() {
     }
 
     solver.update_blocking_status(DELTA_TIME);
-    let behind = &mut solver.runners[2];
-    assert_close!(behind.blocked.speed_limit.unwrap(), 0.994 * 16.0);
-    behind.update_speed(DELTA_TIME, solver.state.course.base_speed());
-    assert_close!(behind.speed, 0.994 * 16.0);
+    let behind = &solver.runners[2];
+    assert_close!(behind.blocked.speed_ratio.unwrap(), 0.994);
+    assert_eq!(
+        behind.blocked.front_blocker,
+        Some(solver.runners[1].gate_roll)
+    );
+}
+
+#[test]
+fn test_front_blocker_speed_is_read_in_gate_order() {
+    // Runners move in gate order, so the runner behind (1m back) is limited by
+    // the blocker's new speed if the blocker's gate is lower, or by her old
+    // speed otherwise.
+    for blocker_moves_first in [true, false] {
+        let mut solver = struggle_solver(
+            &[(Style::Pace, 201.0, 0.2), (Style::Pace, 200.0, 0.2)],
+            GameVersion::LATEST,
+        );
+        let (blocker_gate, behind_gate) = if blocker_moves_first { (1, 2) } else { (2, 1) };
+        for (runner, (gate, speed)) in solver
+            .runners
+            .iter_mut()
+            .zip([(blocker_gate, 16.0), (behind_gate, 20.0)])
+        {
+            runner.gate_roll = gate;
+            runner.speed = speed;
+            runner.is_start_dash = false;
+        }
+        solver.update_blocking_status(DELTA_TIME);
+        solver.step(DELTA_TIME);
+
+        let speed = |gate| {
+            solver
+                .runners
+                .iter()
+                .find(|r| r.gate_roll == gate)
+                .unwrap()
+                .speed
+        };
+        let new_speed = speed(blocker_gate);
+        assert!(
+            (new_speed - 16.0).abs() > 0.01,
+            "the blocker's speed must change"
+        );
+        let blocker_speed = if blocker_moves_first { new_speed } else { 16.0 };
+        assert_close!(speed(behind_gate), 0.994 * blocker_speed);
+    }
 }
 
 #[test]
