@@ -190,7 +190,10 @@ pub struct Configuration {
     pub seed: Option<u64>,
     /// How skill wit checks are resolved before the race.
     pub wit_checks: Roll,
-    /// How runners' rush checks are resolved before the race.
+    /// How runners' rush checks are resolved before the race, except for
+    /// runners whose rushing is pinned (see [`RushPins::rushes`]).
+    ///
+    /// [`RushPins::rushes`]: crate::race::pins::RushPins::rushes
     pub rushing: Roll,
     /// Fan count for runners that don't define their own.
     pub default_fan_count: u32,

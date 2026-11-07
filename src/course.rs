@@ -43,6 +43,10 @@ use serde::{Deserialize, Deserializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
 
+/// Number of equally-sized sections of a course's nominal distance, after the
+/// run-up.
+pub(crate) const SECTION_COUNT: u8 = 24;
+
 /// Represents the phase of a race based on the position on the course.
 ///
 /// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
@@ -412,7 +416,7 @@ impl Course {
     ///
     /// There are 24 equally-sized sections in the nominal distance.
     pub fn section_length(&self) -> f64 {
-        self.distance as f64 / 24.0
+        self.distance as f64 / SECTION_COUNT as f64
     }
 
     /// Get the start position in meters of section `section` (0-24, the latter
@@ -420,7 +424,10 @@ impl Course {
     ///
     /// See [`Course::section_from_position`] for an example.
     pub fn section_start(&self, section: u8) -> f64 {
-        debug_assert!(section <= 24, "section {section} is past the goal");
+        debug_assert!(
+            section <= SECTION_COUNT,
+            "section {section} is past the goal"
+        );
         self.run_up + self.section_length() * section as f64
     }
 

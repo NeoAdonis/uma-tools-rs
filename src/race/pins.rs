@@ -5,11 +5,14 @@
 //! never changes another one rolled from the same seed. A pin takes precedence
 //! over any [`Configuration`] setting for the same outcome.
 //!
-//! Pinned values are only rejected when they would break the simulation.
-//! Values the mechanics would never roll are kept, so that pins can express
-//! what happened in a real race even where the simulator disagrees.
+//! Pinned values are only rejected when they would break the simulation or
+//! never take effect. Values the mechanics would never roll are kept, so that
+//! pins can express what happened in a real race even where the simulator
+//! disagrees.
 //!
 //! [`Configuration`]: crate::Configuration
+use crate::course::SECTION_COUNT;
+use crate::uma::Style;
 
 /// Random outcomes of a runner fixed instead of rolled (see the
 /// [module docs](self)). Unset ones are rolled as usual.
@@ -32,15 +35,41 @@ pub struct Pins {
     /// Start delay in seconds, as the runner leaves the gate: it replaces the
     /// rolled delay after out-of-gate skills change it.
     pub start_delay: Option<f64>,
+    /// Rushing outcomes.
+    pub rush: RushPins,
+}
+
+/// Rushing outcomes of a runner fixed instead of rolled (see
+/// [`crate::race::rush`]). Apart from whether she rushes, they only apply if
+/// she does.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RushPins {
+    /// Whether she rushes at some point, whatever her chance of rushing.
+    pub rushes: Option<bool>,
+    /// Style she positions as while rushed.
+    pub style: Option<Style>,
+    /// Section (0-indexed) upon whose entry she starts rushing, from 1 to 23:
+    /// runners start in section 0 rather than entering it.
+    pub section: Option<u8>,
+    /// Snap-out checks she fails before snapping out of the rush. Reaching its
+    /// maximum duration still ends it.
+    pub failed_checks: Option<u8>,
 }
 
 impl Pins {
-    /// Panic if a pinned value would break the simulation.
+    /// Panic if a pinned value would break the simulation or never take effect.
     pub(crate) fn validate(&self) {
         if let Some(delay) = self.start_delay {
             assert!(
                 delay.is_finite() && delay >= 0.0,
                 "Invalid start delay {delay}: expected a finite, non-negative number"
+            );
+        }
+        if let Some(section) = self.rush.section {
+            let last = SECTION_COUNT - 1;
+            assert!(
+                (1..=last).contains(&section),
+                "Invalid rush section {section}: expected 1 to {last}"
             );
         }
     }

@@ -472,11 +472,17 @@ impl UnreadyRunner {
         // Set starting speed (done in the constructor).
         // Determine whether and how the runner will rush.
         let rush_chance = rush::chance(self.base.wit, self.rush_chance_modifier);
+        let rush_pins = self.pins.rush;
         let can_rush = state
             .config
             .rushing
             .resolve(&mut rng.rush, rush_chance / 100.0);
-        let rush_state = can_rush.then(|| RushState::roll(self.style, &mut rng.rush));
+        // Rolled even if she doesn't rush, so that pinning whether she does
+        // doesn't change the stream.
+        let mut rush_state = RushState::roll(self.style, &mut rng.rush);
+        rush_state.style = rush_pins.style.unwrap_or(rush_state.style);
+        rush_state.section = rush_pins.section.unwrap_or(rush_state.section);
+        let rush_state = rush_pins.rushes.unwrap_or(can_rush).then_some(rush_state);
 
         // Calculate section modifier for base speed adjustment.
         let section_speed_modifier = roll_section_speed_modifier(
@@ -569,6 +575,7 @@ impl UnreadyRunner {
                 game_version,
             ),
             rng,
+            pins: self.pins,
             segments: SegmentState::default(),
             last_move: LastMove::default(),
             trigger_scheduler: self.trigger_scheduler,

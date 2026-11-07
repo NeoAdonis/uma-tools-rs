@@ -76,7 +76,7 @@ fn test_start_and_end() {
 fn test_should_end_waits_for_check() {
     let mut rush_state = rushed();
     let end_time = rush_state.end_time;
-    assert!(!rush_state.should_end(end_time - 0.1, &mut rng(0)));
+    assert!(!rush_state.should_end(end_time - 0.1, &mut rng(0), None));
     assert_eq!(rush_state.end_time, end_time);
 }
 
@@ -86,7 +86,7 @@ fn test_should_end_extends_on_failed_check() {
     for seed in 0..100 {
         let mut rush_state = rushed();
         let check_time = rush_state.end_time;
-        if rush_state.should_end(check_time, &mut rng(seed)) {
+        if rush_state.should_end(check_time, &mut rng(seed), None) {
             snapped += 1;
         } else {
             extended += 1;
@@ -100,12 +100,32 @@ fn test_should_end_extends_on_failed_check() {
 }
 
 #[test]
+fn test_pinned_failed_checks_ignore_rolls() {
+    for seed in 0..10 {
+        for failed_checks in 0..3 {
+            let mut rush_state = rushed();
+            let mut rng = rng(seed);
+            let mut check_time = rush_state.end_time;
+            while !rush_state.should_end(check_time, &mut rng, Some(failed_checks)) {
+                check_time = rush_state.end_time;
+            }
+            assert_eq!(rush_state.failed_checks, failed_checks, "seed {seed}");
+            let expected = 5.0 + CHECK_INTERVAL * (failed_checks + 1) as f64;
+            assert_eq!(check_time, expected, "seed {seed}");
+        }
+    }
+    // The maximum duration still ends it.
+    let mut rush_state = rushed();
+    assert!(rush_state.should_end(5.0 + MAX_DURATION, &mut rng(0), Some(10)));
+}
+
+#[test]
 fn test_should_end_after_max_duration() {
     let mut rush_state = rushed();
     rush_state.max_duration += 2.0;
     let max_end = rush_state.start_time + rush_state.max_duration;
     // Before the next check, so only the maximum duration can end it.
     rush_state.end_time = f64::MAX;
-    assert!(!rush_state.should_end(max_end - 0.1, &mut rng(0)));
-    assert!(rush_state.should_end(max_end, &mut rng(0)));
+    assert!(!rush_state.should_end(max_end - 0.1, &mut rng(0), None));
+    assert!(rush_state.should_end(max_end, &mut rng(0), None));
 }

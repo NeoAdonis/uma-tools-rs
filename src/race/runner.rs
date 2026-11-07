@@ -84,6 +84,7 @@ use crate::race::duel::Duel;
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
+use crate::race::pins::Pins;
 use crate::race::popularity::JudgeScores;
 use crate::race::rng::{RunnerRng, Stream};
 use crate::race::rush::{self, RushState};
@@ -431,6 +432,8 @@ pub struct Runner {
     pub charge_up: Option<ChargeUp>,
     /// Random number streams of the runner (see [`crate::race::rng`]).
     pub(crate) rng: RunnerRng,
+    /// Random outcomes fixed instead of rolled.
+    pub(crate) pins: Pins,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
     /// Last move, which slows down the next one if it covered more world
@@ -919,7 +922,11 @@ impl Runner {
     pub(crate) fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
-            && rush_state.should_end(state.elapsed_time, &mut self.rng.rush)
+            && rush_state.should_end(
+                state.elapsed_time,
+                &mut self.rng.rush,
+                self.pins.rush.failed_checks,
+            )
         {
             self.end_rush(state);
         }

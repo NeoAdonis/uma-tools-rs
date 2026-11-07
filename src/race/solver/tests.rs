@@ -2,7 +2,8 @@ use super::*;
 use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
-use crate::race::rush::RushState;
+use crate::race::pins::RushPins;
+use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::test_utils::*;
@@ -1999,6 +2000,7 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
         end_time: 4.0,
         max_duration: 12.0,
         is_rushed: true,
+        failed_checks: 0,
         style: Style::Pace,
     });
 }
@@ -4201,18 +4203,19 @@ fn test_mood_assignments() {
     assert!(random_unset.len() > 1, "unset moods should be random");
 }
 
-/// Three runners ready to race, the first one with a skill that multiplies her
-/// start delay and the given `pins`.
+/// Three runners ready to race, all bound to rush. The first one is an end
+/// closer with a skill that multiplies her start delay and the given `pins`.
 fn ready_with_pins(pins: Pins, seed: u64) -> RaceSolver<Runner> {
     let config = Configuration {
         wit_checks: Roll::Always,
+        rushing: Roll::Always,
         ..seeded_config(seed)
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     let skill = skill(1, "always==1", SkillType::MultiplyStartDelay, 0.4);
     solver.add_runner(Entrant {
         pins,
-        ..Entrant::new(uma(Style::Pace), vec![skill])
+        ..Entrant::new(uma(Style::End), vec![skill])
     });
     for _ in 0..2 {
         solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
@@ -4220,48 +4223,158 @@ fn ready_with_pins(pins: Pins, seed: u64) -> RaceSolver<Runner> {
     solver.ready_runners()
 }
 
-#[test]
-fn test_pinned_start_delay_replaces_skill_effects_only() {
-    for seed in 0..10 {
-        let unpinned = ready_with_pins(Pins::default(), seed);
-        let pins = Pins {
-            start_delay: Some(0.25),
-        };
-        let mut pinned = ready_with_pins(pins, seed);
-        // The skill applies when unpinned (at most 40% of 0.1 s).
-        let unpinned_delay = unpinned.runner(RunnerId(0)).start_delay;
-        assert!(unpinned_delay <= 0.04, "seed {seed}");
+/// Mutable runner with ID `id`.
+fn runner_mut(solver: &mut RaceSolver<Runner>, id: RunnerId) -> &mut Runner {
+    let gate = solver.gates_by_id[id.0 as usize];
+    let runner = solver.runners.iter_mut().find(|r| r.gate_roll == gate);
+    runner.expect("every ID has a runner")
+}
 
-        let gate = pinned.gates_by_id[0];
-        let runner = pinned.runners.iter_mut().find(|r| r.gate_roll == gate);
-        let runner = runner.expect("every ID has a runner");
-        assert_eq!(runner.start_delay, 0.25, "seed {seed}");
-        // Every other outcome, hers included, is the same.
-        runner.start_delay = unpinned_delay;
-        assert_eq!(pinned.runners, unpinned.runners, "seed {seed}");
+/// Rush state of a runner bound to rush.
+fn rush_of(runner: &Runner) -> &RushState {
+    runner.rush_state.as_ref().expect("she's bound to rush")
+}
+
+#[test]
+fn test_pins_change_only_their_outcome() {
+    // (pins, check of the pinned runner, restore of the pinned outcome from the
+    // unpinned runner).
+    type Check = fn(&Runner) -> bool;
+    type Restore = fn(&mut Runner, &Runner);
+    let rush_pins = |rush| Pins {
+        rush,
+        ..Pins::default()
+    };
+    let cases: [(Pins, Check, Restore); 4] = [
+        (
+            Pins {
+                start_delay: Some(0.25),
+                ..Pins::default()
+            },
+            |r| r.start_delay == 0.25,
+            |r, unpinned| r.start_delay = unpinned.start_delay,
+        ),
+        // Whatever `Roll::Always` says.
+        (
+            rush_pins(RushPins {
+                rushes: Some(false),
+                ..RushPins::default()
+            }),
+            |r| r.rush_state.is_none(),
+            |r, unpinned| r.rush_state = unpinned.rush_state.clone(),
+        ),
+        // A style end closers never roll.
+        (
+            rush_pins(RushPins {
+                style: Some(Style::End),
+                ..RushPins::default()
+            }),
+            |r| rush_of(r).style == Style::End,
+            |r, unpinned| r.rush_state.as_mut().unwrap().style = rush_of(unpinned).style,
+        ),
+        // A section outside the rolled ones.
+        (
+            rush_pins(RushPins {
+                section: Some(12),
+                ..RushPins::default()
+            }),
+            |r| rush_of(r).section == 12,
+            |r, unpinned| r.rush_state.as_mut().unwrap().section = rush_of(unpinned).section,
+        ),
+    ];
+    let id = RunnerId(0);
+    for (pins, check, restore) in cases {
+        for seed in 0..10 {
+            let unpinned = ready_with_pins(Pins::default(), seed);
+            // The skill applies when unpinned (at most 40% of 0.1 s).
+            assert!(unpinned.runner(id).start_delay <= 0.04, "seed {seed}");
+
+            let mut pinned = ready_with_pins(pins.clone(), seed);
+            let runner = runner_mut(&mut pinned, id);
+            assert!(check(runner), "{pins:?}, seed {seed}");
+            // Every other outcome, hers included, is the same.
+            restore(runner, unpinned.runner(id));
+            runner.pins = Pins::default();
+            assert_eq!(pinned.runners, unpinned.runners, "{pins:?}, seed {seed}");
+        }
+    }
+}
+
+#[test]
+fn test_pinned_failed_checks_set_rush_duration() {
+    for (failed_checks, seed) in [(0, 0), (1, 1), (2, 2), (2, 3)] {
+        let pins = Pins {
+            rush: RushPins {
+                rushes: Some(true),
+                section: Some(1),
+                failed_checks: Some(failed_checks),
+                ..RushPins::default()
+            },
+            ..Pins::default()
+        };
+        let mut solver = ready_with_pins(pins, seed);
+        let id = RunnerId(0);
+        while !solver.runner(id).has_rushed() || solver.runner(id).is_rushed() {
+            assert!(!solver.step_frame(), "the race ended first");
+        }
+        // Each check happens on the first frame after it's due.
+        let rush_state = rush_of(solver.runner(id));
+        let duration = rush_state.end_time - rush_state.start_time;
+        let checks = (failed_checks + 1) as f64;
+        let expected = rush::CHECK_INTERVAL * checks;
+        assert!(
+            (expected..expected + checks * DELTA_TIME).contains(&duration),
+            "{failed_checks} failed checks, seed {seed}: {duration} s"
+        );
     }
 }
 
 #[test]
 #[should_panic(expected = "Invalid start delay -0.01")]
 fn test_negative_start_delay_pin_panics() {
-    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(Entrant {
-        pins: Pins {
-            start_delay: Some(-0.01),
-        },
-        ..Entrant::new(uma(Style::Pace), vec![])
+    add_with_pins(Pins {
+        start_delay: Some(-0.01),
+        ..Pins::default()
     });
 }
 
 #[test]
 #[should_panic(expected = "Invalid start delay NaN")]
 fn test_nan_start_delay_pin_panics() {
+    add_with_pins(Pins {
+        start_delay: Some(f64::NAN),
+        ..Pins::default()
+    });
+}
+
+#[test]
+#[should_panic(expected = "Invalid rush section 0: expected 1 to 23")]
+fn test_first_rush_section_pin_panics() {
+    add_with_pins(rush_section_pins(0));
+}
+
+#[test]
+#[should_panic(expected = "Invalid rush section 24: expected 1 to 23")]
+fn test_rush_section_pin_past_the_goal_panics() {
+    add_with_pins(rush_section_pins(24));
+}
+
+/// Pins of the rush section only.
+fn rush_section_pins(section: u8) -> Pins {
+    Pins {
+        rush: RushPins {
+            section: Some(section),
+            ..RushPins::default()
+        },
+        ..Pins::default()
+    }
+}
+
+/// Add a runner with `pins` to a race.
+fn add_with_pins(pins: Pins) {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     solver.add_runner(Entrant {
-        pins: Pins {
-            start_delay: Some(f64::NAN),
-        },
+        pins,
         ..Entrant::new(uma(Style::Pace), vec![])
     });
 }

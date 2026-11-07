@@ -37,6 +37,8 @@ pub struct RushState {
     pub max_duration: f64,
     /// Whether the runner is currently rushed.
     pub is_rushed: bool,
+    /// Snap out checks failed so far.
+    pub failed_checks: u8,
     /// Style used for positioning while rushed.
     pub style: Style,
 }
@@ -52,6 +54,7 @@ impl RushState {
             end_time: f64::MAX,
             max_duration: MAX_DURATION,
             is_rushed: false,
+            failed_checks: 0,
             style,
         }
     }
@@ -77,16 +80,26 @@ impl RushState {
     /// Check if the rush should end at `elapsed_time`, either because it reached
     /// its maximum duration or because the runner snapped out of it. A failed snap
     /// out check extends the rush until the next one.
-    pub(crate) fn should_end(&mut self, elapsed_time: f64, rng: &mut impl Rng) -> bool {
+    ///
+    /// If `pinned_failed_checks` is set, the checks fail until that many did,
+    /// whatever their roll.
+    pub(crate) fn should_end(
+        &mut self,
+        elapsed_time: f64,
+        rng: &mut impl Rng,
+        pinned_failed_checks: Option<u8>,
+    ) -> bool {
         if elapsed_time >= self.start_time + self.max_duration {
             return true;
         }
         if elapsed_time < self.end_time {
             return false;
         }
-        if rng.random_bool(SNAP_OUT_CHANCE) {
+        let snaps_out = rng.random_bool(SNAP_OUT_CHANCE);
+        if pinned_failed_checks.map_or(snaps_out, |failed| self.failed_checks >= failed) {
             return true;
         }
+        self.failed_checks += 1;
         self.end_time = elapsed_time + CHECK_INTERVAL;
         false
     }
