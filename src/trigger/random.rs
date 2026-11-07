@@ -117,6 +117,25 @@ impl<'a> RandomRolls<'a> {
     }
 }
 
+/// Areas of the random variables of every OR branch of a condition, without
+/// rolling them: every segment they could roll, and so where the branch could
+/// be true whatever the rolls. Random lots always hit.
+///
+/// Returns one entry per branch (in the order of [`Condition::branches`]),
+/// holding the intervals `(start, end)` of its random variables, or `None` if
+/// one of them has an empty area (e.g. `corner_random==4` without a 4th
+/// corner).
+pub(crate) fn random_areas(condition: &Condition, course: &Course) -> Vec<Option<Vec<(f64, f64)>>> {
+    let branch_areas = |comps: &ComparisonList| {
+        let mut intervals = Vec::new();
+        for comp in comps {
+            intervals.extend(random_area(comp, course)?.intervals());
+        }
+        Some(intervals)
+    };
+    condition.branches.iter().map(branch_areas).collect()
+}
+
 /// Process a single comparison that might contain a random variable.
 ///
 /// Returns `Some(points)` with the points where the skill should be checked
@@ -165,6 +184,19 @@ enum Area {
     OneOf(Vec<(f64, f64)>),
     /// Up to 4 segments on the corners (see [`random_all_corner_segments`]).
     AllCorners(Vec<(f64, f64)>),
+}
+
+impl Area {
+    /// Intervals the segments can be in, empty if there's no constraint.
+    fn intervals(self) -> Vec<(f64, f64)> {
+        match self {
+            Self::Anywhere => vec![],
+            Self::Interval(start, end) => vec![(start, end)],
+            Self::Stitched(intervals) | Self::OneOf(intervals) | Self::AllCorners(intervals) => {
+                intervals
+            }
+        }
+    }
 }
 
 /// Area of a comparison that might contain a random variable, or `None` if

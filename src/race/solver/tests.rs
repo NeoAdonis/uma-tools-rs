@@ -4617,6 +4617,144 @@ fn test_pinned_out_of_gate_activation_twice_panics() {
     add_with_activations(skill, vec![pinned_at(0.0), pinned_at(0.0)]);
 }
 
+/// Run a race alone with `skill` (ID 1), pinned to activate at `times`, and
+/// return whether each pinned activation met its conditions, and the times of
+/// the activations they allowed but weren't pinned.
+fn condition_report(skill: Arc<Skill>, times: &[f64]) -> (Vec<bool>, Vec<f64>) {
+    let pins = activation_pins(1, times.iter().map(|&time| pinned_at(time)).collect());
+    let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+    solver.run();
+    let runner = &solver.runners[0];
+    let met = runner.activated_skills.iter().map(|r| r.conditions_met);
+    let missing = runner.missing_activations.iter().map(|r| r.time);
+    (met.collect(), missing.collect())
+}
+
+#[test]
+fn test_pinned_skills_report_what_their_conditions_allow() {
+    let window = || skill(1, "accumulatetime>=10", SkillType::TargetSpeed, 0.1);
+    // The first frame the skill's conditions allow.
+    let (_, missing) = condition_report(window(), &[]);
+    let [open] = missing[..] else {
+        panic!("expected a single activation: {missing:?}");
+    };
+    assert!((10.0..10.0 + DELTA_TIME).contains(&open), "{open}");
+
+    // Mid race, from 200 to 800m, is reached in the first 20 seconds and
+    // lasts more than 25 seconds.
+    let random = || skill(1, "phase_random==1", SkillType::TargetSpeed, 0.1);
+    // (skill, pinned times, whether each met its conditions, missing times).
+    let cases = [
+        // A wit check can explain a missing activation, unless she has one.
+        (with_wit_check(window()), vec![], vec![], vec![]),
+        (window(), vec![open + DELTA_TIME / 2.0], vec![true], vec![]),
+        (window(), vec![open - 2.0], vec![false], vec![open]),
+        // Unconfirmed, the activation she would have had starts the cooldown.
+        (
+            with_wit_check(window()),
+            vec![open + 1.0],
+            vec![false],
+            vec![open],
+        ),
+        // Random variables can be anywhere in their area, and explain a missing
+        // activation.
+        (random(), vec![25.0], vec![true], vec![]),
+        (random(), vec![3.0], vec![false], vec![]),
+        (random(), vec![], vec![], vec![]),
+    ];
+    for (skill, times, met, missing) in cases {
+        let case = (skill.wit_check, &skill.alternatives[0].condition, &times);
+        assert_eq!(
+            condition_report(skill.clone(), &times),
+            (met, missing),
+            "{case:?}"
+        );
+    }
+}
+
+#[test]
+fn test_unpinned_skills_meet_their_conditions() {
+    let skill = skill(1, "accumulatetime>=10", SkillType::TargetSpeed, 0.1);
+    let mut solver = ready_alone(Style::Pace, vec![skill], Pins::default());
+    solver.run();
+    let runner = &solver.runners[0];
+    let [record] = &runner.activated_skills[..] else {
+        panic!(
+            "expected a single activation: {:?}",
+            runner.activated_skills
+        );
+    };
+    assert_eq!((record.skill_id, record.alternative), (1, 0));
+    assert!(
+        (10.0..10.0 + DELTA_TIME).contains(&record.time),
+        "{record:?}"
+    );
+    assert!(record.conditions_met);
+    assert!(runner.missing_activations.is_empty());
+}
+
+#[test]
+fn test_out_of_gate_activations_are_recorded_at_the_start() {
+    // She moves on the second frame, which activates the skill.
+    let delay = 1.5 * DELTA_TIME;
+    let pins = Pins {
+        start_delay: Some(delay),
+        ..Pins::default()
+    };
+    let skill = out_of_gate_skill(1, 1.0, &[(SkillType::SpeedUp, 40.0)]);
+    let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+    while solver.state.elapsed_time < delay {
+        solver.step_frame();
+    }
+    let record = &solver.runners[0].activated_skills[0];
+    assert_eq!((record.time, record.distance), (0.0, 0.0));
+}
+
+#[test]
+fn test_pinned_out_of_gate_skills_report_what_their_conditions_allow() {
+    let skill = |condition| skill(1, condition, SkillType::MultiplyStartDelay, 0.4);
+    // End closers aren't front runners (`running_style==1`). (skill, pinned
+    // activations, whether it met its conditions, whether it would have
+    // activated).
+    let cases = [
+        (
+            skill("running_style==1"),
+            vec![pinned_at(0.0)],
+            Some(false),
+            false,
+        ),
+        (skill("always==1"), vec![pinned_at(0.0)], Some(true), false),
+        (skill("always==1"), vec![], None, true),
+        // Random lots always hit, and like wit checks, can explain a missing
+        // activation.
+        (
+            skill("random_lot==1"),
+            vec![pinned_at(0.0)],
+            Some(true),
+            false,
+        ),
+        (skill("random_lot==100"), vec![], None, false),
+        (with_wit_check(skill("always==1")), vec![], None, false),
+    ];
+    for (skill, activations, met, missing) in cases {
+        let case = (
+            skill.wit_check,
+            &skill.alternatives[0].condition,
+            &activations,
+        );
+        let pins = activation_pins(1, activations.clone());
+        let mut solver = ready_alone(Style::End, vec![skill.clone()], pins);
+        solver.run();
+        let runner = &solver.runners[0];
+        let record = runner.activated_skills.first();
+        assert_eq!(record.map(|r| r.conditions_met), met, "{case:?}");
+        let expected = missing.then_some((1, 0, 0.0, 0.0));
+        let record = runner.missing_activations.first();
+        let record = record.map(|r| (r.skill_id, r.alternative, r.time, r.distance));
+        assert_eq!(record, expected, "{case:?}");
+    }
+}
+
 /// Pinned activation of `alternative` at `time`, with the usual targets.
 fn pinned_alternative_at(time: f64, alternative: usize) -> PinnedActivation {
     PinnedActivation {

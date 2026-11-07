@@ -131,7 +131,10 @@ impl TriggerScheduler {
         self.remove_triggers_if(|logic_idx| {
             let logic = &logics[logic_idx];
             logic.skill_index == skill_index
-                && logic.action == LogicAction::Activate
+                && matches!(
+                    logic.action,
+                    LogicAction::Activate | LogicAction::Check { .. }
+                )
                 && (logic.alternative_index == alternative_index || !logic.is_continuation)
         });
         self.skill_logics = logics;

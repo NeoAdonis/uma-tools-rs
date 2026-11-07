@@ -25,10 +25,11 @@
 //!
 //! 1. **Event trigger**, if the branch contains an event (at most one per
 //!    branch: skills with more are rejected when loaded):
-//!    - A random variable: its rolled segments
-//!      ([`TriggerCondition::Segments`]), trimmed to the position range of the
-//!      rest of the branch (see [`random`](crate::trigger::random)), or the
-//!      all-out spurt start ([`TriggerCondition::AllOutSpurtStart`]) for
+//!    - A random variable: its rolled segments, or its whole area for skills
+//!      whose activations are pinned ([`TriggerCondition::Segments`]), trimmed
+//!      to the position range of the rest of the branch (see
+//!      [`random`](crate::trigger::random)), or the all-out spurt start
+//!      ([`TriggerCondition::AllOutSpurtStart`]) for
 //!      `run_at_full_speed_random`. `random_lot` is only a roll: it adds no
 //!      trigger.
 //!    - `is_last_straight_onetime==1`: entering the last straight.
@@ -113,7 +114,6 @@ use crate::course::geometry::Segment;
 use crate::course::*;
 use crate::race::solver::RunnerId;
 use crate::skill::{AdditionalActivation, SkillEffect};
-use crate::trigger::random::SEGMENT_LENGTH;
 use crate::units::furlongs_to_meters;
 
 /// Complete activation logic for a skill.
@@ -158,6 +158,19 @@ pub(crate) enum LogicAction {
     Activate,
     /// Mark the given precondition as satisfied.
     Unlock(usize),
+    /// Check the conditions of a skill whose activations are pinned, without
+    /// activating it (see [`SkillActivationRecord::conditions_met`]).
+    ///
+    /// `reports_missing` tells whether a missing activation (the skill's
+    /// conditions holding with no pinned activation) is recorded (see
+    /// [`Runner::missing_activations`]): only if a roll couldn't have
+    /// prevented it, i.e. a failed wit check is ruled out (the skill has a
+    /// pinned activation, or no wit check) and the branch has no random
+    /// variable.
+    ///
+    /// [`Runner::missing_activations`]:
+    ///     crate::race::runner::Runner::missing_activations
+    Check { reports_missing: bool },
 }
 
 /// Variables that window triggers can be based on.
@@ -302,8 +315,32 @@ pub(crate) struct QueuedActivation {
 pub struct SkillActivationRecord {
     /// Skill ID of the activated skill from the global skill list.
     pub skill_id: i32,
+    /// Index of the alternative that activated.
+    pub alternative: usize,
+    /// Time since the race started when the skill was activated, at the start
+    /// of the frame (in seconds). Out-of-gate alternatives activate at 0, even
+    /// though their effects during the race apply on the first frame she
+    /// moves.
+    pub time: f64,
     /// Distance when the skill was activated (in meters from start).
     pub distance: f64,
+    /// Whether the skill's conditions allowed the activation, always true
+    /// unless its activations are pinned (see [`SkillPin::Activations`]).
+    /// Skills activated by another one (e.g.
+    /// [`SkillType::ActivateRandomGold`]) skip their conditions, which still
+    /// counts as allowed.
+    ///
+    /// A pinned activation is allowed if the skill's conditions held for its
+    /// alternative on its frame, ignoring the rolls: the wit check, random
+    /// lots, and the segment of random variables, which can be anywhere in
+    /// their area (e.g. the whole phase for `phase_random`). Cooldowns still
+    /// apply, started by the activations the conditions allowed or would have
+    /// had.
+    ///
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+    /// [`SkillType::ActivateRandomGold`]:
+    ///     crate::skill::SkillType::ActivateRandomGold
+    pub conditions_met: bool,
 }
 
 /// One OR branch of a compiled condition.
@@ -313,15 +350,18 @@ pub(crate) struct CompiledBranch {
     pub(crate) trigger: TriggerCondition,
     /// Comparisons that must all be true when checked.
     pub(crate) guards: ComparisonList,
+    /// Whether the branch has a random variable (random lots included).
+    pub(crate) random: bool,
 }
 
 /// Compile a condition into one [`CompiledBranch`] per OR branch.
 ///
-/// `rolls` holds the segment starts rolled for the random variables of each
-/// branch, or `None` if its roll failed (see
-/// [`RandomRolls::roll`](crate::trigger::random::RandomRolls::roll)). Branches
-/// without an entry (e.g. preconditions, which aren't rolled) have no random
-/// points.
+/// `segments` holds the intervals `(start, end)` the random variables of each
+/// branch can be checked in: the segments they rolled (see
+/// [`RandomRolls::roll`](crate::trigger::random::RandomRolls::roll)), or
+/// their whole areas (see [`random_areas`]). `None` means a failed roll or an
+/// empty area. Branches without an entry (e.g. preconditions, which aren't
+/// rolled) have no random segments.
 ///
 /// Branches that can never be true on this course (e.g. `slope==2` without
 /// downhills, or a failed roll) are dropped, so the result is empty if the
@@ -336,9 +376,11 @@ pub(crate) struct CompiledBranch {
 /// - Branch 1: trigger `Segments` (rolled segment), guards `[hp_per>=20]`.
 /// - Branch 2: trigger `Window` (corner 2), guards
 ///   `[corner==2, ground_type==1]`.
+///
+/// [`random_areas`]: crate::trigger::random::random_areas
 pub(crate) fn compile_condition(
     condition: &Condition,
-    rolls: &[Option<Vec<f64>>],
+    segments: &[Option<Vec<Range>>],
     course: &Course,
 ) -> Vec<CompiledBranch> {
     condition
@@ -346,9 +388,9 @@ pub(crate) fn compile_condition(
         .iter()
         .enumerate()
         .filter_map(|(idx, comps)| {
-            let points = match rolls.get(idx) {
-                // Failed roll: never satisfied.
-                Some(roll) => roll.as_deref()?,
+            let segments = match segments.get(idx) {
+                // Failed roll or empty area: never satisfied.
+                Some(segments) => segments.as_deref()?,
                 // Not rolled: random variables would be ignored. Skills with
                 // them in their preconditions are rejected when loaded.
                 None => {
@@ -359,17 +401,21 @@ pub(crate) fn compile_condition(
                     &[]
                 }
             };
-            compile_branch(comps, points, course)
+            compile_branch(comps, segments, course)
         })
         .collect()
 }
 
-/// Compile an AND chain, with the segment starts (`points`) rolled for its
-/// random variables. Returns `None` if it can never be true on this course.
-fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Option<CompiledBranch> {
+/// Compile an AND chain, with the `segments` its random variables can be
+/// checked in. Returns `None` if it can never be true on this course.
+fn compile_branch(
+    comps: &[Comparison],
+    segments: &[Range],
+    course: &Course,
+) -> Option<CompiledBranch> {
     use VarType::*;
 
-    // The rolled points of a branch don't tell which comparison they come from,
+    // The segments of a branch don't tell which comparison they come from,
     // so they can only belong to its single event. Skills with more events in a
     // branch are rejected when loaded.
     debug_assert!(
@@ -389,13 +435,13 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
             // If we're here, the roll succeeded.
             Random(_) => {}
 
-            // Random segments: checked while inside the rolled segments.
+            // Random segments: checked while inside the given segments.
             RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
                 event = Some(TriggerCondition::AllOutSpurtStart);
             }
             RandomSpatial(_) | RandomPhase(_) => {
                 // Filled once the position range of the branch is known. If there are no
-                // points, there are no segments, so the branch is dropped below.
+                // segments, the branch is dropped below.
                 event = Some(TriggerCondition::Segments { ranges: Vec::new() });
             }
 
@@ -431,9 +477,9 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
     // Segments trimmed to exclude always-false intervals.
     if let Some(TriggerCondition::Segments { ranges }) = &mut event {
         ranges.extend(
-            points
+            segments
                 .iter()
-                .map(|&start| intersect((start, start + SEGMENT_LENGTH), position))
+                .map(|&segment| intersect(segment, position))
                 .filter(|&range| !is_empty(range)),
         );
         if ranges.is_empty() {
@@ -458,7 +504,12 @@ fn compile_branch(comps: &[Comparison], points: &[f64], course: &Course) -> Opti
         }
     });
 
-    Some(CompiledBranch { trigger, guards })
+    let random = comps.iter().any(Comparison::is_random);
+    Some(CompiledBranch {
+        trigger,
+        guards,
+        random,
+    })
 }
 
 /// Trigger of an event on skill activations (see [`Comparison::is_event`]).

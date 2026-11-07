@@ -321,6 +321,31 @@ pub struct Runner {
     pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
+    /// Activations missing from the pins: where the conditions of a skill whose
+    /// activations are pinned (see [`SkillPin::Activations`]) say it should
+    /// have activated, but no activation is pinned on that frame. Out-of-gate
+    /// ones are at 0 seconds and meters.
+    ///
+    /// Only those activations a roll couldn't have prevented are recorded: a
+    /// failed wit check is ruled out (the skill has a pinned activation, or no
+    /// wit check), and the condition (the OR branch, or the whole alternative
+    /// out of gate) has no random variable. Their checks then wait for the
+    /// cooldown, as if they activated (see
+    /// [`SkillActivationRecord::conditions_met`]).
+    ///
+    /// N.B. A skill activates through a single alternative, but only real
+    /// activations count for that: two alternatives can be recorded here.
+    ///
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+    pub missing_activations: Vec<SkillActivationRecord>,
+    /// Indices in `activated_skills` of this frame's pinned activations, until
+    /// their skills' conditions confirm them.
+    pub(crate) pinned_this_frame: Vec<usize>,
+    /// IDs of the skills whose conditions didn't allow their pinned
+    /// out-of-gate alternative to activate. Emptied on the first frame she
+    /// moves, when those activations are recorded as unmet (see
+    /// [`SkillActivationRecord::conditions_met`]).
+    pub(crate) unmet_out_of_gate: Vec<i32>,
     /// Activated alternatives of each skill in `skills`, as a mask (bit `i` set
     /// when alternative `i` activated).
     pub activated_alternatives: Vec<u8>,

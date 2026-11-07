@@ -46,12 +46,17 @@ fn create_test_course() -> Course {
     }
 }
 
-/// Compile a condition on the test course, with a single random point at
+/// The 10m segments starting at `points`, as rolled.
+fn rolled(points: &[f64]) -> Option<Vec<(f64, f64)>> {
+    Some(points.iter().map(|&start| (start, start + 10.0)).collect())
+}
+
+/// Compile a condition on the test course, with a single random segment at
 /// 1000m for every branch.
 fn compile(condition: &str) -> Vec<CompiledBranch> {
     let condition = Condition::from_str(condition).unwrap();
-    let rolls = vec![Some(vec![1000.0]); condition.branches.len()];
-    compile_condition(&condition, &rolls, &create_test_course())
+    let segments = vec![rolled(&[1000.0]); condition.branches.len()];
+    compile_condition(&condition, &segments, &create_test_course())
 }
 
 /// Compile a single-branch condition.
@@ -455,7 +460,7 @@ fn test_branches_use_their_own_rolls() {
     .unwrap();
     let course = create_test_course();
 
-    let rolls = [Some(vec![100.0, 200.0]), Some(vec![500.0])];
+    let rolls = [rolled(&[100.0, 200.0]), rolled(&[500.0])];
     let triggers: Vec<String> = compile_condition(&condition, &rolls, &course)
         .iter()
         .map(|branch| format!("{:?}", branch.trigger))
@@ -469,7 +474,7 @@ fn test_branches_use_their_own_rolls() {
     );
 
     // Branches whose roll failed are dropped.
-    let rolls = [None, Some(vec![500.0])];
+    let rolls = [None, rolled(&[500.0])];
     let branches = compile_condition(&condition, &rolls, &course);
     assert_eq!(branches.len(), 1);
     assert_eq!(guards(&branches[0]), vec!["distance_type == 2"]);
@@ -483,7 +488,7 @@ fn test_segments_are_trimmed_to_the_branch() {
 
     // Segments outside the corner are dropped, and the ones crossing its edges
     // trimmed.
-    let rolls = [Some(vec![95.0, 495.0, 600.0, 695.0, 900.0])];
+    let rolls = [rolled(&[95.0, 495.0, 600.0, 695.0, 900.0])];
     let branches = compile_condition(&condition, &rolls, &course);
     assert_eq!(branches.len(), 1);
     let TriggerCondition::Segments { ranges } = &branches[0].trigger else {
@@ -492,7 +497,7 @@ fn test_segments_are_trimmed_to_the_branch() {
     assert_eq!(ranges, &[(500.0, 505.0), (600.0, 610.0), (695.0, 700.0)]);
 
     // No segment on the corner: the branch can never be satisfied.
-    let rolls = [Some(vec![95.0, 900.0])];
+    let rolls = [rolled(&[95.0, 900.0])];
     assert!(compile_condition(&condition, &rolls, &course).is_empty());
 }
 

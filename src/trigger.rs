@@ -50,7 +50,8 @@
 //! 1. **Runner setup** ([`UnreadyRunner`]): skills that pass the wit check are
 //!    kept, and the `TriggerScheduler` is built for them. Out-of-gate
 //!    alternatives are skipped: their condition is evaluated before the race
-//!    instead.
+//!    instead. Skills whose activations are pinned only get their conditions
+//!    checked, to report whether they agree with the pins.
 //! 2. **Out-of-gate skills**: before the race, their pre-race effects are
 //!    applied, and they're scheduled to activate on the first frame the runner
 //!    moves.

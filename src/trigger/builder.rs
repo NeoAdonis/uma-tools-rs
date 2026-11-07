@@ -21,6 +21,13 @@
 //! Alternatives whose condition or precondition can never be satisfied on the
 //! course are skipped.
 //!
+//! Skills whose activations are pinned (see [`SkillPin::Activations`]) aren't
+//! rolled: their random variables cover their whole areas (see
+//! [`random_areas`]), and their logics only check the conditions (see
+//! [`LogicAction::Check`]).
+//!
+//! [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+//!
 //! Each skill rolls from its own random stream (see [`Stream::TriggerRolls`]),
 //! so adding or removing a skill doesn't change the rolls of the others.
 //!
@@ -68,7 +75,7 @@ use crate::course::Course;
 use crate::race::pins::Pins;
 use crate::race::rng::{RngSeed, Stream};
 use crate::skill::*;
-use crate::trigger::random::RandomRolls;
+use crate::trigger::random::{RandomRolls, SEGMENT_LENGTH, random_areas};
 use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
 
@@ -90,8 +97,13 @@ impl TriggerScheduler {
     /// course are skipped. So are out-of-gate alternatives: their condition is
     /// evaluated before the race, then they're activated by a race start logic
     /// (see [`Self::add_race_start_logic`]). Other alternatives of
-    /// their skills (e.g. continuations) are compiled as usual. Skills whose
-    /// activations are pinned get no logics at all.
+    /// their skills (e.g. continuations) are compiled as usual.
+    ///
+    /// Skills whose activations are pinned (see [`SkillPin::Activations`])
+    /// aren't rolled, and their logics only check their conditions (see
+    /// [`LogicAction::Check`]).
+    ///
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
     pub(crate) fn from_skills(
         skills: &[Arc<Skill>],
         course: &Course,
@@ -101,9 +113,8 @@ impl TriggerScheduler {
         let mut scheduler = Self::default();
 
         for (skill_idx, skill) in skills.iter().enumerate() {
-            if pins.activations(skill.id).is_some() {
-                continue;
-            }
+            let pinned = pins.activations(skill.id);
+            let failed_wit_check_ruled_out = pins.rules_out_failed_wit_check(skill);
             // Random variables are rolled per skill, so that its alternatives share them.
             let mut rolls = RandomRolls::default();
             let mut rng = rng_seed.rng(Stream::TriggerRolls(skill.id));
@@ -114,8 +125,12 @@ impl TriggerScheduler {
 
                 // One logic per OR branch, except the ones whose random roll failed.
                 let condition = &alternative.condition;
-                let rolled = rolls.roll(condition, course, &mut rng);
-                let branches = compile_condition(condition, &rolled, course);
+                let segments = if pinned.is_some() {
+                    random_areas(condition, course)
+                } else {
+                    rolled_segments(rolls.roll(condition, course, &mut rng))
+                };
+                let branches = compile_condition(condition, &segments, course);
                 if branches.is_empty() {
                     // Condition can't be satisfied, skill never activates.
                     continue;
@@ -141,6 +156,13 @@ impl TriggerScheduler {
                 };
 
                 for branch in branches {
+                    let action = if pinned.is_some() {
+                        LogicAction::Check {
+                            reports_missing: failed_wit_check_ruled_out && !branch.random,
+                        }
+                    } else {
+                        LogicAction::Activate
+                    };
                     add_logic(
                         SkillActivationLogic {
                             skill_index: skill_idx,
@@ -148,7 +170,7 @@ impl TriggerScheduler {
                             trigger: branch.trigger,
                             guards: branch.guards,
                             precondition,
-                            action: LogicAction::Activate,
+                            action,
                             is_continuation,
                         },
                         &mut scheduler,
@@ -184,6 +206,16 @@ impl TriggerScheduler {
             self,
         );
     }
+}
+
+/// The 10m segments starting at the points rolled for each branch (see
+/// [`RandomRolls::roll`]).
+fn rolled_segments(rolled: Vec<Option<Vec<f64>>>) -> Vec<Option<Vec<(f64, f64)>>> {
+    let segment = |start| (start, start + SEGMENT_LENGTH);
+    rolled
+        .into_iter()
+        .map(|points| points.map(|points| points.into_iter().map(segment).collect()))
+        .collect()
 }
 
 /// Add the logics unlocking a precondition, and return the precondition ID.

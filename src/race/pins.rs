@@ -90,6 +90,16 @@ pub enum SkillPin {
     /// never pick a skill whose activations are pinned: its picks are pinned
     /// activations of their own.
     ///
+    /// The skill's conditions are still checked, without activating it, to
+    /// report where they disagree with the pins: pinned activations the
+    /// conditions didn't allow (see [`SkillActivationRecord::conditions_met`]),
+    /// and frames where the conditions say it should have activated but no
+    /// activation is pinned (see [`Runner::missing_activations`]).
+    ///
+    /// [`SkillActivationRecord::conditions_met`]:
+    ///     crate::trigger::SkillActivationRecord::conditions_met
+    /// [`Runner::missing_activations`]:
+    ///     crate::race::runner::Runner::missing_activations
     /// [`SkillType::ActivateRandomGold`]:
     ///     crate::skill::SkillType::ActivateRandomGold
     Activations(Vec<PinnedActivation>),
@@ -118,6 +128,14 @@ impl Pins {
             Some(SkillPin::Activations(activations)) => Some(activations),
             _ => None,
         }
+    }
+
+    /// Whether a failed wit check is ruled out for `skill`: it has at least
+    /// one pinned activation, or it has no wit check to fail.
+    pub(crate) fn rules_out_failed_wit_check(&self, skill: &Skill) -> bool {
+        self.activations(skill.id)
+            .is_some_and(|activations| !activations.is_empty())
+            || !skill.wit_check
     }
 
     /// Panic if a pinned value would break the simulation or never take effect,

@@ -637,3 +637,39 @@ fn test_last_straight_random() {
     let condition = Condition::from_str("last_straight_random==1").unwrap();
     assert!(roll(&condition, &course, &mut rand::rng()).is_none());
 }
+
+#[test]
+fn test_random_areas_cover_every_segment() {
+    // Corners [100-300] and [500-650], straight [0-100], uphill [800-900], mid
+    // race [400-1600].
+    let course = create_test_course();
+    type Areas<'a> = &'a [Option<&'a [(f64, f64)]>];
+    let cases: [(&str, Areas); 7] = [
+        ("phase_random==1", &[Some(&[(400.0, 1600.0)])]),
+        ("phase_corner_random==0", &[Some(&[(100.0, 300.0)])]),
+        (
+            "all_corner_random==1",
+            &[Some(&[(100.0, 300.0), (500.0, 650.0)])],
+        ),
+        ("straight_random==1", &[Some(&[(0.0, 100.0)])]),
+        // Random lots always hit, and other variables have no area.
+        (
+            "random_lot==1&up_slope_random==1",
+            &[Some(&[(800.0, 900.0)])],
+        ),
+        ("distance_type==3", &[Some(&[])]),
+        // Corners 1 and 2 don't exist.
+        (
+            "corner_random==1@corner_random==3",
+            &[None, Some(&[(100.0, 300.0)])],
+        ),
+    ];
+    for (condition, expected) in cases {
+        let areas = random_areas(&Condition::from_str(condition).unwrap(), &course);
+        let expected: Vec<_> = expected
+            .iter()
+            .map(|area| area.map(<[_]>::to_vec))
+            .collect();
+        assert_eq!(areas, expected, "{condition}");
+    }
+}

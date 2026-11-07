@@ -87,11 +87,12 @@ use crate::configuration::GameVersion;
 use crate::course::*;
 use crate::race::modifiers::*;
 use crate::race::skill_scaling;
-use crate::race::solver::{RaceState, RunnerId};
+use crate::race::solver::RaceState;
 use crate::skill::*;
 use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{
-    ActiveTimedEffect, LogicAction, OvertakeExtension, PendingEffect, SkillActivationRecord,
+    ActiveTimedEffect, LogicAction, OvertakeExtension, PendingEffect, QueuedActivation,
+    SkillActivationRecord,
 };
 use crate::trigger::system::{TriggerScheduler, WindowTrigger};
 use crate::units::{CourseWidths, meters_to_bashin};
@@ -222,7 +223,9 @@ impl Runner {
     ///    whose preconditions were evaluated before the race, along with their
     ///    conditions.
     /// 2. Pinned activations due by `step_end_time`, the end of the frame (see
-    ///    [`SkillPin::Activations`]).
+    ///    [`SkillPin::Activations`]). Their skills' conditions are checked by the
+    ///    triggers below, which confirm them (see
+    ///    [`SkillActivationRecord::conditions_met`]).
     /// 3. Precondition windows, so that a skill can activate in the same frame its
     ///    precondition is satisfied.
     /// 4. Triggers that don't depend on this frame's activations: windows and
@@ -238,12 +241,23 @@ impl Runner {
     /// [`Self::check_advantage_triggers`]).
     pub(crate) fn check_skills(&mut self, state: &mut RaceState, step_end_time: f64) {
         self.activation_flags = SkillActivationFlags::default();
+        self.pinned_this_frame.clear();
         // Out-of-gate skills activate on the first frame the runner moves; their
         // pre-race effects were already applied before the race. Taken, so that
         // they're only checked once.
         self.try_activate_all(state, |scheduler, indices| {
             indices.append(&mut scheduler.race_start_triggers);
         });
+        // Their conditions were checked before the race.
+        for skill_id in std::mem::take(&mut self.unmet_out_of_gate) {
+            let records = &mut self.activated_skills;
+            if let Some(record) = records
+                .iter_mut()
+                .rfind(|record| record.skill_id == skill_id)
+            {
+                record.conditions_met = false;
+            }
+        }
         self.activate_pinned_skills(state, step_end_time);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
@@ -265,6 +279,9 @@ impl Runner {
 
     /// Activate the pinned skill alternatives due before `step_end_time`, in
     /// order.
+    ///
+    /// They wait for their conditions to confirm them on this frame (see
+    /// [`Self::check_pinned_skill`]), which also start their cooldowns.
     fn activate_pinned_skills(&mut self, state: &RaceState, step_end_time: f64) {
         while self
             .pinned_activations
@@ -272,13 +289,58 @@ impl Runner {
             .is_some_and(|next| next.time < step_end_time)
         {
             let next = self.pinned_activations.pop().expect("checked above");
-            let targets = next.targets.as_deref();
-            self.activate_skill_with_targets(
-                next.skill_index,
-                next.alternative_index,
-                targets,
-                state,
-            );
+            self.pinned_this_frame.push(self.activated_skills.len());
+            self.activate_skill_as(next.skill_index, next.alternative_index, Some(&next), state);
+        }
+    }
+
+    /// Handle the conditions of a pinned skill's alternative holding: confirm
+    /// this frame's pinned activation of the alternative, or record it as a
+    /// missing activation if `reports_missing` (see
+    /// [`Runner::missing_activations`]). Either way, its cooldown starts, as
+    /// if it activated.
+    fn check_pinned_skill(
+        &mut self,
+        skill_index: usize,
+        alternative_index: usize,
+        reports_missing: bool,
+        state: &RaceState,
+    ) {
+        let skill_id = self.skills[skill_index].id;
+        let pinned = self.pinned_this_frame.iter().find(|&&record_index| {
+            let record = &self.activated_skills[record_index];
+            record.skill_id == skill_id
+                && record.alternative == alternative_index
+                && !record.conditions_met
+        });
+        if let Some(&record_index) = pinned {
+            self.activated_skills[record_index].conditions_met = true;
+        } else if reports_missing {
+            let record = self.activation_record(skill_index, alternative_index, true, state);
+            self.missing_activations.push(record);
+        } else {
+            return;
+        }
+        self.start_cooldown(skill_index, alternative_index, state);
+    }
+
+    /// Record of an activation of a skill alternative at this point, or at the
+    /// race start for out-of-gate alternatives.
+    fn activation_record(
+        &self,
+        skill_index: usize,
+        alternative_index: usize,
+        conditions_met: bool,
+        state: &RaceState,
+    ) -> SkillActivationRecord {
+        let skill = &self.skills[skill_index];
+        let out_of_gate = skill.alternatives[alternative_index].is_out_of_gate();
+        SkillActivationRecord {
+            skill_id: skill.id,
+            alternative: alternative_index,
+            time: if out_of_gate { 0.0 } else { state.elapsed_time },
+            distance: self.position,
+            conditions_met,
         }
     }
 
@@ -413,7 +475,7 @@ impl Runner {
             LogicAction::Unlock(id) if self.trigger_scheduler.precondition_satisfied[id] => {
                 return false;
             }
-            LogicAction::Activate
+            LogicAction::Activate | LogicAction::Check { .. }
                 if self.is_in_cooldown(logic.skill_index, logic.alternative_index, state) =>
             {
                 return false;
@@ -447,6 +509,9 @@ impl Runner {
             match action {
                 // Starts the cooldown.
                 LogicAction::Activate => self.activate_skill(skill_index, alternative_index, state),
+                LogicAction::Check { reports_missing } => {
+                    self.check_pinned_skill(skill_index, alternative_index, reports_missing, state);
+                }
                 LogicAction::Unlock(id) => self.trigger_scheduler.precondition_satisfied[id] = true,
             }
         }
@@ -460,18 +525,23 @@ impl Runner {
         alternative_index: usize,
         state: &RaceState,
     ) {
-        self.activate_skill_with_targets(skill_index, alternative_index, None, state);
+        self.activate_skill_as(skill_index, alternative_index, None, state);
     }
 
-    /// Activate a skill by its index and alternative index, with its effects on
-    /// others reaching `targets` if set, instead of the usual targets.
-    fn activate_skill_with_targets(
+    /// Activate a skill by its index and alternative index, as the `pinned`
+    /// activation if it's one.
+    ///
+    /// The effects of a pinned activation on others reach its targets, if set,
+    /// instead of the usual ones. Its conditions aren't met until confirmed, and
+    /// it starts no cooldown (see [`Self::check_pinned_skill`]).
+    fn activate_skill_as(
         &mut self,
         skill_index: usize,
         alternative_index: usize,
-        targets: Option<&[RunnerId]>,
+        pinned: Option<&QueuedActivation>,
         state: &RaceState,
     ) {
+        let targets = pinned.and_then(|pinned| pinned.targets.as_deref());
         // Activating a skill triggers the additional effects of those already active,
         // before this skill's own effects are applied.
         self.trigger_additional_effects(
@@ -484,15 +554,13 @@ impl Runner {
 
         // Shared rather than borrowed from the runner, which is modified below.
         let skill = Arc::clone(&self.skills[skill_index]);
-        let skill_id = skill.id;
         let alternative = &skill.alternatives[alternative_index];
 
         // Record the activation before applying the effects, so that skills
         // activated by them are recorded after this one.
-        self.activated_skills.push(SkillActivationRecord {
-            skill_id,
-            distance: self.position,
-        });
+        let record =
+            self.activation_record(skill_index, alternative_index, pinned.is_none(), state);
+        self.activated_skills.push(record);
 
         // Scale with the runner's situation, distance and effects. Effects lasting
         // until the end of the race have an infinite base duration, which stays
@@ -562,7 +630,9 @@ impl Runner {
         // Recalculate skill modifiers from active effects.
         self.recalculate_skill_modifiers();
 
-        self.start_cooldown(skill_index, alternative_index, state);
+        if pinned.is_none() {
+            self.start_cooldown(skill_index, alternative_index, state);
+        }
 
         // Track skill activation.
         self.activated_alternatives[skill_index] |= 1 << alternative_index;
@@ -1026,12 +1096,18 @@ impl Runner {
         let rng = &mut self.rng;
         let scheduler = &mut self.trigger_scheduler;
         for logic_idx in scheduler.all_out_spurt_triggers.drain(..) {
-            let skill_index = scheduler.skill_logics[logic_idx].skill_index;
-            let start = random_segment(self.position, goal, &mut rng.skills[skill_index]);
+            let logic = &scheduler.skill_logics[logic_idx];
+            let start = random_segment(self.position, goal, &mut rng.skills[logic.skill_index]);
+            // Pinned skills ignore the roll, still drawn so that the stream doesn't
+            // change: anywhere until the goal.
+            let (min_threshold, max_threshold) = match logic.action {
+                LogicAction::Check { .. } => (self.position, goal),
+                _ => (start, start + SEGMENT_LENGTH),
+            };
             scheduler.position_windows.push(WindowTrigger {
                 logic_idx,
-                min_threshold: start,
-                max_threshold: start + SEGMENT_LENGTH,
+                min_threshold,
+                max_threshold,
             });
         }
     }

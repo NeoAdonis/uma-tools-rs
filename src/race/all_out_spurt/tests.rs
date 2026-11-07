@@ -1,11 +1,13 @@
 use super::*;
 use crate::configuration::{Configuration, GameVersion};
 use crate::race::last_spurt::*;
+use crate::race::pins::{Pins, SkillPin};
 use crate::race::runner::Runner;
-use crate::race::solver::{DELTA_TIME, RaceSolver};
+use crate::race::solver::{DELTA_TIME, Entrant, RaceSolver};
 use crate::skill::*;
 use crate::test_utils::{
-    alternative, assert_close, ready_solver, seeded_config, synthetic_skill, uma,
+    alternative, assert_close, load_course, race_params, ready_solver, seeded_config,
+    synthetic_skill, uma,
 };
 use crate::uma::*;
 use std::sync::Arc;
@@ -149,6 +151,34 @@ fn test_random_trigger_scheduled_on_activation() {
     assert_eq!(windows[0].logic_idx, 0);
     assert!((1500.0..2000.0).contains(&windows[0].min_threshold));
     assert_eq!(windows[0].max_threshold, windows[0].min_threshold + 10.0);
+}
+
+#[test]
+fn test_pinned_random_trigger_covers_the_rest_of_the_race() {
+    let uma = Uma {
+        speed: 2500,
+        stamina: 1600,
+        power: 1200,
+        ..uma(Style::Late)
+    };
+    let mut pins = Pins::default();
+    pins.skills.insert(204222, SkillPin::Activations(vec![]));
+    let mut solver = RaceSolver::new(load_course(10204), race_params(), seeded_config(42));
+    solver.add_runner(Entrant {
+        pins,
+        ..Entrant::new(uma, vec![all_out_spurt_skill()])
+    });
+    let mut solver = solver.ready_runners();
+
+    enter_last_spurt(&mut solver, 20.0);
+
+    let windows: Vec<_> = solver.runners[0]
+        .trigger_scheduler
+        .position_windows
+        .iter()
+        .map(|window| (window.min_threshold, window.max_threshold))
+        .collect();
+    assert_eq!(windows, [(1500.0, 2000.0)]);
 }
 
 #[test]
