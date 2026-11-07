@@ -11,7 +11,11 @@
 //! disagrees.
 //!
 //! [`Configuration`]: crate::Configuration
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::course::SECTION_COUNT;
+use crate::skill::Skill;
 use crate::uma::Style;
 
 /// Random outcomes of a runner fixed instead of rolled (see the
@@ -30,6 +34,15 @@ use crate::uma::Style;
 /// };
 /// assert_eq!(pins.start_delay, Some(0.035));
 /// ```
+///
+/// Make a skill fail its wit check, whatever her wit:
+///
+/// ```
+/// use uma_tools::race::pins::{Pins, SkillPin};
+///
+/// let mut pins = Pins::default();
+/// pins.skills.insert(100011, SkillPin::WitCheck(false));
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Pins {
     /// Start delay in seconds, as the runner leaves the gate: it replaces the
@@ -37,6 +50,8 @@ pub struct Pins {
     pub start_delay: Option<f64>,
     /// Rushing outcomes.
     pub rush: RushPins,
+    /// Outcomes of her skills, by skill ID.
+    pub skills: HashMap<i32, SkillPin>,
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled (see
@@ -56,9 +71,21 @@ pub struct RushPins {
     pub failed_checks: Option<u8>,
 }
 
+/// Outcome of a skill fixed instead of rolled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkillPin {
+    /// Whether the skill passes its wit check, even if it has none or
+    /// [`Configuration::wit_checks`] says otherwise. Her conditions still
+    /// decide when it activates.
+    ///
+    /// [`Configuration::wit_checks`]: crate::Configuration::wit_checks
+    WitCheck(bool),
+}
+
 impl Pins {
-    /// Panic if a pinned value would break the simulation or never take effect.
-    pub(crate) fn validate(&self) {
+    /// Panic if a pinned value would break the simulation or never take effect,
+    /// for a runner with `skills`.
+    pub(crate) fn validate(&self, skills: &[Arc<Skill>]) {
         if let Some(delay) = self.start_delay {
             assert!(
                 delay.is_finite() && delay >= 0.0,
@@ -70,6 +97,12 @@ impl Pins {
             assert!(
                 (1..=last).contains(&section),
                 "Invalid rush section {section}: expected 1 to {last}"
+            );
+        }
+        for id in self.skills.keys() {
+            assert!(
+                skills.iter().any(|skill| skill.id == *id),
+                "No skill {id} to pin"
             );
         }
     }

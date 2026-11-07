@@ -2,7 +2,7 @@ use super::*;
 use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
-use crate::race::pins::RushPins;
+use crate::race::pins::{RushPins, SkillPin};
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
@@ -3048,7 +3048,8 @@ fn test_activate_random_gold_picks_skills_that_failed_the_wit_check() {
         wit_checks: Roll::Never,
         ..seeded_config(0)
     };
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![forced_gold_skill(15)], config);
+    let skills = vec![with_wit_check(forced_gold_skill(15))];
+    let mut solver = ready_solver(10101, uma(Style::Pace), skills, config);
     let runner = &mut solver.runners[0];
     assert_eq!(runner.failed_skills().len(), 1);
     let activate_random_gold = |runner: &mut Runner, state: &RaceState| {
@@ -3277,7 +3278,7 @@ fn test_skill_count_includes_failed_wit_checks() {
         ..seeded_config(0)
     };
     let skills = (0..3)
-        .map(|i| skill(i, "always==1", SkillType::TargetSpeed, 0.1))
+        .map(|i| with_wit_check(skill(i, "always==1", SkillType::TargetSpeed, 0.1)))
         .collect();
     let solver = ready_solver(10101, uma(Style::Late), skills, config);
     let runner = &solver.runners[0];
@@ -4357,6 +4358,79 @@ fn test_first_rush_section_pin_panics() {
 #[should_panic(expected = "Invalid rush section 24: expected 1 to 23")]
 fn test_rush_section_pin_past_the_goal_panics() {
     add_with_pins(rush_section_pins(24));
+}
+
+#[test]
+fn test_pinned_wit_checks_override_configuration() {
+    // (`wit_checks`, whether the skill has a wit check, pin, whether it passes).
+    let cases = [
+        (Roll::Always, true, Some(false), false),
+        (Roll::Never, true, Some(true), true),
+        // Like a unique.
+        (Roll::Always, false, Some(false), false),
+        // `wit_checks` only forces skills that have a wit check.
+        (Roll::Never, false, None, true),
+    ];
+    for (wit_checks, has_wit_check, pin, passes) in cases {
+        let config = Configuration {
+            wit_checks,
+            ..seeded_config(0)
+        };
+        let mut skill = skill(1, "always==1", SkillType::TargetSpeed, 0.1);
+        if has_wit_check {
+            skill = with_wit_check(skill);
+        }
+        let mut pins = Pins::default();
+        if let Some(pin) = pin {
+            pins.skills.insert(1, SkillPin::WitCheck(pin));
+        }
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
+        let id = solver.add_runner(Entrant {
+            pins,
+            ..Entrant::new(uma(Style::Pace), vec![skill])
+        });
+        let solver = solver.ready_runners();
+        let runner = solver.runner(id);
+        let case = (wit_checks, has_wit_check, pin);
+        assert_eq!(runner.available_skills().len(), passes as usize, "{case:?}");
+        assert_eq!(runner.failed_skills().len(), !passes as usize, "{case:?}");
+    }
+}
+
+#[test]
+fn test_pinned_wit_check_changes_no_other_runner() {
+    let mut pins = Pins::default();
+    pins.skills.insert(1, SkillPin::WitCheck(false));
+    let id = RunnerId(0);
+    for seed in 0..10 {
+        let unpinned = ready_with_pins(Pins::default(), seed);
+        let pinned = ready_with_pins(pins.clone(), seed);
+        assert_eq!(pinned.runner(id).failed_skills().len(), 1, "seed {seed}");
+        assert_eq!(others(&pinned, id), others(&unpinned, id), "seed {seed}");
+    }
+}
+
+/// Runners other than the one with ID `id`.
+fn others(solver: &RaceSolver<Runner>, id: RunnerId) -> Vec<&Runner> {
+    let gate = solver.runner(id).gate_roll;
+    let others = solver.runners.iter().filter(|r| r.gate_roll != gate);
+    others.collect()
+}
+
+#[test]
+#[should_panic(expected = "No skill 1 to pin")]
+fn test_wit_check_pin_without_the_skill_panics() {
+    let mut pins = Pins::default();
+    pins.skills.insert(1, SkillPin::WitCheck(true));
+    add_with_pins(pins);
+}
+
+/// `skill` with a wit check.
+fn with_wit_check(skill: Arc<Skill>) -> Arc<Skill> {
+    Arc::new(Skill {
+        wit_check: true,
+        ..Arc::unwrap_or_clone(skill)
+    })
 }
 
 /// Pins of the rush section only.

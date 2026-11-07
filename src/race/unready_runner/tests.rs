@@ -14,6 +14,7 @@ fn unready_runner(skills: Vec<Arc<Skill>>) -> (UnreadyRunner, RaceState) {
         Mood::Normal,
         &state,
         skills,
+        Pins::default(),
         RngSeed::new(0),
     );
     runner.assign_gate(1, &state);
@@ -125,9 +126,16 @@ fn test_fan_count_falls_back_to_configured_default() {
             fan_count,
             ..uma(Style::Pace)
         };
-        UnreadyRunner::new(uma, Mood::Normal, &state, vec![], RngSeed::new(0))
-            .initial_state
-            .fan_count
+        UnreadyRunner::new(
+            uma,
+            Mood::Normal,
+            &state,
+            vec![],
+            Pins::default(),
+            RngSeed::new(0),
+        )
+        .initial_state
+        .fan_count
     };
 
     assert_eq!(fan_count(None), 500000);
@@ -523,6 +531,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
                 Mood::Normal,
                 &state,
                 skills,
+                Pins::default(),
                 RngSeed::new(seed),
             );
             runner.assign_gate(1, &state);
@@ -657,6 +666,7 @@ fn test_heavy_track_lowers_adjusted_speed() {
             Mood::Normal,
             &state,
             vec![],
+            Pins::default(),
             RngSeed::new(0),
         );
         runner.adjusted.speed

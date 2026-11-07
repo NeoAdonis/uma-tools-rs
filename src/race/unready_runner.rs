@@ -17,6 +17,9 @@
 //!    `TriggerScheduler::from_skills`). Logics refer to skills by their
 //!    index in this list. Out-of-gate alternatives are skipped.
 //!
+//! A pinned wit check (see [`SkillPin::WitCheck`]) replaces the rolled one,
+//! even for skills without a wit check.
+//!
 //! ## Out-of-Gate Skills
 //!
 //! Out-of-gate skills apply before the race starts: they're the skills with any
@@ -66,7 +69,7 @@ use rand::RngExt;
 
 use crate::condition::evaluator::{CompEvaluator, EvaluatorOutOfGate};
 use crate::condition::parser::Condition;
-use crate::configuration::GameVersion;
+use crate::configuration::{GameVersion, Roll};
 use crate::course::{Course, Phase};
 use crate::race::all_out_spurt::{self, AllOutSpurt};
 use crate::race::charge_up::{self, ChargeUp};
@@ -78,7 +81,7 @@ use crate::race::modifiers::{
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
 use crate::race::parameters::RaceParameters;
-use crate::race::pins::Pins;
+use crate::race::pins::{Pins, SkillPin};
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
@@ -138,6 +141,33 @@ fn modify_stat(stat: &mut f64, modifier: f64) {
     *stat = (*stat + modifier).max(1.0);
 }
 
+/// Whether `skill` passes its wit check for a runner with `base_wit`.
+///
+/// [`Configuration::wit_checks`] only forces the checks of skills that have
+/// one, while pins force any. Every check is rolled, so that pinning or
+/// forcing it doesn't shift the skill's other draws.
+///
+/// [`Configuration::wit_checks`]: crate::Configuration::wit_checks
+fn passes_wit_check(
+    skill: &Skill,
+    base_wit: f64,
+    pins: &Pins,
+    state: &RaceState,
+    rng_seed: RngSeed,
+) -> bool {
+    let roll = if skill.wit_check {
+        state.config.wit_checks
+    } else {
+        Roll::Random
+    };
+    let mut rng = rng_seed.rng(Stream::WitCheck(skill.id));
+    let passes = roll.resolve(&mut rng, skill.activation_chance(base_wit));
+    match pins.skills.get(&skill.id) {
+        Some(&SkillPin::WitCheck(pinned)) => pinned,
+        None => passes,
+    }
+}
+
 /// A data structure that holds all information needed to initialize a
 /// [`Runner`]. It allows for proper activation of out-of-gate skills that can
 /// take into account the runner's base stats, race parameters, and most
@@ -173,8 +203,12 @@ pub struct UnreadyRunner {
     // === Skills ===
     /// Scheduler for skill triggers.
     trigger_scheduler: TriggerScheduler,
-    /// Skills that passed the wit check. Out-of-gate skills among them are
-    /// evaluated before the race (see `Self::apply_out_of_gate_skills`).
+    /// Skills that passed the wit check (skills without one always do).
+    /// Out-of-gate skills among them are evaluated before the race (see
+    /// `Self::apply_out_of_gate_skills`).
+    ///
+    /// A pinned wit check (see [`SkillPin::WitCheck`]) replaces the rolled one,
+    /// even for skills without a wit check.
     pub skills: Vec<Arc<Skill>>,
     /// Skills that failed the wit check. They can't activate on their own, but
     /// they still count towards the runner's skills (e.g. for popularity or skill
@@ -213,6 +247,7 @@ impl UnreadyRunner {
         mood: Mood,
         state: &RaceState,
         skills: Vec<Arc<Skill>>,
+        pins: Pins,
         rng_seed: RngSeed,
     ) -> Self {
         let course = &state.course;
@@ -224,12 +259,9 @@ impl UnreadyRunner {
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
-        let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
-            state.config.wit_checks.resolve(
-                &mut rng_seed.rng(Stream::WitCheck(skill.id)),
-                skill.activation_chance(base.wit),
-            )
-        });
+        let (skills, failed_skills): (Vec<_>, Vec<_>) = skills
+            .into_iter()
+            .partition(|skill| passes_wit_check(skill, base.wit, &pins, state, rng_seed));
 
         let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, rng_seed);
 
@@ -258,7 +290,7 @@ impl UnreadyRunner {
             },
             start_delay,
             rng_seed,
-            pins: Pins::default(),
+            pins,
             trigger_scheduler,
             skills,
             failed_skills,

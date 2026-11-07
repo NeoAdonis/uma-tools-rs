@@ -5,6 +5,7 @@ use crate::race::all_out_spurt::AllOutSpurt;
 use crate::race::duel::Duel;
 use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
 use crate::race::parameters::*;
+use crate::race::pins::Pins;
 use crate::race::rng::RngSeed;
 use crate::race::runner::Runner;
 use crate::race::rush::RushState;
@@ -995,6 +996,7 @@ fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
         Mood::Good,
         &state,
         vec![],
+        Pins::default(),
         RngSeed::new(0),
     );
     runner.assign_gate(1, &state);

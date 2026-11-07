@@ -188,7 +188,11 @@ pub struct Configuration {
     /// If `None`, seed 0 is used. Apps that want varied races must pick a seed
     /// themselves.
     pub seed: Option<u64>,
-    /// How skill wit checks are resolved before the race.
+    /// How the wit checks of skills that have one are resolved before the race,
+    /// except for skills whose wit check is pinned (see
+    /// [`SkillPin::WitCheck`]). Skills without one always pass unless pinned.
+    ///
+    /// [`SkillPin::WitCheck`]: crate::race::pins::SkillPin::WitCheck
     pub wit_checks: Roll,
     /// How runners' rush checks are resolved before the race, except for
     /// runners whose rushing is pinned (see [`RushPins::rushes`]).

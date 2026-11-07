@@ -1,4 +1,5 @@
 use super::*;
+use crate::race::pins::Pins;
 use crate::race::rng::RngSeed;
 use crate::skill::{PopularityStat as Stat, Skill, SkillType};
 use crate::test_utils::{alternative, assert_close, synthetic_skill};
@@ -83,7 +84,14 @@ fn speed_bonus(skill: &Skill) -> f64 {
         guts: 1000,
         ..uma(Style::Pace)
     };
-    let mut runner = UnreadyRunner::new(uma, Mood::Normal, &state, vec![], RngSeed::new(0));
+    let mut runner = UnreadyRunner::new(
+        uma,
+        Mood::Normal,
+        &state,
+        vec![],
+        Pins::default(),
+        RngSeed::new(0),
+    );
     runner.assign_gate(1, &state);
     skill_bonus([skill], &runner, &state).speed
 }
@@ -158,7 +166,14 @@ fn popularity_ranks(umas: &[crate::uma::Uma]) -> Vec<u8> {
         .iter()
         .enumerate()
         .map(|(i, &uma)| {
-            let mut runner = UnreadyRunner::new(uma, Mood::Normal, &state, vec![], RngSeed::new(0));
+            let mut runner = UnreadyRunner::new(
+                uma,
+                Mood::Normal,
+                &state,
+                vec![],
+                Pins::default(),
+                RngSeed::new(0),
+            );
             runner.assign_gate(i as u8 + 1, &state);
             runner
         })

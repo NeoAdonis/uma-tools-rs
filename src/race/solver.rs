@@ -391,7 +391,8 @@ impl RaceSolver<Entrant> {
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]),
     /// if her gate is set but isn't between 1 and [`RaceParameters::gates`] or
-    /// another runner already has it, or if a pin is invalid (see [`Pins`]).
+    /// another runner already has it, or if a pin is invalid (see [`Pins`]) or
+    /// names a skill she doesn't have.
     pub fn add_runner(&mut self, entrant: Entrant) -> RunnerId {
         if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
@@ -497,7 +498,7 @@ impl RaceSolver<Entrant> {
                 "Gate {gate} is already set for another runner"
             );
         }
-        entrant.pins.validate();
+        entrant.pins.validate(&entrant.skills);
         for skill in &entrant.skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
@@ -573,10 +574,15 @@ impl RaceSolver<Entrant> {
             .zip(&gates_by_id)
             .zip(moods)
             .map(|((((entrant, seed), &team), &gate), mood)| {
-                let mut builder =
-                    UnreadyRunner::new(entrant.uma, mood, &state, entrant.skills, seed);
+                let mut builder = UnreadyRunner::new(
+                    entrant.uma,
+                    mood,
+                    &state,
+                    entrant.skills,
+                    entrant.pins,
+                    seed,
+                );
                 builder.initial_state.team = team;
-                builder.pins = entrant.pins;
                 builder.assign_gate(gate, &state);
                 builder
             })
