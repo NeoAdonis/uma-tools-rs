@@ -3582,19 +3582,20 @@ fn test_longest_mid_race_side_block_is_tracked() {
     // Blocking that continues into the Mid race only counts from then on, but
     // the overall timer keeps running. Changing sides doesn't reset either.
     block(runner, Phase::Mid, false, true, 1.0);
-    block(runner, Phase::Mid, true, false, 2.0);
-    assert_close!(runner.blocked.side_time, 8.0);
-    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+    block(runner, Phase::Mid, true, false, 1.0);
+    assert_close!(runner.blocked.side_time, 7.0);
+    assert_close!(runner.blocked.max_mid_side_time, 2.0);
     // Reset once both sides are clear; the longest blocking is kept.
     block(runner, Phase::Mid, false, false, 1.0);
-    block(runner, Phase::Mid, true, false, 2.0);
-    assert_close!(runner.blocked.side_time, 2.0);
-    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+    block(runner, Phase::Mid, true, false, 1.0);
+    assert_close!(runner.blocked.side_time, 1.0);
+    assert_close!(runner.blocked.max_mid_side_time, 2.0);
     // After the Mid race, blocking doesn't count either.
     block(runner, Phase::Late, true, false, 10.0);
-    assert_close!(runner.blocked.max_mid_side_time, 3.0);
+    assert_close!(runner.blocked.max_mid_side_time, 2.0);
 
-    assert_close!(activate_last_skill(&mut solver), 0.25 * 2.0);
+    // The first update counts as 0, so this is just short of 2 s.
+    assert_close!(activate_last_skill(&mut solver), 0.25 * 1.0);
 }
 
 #[test]
@@ -3679,8 +3680,9 @@ fn test_duration_scaling_by_runner_situation() {
         (DurationScaling::MultiplyRemainHp2, |_| {}, 3.0),
         (
             DurationScaling::MultiplyBlockedSideMaxContinueTimePhaseMiddleRun,
-            |runner| runner.blocked.max_mid_side_time = 4.5,
-            3.0,
+            // Just short of 4 s, since the first update counts as 0.
+            |runner| runner.blocked.max_mid_side_time = 4.0,
+            2.0,
         ),
         // Only extended later, by overtaking.
         (DurationScaling::IncrementOrderUp, |_| {}, 1.0),

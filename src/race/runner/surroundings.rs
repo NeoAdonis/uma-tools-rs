@@ -1,6 +1,7 @@
 //! Field of view and blocking, surrounding and nearby state between runners.
 
 use crate::course::*;
+use crate::race::solver::DELTA_TIME;
 use crate::units::*;
 
 use super::Runner;
@@ -212,6 +213,15 @@ impl Runner {
 /// Add `delta_time` to `timer` while `active`, or reset it otherwise.
 fn tick(timer: &mut f64, active: bool, delta_time: f64) {
     *timer = if active { *timer + delta_time } else { 0.0 };
+}
+
+/// Seconds a condition has held without interruption, from a `timer` that adds
+/// every update where it holds: the first update where it holds reads 0.
+pub(crate) fn continue_time(timer: f64) -> f64 {
+    // ? The game may instead update blocking and nearby state after skill
+    // checks, so that every value derived from it (not just timers) lags a
+    // frame. If so, update it there and read timers directly.
+    (timer - DELTA_TIME).max(0.0)
 }
 
 #[cfg(test)]

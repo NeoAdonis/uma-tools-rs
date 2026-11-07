@@ -113,7 +113,7 @@ pub(crate) use lane::OvertakeState;
 pub(crate) use positioning::{POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy};
 pub use skills::SkillActivationFlags;
 pub(crate) use skills::SkillModifiers;
-pub(crate) use surroundings::{BlockedState, NearbyState, SurroundState};
+pub(crate) use surroundings::{BlockedState, NearbyState, SurroundState, continue_time};
 
 /// Maximum target speed a runner can reach in m/s.
 pub(crate) const MAX_TARGET_SPEED: f64 = 30.0;
