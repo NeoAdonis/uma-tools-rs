@@ -87,7 +87,7 @@ use crate::configuration::GameVersion;
 use crate::course::*;
 use crate::race::modifiers::*;
 use crate::race::skill_scaling;
-use crate::race::solver::RaceState;
+use crate::race::solver::{RaceState, RunnerId};
 use crate::skill::*;
 use crate::trigger::random::{SEGMENT_LENGTH, random_segment};
 use crate::trigger::skill_activation::{
@@ -221,18 +221,22 @@ impl Runner {
     ///    logics never wait for a precondition: they belong to out-of-gate skills,
     ///    whose preconditions were evaluated before the race, along with their
     ///    conditions.
-    /// 2. Precondition windows, so that a skill can activate in the same frame its
+    /// 2. Pinned activations due by `step_end_time`, the end of the frame (see
+    ///    [`SkillPin::Activations`]).
+    /// 3. Precondition windows, so that a skill can activate in the same frame its
     ///    precondition is satisfied.
-    /// 3. Triggers that don't depend on this frame's activations: windows and
+    /// 4. Triggers that don't depend on this frame's activations: windows and
     ///    last straight entry, in the order the logics were built.
-    /// 4. Any-skill and heal activation triggers, which depend on the activations
+    /// 5. Any-skill and heal activation triggers, which depend on the activations
     ///    above.
+    ///
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
     ///
     /// `is_other_character_activate_advantage_skill` (and
     /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
     /// the activations of every runner, so they're checked afterwards (see
     /// [`Self::check_advantage_triggers`]).
-    pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
+    pub(crate) fn check_skills(&mut self, state: &mut RaceState, step_end_time: f64) {
         self.activation_flags = SkillActivationFlags::default();
         // Out-of-gate skills activate on the first frame the runner moves; their
         // pre-race effects were already applied before the race. Taken, so that
@@ -240,6 +244,7 @@ impl Runner {
         self.try_activate_all(state, |scheduler, indices| {
             indices.append(&mut scheduler.race_start_triggers);
         });
+        self.activate_pinned_skills(state, step_end_time);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
@@ -255,6 +260,25 @@ impl Runner {
             self.try_activate_all(state, |scheduler, indices| {
                 indices.extend_from_slice(&scheduler.heal_activation_triggers);
             });
+        }
+    }
+
+    /// Activate the pinned skill alternatives due before `step_end_time`, in
+    /// order.
+    fn activate_pinned_skills(&mut self, state: &RaceState, step_end_time: f64) {
+        while self
+            .pinned_activations
+            .last()
+            .is_some_and(|next| next.time < step_end_time)
+        {
+            let next = self.pinned_activations.pop().expect("checked above");
+            let targets = next.targets.as_deref();
+            self.activate_skill_with_targets(
+                next.skill_index,
+                next.alternative_index,
+                targets,
+                state,
+            );
         }
     }
 
@@ -436,6 +460,18 @@ impl Runner {
         alternative_index: usize,
         state: &RaceState,
     ) {
+        self.activate_skill_with_targets(skill_index, alternative_index, None, state);
+    }
+
+    /// Activate a skill by its index and alternative index, with its effects on
+    /// others reaching `targets` if set, instead of the usual targets.
+    fn activate_skill_with_targets(
+        &mut self,
+        skill_index: usize,
+        alternative_index: usize,
+        targets: Option<&[RunnerId]>,
+        state: &RaceState,
+    ) {
         // Activating a skill triggers the additional effects of those already active,
         // before this skill's own effects are applied.
         self.trigger_additional_effects(
@@ -511,6 +547,7 @@ impl Runner {
                         duration: scaled_duration,
                         wit_bonus,
                         target_roll: self.rng.skills[skill_index].random(),
+                        targets: targets.map(<[_]>::to_vec),
                     });
                 }
             }
@@ -801,7 +838,8 @@ impl Runner {
     /// bypassing their conditions.
     ///
     /// Skills that failed the wit check can be picked too, but out-of-gate skills
-    /// can't, as their effects are only applied before the race. Skills still in
+    /// can't, as their effects are only applied before the race, and neither can
+    /// skills whose activations are pinned. Skills still in
     /// cooldown or with active effects are skipped, so a skill that already
     /// activated can be picked again once both are over.
     ///
@@ -817,6 +855,7 @@ impl Runner {
                 let skill = &self.skills[skill_index];
                 skill.is_gold()
                     && !skill.should_activate_out_of_gate()
+                    && self.pins.activations(skill.id).is_none()
                     && self.can_force_gold_skill(skill_index, state)
             })
             .collect();
@@ -855,7 +894,7 @@ impl Runner {
     /// [`Self::activate_random_gold_skills`].
     ///
     /// N.B. Out-of-gate skills are skipped, as their effects are only applied
-    /// before the race.
+    /// before the race, and so are skills whose activations are pinned.
     fn activate_unique_skills(&mut self, count: usize, state: &RaceState) {
         let mut remaining = count;
         // By index, since activating a skill needs the whole runner.
@@ -864,7 +903,10 @@ impl Runner {
                 break;
             }
             let skill = &self.available_skills()[skill_index];
-            if !skill.is_unique() || skill.should_activate_out_of_gate() {
+            if !skill.is_unique()
+                || skill.should_activate_out_of_gate()
+                || self.pins.activations(skill.id).is_some()
+            {
                 continue;
             }
             remaining -= 1;

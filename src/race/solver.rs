@@ -102,6 +102,13 @@ pub struct RaceState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RunnerId(u8);
 
+impl RunnerId {
+    /// Index of the runner among those added to the race, in order.
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// A runner as entered in a race: what she's added to the [`RaceSolver`]
 /// with, before she gets ready (see [`RaceSolver::ready_runners`]).
 ///
@@ -516,6 +523,13 @@ impl RaceSolver<Entrant> {
     ///
     /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
     ///
+    /// # Panics
+    ///
+    /// Panics if a pinned activation targets a runner that isn't in the race
+    /// (see [`PinnedActivation::targets`]).
+    ///
+    /// [`PinnedActivation::targets`]: crate::race::pins::PinnedActivation::targets
+    ///
     /// # Examples
     ///
     /// Inspect the runners before the race, e.g. to see which skills failed
@@ -559,6 +573,10 @@ impl RaceSolver<Entrant> {
     /// ```
     pub fn ready_runners(self) -> RaceSolver<Runner> {
         let entrants = self.runners;
+        // Only known once every runner was added.
+        for entrant in &entrants {
+            entrant.pins.validate_targets(entrants.len());
+        }
         let mut state = self.state;
         // Entrants are in the order they were added, i.e. by ID. Their random
         // streams derive from their IDs, so that they don't depend on skills.
@@ -711,11 +729,20 @@ impl RaceSolver<Runner> {
     ///
     /// Panics if `id` isn't in this race.
     pub fn runner(&self, id: RunnerId) -> &Runner {
+        &self.runners[self.runner_index(id)]
+    }
+
+    /// Index in [`Self::runners`] of the runner with ID `id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` isn't in this race.
+    fn runner_index(&self, id: RunnerId) -> usize {
         let gate = self.gates_by_id.get(id.0 as usize);
         let gate = *gate.unwrap_or_else(|| panic!("No runner with {id:?} in this race"));
         self.runners
             .iter()
-            .find(|runner| runner.gate_roll == gate)
+            .position(|runner| runner.gate_roll == gate)
             .expect("every ID has a runner")
     }
 
@@ -921,13 +948,14 @@ impl RaceSolver<Runner> {
         self.update_team_activations();
         self.state.buffs_activated.clear();
         self.state.popularity_top_activations = SkillActivationFlags::default();
+        let step_end_time = self.state.elapsed_time + delta_time;
         for runner in &mut self.runners {
             // Runners that stay in the gate during this step haven't reached any state
             // worth checking, and skills can't activate after the goal.
-            if !runner.can_activate_skills(self.state.elapsed_time + delta_time) {
+            if !runner.can_activate_skills(step_end_time) {
                 continue;
             }
-            runner.check_skills(&mut self.state);
+            runner.check_skills(&mut self.state, step_end_time);
             for skill_type in runner.activation_flags.buff_activated.iter() {
                 *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
             }
@@ -1018,7 +1046,11 @@ impl RaceSolver<Runner> {
             let pending = std::mem::take(&mut self.runners[caster].pending_effects);
             for pending_effect in &pending {
                 let target = pending_effect.effect.target;
-                for target in self.select_targets(caster, target, pending_effect.target_roll) {
+                let targets = match &pending_effect.targets {
+                    Some(ids) => ids.iter().map(|&id| self.runner_index(id)).collect(),
+                    None => self.select_targets(caster, target, pending_effect.target_roll),
+                };
+                for target in targets {
                     self.runners[target].receive_skill_effect(pending_effect, &self.state);
                 }
             }

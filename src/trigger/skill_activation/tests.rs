@@ -3,6 +3,7 @@
 use super::*;
 use crate::condition::parser::{CompOp, Condition};
 use crate::course::geometry::*;
+use crate::race::pins::Pins;
 use crate::race::rng::RngSeed;
 use crate::skill::*;
 use crate::test_utils::{alternative, assert_close, synthetic_course, synthetic_skill};
@@ -295,7 +296,7 @@ fn create_skill_with_precondition(id: i32, condition: &str, precondition: &str) 
 /// Build a scheduler for the given skills on the test course.
 fn build_test_scheduler(skills: &[Arc<Skill>]) -> crate::trigger::system::TriggerScheduler {
     let rng_seed = RngSeed::new(0);
-    TriggerScheduler::from_skills(skills, &create_test_course(), rng_seed)
+    TriggerScheduler::from_skills(skills, &create_test_course(), &Pins::default(), rng_seed)
 }
 
 #[test]

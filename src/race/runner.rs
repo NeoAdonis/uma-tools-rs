@@ -96,7 +96,9 @@ use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::race::world_distance::{self, LastMove};
 use crate::skill::*;
-use crate::trigger::skill_activation::{ActiveTimedEffect, PendingEffect, SkillActivationRecord};
+use crate::trigger::skill_activation::{
+    ActiveTimedEffect, PendingEffect, QueuedActivation, SkillActivationRecord,
+};
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use crate::units::CourseWidths;
@@ -332,6 +334,9 @@ pub struct Runner {
     /// Effects from this runner's skills that target other runners, applied by the
     /// solver once every runner has checked its skills.
     pub(crate) pending_effects: Vec<PendingEffect>,
+    /// Pinned activations still to happen during the race, by descending time
+    /// (the next one last).
+    pub(crate) pinned_activations: Vec<QueuedActivation>,
     /// Chance of rushing as a percentage (see `rush::chance`).
     ///
     /// This is determined at the start of the race along with deciding whether the

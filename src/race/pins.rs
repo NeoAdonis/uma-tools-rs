@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::course::SECTION_COUNT;
+use crate::race::solver::RunnerId;
 use crate::skill::Skill;
 use crate::uma::Style;
 
@@ -72,7 +73,7 @@ pub struct RushPins {
 }
 
 /// Outcome of a skill fixed instead of rolled.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SkillPin {
     /// Whether the skill passes its wit check, even if it has none or
     /// [`Configuration::wit_checks`] says otherwise. Her conditions still
@@ -80,9 +81,45 @@ pub enum SkillPin {
     ///
     /// [`Configuration::wit_checks`]: crate::Configuration::wit_checks
     WitCheck(bool),
+    /// Every activation of the skill, in place of its conditions, wit check and
+    /// trigger rolls (none means it never activates). Activations go through
+    /// the usual activation code (effects, cooldowns, activation counts...),
+    /// even if the skill is in cooldown or its effects are still active.
+    ///
+    /// Skills that activate others (e.g. [`SkillType::ActivateRandomGold`])
+    /// never pick a skill whose activations are pinned: its picks are pinned
+    /// activations of their own.
+    ///
+    /// [`SkillType::ActivateRandomGold`]:
+    ///     crate::skill::SkillType::ActivateRandomGold
+    Activations(Vec<PinnedActivation>),
+}
+
+/// Activation of a skill fixed instead of triggered (see
+/// [`SkillPin::Activations`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PinnedActivation {
+    /// Time since the race started, in seconds. The skill activates on the
+    /// first skill check of a frame ending after that time, once she has left
+    /// the gate and before she finishes. Out-of-gate alternatives activate
+    /// before the race, so their time is 0.
+    pub time: f64,
+    /// Index of the alternative that activates.
+    pub alternative: usize,
+    /// Runners her effects on others reach, instead of the usual targets. Her
+    /// effects on herself ignore it. `None` picks targets as usual.
+    pub targets: Option<Vec<RunnerId>>,
 }
 
 impl Pins {
+    /// Pinned activations of the skill with ID `id`, if they are.
+    pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
+        match self.skills.get(&id) {
+            Some(SkillPin::Activations(activations)) => Some(activations),
+            _ => None,
+        }
+    }
+
     /// Panic if a pinned value would break the simulation or never take effect,
     /// for a runner with `skills`.
     pub(crate) fn validate(&self, skills: &[Arc<Skill>]) {
@@ -99,11 +136,59 @@ impl Pins {
                 "Invalid rush section {section}: expected 1 to {last}"
             );
         }
-        for id in self.skills.keys() {
+        for (&id, pin) in &self.skills {
+            let skill = skills.iter().find(|skill| skill.id == id);
+            let skill = skill.unwrap_or_else(|| panic!("No skill {id} to pin"));
+            if let SkillPin::Activations(activations) = pin {
+                validate_activations(skill, activations);
+            }
+        }
+    }
+
+    /// Panic if a pinned target isn't among the `runner_count` runners of the
+    /// race.
+    pub(crate) fn validate_targets(&self, runner_count: usize) {
+        let activations = self.skills.values().filter_map(|pin| match pin {
+            SkillPin::Activations(activations) => Some(activations),
+            SkillPin::WitCheck(_) => None,
+        });
+        let targets = activations.flatten().filter_map(|a| a.targets.as_ref());
+        for &id in targets.flatten() {
+            assert!(id.index() < runner_count, "No runner with {id:?} to target");
+        }
+    }
+}
+
+/// Panic if a pinned activation of `skill` would break the simulation or never
+/// take effect.
+fn validate_activations(skill: &Skill, activations: &[PinnedActivation]) {
+    let id = skill.id;
+    let mut out_of_gate = 0;
+    for &PinnedActivation {
+        time, alternative, ..
+    } in activations
+    {
+        let count = skill.alternatives.len();
+        assert!(
+            alternative < count,
+            "Invalid alternative {alternative} for skill {id}: expected 0 to {}",
+            count - 1
+        );
+        if skill.alternatives[alternative].is_out_of_gate() {
             assert!(
-                skills.iter().any(|skill| skill.id == *id),
-                "No skill {id} to pin"
+                time == 0.0,
+                "Invalid time {time} for skill {id}: out-of-gate alternatives activate at 0"
+            );
+            out_of_gate += 1;
+        } else {
+            assert!(
+                time.is_finite() && time >= 0.0,
+                "Invalid time {time} for skill {id}: expected a finite, non-negative number"
             );
         }
     }
+    assert!(
+        out_of_gate <= 1,
+        "Skill {id} activates out of gate {out_of_gate} times: expected at most once"
+    );
 }

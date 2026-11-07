@@ -2,7 +2,7 @@ use super::*;
 use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
-use crate::race::pins::{RushPins, SkillPin};
+use crate::race::pins::{PinnedActivation, RushPins, SkillPin};
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
@@ -2401,6 +2401,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
         duration: 3.0,
         wit_bonus: 0.0,
         target_roll: 0.0,
+        targets: None,
     }
 }
 
@@ -2730,7 +2731,7 @@ fn test_hp_triggers_activate_within_their_range() {
         let skills = vec![skill(1, condition, SkillType::TargetSpeed, 0.15)];
         let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
         set_hp_percent(&mut solver, 0, percent);
-        solver.runners[0].check_skills(&mut solver.state);
+        solver.runners[0].check_skills(&mut solver.state, DELTA_TIME);
         let activated = !solver.runners[0].activated_skills.is_empty();
         assert_eq!(activated, activates, "{condition} at {percent}%");
     }
@@ -4423,6 +4424,229 @@ fn test_wit_check_pin_without_the_skill_panics() {
     let mut pins = Pins::default();
     pins.skills.insert(1, SkillPin::WitCheck(true));
     add_with_pins(pins);
+}
+
+/// Pinned activation of alternative 0 at `time`, with the usual targets.
+fn pinned_at(time: f64) -> PinnedActivation {
+    PinnedActivation {
+        time,
+        alternative: 0,
+        targets: None,
+    }
+}
+
+/// Pins with `activations` of the skill with ID `id`.
+fn activation_pins(id: i32, activations: Vec<PinnedActivation>) -> Pins {
+    let mut pins = Pins::default();
+    pins.skills.insert(id, SkillPin::Activations(activations));
+    pins
+}
+
+/// Single runner with `skills` and `pins`, ready to race.
+fn ready_alone(style: Style, skills: Vec<Arc<Skill>>, pins: Pins) -> RaceSolver<Runner> {
+    let config = Configuration {
+        wit_checks: Roll::Never,
+        ..seeded_config(0)
+    };
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
+    solver.add_runner(Entrant {
+        pins,
+        ..Entrant::new(uma(style), skills)
+    });
+    solver.ready_runners()
+}
+
+#[test]
+fn test_pinned_activations_happen_at_their_times() {
+    // Unsorted, the second one during the cooldown of the first. The skill
+    // would activate on the first frame, and fails its wit check.
+    for times in [vec![], vec![2.0], vec![5.0, 2.0]] {
+        let skill = with_wit_check(skill(1, "always==1", SkillType::TargetSpeed, 0.1));
+        let pins = activation_pins(1, times.iter().map(|&time| pinned_at(time)).collect());
+        let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+        // Start times of the frames each activation happened on.
+        let mut frames = Vec::new();
+        loop {
+            let start = solver.state.elapsed_time;
+            let count = solver.runners[0].activated_skills.len();
+            if solver.step_frame() {
+                break;
+            }
+            let activated = solver.runners[0].activated_skills.len() - count;
+            frames.extend(std::iter::repeat_n(start, activated));
+        }
+        let mut times = times.clone();
+        times.sort_by(f64::total_cmp);
+        assert_eq!(frames.len(), times.len(), "{times:?}");
+        for (start, time) in frames.into_iter().zip(&times) {
+            assert!(
+                (start..start + DELTA_TIME).contains(time),
+                "{time} at {start}"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_pinned_out_of_gate_activations_replace_their_conditions() {
+    let delay = ready_alone(Style::End, vec![], Pins::default()).runners[0].start_delay;
+    // (condition, pinned activations, start delay multiplier). End closers
+    // aren't front runners (`running_style==1`).
+    let cases = [
+        ("always==1", None, 0.4),
+        ("always==1", Some(vec![]), 1.0),
+        ("running_style==1", None, 1.0),
+        ("running_style==1", Some(vec![pinned_at(0.0)]), 0.4),
+    ];
+    for (condition, activations, multiplier) in cases {
+        let skill = skill(1, condition, SkillType::MultiplyStartDelay, 0.4);
+        let pins = activations
+            .clone()
+            .map_or_else(Pins::default, |a| activation_pins(1, a));
+        let mut solver = ready_alone(Style::End, vec![skill], pins);
+        let case = (condition, &activations);
+        assert_close!(
+            solver.runners[0].start_delay,
+            delay * multiplier,
+            "{case:?}"
+        );
+        // They still activate on the first frame she moves.
+        while solver.state.elapsed_time < delay {
+            solver.step_frame();
+        }
+        let activated = !solver.runners[0].activated_skills.is_empty();
+        assert_eq!(activated, multiplier < 1.0, "{case:?}");
+    }
+}
+
+#[test]
+fn test_forced_activations_skip_pinned_skills() {
+    let cases = [
+        (SkillType::ActivateRandomGold, SkillRarity::Gold),
+        (SkillType::ActivateUnique, SkillRarity::Unique),
+    ];
+    for (forcing, rarity) in cases {
+        for pinned in [false, true] {
+            let forced = Arc::new(Skill {
+                rarity,
+                ..Arc::unwrap_or_clone(forced_gold_skill(15))
+            });
+            let skills = vec![forced, skill(3, "distance_rate>=50", forcing, 1.0)];
+            let pins = if pinned {
+                activation_pins(15, vec![])
+            } else {
+                Pins::default()
+            };
+            let mut solver = ready_alone(Style::Pace, skills, pins);
+            solver.run();
+            let ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
+            let expected = if pinned { vec![3] } else { vec![3, 15] };
+            assert_eq!(ids, expected, "{forcing:?}, pinned: {pinned}");
+        }
+    }
+}
+
+#[test]
+fn test_pinned_targets_replace_the_usual_ones() {
+    // (pinned targets, runners reached).
+    let cases = [
+        (None, vec![0, 1, 2]),
+        (Some(vec![RunnerId(2)]), vec![2]),
+        (Some(vec![]), vec![]),
+    ];
+    for (targets, reached) in cases {
+        let alternative = SkillAlternative {
+            effects: vec![SkillEffect {
+                target: SkillTarget::All,
+                ..effect(SkillType::TargetSpeed, -0.1)
+            }],
+            ..alternative("always==1", SkillType::TargetSpeed, 0.0)
+        };
+        let skill = Arc::new(Skill {
+            id: 1,
+            ..synthetic_skill(vec![alternative])
+        });
+        let activation = PinnedActivation {
+            targets: targets.clone(),
+            ..pinned_at(1.0)
+        };
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+        solver.add_runner(Entrant {
+            pins: activation_pins(1, vec![activation]),
+            ..Entrant::new(uma(Style::Pace), vec![skill])
+        });
+        for _ in 0..2 {
+            solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        }
+        let mut solver = solver.ready_runners();
+        while solver.runner(RunnerId(0)).activated_skills.is_empty() {
+            assert!(!solver.step_frame(), "the race ended first");
+        }
+        let affected: Vec<_> = (0..3)
+            .filter(|&id| !solver.runner(RunnerId(id)).active_timed_effects.is_empty())
+            .collect();
+        assert_eq!(affected, reached, "{targets:?}");
+    }
+}
+
+#[test]
+#[should_panic(expected = "Invalid alternative 1 for skill 1: expected 0 to 0")]
+fn test_pinned_activation_of_a_missing_alternative_panics() {
+    let skill = skill(1, "always==1", SkillType::TargetSpeed, 0.1);
+    add_with_activations(skill, vec![pinned_alternative_at(1.0, 1)]);
+}
+
+#[test]
+#[should_panic(expected = "Invalid time -1 for skill 1: expected a finite, non-negative number")]
+fn test_pinned_activation_before_the_start_panics() {
+    let skill = skill(1, "always==1", SkillType::TargetSpeed, 0.1);
+    add_with_activations(skill, vec![pinned_at(-1.0)]);
+}
+
+#[test]
+#[should_panic(expected = "Invalid time 1 for skill 1: out-of-gate alternatives activate at 0")]
+fn test_pinned_out_of_gate_activation_during_the_race_panics() {
+    let skill = out_of_gate_skill(1, 1.0, &[(SkillType::SpeedUp, 40.0)]);
+    add_with_activations(skill, vec![pinned_at(1.0)]);
+}
+
+#[test]
+#[should_panic(expected = "Skill 1 activates out of gate 2 times: expected at most once")]
+fn test_pinned_out_of_gate_activation_twice_panics() {
+    let skill = out_of_gate_skill(1, 1.0, &[(SkillType::SpeedUp, 40.0)]);
+    add_with_activations(skill, vec![pinned_at(0.0), pinned_at(0.0)]);
+}
+
+/// Pinned activation of `alternative` at `time`, with the usual targets.
+fn pinned_alternative_at(time: f64, alternative: usize) -> PinnedActivation {
+    PinnedActivation {
+        alternative,
+        ..pinned_at(time)
+    }
+}
+
+/// Add a runner with `skill`, pinned to activate as in `activations`.
+fn add_with_activations(skill: Arc<Skill>, activations: Vec<PinnedActivation>) {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(Entrant {
+        pins: activation_pins(skill.id, activations),
+        ..Entrant::new(uma(Style::Pace), vec![skill])
+    });
+}
+
+#[test]
+#[should_panic(expected = "No runner with RunnerId(1) to target")]
+fn test_pinned_target_outside_the_race_panics() {
+    let activation = PinnedActivation {
+        targets: Some(vec![RunnerId(1)]),
+        ..pinned_at(1.0)
+    };
+    let skill = skill(1, "always==1", SkillType::TargetSpeed, 0.1);
+    ready_alone(
+        Style::Pace,
+        vec![skill],
+        activation_pins(1, vec![activation]),
+    );
 }
 
 /// `skill` with a wit check.

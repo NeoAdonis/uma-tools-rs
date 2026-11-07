@@ -111,6 +111,7 @@ use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::geometry::Segment;
 use crate::course::*;
+use crate::race::solver::RunnerId;
 use crate::skill::{AdditionalActivation, SkillEffect};
 use crate::trigger::random::SEGMENT_LENGTH;
 use crate::units::furlongs_to_meters;
@@ -273,6 +274,27 @@ pub(crate) struct PendingEffect {
     /// Draw (from 0 to 1) to pick random targets, from the stream of the
     /// caster's skill.
     pub(crate) target_roll: f64,
+    /// Pinned targets, instead of the usual ones (see
+    /// [`PinnedActivation::targets`]).
+    ///
+    /// [`PinnedActivation::targets`]: crate::race::pins::PinnedActivation::targets
+    pub(crate) targets: Option<Vec<RunnerId>>,
+}
+
+/// Pinned activation of a skill alternative during the race, waiting for its
+/// time (see [`SkillPin::Activations`]).
+///
+/// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct QueuedActivation {
+    /// Time since the race started, in seconds.
+    pub(crate) time: f64,
+    /// Index of the skill in the runner's skills.
+    pub(crate) skill_index: usize,
+    /// Index of the alternative that activates.
+    pub(crate) alternative_index: usize,
+    /// Pinned targets of her effects on others.
+    pub(crate) targets: Option<Vec<RunnerId>>,
 }
 
 /// Record of a skill activation during the race.

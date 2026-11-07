@@ -65,6 +65,7 @@
 use std::sync::Arc;
 
 use crate::course::Course;
+use crate::race::pins::Pins;
 use crate::race::rng::{RngSeed, Stream};
 use crate::skill::*;
 use crate::trigger::random::RandomRolls;
@@ -89,11 +90,20 @@ impl TriggerScheduler {
     /// course are skipped. So are out-of-gate alternatives: their condition is
     /// evaluated before the race, then they're activated by a race start logic
     /// (see [`Self::add_race_start_logic`]). Other alternatives of
-    /// their skills (e.g. continuations) are compiled as usual.
-    pub(crate) fn from_skills(skills: &[Arc<Skill>], course: &Course, rng_seed: RngSeed) -> Self {
+    /// their skills (e.g. continuations) are compiled as usual. Skills whose
+    /// activations are pinned get no logics at all.
+    pub(crate) fn from_skills(
+        skills: &[Arc<Skill>],
+        course: &Course,
+        pins: &Pins,
+        rng_seed: RngSeed,
+    ) -> Self {
         let mut scheduler = Self::default();
 
         for (skill_idx, skill) in skills.iter().enumerate() {
+            if pins.activations(skill.id).is_some() {
+                continue;
+            }
             // Random variables are rolled per skill, so that its alternatives share them.
             let mut rolls = RandomRolls::default();
             let mut rng = rng_seed.rng(Stream::TriggerRolls(skill.id));

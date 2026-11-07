@@ -93,6 +93,7 @@ use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::world_distance::LastMove;
 use crate::skill::{SYMPATHY_ID, Skill, SkillType};
+use crate::trigger::skill_activation::QueuedActivation;
 use crate::trigger::system::*;
 use crate::uma::{Aptitude, Mood, Stats, Style, Uma};
 
@@ -164,8 +165,37 @@ fn passes_wit_check(
     let passes = roll.resolve(&mut rng, skill.activation_chance(base_wit));
     match pins.skills.get(&skill.id) {
         Some(&SkillPin::WitCheck(pinned)) => pinned,
+        // Pinned activations happen whatever the check says.
+        Some(SkillPin::Activations(_)) => true,
         None => passes,
     }
+}
+
+/// Activations of `skills` pinned in `pins` during the race (out-of-gate ones
+/// already happened), by descending time. Activations at the same time keep
+/// their order (by skill, then as pinned), so they're popped in that order.
+fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedActivation> {
+    let mut queue = Vec::new();
+    for (skill_index, skill) in skills.iter().enumerate() {
+        let Some(activations) = pins.activations(skill.id) else {
+            continue;
+        };
+        for activation in activations {
+            if skill.alternatives[activation.alternative].is_out_of_gate() {
+                continue;
+            }
+            queue.push(QueuedActivation {
+                time: activation.time,
+                skill_index,
+                alternative_index: activation.alternative,
+                targets: activation.targets.clone(),
+            });
+        }
+    }
+    // Reversed first, so that the stable sort pops ties in order.
+    queue.reverse();
+    queue.sort_by(|a, b| b.time.total_cmp(&a.time));
+    queue
 }
 
 /// A data structure that holds all information needed to initialize a
@@ -263,7 +293,7 @@ impl UnreadyRunner {
             .into_iter()
             .partition(|skill| passes_wit_check(skill, base.wit, &pins, state, rng_seed));
 
-        let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, rng_seed);
+        let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, &pins, rng_seed);
 
         // Calculate adjusted stats (before out-of-gate skills).
         let adjusted = adjust_stats(&base, uma.style_aptitude, course, params);
@@ -435,6 +465,17 @@ impl UnreadyRunner {
 
         for skill_index in order {
             let skill = &self.skills[skill_index];
+            if let Some(activations) = self.pins.activations(skill.id) {
+                // Validated to be at most one.
+                let alt_index = activations
+                    .iter()
+                    .map(|activation| activation.alternative)
+                    .find(|&alt_index| skill.alternatives[alt_index].is_out_of_gate());
+                if let Some(alt_index) = alt_index {
+                    self.activate_out_of_gate_skill(skill_index, alt_index);
+                }
+                continue;
+            }
             if !skill.should_activate_out_of_gate() {
                 continue;
             }
@@ -468,7 +509,7 @@ impl UnreadyRunner {
     }
 
     /// Activate "Sympathy" if the runner has it, bypassing its condition
-    /// (`same_skill_horse_count>=5`).
+    /// (`same_skill_horse_count>=5`), unless its activations are pinned.
     ///
     /// This must be called after out-of-gate skills have been applied, so that it
     /// doesn't activate twice when its condition is also satisfied.
@@ -476,6 +517,10 @@ impl UnreadyRunner {
         let Some(skill_index) = self.skills.iter().position(|skill| skill.id == SYMPATHY_ID) else {
             return;
         };
+        // Pinned activations decide instead.
+        if self.pins.activations(SYMPATHY_ID).is_some() {
+            return;
+        }
         if !self.activates_on_race_start(skill_index) {
             self.activate_out_of_gate_skill(skill_index, 0);
         }
@@ -500,6 +545,7 @@ impl UnreadyRunner {
             .map(|skill| vec![0.0; skill.alternatives.len()])
             .collect();
         let mut rng = RunnerRng::new(self.rng_seed, skills.iter().map(|skill| skill.id));
+        let pinned_activations = queue_pinned_activations(&self.pins, &skills);
 
         // Set starting speed (done in the constructor).
         // Determine whether and how the runner will rush.
@@ -574,6 +620,7 @@ impl UnreadyRunner {
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),
+            pinned_activations,
             section: 0,
             phase: Phase::from_position(0.0, course),
             section_speed_modifier,
