@@ -87,7 +87,7 @@ use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
 use crate::race::rush::{self, RushState};
 use crate::race::skill_scaling;
-use crate::race::solver::RaceState;
+use crate::race::solver::{RaceState, RunnerId};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
@@ -205,6 +205,9 @@ fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedAct
 #[derive(Debug)]
 pub struct UnreadyRunner {
     // === Immutable context ===
+    /// ID of the runner in the race, assigned by the solver when she gets
+    /// ready.
+    pub(crate) id: RunnerId,
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
     /// skills.
     pub base: Stats,
@@ -309,6 +312,8 @@ impl UnreadyRunner {
         let start_delay = rng_seed.rng(Stream::StartDelay).random_range(0.0..=0.1);
 
         UnreadyRunner {
+            // Assigned by the solver.
+            id: RunnerId::from_index(0),
             base,
             raw: uma,
             gate: None,
@@ -541,11 +546,18 @@ impl UnreadyRunner {
                         && failed_wit_check_ruled_out
                         && !is_random(alt_index)
                     {
+                        let alternative = &skill.alternatives[alt_index];
                         self.missing_activations.push(SkillActivationRecord {
                             skill_id: skill.id,
                             alternative: alt_index,
                             time: 0.0,
                             distance: 0.0,
+                            // Before the race, only the distance scales it.
+                            duration: alternative.base_duration * state.course.distance as f64
+                                / 1000.0,
+                            affected: Vec::from_iter(
+                                alternative.affects_oneself().then_some(self.id),
+                            ),
                             conditions_met: true,
                         });
                     }
@@ -638,6 +650,7 @@ impl UnreadyRunner {
 
         // Initialize race state.
         Runner {
+            id: self.id,
             gate_roll,
             base: self.base,
             raw: self.raw,

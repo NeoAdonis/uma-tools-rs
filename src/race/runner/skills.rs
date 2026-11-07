@@ -326,6 +326,9 @@ impl Runner {
 
     /// Record of an activation of a skill alternative at this point, or at the
     /// race start for out-of-gate alternatives.
+    ///
+    /// The runners reached by effects on others are added once the solver picks
+    /// them (see [`SkillActivationRecord::affected`]).
     fn activation_record(
         &self,
         skill_index: usize,
@@ -334,14 +337,33 @@ impl Runner {
         state: &RaceState,
     ) -> SkillActivationRecord {
         let skill = &self.skills[skill_index];
-        let out_of_gate = skill.alternatives[alternative_index].is_out_of_gate();
+        let alternative = &skill.alternatives[alternative_index];
         SkillActivationRecord {
             skill_id: skill.id,
             alternative: alternative_index,
-            time: if out_of_gate { 0.0 } else { state.elapsed_time },
+            time: if alternative.is_out_of_gate() {
+                0.0
+            } else {
+                state.elapsed_time
+            },
             distance: self.position,
+            duration: self.scaled_duration(alternative, state),
+            affected: Vec::from_iter(alternative.affects_oneself().then_some(self.id)),
             conditions_met,
         }
+    }
+
+    /// Factor every base duration is scaled by: the course distance / 1000, and
+    /// her duration effects.
+    fn duration_factor(&self, state: &RaceState) -> f64 {
+        state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling
+    }
+
+    /// Duration of the effects of a skill alternative activating now, in
+    /// seconds. Effects lasting until the end of the race have an infinite base
+    /// duration, which stays infinite.
+    fn scaled_duration(&self, alternative: &SkillAlternative, state: &RaceState) -> f64 {
+        self.situational_base_duration(alternative) * self.duration_factor(state)
     }
 
     /// Check if the runner can activate skills during a step ending at
@@ -560,14 +582,15 @@ impl Runner {
         // activated by them are recorded after this one.
         let record =
             self.activation_record(skill_index, alternative_index, pinned.is_none(), state);
+        // The runners her effects on others reach are recorded unless she's affected.
+        let record_index = record
+            .affected
+            .is_empty()
+            .then_some(self.activated_skills.len());
         self.activated_skills.push(record);
 
-        // Scale with the runner's situation, distance and effects. Effects lasting
-        // until the end of the race have an infinite base duration, which stays
-        // infinite.
-        let duration_factor =
-            state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling;
-        let scaled_duration = self.situational_base_duration(alternative) * duration_factor;
+        let duration_factor = self.duration_factor(state);
+        let scaled_duration = self.scaled_duration(alternative, state);
         // Extensions from overtaking scale like the base duration.
         let overtake_extension =
             if alternative.duration_scaling == DurationScaling::IncrementOrderUp {
@@ -616,6 +639,7 @@ impl Runner {
                         wit_bonus,
                         target_roll: self.rng.skills[skill_index].random(),
                         targets: targets.map(<[_]>::to_vec),
+                        record: record_index,
                     });
                 }
             }

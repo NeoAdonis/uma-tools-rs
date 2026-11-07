@@ -89,7 +89,7 @@ use crate::race::popularity::JudgeScores;
 use crate::race::rng::{RunnerRng, Stream};
 use crate::race::rush::{self, RushState};
 use crate::race::secure_lead;
-use crate::race::solver::RaceState;
+use crate::race::solver::{RaceState, RunnerId};
 use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
@@ -260,6 +260,10 @@ pub(crate) struct RushCounter {
 /// [`RaceSolver`]: crate::race::solver::RaceSolver
 #[derive(Debug, PartialEq)]
 pub struct Runner {
+    /// ID of the runner in the race (see [`RaceSolver::add_runner`]).
+    ///
+    /// [`RaceSolver::add_runner`]: crate::race::solver::RaceSolver::add_runner
+    pub(crate) id: RunnerId,
     /// Gate number (1-indexed). It determines starting lane position.
     ///
     /// Each runner has a different gate, so the solver also uses it to tell

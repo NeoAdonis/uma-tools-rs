@@ -107,6 +107,11 @@ impl RunnerId {
     pub(crate) fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// ID of the runner at `index` among those added to the race, in order.
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index as u8)
+    }
 }
 
 /// A runner as entered in a race: what she's added to the [`RaceSolver`]
@@ -591,7 +596,8 @@ impl RaceSolver<Entrant> {
             .zip(&self.teams_by_id)
             .zip(&gates_by_id)
             .zip(moods)
-            .map(|((((entrant, seed), &team), &gate), mood)| {
+            .enumerate()
+            .map(|(index, ((((entrant, seed), &team), &gate), mood))| {
                 let mut builder = UnreadyRunner::new(
                     entrant.uma,
                     mood,
@@ -600,6 +606,7 @@ impl RaceSolver<Entrant> {
                     entrant.pins,
                     seed,
                 );
+                builder.id = RunnerId::from_index(index);
                 builder.initial_state.team = team;
                 builder.assign_gate(gate, &state);
                 builder
@@ -1046,10 +1053,17 @@ impl RaceSolver<Runner> {
             let pending = std::mem::take(&mut self.runners[caster].pending_effects);
             for pending_effect in &pending {
                 let target = pending_effect.effect.target;
-                let targets = match &pending_effect.targets {
+                let targets: Vec<usize> = match &pending_effect.targets {
                     Some(ids) => ids.iter().map(|&id| self.runner_index(id)).collect(),
                     None => self.select_targets(caster, target, pending_effect.target_roll),
                 };
+                if let Some(record) = pending_effect.record {
+                    let ids: Vec<_> = targets.iter().map(|&i| self.runners[i].id).collect();
+                    let affected = &mut self.runners[caster].activated_skills[record].affected;
+                    affected.extend(ids);
+                    affected.sort_unstable_by_key(|id| id.index());
+                    affected.dedup();
+                }
                 for target in targets {
                     self.runners[target].receive_skill_effect(pending_effect, &self.state);
                 }

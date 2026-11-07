@@ -2402,6 +2402,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
         wit_bonus: 0.0,
         target_roll: 0.0,
         targets: None,
+        record: None,
     }
 }
 
@@ -4586,6 +4587,68 @@ fn test_pinned_targets_replace_the_usual_ones() {
             .filter(|&id| !solver.runner(RunnerId(id)).active_timed_effects.is_empty())
             .collect();
         assert_eq!(affected, reached, "{targets:?}");
+        // Her record gives the runners reached.
+        let record = &solver.runner(RunnerId(0)).activated_skills[0];
+        let recorded: Vec<_> = record.affected.iter().map(|id| id.0).collect();
+        assert_eq!(recorded, reached, "{targets:?}");
+    }
+}
+
+#[test]
+fn test_records_give_the_duration_and_affected_runners() {
+    let on_self = |skill_type, modifier| effect(skill_type, modifier);
+    let debuff = SkillEffect {
+        target: SkillTarget::All,
+        ..effect(SkillType::TargetSpeed, -0.1)
+    };
+    // (base duration, effects, duration on the 1200 m course, runners
+    // affected). Effects on herself make her the only one recorded.
+    let cases = [
+        (
+            3.0,
+            vec![on_self(SkillType::TargetSpeed, 0.1)],
+            3.6,
+            vec![0],
+        ),
+        (0.0, vec![on_self(SkillType::Recovery, 0.01)], 0.0, vec![0]),
+        (
+            f64::INFINITY,
+            vec![on_self(SkillType::Fov, 1.0)],
+            f64::INFINITY,
+            vec![0],
+        ),
+        (
+            3.0,
+            vec![on_self(SkillType::TargetSpeed, 0.1), debuff.clone()],
+            3.6,
+            vec![0],
+        ),
+        // Runners reached by several effects (all of them, her included) are
+        // recorded once.
+        (3.0, vec![debuff.clone(), debuff.clone()], 3.6, vec![0, 1]),
+    ];
+    for (base_duration, effects, duration, affected) in cases {
+        let alternative = SkillAlternative {
+            base_duration,
+            effects: effects.clone(),
+            ..alternative("always==1", SkillType::TargetSpeed, 0.0)
+        };
+        let skill = Arc::new(Skill {
+            id: 1,
+            ..synthetic_skill(vec![alternative])
+        });
+        let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![skill]));
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        let mut solver = solver.ready_runners();
+        while solver.runner(RunnerId(0)).activated_skills.is_empty() {
+            assert!(!solver.step_frame(), "the race ended first");
+        }
+        let record = &solver.runner(RunnerId(0)).activated_skills[0];
+        let recorded: Vec<_> = record.affected.iter().map(|id| id.0).collect();
+        let case = (base_duration, &effects);
+        assert_close!(record.duration, duration, "{case:?}");
+        assert_eq!(recorded, affected, "{case:?}");
     }
 }
 
@@ -4748,9 +4811,20 @@ fn test_pinned_out_of_gate_skills_report_what_their_conditions_allow() {
         let runner = &solver.runners[0];
         let record = runner.activated_skills.first();
         assert_eq!(record.map(|r| r.conditions_met), met, "{case:?}");
-        let expected = missing.then_some((1, 0, 0.0, 0.0));
+        // Base duration of 3 s on a 1200 m course.
+        let expected = missing.then_some((1, 0, 0.0, 0.0, 3.6, vec![runner.id]));
         let record = runner.missing_activations.first();
-        let record = record.map(|r| (r.skill_id, r.alternative, r.time, r.distance));
+        let record = record.map(|r| {
+            let affected = r.affected.clone();
+            (
+                r.skill_id,
+                r.alternative,
+                r.time,
+                r.distance,
+                r.duration,
+                affected,
+            )
+        });
         assert_eq!(record, expected, "{case:?}");
     }
 }

@@ -601,6 +601,13 @@ impl SkillAlternative {
             .iter()
             .any(|effect| effect.skill_type.is_pre_race_effect())
     }
+
+    /// Check if any effect of this alternative targets the runner herself.
+    pub(crate) fn affects_oneself(&self) -> bool {
+        self.effects
+            .iter()
+            .any(|effect| effect.target == SkillTarget::Oneself)
+    }
 }
 
 /// Parse a condition string while deserializing.

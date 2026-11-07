@@ -292,6 +292,10 @@ pub(crate) struct PendingEffect {
     ///
     /// [`PinnedActivation::targets`]: crate::race::pins::PinnedActivation::targets
     pub(crate) targets: Option<Vec<RunnerId>>,
+    /// Index in the caster's `activated_skills` of the activation's record,
+    /// if the runners reached are recorded there (see
+    /// [`SkillActivationRecord::affected`]).
+    pub(crate) record: Option<usize>,
 }
 
 /// Pinned activation of a skill alternative during the race, waiting for its
@@ -324,6 +328,22 @@ pub struct SkillActivationRecord {
     pub time: f64,
     /// Distance when the skill was activated (in meters from start).
     pub distance: f64,
+    /// Duration of its effects in seconds: the base duration scaled by the
+    /// course distance (× distance / 1000), her situation (see
+    /// [`DurationScaling`]) and her duration effects. It's infinite for effects
+    /// lasting until the end of the race, and 0 for instant skills.
+    ///
+    /// [`DurationScaling`]: crate::skill::DurationScaling
+    pub duration: f64,
+    /// Runners its effects reached: herself if any of them targets her,
+    /// otherwise the runners her effects on others reached, once the solver
+    /// picks them after every runner has checked her skills. Missing
+    /// activations (see [`Runner::missing_activations`]) whose effects only
+    /// reach others have none, as nobody is picked for them.
+    ///
+    /// [`Runner::missing_activations`]:
+    ///     crate::race::runner::Runner::missing_activations
+    pub affected: Vec<RunnerId>,
     /// Whether the skill's conditions allowed the activation, always true
     /// unless its activations are pinned (see [`SkillPin::Activations`]).
     /// Skills activated by another one (e.g.
