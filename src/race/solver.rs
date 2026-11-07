@@ -23,6 +23,7 @@ use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
 use crate::race::parameters::{MAX_GATES, RaceParameters};
+use crate::race::pins::Pins;
 use crate::race::popularity::calculate_popularity;
 use crate::race::proximity;
 use crate::race::rng::{RngSeed, Stream};
@@ -150,16 +151,20 @@ pub struct Entrant {
     pub gate: Option<u8>,
     /// Skills, before wit checks.
     pub skills: Vec<Arc<Skill>>,
+    /// Random outcomes fixed instead of rolled (none by default).
+    pub pins: Pins,
 }
 
 impl Entrant {
-    /// Entrant with the given raw stats and skills, with no mood nor gate set.
+    /// Entrant with the given raw stats and skills, with no mood, gate nor
+    /// pins set.
     pub fn new(uma: Uma, skills: Vec<Arc<Skill>>) -> Self {
         Entrant {
             uma,
             mood: None,
             gate: None,
             skills,
+            pins: Pins::default(),
         }
     }
 }
@@ -385,8 +390,8 @@ impl RaceSolver<Entrant> {
     /// # Panics
     ///
     /// Panics if every gate is already taken (see [`RaceParameters::gates`]),
-    /// or if her gate is set but isn't between 1 and [`RaceParameters::gates`],
-    /// or another runner already has it.
+    /// if her gate is set but isn't between 1 and [`RaceParameters::gates`] or
+    /// another runner already has it, or if a pin is invalid (see [`Pins`]).
     pub fn add_runner(&mut self, entrant: Entrant) -> RunnerId {
         if self.runners.len() >= self.state.params.gates as usize {
             panic!("Cannot add more runners than available gates");
@@ -451,8 +456,8 @@ impl RaceSolver<Entrant> {
     ///
     /// Panics if the team has no members or more than [`MAX_TEAM_SIZE`], if
     /// there aren't enough free gates for all of them (see
-    /// [`RaceParameters::gates`]), or if a member's gate can't be set (see
-    /// [`RaceSolver::add_runner`]).
+    /// [`RaceParameters::gates`]), or if a member's gate or pins can't be set
+    /// (see [`RaceSolver::add_runner`]).
     pub fn add_team(&mut self, members: Vec<Entrant>) -> Vec<RunnerId> {
         if members.is_empty() || members.len() > MAX_TEAM_SIZE {
             panic!("Team must have between 1 and {MAX_TEAM_SIZE} runners");
@@ -492,6 +497,7 @@ impl RaceSolver<Entrant> {
                 "Gate {gate} is already set for another runner"
             );
         }
+        entrant.pins.validate();
         for skill in &entrant.skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
@@ -570,6 +576,7 @@ impl RaceSolver<Entrant> {
                 let mut builder =
                     UnreadyRunner::new(entrant.uma, mood, &state, entrant.skills, seed);
                 builder.initial_state.team = team;
+                builder.pins = entrant.pins;
                 builder.assign_gate(gate, &state);
                 builder
             })

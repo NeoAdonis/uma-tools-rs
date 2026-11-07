@@ -4201,6 +4201,71 @@ fn test_mood_assignments() {
     assert!(random_unset.len() > 1, "unset moods should be random");
 }
 
+/// Three runners ready to race, the first one with a skill that multiplies her
+/// start delay and the given `pins`.
+fn ready_with_pins(pins: Pins, seed: u64) -> RaceSolver<Runner> {
+    let config = Configuration {
+        wit_checks: Roll::Always,
+        ..seeded_config(seed)
+    };
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
+    let skill = skill(1, "always==1", SkillType::MultiplyStartDelay, 0.4);
+    solver.add_runner(Entrant {
+        pins,
+        ..Entrant::new(uma(Style::Pace), vec![skill])
+    });
+    for _ in 0..2 {
+        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    }
+    solver.ready_runners()
+}
+
+#[test]
+fn test_pinned_start_delay_replaces_skill_effects_only() {
+    for seed in 0..10 {
+        let unpinned = ready_with_pins(Pins::default(), seed);
+        let pins = Pins {
+            start_delay: Some(0.25),
+        };
+        let mut pinned = ready_with_pins(pins, seed);
+        // The skill applies when unpinned (at most 40% of 0.1 s).
+        let unpinned_delay = unpinned.runner(RunnerId(0)).start_delay;
+        assert!(unpinned_delay <= 0.04, "seed {seed}");
+
+        let gate = pinned.gates_by_id[0];
+        let runner = pinned.runners.iter_mut().find(|r| r.gate_roll == gate);
+        let runner = runner.expect("every ID has a runner");
+        assert_eq!(runner.start_delay, 0.25, "seed {seed}");
+        // Every other outcome, hers included, is the same.
+        runner.start_delay = unpinned_delay;
+        assert_eq!(pinned.runners, unpinned.runners, "seed {seed}");
+    }
+}
+
+#[test]
+#[should_panic(expected = "Invalid start delay -0.01")]
+fn test_negative_start_delay_pin_panics() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(Entrant {
+        pins: Pins {
+            start_delay: Some(-0.01),
+        },
+        ..Entrant::new(uma(Style::Pace), vec![])
+    });
+}
+
+#[test]
+#[should_panic(expected = "Invalid start delay NaN")]
+fn test_nan_start_delay_pin_panics() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(Entrant {
+        pins: Pins {
+            start_delay: Some(f64::NAN),
+        },
+        ..Entrant::new(uma(Style::Pace), vec![])
+    });
+}
+
 /// Entrant with the given gate.
 fn entrant_at(gate: u8) -> Entrant {
     Entrant {

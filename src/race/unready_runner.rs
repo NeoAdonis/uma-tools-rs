@@ -78,6 +78,7 @@ use crate::race::modifiers::{
     course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
 use crate::race::parameters::RaceParameters;
+use crate::race::pins::Pins;
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
@@ -195,6 +196,8 @@ pub struct UnreadyRunner {
     pub(crate) casts_sympathy: bool,
 
     // === Random number generation ===
+    /// Random outcomes fixed instead of rolled.
+    pub(crate) pins: Pins,
     /// Seed from which every random stream of the runner derives (see
     /// [`crate::race::rng`]).
     pub(crate) rng_seed: RngSeed,
@@ -255,6 +258,7 @@ impl UnreadyRunner {
             },
             start_delay,
             rng_seed,
+            pins: Pins::default(),
             trigger_scheduler,
             skills,
             failed_skills,
@@ -522,7 +526,8 @@ impl UnreadyRunner {
             nearby: NearbyState::default(),
             blocked: BlockedState::default(),
             surrounded: SurroundState::default(),
-            start_delay: self.start_delay,
+            // Pinned after every out-of-gate skill changed it.
+            start_delay: self.pins.start_delay.unwrap_or(self.start_delay),
             activated_alternatives: vec![0; skills.len()],
             cooldown_until,
             skills,

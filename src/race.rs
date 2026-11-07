@@ -22,6 +22,7 @@ pub mod last_spurt;
 pub mod margin;
 pub(crate) mod modifiers;
 pub mod parameters;
+pub mod pins;
 pub mod popularity;
 pub(crate) mod proximity;
 pub(crate) mod rng;

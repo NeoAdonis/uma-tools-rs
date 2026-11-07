@@ -98,6 +98,8 @@ Source code, relative to `src/`:
     sections and course features.
   - `race/rng.rs`: random number streams, derived per runner, mechanic and skill
     from the race seed.
+  - `race/pins.rs`: random outcomes of a runner fixed instead of rolled (e.g.
+    to replay a race).
   - Any other module in `race/` contains properties and calculations related to
     a specific race mechanic.
 - `trigger.rs`, `trigger/`: trigger system to activate skills based upon their

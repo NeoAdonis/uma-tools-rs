@@ -93,6 +93,7 @@ pub use condition::parser::ParseError;
 pub use configuration::Configuration;
 pub use course::Course;
 pub use race::parameters::{RaceParameters, RaceParametersData};
+pub use race::pins::Pins;
 pub use race::runner::Runner;
 pub use race::solver::{Entrant, RaceSolver, RunnerId};
 pub use skill::{Skill, SkillData, SkillDataError};
