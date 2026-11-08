@@ -142,6 +142,27 @@ fn test_lane_space_follows_side_blocking() {
 }
 
 #[test]
+fn test_move_time_counts_lateral_movement_in_one_direction() {
+    let mut solver = lane_solver(&[(100.0, 0.4)]);
+    let course = solver.state.course.clone();
+    let runner = &mut solver.runners[0];
+    let step = |runner: &mut Runner, target| {
+        runner.lane.target = CourseWidths(target);
+        runner.update_lane(&course, DELTA_TIME);
+        runner.lane.move_time
+    };
+    assert_close!(step(runner, 0.5), DELTA_TIME);
+    assert_close!(step(runner, 0.5), 2.0 * DELTA_TIME);
+
+    // Turning back restarts it.
+    assert_close!(step(runner, 0.3), DELTA_TIME);
+
+    // Blocked towards the target: not moving.
+    runner.blocked.side_in = true;
+    assert_eq!(step(runner, 0.3), 0.0);
+}
+
+#[test]
 fn test_target_lane_updates_when_close_or_blocked_towards_it() {
     let mut solver = lane_solver(&[(100.0, 0.4)]);
     let runner = &mut solver.runners[0];

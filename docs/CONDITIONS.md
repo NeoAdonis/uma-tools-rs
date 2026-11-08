@@ -655,14 +655,15 @@ Checks if you're currently performing your last spurt.
 
 ## is_move_lane
 
-Checks if you've just moved left or right.
+Checks if you've been moving left or right, in the same direction, for at least
+a second.
 
 *Possible values:* 1 (moved closer to the fence), 2 (moved further from the
 fence)
 
 *Example:* `is_move_lane==1`
 
-*Meaning:* You've just moved closer to the inner fence.
+*Meaning:* You've been moving closer to the inner fence for a second or more.
 
 ## is_other_character_activate_advantage_skill
 

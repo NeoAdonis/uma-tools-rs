@@ -32,6 +32,9 @@ pub struct LaneState {
     /// It changes towards the lane change target speed, before skills and direction
     /// are accounted for, and resets when the target lane is reached.
     pub current_speed: f64,
+    /// Time spent moving laterally in the same direction until the last lane
+    /// update, in seconds, or zero if she didn't change lanes on it.
+    pub move_time: f64,
 }
 
 impl LaneState {
@@ -41,6 +44,7 @@ impl LaneState {
             target: lane,
             speed: 0.0,
             current_speed: 0.0,
+            move_time: 0.0,
         }
     }
 }
@@ -92,8 +96,23 @@ impl<'a> Deref for VisibleAhead<'a> {
 }
 
 impl Runner {
-    /// Update lane position towards target lane.
+    /// Update lane position towards target lane, and the time spent moving
+    /// laterally in the same direction.
     pub(crate) fn update_lane(&mut self, course: &Course, delta_time: f64) {
+        let previous_speed = self.lane.speed;
+        self.move_towards_target_lane(course, delta_time);
+        self.lane.move_time = if self.lane.speed == 0.0 {
+            0.0
+        } else if self.lane.speed * previous_speed > 0.0 {
+            self.lane.move_time + delta_time
+        } else {
+            delta_time
+        };
+    }
+
+    /// Move the lane position towards the target lane, setting the lateral
+    /// speed.
+    fn move_towards_target_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.02 * 1.5;
         const MAX_SPEED: f64 = 0.6;
 

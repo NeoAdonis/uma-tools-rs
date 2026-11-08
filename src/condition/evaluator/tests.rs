@@ -780,14 +780,26 @@ fn test_start_types_by_start_delay() {
 }
 
 #[test]
-fn test_is_move_lane_by_lane_speed() {
+fn test_is_move_lane_by_lane_speed_and_move_time() {
     let mut solver = create_test_race_solver(vec![]);
 
-    // Inward, still, outward.
-    for (speed, expected) in [(-0.01, 1), (0.0, 0), (0.01, 2)] {
-        solver.runners[0].lane.speed = speed;
+    // (lane speed, move time, expected): inward, outward, still, and moving
+    // for less than 1 s.
+    let cases = [
+        (-0.01, 1.0, 1),
+        (0.01, 1.0, 2),
+        (0.0, 0.0, 0),
+        (0.01, 0.999, 0),
+    ];
+    for (speed, move_time, expected) in cases {
+        let runner = &mut solver.runners[0];
+        runner.lane.speed = speed;
+        runner.lane.move_time = move_time;
         let actual = status_value(&StatusVar::IsMoveLane, &solver.runners[0]);
-        assert_eq!(actual, expected, "lane speed {speed}");
+        assert_eq!(
+            actual, expected,
+            "lane speed {speed}, move time {move_time}"
+        );
     }
 }
 

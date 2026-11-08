@@ -810,7 +810,9 @@ fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
         // ? Assumed to be a Good Start; under investigation.
         IsGoodstart => matches!(runner.start_type(), StartType::Good) as i32,
 
-        // Lane movement.
+        // Lane movement, after moving in the same direction for a while.
+        // ? Assumed to be 1 s; under investigation.
+        IsMoveLane if runner.lane.move_time < 1.0 => 0,
         IsMoveLane => {
             if runner.lane.speed < 0.0 {
                 1 // Moving inward.
