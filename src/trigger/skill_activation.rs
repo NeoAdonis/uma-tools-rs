@@ -46,13 +46,14 @@
 //!    range that the branch has, in this order:
 //!    1. **Position**: distance rate, remaining distance, furlongs, corners,
 //!       slopes, straights, final corner, last straight.
-//!    2. **Time**: `accumulatetime`.
-//!    3. **HP**: `hp_per`.
+//!    2. **Phase**: the phase and its subdivisions.
+//!    3. **Time**: `accumulatetime`.
+//!    4. **HP**: `hp_per`.
 //!
 //!    The phase is a variable of its own kind, not a position: it's updated
 //!    from the position before the last move, a frame behind the one position
-//!    windows are checked with. No window is based on it, so its comparisons
-//!    (subdivisions included) are only checked as guards.
+//!    windows are checked with. So it doesn't narrow position windows, and
+//!    phase windows follow the runner's phase itself.
 //!
 //!    A branch with no range at all gets a position window over the whole
 //!    race.
@@ -89,8 +90,8 @@
 //!
 //! - Their position windows go to a separate queue, checked before the
 //!   triggers they unlock (see [`Runner::check_skills`]). That queue only
-//!   tracks positions, so a precondition window based on time or HP covers the
-//!   whole race instead.
+//!   tracks positions, so a precondition window based on the phase, time or HP
+//!   covers the whole race instead.
 //! - Unlock logics are added before the logics they unlock, so an event firing
 //!   both unlocks the skill first.
 //! - They aren't rolled: skills with random variables in their preconditions
@@ -110,8 +111,14 @@
 //! - **Trigger**: `Window { Position, 300, 1100 }` (corners only).
 //! - **Guards**: `[phase==1, corner!=0, order<=3]`.
 //!
+//! Condition `phase>=2 & order<=3`:
+//!
+//! - **Trigger**: `Window { Phase, 2, 3 }` (Late and Last phases).
+//! - **Guards**: `[phase>=2, order<=3]`.
+//!
 //! [`Runner::check_skills`]: crate::race::runner::Runner::check_skills
 
+use crate::condition::evaluator::Value;
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::geometry::Segment;
@@ -182,6 +189,8 @@ pub(crate) enum LogicAction {
 pub(crate) enum WindowVariable {
     /// Position (meters from start).
     Position,
+    /// Phase (its value in conditions, from -1 for the run-up to 3).
+    Phase,
     /// Time elapsed since race start (seconds).
     Time,
     /// HP percentage (0-100).
@@ -451,6 +460,7 @@ fn compile_branch(
     let mut event = None;
     let mut guards = Vec::new();
     let mut position = FULL_RANGE;
+    let mut phase = ALL_PHASES;
     let mut time = FULL_RANGE;
     let mut hp = FULL_RANGE;
 
@@ -487,6 +497,7 @@ fn compile_branch(
 
             _ => {
                 position = intersect(position, position_range(comp, course)?);
+                phase = intersect(phase, phase_range(comp));
                 time = intersect(time, time_range(comp));
                 hp = intersect(hp, hp_range(comp));
                 guards.push(comp.clone());
@@ -494,7 +505,7 @@ fn compile_branch(
         }
     }
 
-    if is_empty(position) || is_empty(time) || is_empty(hp) {
+    if is_empty(position) || is_empty(phase) || is_empty(time) || is_empty(hp) {
         // Some comparisons can never be true at the same time.
         return None;
     }
@@ -520,8 +531,11 @@ fn compile_branch(
         max_threshold,
     };
     let trigger = event.unwrap_or_else(|| {
-        if position != FULL_RANGE || (time == FULL_RANGE && hp == FULL_RANGE) {
+        let unbounded = phase == ALL_PHASES && time == FULL_RANGE && hp == FULL_RANGE;
+        if position != FULL_RANGE || unbounded {
             window(WindowVariable::Position, position)
+        } else if phase != ALL_PHASES {
+            window(WindowVariable::Phase, phase)
         } else if time != FULL_RANGE {
             window(WindowVariable::Time, time)
         } else {
@@ -561,6 +575,9 @@ const FULL_RANGE: Range = (0.0, f64::INFINITY);
 
 /// Range containing no value.
 const EMPTY_RANGE: Range = (f64::INFINITY, f64::NEG_INFINITY);
+
+/// Range containing every phase.
+const ALL_PHASES: Range = (Phase::RunUp as i8 as f64, Phase::Last as i8 as f64);
 
 fn intersect(a: Range, b: Range) -> Range {
     (a.0.max(b.0), a.1.min(b.1))
@@ -671,6 +688,31 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
 
     let range = intersect(range, FULL_RANGE);
     (!is_empty(range)).then_some(range)
+}
+
+/// Get the range of phases where a comparison can be true.
+///
+/// Subdivisions (`phase_firsthalf`...) are -1 outside of them, so they only
+/// narrow the range when they can't hold there.
+fn phase_range(comp: &Comparison) -> Range {
+    let holds = |phase: Phase| comp.holds(Value::Int(phase as i32));
+    match comp.var {
+        VarType::Phase(PhaseVar::Phase) => {}
+        VarType::Phase(_) if !holds(Phase::RunUp) => {}
+        _ => return ALL_PHASES,
+    }
+    envelope(
+        [
+            Phase::RunUp,
+            Phase::Early,
+            Phase::Mid,
+            Phase::Late,
+            Phase::Last,
+        ]
+        .into_iter()
+        .filter(|&phase| holds(phase))
+        .map(|phase| (phase as i8 as f64, phase as i8 as f64)),
+    )
 }
 
 /// Get the range of elapsed times (in seconds) where a comparison can be true.

@@ -80,9 +80,10 @@ pub(crate) struct TriggerScheduler {
     pub(crate) precondition_windows: WindowQueue,
 
     // Window triggers - checked every frame while within bounds (including random
-    // segments). Position and time only increase, so their windows are queued; HP
-    // can recover, so HP windows are scanned every frame.
+    // segments). Position, phase and time only increase, so their windows are
+    // queued; HP can recover, so HP windows are scanned every frame.
     pub(crate) position_windows: WindowQueue,
+    pub(crate) phase_windows: WindowQueue,
     pub(crate) time_windows: WindowQueue,
     pub(crate) hp_windows: Vec<WindowTrigger>,
 
@@ -146,6 +147,8 @@ impl TriggerScheduler {
         self.precondition_windows
             .remove_if(|window| removed(window.logic_idx));
         self.position_windows
+            .remove_if(|window| removed(window.logic_idx));
+        self.phase_windows
             .remove_if(|window| removed(window.logic_idx));
         self.time_windows
             .remove_if(|window| removed(window.logic_idx));
@@ -302,6 +305,7 @@ mod tests {
             let window = || window(logic_idx, min, min + 10.0);
             scheduler.precondition_windows.push(window());
             scheduler.position_windows.push(window());
+            scheduler.phase_windows.push(window());
             scheduler.time_windows.push(window());
             scheduler.hp_windows.push(window());
             scheduler.last_straight_triggers.push(logic_idx);
@@ -326,6 +330,7 @@ mod tests {
                 windows(&scheduler.precondition_windows),
             ),
             ("position_windows", windows(&scheduler.position_windows)),
+            ("phase_windows", windows(&scheduler.phase_windows)),
             ("time_windows", windows(&scheduler.time_windows)),
             (
                 "hp_windows",

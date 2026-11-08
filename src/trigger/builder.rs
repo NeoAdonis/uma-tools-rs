@@ -234,8 +234,8 @@ fn add_precondition(
 
     for branch in branches {
         // Windows go to their own queue, checked before the triggers they unlock (see
-        // `Runner::check_skills`). That queue tracks positions only: time and HP
-        // windows cover the whole race.
+        // `Runner::check_skills`). That queue tracks positions only: phase, time
+        // and HP windows cover the whole race.
         let trigger = match branch.trigger {
             TriggerCondition::Window {
                 variable: WindowVariable::Position,
@@ -314,6 +314,7 @@ fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut T
             };
             match variable {
                 WindowVariable::Position => scheduler.position_windows.push(window),
+                WindowVariable::Phase => scheduler.phase_windows.push(window),
                 WindowVariable::Time => scheduler.time_windows.push(window),
                 WindowVariable::HpPercent => scheduler.hp_windows.push(window),
             }

@@ -185,11 +185,10 @@ fn test_position_window_ranges() {
         // Only true from 1200 to 1201m: the final corner starts at 1200m, and
         // the remaining distance is 800m until 1201m.
         ("remain_distance>=800&is_finalcorner==1", (1200.0, 1201.0)),
-        // Nothing position-based: window covers the whole race. The phase
-        // follows the position a frame behind, so it doesn't narrow windows
-        // (the guards check it).
+        // Nothing position-based: window covers the whole race.
         ("order<=3", (0.0, f64::INFINITY)),
-        ("phase==1", (0.0, f64::INFINITY)),
+        // A subdivision is -1 outside of it, so this holds in every phase.
+        ("phase_firsthalf<=1", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
         ("distance_rate!=50", (0.0, f64::INFINITY)),
         // Not in a corner or on a slope: their gaps aren't a range.
@@ -230,9 +229,24 @@ fn test_position_windows_start_after_the_run_up() {
 }
 
 #[test]
-fn test_time_and_hp_windows() {
-    // Used when the branch doesn't depend on the position.
+fn test_phase_time_and_hp_windows() {
+    // Used when the branch doesn't depend on the position, in this order.
     let cases = [
+        ("phase==1", WindowVariable::Phase, (1.0, 1.0)),
+        ("phase>=2&order<=3", WindowVariable::Phase, (2.0, 3.0)),
+        // The run-up is -1.
+        ("phase<1", WindowVariable::Phase, (-1.0, 0.0)),
+        ("phase_laterhalf==2", WindowVariable::Phase, (2.0, 2.0)),
+        (
+            "phase_firstquarter>=1&phase<=2",
+            WindowVariable::Phase,
+            (1.0, 2.0),
+        ),
+        (
+            "phase==1&accumulatetime>=5",
+            WindowVariable::Phase,
+            (1.0, 1.0),
+        ),
         (
             "accumulatetime>=5",
             WindowVariable::Time,
@@ -242,6 +256,11 @@ fn test_time_and_hp_windows() {
             "accumulatetime<=10&order<=3",
             WindowVariable::Time,
             (0.0, 11.0),
+        ),
+        (
+            "accumulatetime>=5&hp_per<=30",
+            WindowVariable::Time,
+            (5.0, f64::INFINITY),
         ),
         ("hp_per<=30", WindowVariable::HpPercent, (0.0, 31.0)),
         (
@@ -257,10 +276,13 @@ fn test_time_and_hp_windows() {
         assert_close!(actual_max, max, "{condition}");
     }
 
-    // Position windows take precedence; time and HP stay as guards.
-    let branch = compile_one("distance_rate>=50&hp_per<=30");
+    // Position windows take precedence; the others stay as guards.
+    let branch = compile_one("distance_rate>=50&phase==1&hp_per<=30");
     assert_eq!(window(&branch).0, WindowVariable::Position);
-    assert_eq!(guards(&branch), vec!["distance_rate >= 50", "hp_per <= 30"]);
+    assert_eq!(
+        guards(&branch),
+        vec!["distance_rate >= 50", "phase == 1", "hp_per <= 30"]
+    );
 }
 
 #[test]
@@ -272,6 +294,7 @@ fn test_unsatisfiable_branches_are_dropped() {
         "corner==1",
         "distance_rate<=20&is_finalcorner==1",
         "hp_per>=50&hp_per<=30",
+        "phase==1&phase_laterhalf==2",
         "slope==2&is_activate_heal_skill==1",
     ] {
         assert!(compile(condition).is_empty(), "{condition}");

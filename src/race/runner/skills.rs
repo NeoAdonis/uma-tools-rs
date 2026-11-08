@@ -403,8 +403,8 @@ impl Runner {
 
     /// Check the triggers that don't depend on this frame's activations.
     ///
-    /// Windows (position, time, HP) containing the current values are checked, as
-    /// well as entering the last straight since the last check.
+    /// Windows (position, phase, time, HP) containing the current values are
+    /// checked, as well as entering the last straight since the last check.
     ///
     /// These triggers are checked together in the order the logics were built (by
     /// skill, then by alternative), so that when several alternatives of a skill
@@ -416,9 +416,12 @@ impl Runner {
             .is_some_and(|straight_idx| straight_idx + 1 == state.course.straights.len());
 
         let position = self.position;
+        let phase = self.phase as i8 as f64;
         let hp = self.hp.percent();
         self.try_activate_all(state, |scheduler, inside| {
             inside.extend(scheduler.position_windows.advance(position, EPSILON));
+            // The guards evaluate the same phase, so no epsilon is needed.
+            inside.extend(scheduler.phase_windows.advance(phase, 0.0));
             inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
 
             // HP can recover, so HP windows are never dropped. Unlike positions and
