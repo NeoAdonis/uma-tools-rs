@@ -605,8 +605,8 @@ fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
         // Distance in furlongs from the official start line.
         Furlong => meters_to_furlongs(course.nominal_position(runner.position)).floor() as i32,
 
-        // Remaining distance in meters.
-        RemainDistance => course.remain_distance(runner.position).floor() as i32,
+        // Remaining distance in meters, from the floored position.
+        RemainDistance => course.remain_distance(runner.position.floor()) as i32,
 
         // Remaining distance for any player (non-NPC) runner.
         RemainDistanceViewerId => {

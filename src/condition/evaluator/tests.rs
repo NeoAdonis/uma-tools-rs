@@ -414,7 +414,7 @@ fn test_location_values_without_corners() {
 fn test_distance_location_values() {
     let mut solver = create_test_race_solver(vec![]);
     let course = location_course();
-    place(&mut solver.runners[0], &course, 1500.0);
+    place(&mut solver.runners[0], &course, 1500.5);
 
     let runner = &solver.runners[0];
     let actual = [
@@ -423,7 +423,8 @@ fn test_distance_location_values() {
         SpatialVar::RemainDistance,
     ]
     .map(|var| location_value(&var, &course, runner));
-    // 1500m are 7.5 furlongs.
+    // 1500m are 7.5 furlongs. The remaining distance is counted from the
+    // floored position (2000 - 1500).
     assert_eq!(actual, [75, 7, 500]);
 }
 

@@ -81,14 +81,14 @@ fn test_position_derived_state_matches_positions_after_each_frame() {
 fn test_skills_see_positions_and_phase_from_earlier_frames() {
     // (condition, boundary deciding it, how many frames before the activation
     // the position it's decided from is). On this 2400m course, the Late phase
-    // starts at 1600m and the final corner at 1910m. Less than 800m remain past
-    // 1600m, so the last case only holds for the frame where the position is
-    // past it but the phase isn't yet.
+    // starts at 1600m and the final corner at 1910m. 800m remain from 1600m,
+    // so the last case only holds for the frame where the position is past it
+    // but the phase isn't yet.
     let cases = [
         ("is_finalcorner==1", 1910.0, 1),
         ("phase>=2", 1600.0, 2),
         ("phase>=2&is_finalcorner==1", 1910.0, 1),
-        ("phase==1&remain_distance<=799", 1600.0, 1),
+        ("phase==1&remain_distance<=800", 1600.0, 1),
     ];
     for (condition, boundary, lag) in cases {
         let skill = skill(24, condition, SkillType::TargetSpeed, 0.35);

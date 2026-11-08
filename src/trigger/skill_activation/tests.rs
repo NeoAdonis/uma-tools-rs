@@ -148,7 +148,8 @@ fn test_position_window_ranges() {
     // Test course: 2000m, corners at 100-250, 500-700 and 1200-1380, uphill at
     // 800-900, straights at 0-100 and 1500-2000 (both facing the audience).
     // Values are floored when evaluated, so `<=N` holds until N + 1, and `>N`
-    // from N + 1.
+    // from N + 1. The remaining distance is counted from the floored position,
+    // so `remain_distance<=N` holds from N meters before the goal.
     let furlong = crate::units::FURLONG_TO_METERS;
     let cases = [
         ("distance_rate>=50", (1000.0, f64::INFINITY)),
@@ -157,13 +158,13 @@ fn test_position_window_ranges() {
         ("distance_rate>=50&distance_rate<=51", (1000.0, 1040.0)),
         ("distance_rate>50", (1020.0, f64::INFINITY)),
         ("distance_rate<50", (0.0, 1000.0)),
-        ("remain_distance<=600", (1399.0, f64::INFINITY)),
-        ("remain_distance>=600", (0.0, 1400.0)),
-        ("remain_distance<600", (1400.0, f64::INFINITY)),
-        ("remain_distance>600", (0.0, 1399.0)),
+        ("remain_distance<=600", (1400.0, f64::INFINITY)),
+        ("remain_distance>=600", (0.0, 1401.0)),
+        ("remain_distance<600", (1401.0, f64::INFINITY)),
+        ("remain_distance>600", (0.0, 1400.0)),
         (
             "remain_distance<=305&remain_distance>=300",
-            (1694.0, 1700.0),
+            (1695.0, 1701.0),
         ),
         ("furlong>=5", (5.0 * furlong, f64::INFINITY)),
         // Final corner "or beyond" (and its second half).
@@ -181,9 +182,9 @@ fn test_position_window_ranges() {
         ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
         ("phase==1&corner!=0", (100.0, 1380.0)),
         ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
-        // Only true at 1200m: the remaining distance is 800m there, and the
-        // final corner starts. A single point is a valid range.
-        ("remain_distance>=800&is_finalcorner==1", (1200.0, 1200.0)),
+        // Only true from 1200 to 1201m: the final corner starts at 1200m, and
+        // the remaining distance is 800m until 1201m.
+        ("remain_distance>=800&is_finalcorner==1", (1200.0, 1201.0)),
         // Nothing position-based: window covers the whole race. The phase
         // follows the position a frame behind, so it doesn't narrow windows
         // (the guards check it).

@@ -553,9 +553,7 @@ fn activation_event(comp: &Comparison) -> TriggerCondition {
 /// Range of values `(min, max)` a variable can take (both inclusive).
 ///
 /// It may contain values where the comparisons are false, but never misses one
-/// where they're true, so a single point (`min == max`) isn't empty (e.g.
-/// `remain_distance>=800&is_finalcorner==1` when the final corner starts 800m
-/// before the goal).
+/// where they're true. A single point (`min == max`) isn't empty.
 type Range = (f64, f64);
 
 /// Range containing every value.
@@ -614,9 +612,11 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
             let (min, max) = floored_range(op, value);
             (course.position_at_rate(min), course.position_at_rate(max))
         }
+        // Counted from the floored position, so the value is in `min..max`
+        // from `length - max + 1` to `length - min + 1`.
         (Spatial(SpatialVar::RemainDistance), op, value) => {
             let (min, max) = floored_range(op, value);
-            (course.length() - max, course.length() - min)
+            (course.length() - max + 1.0, course.length() - min + 1.0)
         }
         (Spatial(SpatialVar::Furlong), op, value) => {
             let (min, max) = floored_range(op, value);

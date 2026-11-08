@@ -61,8 +61,9 @@ fn test_runner_finishes_after_run_up() {
 
 #[test]
 fn test_remain_distance_counts_down_to_goal() {
-    // Floored, so 300m remaining holds from 1349m onwards.
-    let start = LENGTH - 301.0;
+    // Counted from the floored position, so 300m remaining holds from 1350m
+    // onwards.
+    let start = LENGTH - 300.0;
     assert_activates_within("remain_distance<=300", start, start + FRAME_DISTANCE);
 }
 

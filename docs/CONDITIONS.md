@@ -1170,7 +1170,8 @@ skill's `random_lot_shared` conditions.
 The number of meters remaining in the race.
 
 *Note:* On courses with a run-up, it includes the run-up, i.e. it's the distance
-to the goal.
+to the goal. It's counted from the position rounded down, so it's 200 from 200
+meters before the goal until 199 meters before it.
 
 *Example:* `remain_distance==200`
 

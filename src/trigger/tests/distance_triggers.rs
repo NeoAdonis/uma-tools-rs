@@ -71,8 +71,9 @@ fn test_phase_window_activates_once_guards_hold() {
 
 #[test]
 fn test_remain_distance_activates_near_goal() {
-    // Remaining distance is floored: 300.5m remaining counts as 300m
-    let threshold = COURSE_DISTANCE - 301.0;
+    // Remaining distance is counted from the floored position: 300.5m
+    // remaining counts as 301m
+    let threshold = COURSE_DISTANCE - 300.0;
     assert_activates_within(
         "remain_distance<=300",
         threshold,
@@ -83,9 +84,10 @@ fn test_remain_distance_activates_near_goal() {
 #[test]
 fn test_remain_distance_range_activates_within_range() {
     // Skill 100771
-    // 399 <= remain_distance <= 401, floored (so up to 402m remaining)
-    let min = COURSE_DISTANCE - 402.0;
-    let max = COURSE_DISTANCE - 399.0;
+    // 399 <= remain_distance <= 401, from the floored position (so from 401m
+    // remaining to more than 398m)
+    let min = COURSE_DISTANCE - 401.0;
+    let max = COURSE_DISTANCE - 398.0;
     assert_activates_within("remain_distance<=401&remain_distance>=399", min, max);
 }
 
