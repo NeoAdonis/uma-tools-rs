@@ -22,6 +22,13 @@ pub struct LastSpurt {
     pub category: LastSpurtCategory,
 }
 
+impl LastSpurt {
+    /// Check if the last spurt has started at `position`.
+    pub fn has_started(&self, position: f64) -> bool {
+        position >= self.target_distance
+    }
+}
+
 /// Category of last spurt based on achievable speed and HP.
 ///
 /// Values match those of the `lastspurt` condition variable.
@@ -65,19 +72,20 @@ fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
     base_component + speed_component + guts_component
 }
 
-/// Remaining distance from the start of the Late phase (or current position, if
+/// Remaining distance from the start of the Late phase (or `position`, if
 /// later) to the goal line.
-fn remaining_spurt_distance(runner: &Runner, course: &Course) -> f64 {
-    (course.length() - Phase::Late.boundaries(course).0).min(course.length() - runner.position)
+fn remaining_spurt_distance(position: f64, course: &Course) -> f64 {
+    (course.length() - Phase::Late.boundaries(course).0).min(course.length() - position)
 }
 
-/// HP required to run the last spurt at `speed` until 60m before the goal line.
-fn spurt_hp_required(runner: &Runner, state: &RaceState, speed: f64) -> f64 {
+/// HP required to run the last spurt at `speed` from `position` until 60m
+/// before the goal line.
+fn spurt_hp_required(runner: &Runner, state: &RaceState, speed: f64, position: f64) -> f64 {
     estimate_hp_last_spurt(
         speed,
         &state.course,
         state.params.track_condition,
-        remaining_spurt_distance(runner, &state.course) - 60.0,
+        remaining_spurt_distance(position, &state.course) - 60.0,
         runner.adjusted.guts,
     )
 }
@@ -108,10 +116,16 @@ impl Runner {
             1.0,
         ) * mid_distance
             / mid_speed;
-        mid_hp + spurt_hp_required(self, state, last_spurt_speed_max(self, state))
+        mid_hp
+            + spurt_hp_required(
+                self,
+                state,
+                last_spurt_speed_max(self, state),
+                self.position,
+            )
     }
 
-    /// Calculate the last spurt parameters of this runner.
+    /// Calculate the last spurt parameters of this runner, from `position`.
     ///
     /// The last spurt is a burst of speed towards the end of the race. It is
     /// determined based on the runner's stats, remaining HP, and course conditions.
@@ -125,19 +139,19 @@ impl Runner {
     /// race. A candidate is picked based on a probability influenced by the
     /// runner's wit stat. A higher wit increases the chance of picking a
     /// higher speed.
-    pub(crate) fn calculate_last_spurt(&mut self, state: &RaceState) -> LastSpurt {
+    pub(crate) fn calculate_last_spurt(&mut self, position: f64, state: &RaceState) -> LastSpurt {
         let course = &state.course;
         let track_condition = state.params.track_condition;
         let max_last_spurt_speed = last_spurt_speed_max(self, state);
 
-        // Calculate remaining distance from start of late phase (or current position).
-        let remaining_distance = remaining_spurt_distance(self, course);
+        // Calculate remaining distance from start of late phase (or `position`).
+        let remaining_distance = remaining_spurt_distance(position, course);
 
         // Estimate stamina usage up to 60m before goal line.
         let calculation_distance = remaining_distance - 60.0;
 
         // If HP is sufficient for max speed, use it immediately.
-        let max_hp_required = spurt_hp_required(self, state, max_last_spurt_speed);
+        let max_hp_required = spurt_hp_required(self, state, max_last_spurt_speed, position);
 
         if self.hp.current() >= max_hp_required {
             return LastSpurt {

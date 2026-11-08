@@ -903,7 +903,7 @@ impl Runner {
                     if state.config.game_version >= GameVersion::FirstAnniversary
                         && self.phase >= Phase::Late
                     {
-                        self.last_spurt = Some(self.calculate_last_spurt(state));
+                        self.last_spurt = Some(self.calculate_last_spurt(self.position, state));
                     }
                 }
             }

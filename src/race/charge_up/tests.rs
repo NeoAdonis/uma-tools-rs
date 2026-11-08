@@ -301,6 +301,32 @@ fn test_release_state() {
 }
 
 #[test]
+fn test_release_follows_position_before_move() {
+    let mut solver = eligible_solver();
+    let runner = &mut solver.runners[0];
+    runner.charge_up.as_mut().unwrap().conserved = 100.0;
+    runner.position = 1500.0;
+    runner.last_spurt = Some(LastSpurt {
+        max_speed: 20.0,
+        target_distance: 1400.0,
+        category: LastSpurtCategory::Full,
+    });
+    let pending =
+        |runner: &Runner| runner.charge_up.as_ref().unwrap().outcome == ChargeUpOutcome::Pending;
+
+    // (Position before the move, whether released). The spurt starts at 1400m,
+    // and the runner is already past it.
+    for (position, released) in [(1399.0, false), (1400.0, true)] {
+        runner.update_phase(position, &mut solver.state);
+        assert_eq!(!pending(runner), released, "{position}m");
+    }
+    let ChargeUpOutcome::Released(release) = &runner.charge_up.as_ref().unwrap().outcome else {
+        unreachable!();
+    };
+    assert_eq!(release.start_position, 1400.0);
+}
+
+#[test]
 fn test_release_increases_acceleration() {
     let mut solver = eligible_solver();
     enter_last_spurt(&mut solver, 100.0);

@@ -667,7 +667,7 @@ impl Runner {
     pub fn active_last_spurt(&self) -> Option<&LastSpurt> {
         self.last_spurt
             .as_ref()
-            .filter(|last_spurt| self.position >= last_spurt.target_distance)
+            .filter(|last_spurt| last_spurt.has_started(self.position))
     }
 
     /// Check if the runner is in her last spurt and has reached its speed.
@@ -792,8 +792,20 @@ impl Runner {
 
     /// Update the current section and phase from `position`, the one before the
     /// last move, so they're a frame behind the rest of the state derived from
-    /// positions. A last spurt decided here starts from the current position.
+    /// positions.
+    ///
+    /// The last spurt is decided here a frame after the phase reaches Late,
+    /// from `position`, and conserved power is released from the frame
+    /// `position` reaches its start. So when the spurt starts right away,
+    /// power is released a frame after the phase reaches Late, and skills see
+    /// the spurt a frame later.
     pub(crate) fn update_phase(&mut self, position: f64, state: &mut RaceState) {
+        // ? Assume the last spurt is decided after the move, so its speed only
+        // applies from the next one.
+        if self.phase >= Phase::Late && self.last_spurt.is_none() {
+            self.last_spurt = Some(self.calculate_last_spurt(position, state));
+        }
+
         // ? Assume sections follow the phase, along with what depends on them
         // (section speed, rushes, the end of spot struggles).
         let prev_section = self.section;
@@ -822,22 +834,22 @@ impl Runner {
         // Phase can only advance at section boundaries, or at the end of the
         // run-up (which is part of section 0).
         if self.section != prev_section || self.phase == Phase::RunUp {
-            let prev_phase = self.phase;
             self.phase = Phase::from_position(position, &state.course);
-            if prev_phase != self.phase && self.phase >= Phase::Late && self.last_spurt.is_none() {
-                self.last_spurt = Some(self.calculate_last_spurt(state));
-            }
         }
 
-        self.try_release_charge_up(state);
+        self.try_release_charge_up(position, state);
     }
 
-    /// Release conserved power (脚色十分) upon entering the last spurt.
+    /// Release conserved power (脚色十分) once `position` reaches the start of the
+    /// last spurt.
     ///
     /// Called after the position update, so the acceleration bonus starts on the
     /// next frame.
-    fn try_release_charge_up(&mut self, state: &RaceState) {
-        if self.active_last_spurt().is_none() {
+    fn try_release_charge_up(&mut self, position: f64, state: &RaceState) {
+        if !self
+            .last_spurt
+            .is_some_and(|last_spurt| last_spurt.has_started(position))
+        {
             return;
         }
 
@@ -849,7 +861,7 @@ impl Runner {
                 &state.course,
                 activity,
                 state.elapsed_time,
-                self.position,
+                position,
             );
         }
     }
