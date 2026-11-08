@@ -109,10 +109,10 @@ pub enum SkillPin {
 /// [`SkillPin::Activations`]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PinnedActivation {
-    /// Time since the race started, in seconds. The skill activates on the
-    /// first skill check of a frame ending after that time, once she has left
-    /// the gate and before she finishes. Out-of-gate alternatives activate
-    /// before the race, so their time is 0.
+    /// Time since the race started, in seconds. Skills are checked at the end
+    /// of each frame, and the skill activates on the first check at or after
+    /// that time, once she has left the gate and before she finishes.
+    /// Out-of-gate alternatives activate before the race, so their time is 0.
     pub time: f64,
     /// Index of the alternative that activates.
     pub alternative: usize,

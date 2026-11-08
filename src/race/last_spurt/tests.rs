@@ -28,7 +28,7 @@ fn move_to_section(solver: &mut RaceSolver<Runner>, section: u8) {
     let position = solver.state.course.section_length() * section as f64 + 0.1;
     let runner = &mut solver.runners[0];
     runner.position = position;
-    runner.update_phase(&mut solver.state);
+    runner.update_phase(runner.position, &mut solver.state);
 }
 
 /// Late-race base target speed of the solver's runner.

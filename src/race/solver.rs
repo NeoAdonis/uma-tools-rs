@@ -926,16 +926,16 @@ impl RaceSolver<Runner> {
     /// at the end of the previous step, so the first check happens before anyone
     /// moves, with every runner still at the gate.
     ///
-    /// For **skills**, every runner that moves during this step (i.e. leaves the
-    /// gate by its end, so that her first frame of movement is checked too)
-    /// [checks her skills](Runner::check_skills) before time advances. Nothing is
-    /// updated in between, so every check sees the same state: the one reached at
-    /// the end of the previous step, including multi-runner values such as order.
-    /// The exception is blocking and nearby state (blocking, surrounding, nearby
-    /// runners, visibility and overtake targets, and their times): it's only
-    /// updated after skill checks, so checks see it from the positions a frame
-    /// earlier. So does the competition before the spurt, which counts nearby
-    /// runners at the end of the step.
+    /// For **skills**, time first advances to the end of the step, and active
+    /// effects that have run their duration expire. Then every runner that moves
+    /// during this step (i.e. leaves the gate by its end, so that her first frame
+    /// of movement is checked too) [checks her skills](Runner::check_skills), and
+    /// activations are recorded at that time. Nothing is updated in between, so
+    /// every check sees the same state: the one reached at the end of the previous
+    /// step, i.e. from the positions a frame before the activation time, including
+    /// multi-runner values (order, blocking...). The phase and section are a frame
+    /// older still (see below). Effects activated then apply from this step's
+    /// move.
     ///
     /// Once every runner has checked her skills, the buff (advantage) skill
     /// types activated this frame are counted, along with the activations of the
@@ -944,14 +944,13 @@ impl RaceSolver<Runner> {
     /// every runner are checked, so that the result doesn't depend on which
     /// runner checked first. Then, effects targeting other runners are applied.
     ///
-    /// After that, the **state is updated**. Blocking and nearby state (along with
-    /// target lanes) comes first, from the current positions, unless nobody has
-    /// moved yet. Then time advances, and each runner (in gate order) moves and
-    /// updates everything derived from her position (phase, corners, straights,
-    /// slopes), her lane and HP, and her active effects. Only front blocking reads
-    /// another runner then: the blocker's speed, already updated if her gate is
-    /// lower. The other multi-runner values (order, overlaps, duels...) are
-    /// updated last.
+    /// After that, the **state is updated**. Each runner (in gate order) moves
+    /// and updates everything derived from her position: corners, straights and
+    /// slopes from her new one, but phase and section from the one before the
+    /// move. Then her lane and HP. Only front blocking reads another runner then:
+    /// the blocker's speed, already updated if her gate is lower. Multi-runner
+    /// values (order, overlaps, blocking and nearby state, duels...) are updated
+    /// last.
     ///
     /// Events detected during the update (e.g. entering a straight) are stored
     /// and handled by the next skill check. Update functions never check skills
@@ -963,14 +962,21 @@ impl RaceSolver<Runner> {
         self.update_team_activations();
         self.state.buffs_activated.clear();
         self.state.popularity_top_activations = SkillActivationFlags::default();
-        let step_end_time = self.state.elapsed_time + delta_time;
+        self.state.elapsed_time += delta_time;
+        for runner in &mut self.runners {
+            // Effects expire before skills are checked, so they apply to as many
+            // moves as their duration covers, the first one ending now.
+            if runner.start_delay <= self.state.elapsed_time {
+                runner.update_skill_durations(self.state.elapsed_time);
+            }
+        }
         for runner in &mut self.runners {
             // Runners that stay in the gate during this step haven't reached any state
             // worth checking, and skills can't activate after the goal.
-            if !runner.can_activate_skills(step_end_time) {
+            if !runner.can_activate_skills(self.state.elapsed_time) {
                 continue;
             }
-            runner.check_skills(&mut self.state, step_end_time);
+            runner.check_skills(&mut self.state);
             for skill_type in runner.activation_flags.buff_activated.iter() {
                 *self.state.buffs_activated.entry(skill_type).or_insert(0) += 1;
             }
@@ -978,16 +984,8 @@ impl RaceSolver<Runner> {
                 self.state.popularity_top_activations = runner.activation_flags;
             }
         }
-        self.check_advantage_triggers(delta_time);
+        self.check_advantage_triggers();
         self.apply_pending_effects();
-
-        // ? Assume there's no update before anyone moves, so it doesn't count
-        // towards blocked and nearby times.
-        if self.state.elapsed_time > 0.0 {
-            self.update_blocking_status(delta_time);
-        }
-
-        self.state.elapsed_time += delta_time;
 
         // Runners move in gate order, so a front blocker with a lower gate limits
         // speed with her new speed, and one with a higher gate with her old one.
@@ -1008,14 +1006,15 @@ impl RaceSolver<Runner> {
             // still counts as part of it for HP consumption.
             let start_dash = runner.is_start_dash;
             runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
+            let prev_position = runner.position;
             runner.update_position(delta_time, &self.state);
             if runner.has_finished() && self.state.finish_time.is_none() {
                 self.state.finish_time = Some(self.state.elapsed_time);
             }
 
-            // Update everything derived from the new position, so that skills see a
-            // consistent state.
-            runner.update_phase(&mut self.state);
+            // Update everything derived from the new position, except for the phase
+            // and section, which follow the position before the move.
+            runner.update_phase(prev_position, &mut self.state);
             let transitions = runner.segments.update(runner.position, &self.state.course);
             runner.update_final_extra_move_lane(
                 &transitions,
@@ -1027,7 +1026,6 @@ impl RaceSolver<Runner> {
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, start_dash, &self.state);
             runner.update_charge_up(delta_time, self.state.elapsed_time);
-            runner.update_skill_durations(self.state.elapsed_time);
         }
 
         self.runners
@@ -1035,6 +1033,7 @@ impl RaceSolver<Runner> {
 
         self.update_order_values();
         self.resolve_overlaps();
+        self.update_blocking_status(delta_time);
         self.update_spot_struggle();
         self.update_duels(delta_time);
         self.update_secure_lead();
@@ -1056,7 +1055,7 @@ impl RaceSolver<Runner> {
     /// runner, now that this frame's activations are known.
     ///
     /// Skills activated here aren't counted as advantage skills for other runners.
-    fn check_advantage_triggers(&mut self, delta_time: f64) {
+    fn check_advantage_triggers(&mut self) {
         // ? Assume activations don't chain within a frame.
         // Any activation of the most popular runner counts (see
         // `is_popularity_top_character_activate_advantage_skill==-1`).
@@ -1066,7 +1065,7 @@ impl RaceSolver<Runner> {
             return;
         }
         for runner in &mut self.runners {
-            if runner.can_activate_skills(self.state.elapsed_time + delta_time) {
+            if runner.can_activate_skills(self.state.elapsed_time) {
                 runner.check_advantage_triggers(&self.state);
             }
         }

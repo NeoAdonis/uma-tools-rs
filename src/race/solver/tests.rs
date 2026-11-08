@@ -22,9 +22,10 @@ fn feature_at(position: f64, ranges: impl Iterator<Item = (f64, f64)>) -> Option
 }
 
 #[test]
-fn test_position_derived_state_is_consistent_after_each_frame() {
+fn test_position_derived_state_matches_positions_after_each_frame() {
     // Skills are checked against the runner's state; everything derived from the
-    // position must match the position at the end of each frame.
+    // position must match the position at the end of each frame, except for the
+    // phase and section, which match the one before the last move.
     for course_id in [10101, 10104, 10606, 10913] {
         let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
         for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
@@ -33,6 +34,7 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
         let mut solver = solver.ready_runners();
 
         while solver.state.finish_time.is_none() {
+            let before: Vec<_> = solver.runners.iter().map(|r| (r.id, r.position)).collect();
             solver.step(DELTA_TIME);
 
             let course = &solver.state.course;
@@ -43,15 +45,16 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
                 .filter(|runner| runner.start_delay <= solver.state.elapsed_time);
             for runner in started {
                 let position = runner.position;
-                let context = format!("course {course_id}, position {position}");
+                let (_, prev_position) = *before.iter().find(|(id, _)| *id == runner.id).unwrap();
+                let context = format!("course {course_id}, positions {prev_position}, {position}");
                 assert_eq!(
                     runner.phase,
-                    Phase::from_position(position, course),
+                    Phase::from_position(prev_position, course),
                     "{context}"
                 );
                 assert_eq!(
                     runner.section,
-                    course.section_from_position(position),
+                    course.section_from_position(prev_position),
                     "{context}"
                 );
                 assert_eq!(
@@ -75,32 +78,39 @@ fn test_position_derived_state_is_consistent_after_each_frame() {
 }
 
 #[test]
-fn test_skills_see_state_after_the_move() {
-    // On a 2400m course, Late phase starts at 1600m, i.e. with 800m remaining.
-    // The distance trigger and the phase guard become true on the same frame, so
-    // both must be seen at once.
-    let skill = skill(
-        24,
-        "remain_distance<=800&phase>=2",
-        SkillType::TargetSpeed,
-        0.35,
-    );
+fn test_skills_see_positions_and_phase_from_earlier_frames() {
+    // (condition, boundary deciding it, how many frames before the activation
+    // the position it's decided from is). On this 2400m course, the Late phase
+    // starts at 1600m and the final corner at 1910m. Less than 800m remain past
+    // 1600m, so the last case only holds for the frame where the position is
+    // past it but the phase isn't yet.
+    let cases = [
+        ("is_finalcorner==1", 1910.0, 1),
+        ("phase>=2", 1600.0, 2),
+        ("phase>=2&is_finalcorner==1", 1910.0, 1),
+        ("phase==1&remain_distance<=799", 1600.0, 1),
+    ];
+    for (condition, boundary, lag) in cases {
+        let skill = skill(24, condition, SkillType::TargetSpeed, 0.35);
+        let uma = Uma {
+            stamina: 1200,
+            ..uma(Style::Pace)
+        };
+        let mut solver = ready_solver(10108, uma, vec![skill], seeded_config(0));
 
-    let uma = Uma {
-        stamina: 1200,
-        ..uma(Style::Pace)
-    };
-    let mut solver = ready_solver(10108, uma, vec![skill], seeded_config(0));
-    assert_eq!(solver.state.course.distance, 2400);
-    solver.run();
-
-    let activations = &solver.runners[0].activated_skills;
-    assert_eq!(activations.len(), 1, "Skill should activate");
-    assert!(
-        (1600.0..1605.0).contains(&activations[0].distance),
-        "Should activate right after 1600m, got {}m",
-        activations[0].distance
-    );
+        // Positions at the end of each frame, from the start.
+        let mut positions = vec![solver.runners[0].position];
+        while solver.runners[0].activated_skills.is_empty() {
+            assert!(!solver.step_frame(), "{condition}: never activated");
+            positions.push(solver.runners[0].position);
+        }
+        let frame = (solver.runners[0].activated_skills[0].time / DELTA_TIME).round() as usize;
+        let seen = &positions[frame - lag - 1..=frame - lag];
+        assert!(
+            seen[1] >= boundary && seen[0] < boundary,
+            "{condition}: {seen:?}"
+        );
+    }
 }
 
 /// Solver with one runner per `(style, position)` pair, sorted by position and
@@ -1076,11 +1086,11 @@ fn test_spot_struggle_ends_upon_entering_ninth_section() {
 
     // Section 7 (0-indexed) is still fine.
     runner.position = 355.0;
-    runner.update_phase(state);
+    runner.update_phase(runner.position, state);
     assert!(runner.spot_struggle.is_active(elapsed_time));
 
     runner.position = 405.0;
-    runner.update_phase(state);
+    runner.update_phase(runner.position, state);
     assert_eq!(runner.spot_struggle, SpotStruggle::Ended);
 }
 
@@ -2732,7 +2742,7 @@ fn test_hp_triggers_activate_within_their_range() {
         let skills = vec![skill(1, condition, SkillType::TargetSpeed, 0.15)];
         let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
         set_hp_percent(&mut solver, 0, percent);
-        solver.runners[0].check_skills(&mut solver.state, DELTA_TIME);
+        solver.runners[0].check_skills(&mut solver.state);
         let activated = !solver.runners[0].activated_skills.is_empty();
         assert_eq!(activated, activates, "{condition} at {percent}%");
     }
@@ -2857,12 +2867,14 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
     let runner = &solver.runners[0];
     assert_eq!(activations(&solver), vec![(7, 0.0)]);
     assert_close!(runner.skill_modifiers.acceleration, 0.2);
-    // Usual duration, scaled with the course distance.
+    // It covers the moves of its usual duration (scaled with the course
+    // distance) from the race start, the first one ending at the first check, so
+    // it's gone by the check a frame after that duration.
     let distance = solver.state.course.distance as f64;
     let [effect] = runner.active_timed_effects.as_slice() else {
         panic!("Expected one active effect");
     };
-    assert_close!(effect.expires_at, 3.0 * distance / 1000.0);
+    assert_close!(effect.expires_at, DELTA_TIME + 3.0 * distance / 1000.0);
 }
 
 #[test]
@@ -3980,6 +3992,7 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
             runner.speed = speed;
             runner.is_start_dash = false;
         }
+        solver.update_blocking_status(DELTA_TIME);
         solver.step(DELTA_TIME);
 
         let speed = |gate| {
@@ -4806,7 +4819,7 @@ fn test_pinned_skills_report_what_their_conditions_allow() {
     let cases = [
         // A wit check can explain a missing activation, unless she has one.
         (with_wit_check(window()), vec![], vec![], vec![]),
-        (window(), vec![open + DELTA_TIME / 2.0], vec![true], vec![]),
+        (window(), vec![open - DELTA_TIME / 2.0], vec![true], vec![]),
         (window(), vec![open - 2.0], vec![false], vec![open]),
         // Unconfirmed, the activation she would have had starts the cooldown.
         (

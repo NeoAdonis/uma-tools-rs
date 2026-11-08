@@ -790,10 +790,14 @@ impl Runner {
         self.finish_time.is_some()
     }
 
-    /// Update the current section and phase based on position.
-    pub(crate) fn update_phase(&mut self, state: &mut RaceState) {
+    /// Update the current section and phase from `position`, the one before the
+    /// last move, so they're a frame behind the rest of the state derived from
+    /// positions. A last spurt decided here starts from the current position.
+    pub(crate) fn update_phase(&mut self, position: f64, state: &mut RaceState) {
+        // ? Assume sections follow the phase, along with what depends on them
+        // (section speed, rushes, the end of spot struggles).
         let prev_section = self.section;
-        self.section = state.course.section_from_position(self.position);
+        self.section = state.course.section_from_position(position);
         if self.section != prev_section {
             // Update section speed modifier.
             self.section_speed_modifier = roll_section_speed_modifier(
@@ -819,7 +823,7 @@ impl Runner {
         // run-up (which is part of section 0).
         if self.section != prev_section || self.phase == Phase::RunUp {
             let prev_phase = self.phase;
-            self.phase = Phase::from_position(self.position, &state.course);
+            self.phase = Phase::from_position(position, &state.course);
             if prev_phase != self.phase && self.phase >= Phase::Late && self.last_spurt.is_none() {
                 self.last_spurt = Some(self.calculate_last_spurt(state));
             }

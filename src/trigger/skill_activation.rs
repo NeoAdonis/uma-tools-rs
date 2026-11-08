@@ -44,11 +44,15 @@
 //! 2. **Window trigger** otherwise. The ranges of the branch's comparisons
 //!    are intersected per variable, and the window uses the first kind of
 //!    range that the branch has, in this order:
-//!    1. **Position**: distance rate, remaining distance, furlongs, phase and
-//!       its subdivisions, corners, slopes, straights, final corner, last
-//!       straight.
+//!    1. **Position**: distance rate, remaining distance, furlongs, corners,
+//!       slopes, straights, final corner, last straight.
 //!    2. **Time**: `accumulatetime`.
 //!    3. **HP**: `hp_per`.
+//!
+//!    The phase is a variable of its own kind, not a position: it's updated
+//!    from the position before the last move, a frame behind the one position
+//!    windows are checked with. No window is based on it, so its comparisons
+//!    (subdivisions included) are only checked as guards.
 //!
 //!    A branch with no range at all gets a position window over the whole
 //!    race.
@@ -63,7 +67,8 @@
 //! - A variable whose range isn't known simply doesn't narrow the window.
 //!
 //! If any range is empty (e.g. `slope==2` on a course without downhills, or
-//! `phase==0&distance_rate>=50`), the branch can never be true and is dropped.
+//! `distance_rate<=20&is_finalcorner==1` when the final corner starts later),
+//! the branch can never be true and is dropped.
 //!
 //! ## Preconditions
 //!
@@ -100,14 +105,13 @@
 //! - **Guards**: `[hp_per>=20]`.
 //!
 //! Condition `phase==1 & corner!=0 & order<=3` (on a course with corners at
-//! 300-500m and 900-1100m, and Mid phase at 400-1600m):
+//! 300-500m and 900-1100m):
 //!
-//! - **Trigger**: `Window { Position, 400, 1100 }` (Mid phase ∩ corners).
+//! - **Trigger**: `Window { Position, 300, 1100 }` (corners only).
 //! - **Guards**: `[phase==1, corner!=0, order<=3]`.
 //!
 //! [`Runner::check_skills`]: crate::race::runner::Runner::check_skills
 
-use crate::condition::evaluator::Value;
 use crate::condition::parser::*;
 use crate::condition::variables::*;
 use crate::course::geometry::Segment;
@@ -321,10 +325,11 @@ pub struct SkillActivationRecord {
     pub skill_id: i32,
     /// Index of the alternative that activated.
     pub alternative: usize,
-    /// Time since the race started when the skill was activated, at the start
-    /// of the frame (in seconds). Out-of-gate alternatives activate at 0, even
-    /// though their effects during the race apply on the first frame she
-    /// moves.
+    /// Time since the race started when the skill was activated, at the end of
+    /// the frame whose move its effects first apply to (in seconds).
+    /// Out-of-gate alternatives are recorded at 0, though they activate on her
+    /// first frame of movement, the first one their effects during the race
+    /// apply to.
     pub time: f64,
     /// Distance when the skill was activated (in meters from start).
     pub distance: f64,
@@ -559,15 +564,6 @@ const FULL_RANGE: Range = (0.0, f64::INFINITY);
 /// Range containing no value.
 const EMPTY_RANGE: Range = (f64::INFINITY, f64::NEG_INFINITY);
 
-/// All race phases, in order.
-const PHASES: [Phase; 5] = [
-    Phase::RunUp,
-    Phase::Early,
-    Phase::Mid,
-    Phase::Late,
-    Phase::Last,
-];
-
 fn intersect(a: Range, b: Range) -> Range {
     (a.0.max(b.0), a.1.min(b.1))
 }
@@ -612,7 +608,6 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
     use VarType::*;
 
     let last_corner = course.corners.last();
-    let subdivision = |boundaries| subdivision_range(comp.value, course, boundaries);
 
     let range = match (&comp.var, comp.op, comp.value) {
         (Spatial(SpatialVar::DistanceRate), op, value) => {
@@ -627,23 +622,6 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
             let (min, max) = floored_range(op, value);
             let position = |furlongs| course.run_up + furlongs_to_meters(furlongs);
             (position(min), position(max))
-        }
-
-        // Union of the phases that satisfy the comparison.
-        (Phase(PhaseVar::Phase), _, _) => envelope(
-            PHASES
-                .iter()
-                .filter(|phase| comp.holds(Value::Int(**phase as i32)))
-                .map(|phase| phase.boundaries(course)),
-        ),
-        (Phase(PhaseVar::PhaseFirstquarter), CompOp::Equal, _) => {
-            subdivision(crate::course::Phase::boundaries_first_quarter)
-        }
-        (Phase(PhaseVar::PhaseFirsthalf), CompOp::Equal, _) => {
-            subdivision(crate::course::Phase::boundaries_first_half)
-        }
-        (Phase(PhaseVar::PhaseLaterhalf), CompOp::Equal, _) => {
-            subdivision(crate::course::Phase::boundaries_second_half)
         }
 
         // Final corner (or its second half) and beyond.
@@ -693,17 +671,6 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
 
     let range = intersect(range, FULL_RANGE);
     (!is_empty(range)).then_some(range)
-}
-
-/// Boundaries of a phase subdivision (e.g. [`Phase::boundaries_first_half`]).
-type PhaseBoundaries = fn(&Phase, &Course) -> Range;
-
-/// Range of a phase subdivision (`phase_firsthalf==N`, ...) for phase `value`.
-fn subdivision_range(value: i32, course: &Course, boundaries: PhaseBoundaries) -> Range {
-    PHASES
-        .iter()
-        .find(|phase| **phase as i32 == value)
-        .map_or(EMPTY_RANGE, |phase| boundaries(phase, course))
 }
 
 /// Get the range of elapsed times (in seconds) where a comparison can be true.

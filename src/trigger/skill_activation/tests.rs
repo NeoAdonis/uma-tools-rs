@@ -145,11 +145,10 @@ fn test_events_are_the_trigger() {
 
 #[test]
 fn test_position_window_ranges() {
-    // Test course: 2000m, sections of 83.33m, corners at 100-250, 500-700 and
-    // 1200-1380, uphill at 800-900, straights at 0-100 and 1500-2000 (both facing
-    // the audience). Values are floored when evaluated, so `<=N` holds until N + 1,
-    // and `>N` from N + 1.
-    let section = 2000.0 / 24.0;
+    // Test course: 2000m, corners at 100-250, 500-700 and 1200-1380, uphill at
+    // 800-900, straights at 0-100 and 1500-2000 (both facing the audience).
+    // Values are floored when evaluated, so `<=N` holds until N + 1, and `>N`
+    // from N + 1.
     let furlong = crate::units::FURLONG_TO_METERS;
     let cases = [
         ("distance_rate>=50", (1000.0, f64::INFINITY)),
@@ -167,12 +166,6 @@ fn test_position_window_ranges() {
             (1694.0, 1700.0),
         ),
         ("furlong>=5", (5.0 * furlong, f64::INFINITY)),
-        ("phase==1", (section * 4.0, section * 16.0)),
-        ("phase>=2", (section * 16.0, 2000.0)),
-        ("phase<=1", (0.0, section * 16.0)),
-        ("phase_firstquarter==1", (section * 4.0, section * 7.0)),
-        ("phase_firsthalf==1", (section * 4.0, section * 10.0)),
-        ("phase_laterhalf==1", (section * 10.0, section * 16.0)),
         // Final corner "or beyond" (and its second half).
         ("is_finalcorner==1", (1200.0, f64::INFINITY)),
         ("is_finalcorner_laterhalf==1", (1290.0, f64::INFINITY)),
@@ -186,13 +179,16 @@ fn test_position_window_ranges() {
         ("straight_front_type==1", (0.0, 2000.0)),
         // Intersections.
         ("is_finalcorner==1&corner!=0", (1200.0, 1380.0)),
-        ("phase==1&corner!=0", (section * 4.0, section * 16.0)),
+        ("phase==1&corner!=0", (100.0, 1380.0)),
         ("phase>=1&slope==1&order_rate>=40", (800.0, 900.0)),
         // Only true at 1200m: the remaining distance is 800m there, and the
         // final corner starts. A single point is a valid range.
         ("remain_distance>=800&is_finalcorner==1", (1200.0, 1200.0)),
-        // Nothing position-based: window covers the whole race.
+        // Nothing position-based: window covers the whole race. The phase
+        // follows the position a frame behind, so it doesn't narrow windows
+        // (the guards check it).
         ("order<=3", (0.0, f64::INFINITY)),
+        ("phase==1", (0.0, f64::INFINITY)),
         ("distance_type==3", (0.0, f64::INFINITY)),
         ("distance_rate!=50", (0.0, f64::INFINITY)),
         // Not in a corner or on a slope: their gaps aren't a range.
@@ -273,7 +269,7 @@ fn test_unsatisfiable_branches_are_dropped() {
     for condition in [
         "slope==2",
         "corner==1",
-        "phase==0&distance_rate>=50",
+        "distance_rate<=20&is_finalcorner==1",
         "hp_per>=50&hp_per<=30",
         "slope==2&is_activate_heal_skill==1",
     ] {

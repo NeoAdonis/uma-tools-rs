@@ -222,10 +222,9 @@ impl Runner {
     ///    logics never wait for a precondition: they belong to out-of-gate skills,
     ///    whose preconditions were evaluated before the race, along with their
     ///    conditions.
-    /// 2. Pinned activations due by `step_end_time`, the end of the frame (see
-    ///    [`SkillPin::Activations`]). Their skills' conditions are checked by the
-    ///    triggers below, which confirm them (see
-    ///    [`SkillActivationRecord::conditions_met`]).
+    /// 2. Pinned activations due by now (see [`SkillPin::Activations`]). Their
+    ///    skills' conditions are checked by the triggers below, which confirm
+    ///    them (see [`SkillActivationRecord::conditions_met`]).
     /// 3. Precondition windows, so that a skill can activate in the same frame its
     ///    precondition is satisfied.
     /// 4. Triggers that don't depend on this frame's activations: windows and
@@ -239,7 +238,7 @@ impl Runner {
     /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
     /// the activations of every runner, so they're checked afterwards (see
     /// [`Self::check_advantage_triggers`]).
-    pub(crate) fn check_skills(&mut self, state: &mut RaceState, step_end_time: f64) {
+    pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
         self.pinned_this_frame.clear();
         // Out-of-gate skills activate on the first frame the runner moves; their
@@ -258,7 +257,7 @@ impl Runner {
                 record.conditions_met = false;
             }
         }
-        self.activate_pinned_skills(state, step_end_time);
+        self.activate_pinned_skills(state);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
@@ -277,16 +276,15 @@ impl Runner {
         }
     }
 
-    /// Activate the pinned skill alternatives due before `step_end_time`, in
-    /// order.
+    /// Activate the pinned skill alternatives due by now, in order.
     ///
     /// They wait for their conditions to confirm them on this frame (see
     /// [`Self::check_pinned_skill`]), which also start their cooldowns.
-    fn activate_pinned_skills(&mut self, state: &RaceState, step_end_time: f64) {
+    fn activate_pinned_skills(&mut self, state: &RaceState) {
         while self
             .pinned_activations
             .last()
-            .is_some_and(|next| next.time < step_end_time)
+            .is_some_and(|next| next.time <= state.elapsed_time)
         {
             let next = self.pinned_activations.pop().expect("checked above");
             self.pinned_this_frame.push(self.activated_skills.len());
@@ -366,13 +364,13 @@ impl Runner {
         self.situational_base_duration(alternative) * self.duration_factor(state)
     }
 
-    /// Check if the runner can activate skills during a step ending at
-    /// `step_end_time`.
+    /// Check if the runner can activate skills on a check at `time`, at the end
+    /// of a frame.
     ///
-    /// For that, she needs to move during the step (i.e. she has left the gate by
-    /// then) and hasn't finished yet.
-    pub(crate) fn can_activate_skills(&self, step_end_time: f64) -> bool {
-        self.start_delay <= step_end_time && !self.has_finished()
+    /// For that, she needs to move during the frame (i.e. she has left the gate
+    /// by then) and hasn't finished yet.
+    pub(crate) fn can_activate_skills(&self, time: f64) -> bool {
+        self.start_delay <= time && !self.has_finished()
     }
 
     /// Check the preconditions whose window contains the current position.
