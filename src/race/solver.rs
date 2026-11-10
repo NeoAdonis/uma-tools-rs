@@ -643,14 +643,19 @@ impl RaceSolver<Entrant> {
             .map(|builder| Runner::new(builder, &state))
             .collect();
         let gates = state.params.gates as usize;
-        RaceSolver {
+        let mut solver = RaceSolver {
             runners,
             teams_by_id: self.teams_by_id,
             gates_by_id,
             state,
             duel_close_times: vec![None; gates * gates],
             prev_duel_close_times: vec![None; gates * gates],
-        }
+        };
+        // Runners in the gates already block each other's sides, which the
+        // first target lane decisions see.
+        // ? So do the first skill checks.
+        solver.update_blocking_status(0.0);
+        solver
     }
 }
 
@@ -944,6 +949,9 @@ impl RaceSolver<Runner> {
     /// every runner are checked, so that the result doesn't depend on which
     /// runner checked first. Then, effects targeting other runners are applied.
     ///
+    /// Then every runner **decides her target lane** (see
+    /// [`Self::update_target_lanes`]).
+    ///
     /// After that, the **state is updated**. Each runner (in gate order) updates
     /// her section from her position, then moves and updates everything else
     /// derived from her position: corners, straights and slopes from her new
@@ -987,6 +995,7 @@ impl RaceSolver<Runner> {
         }
         self.check_advantage_triggers();
         self.apply_pending_effects();
+        self.update_target_lanes();
 
         // Runners move in gate order, so a front blocker with a lower gate limits
         // speed with her new speed, and one with a higher gate with her old one.
@@ -1339,9 +1348,14 @@ impl RaceSolver<Runner> {
             }
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }
+    }
 
-        // Calculate lane targets.
-        for i in 0..num_runners {
+    /// Decide every runner's target lane, right before runners move, from the
+    /// blocking and overtake state of the end of the previous step, but the
+    /// positioning strategy and skill effects of this one. On the first step,
+    /// that state comes from the gates.
+    fn update_target_lanes(&mut self) {
+        for i in 0..self.runners.len() {
             // Borrow all runners along with a single runner in an immutable state first.
             let all_runners = &self.runners;
             let Some(decision) =

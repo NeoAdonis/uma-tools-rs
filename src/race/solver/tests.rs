@@ -1202,6 +1202,8 @@ fn test_compete_before_spurt_when_far_from_first() {
             // Never enter Stamina Keep, the only random roll.
             // ? Competing has no chance for now (its formula is unknown).
             runner.stamina_keep.ratio = 0.0;
+            // Nobody nearby, which would also make her compete.
+            runner.reset_blocking_status();
         }
         solver.update_order_values();
         solver.update_compete_before_spurt();
@@ -1572,6 +1574,44 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
 }
 
 #[test]
+fn test_target_lane_decided_before_moving() {
+    // Alone in the Early race, she targets a lane further in and starts moving
+    // towards it on the same step.
+    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let lane = CourseWidths(0.4);
+    solver.runners[0].lane = crate::race::runner::LaneState::new(lane);
+    solver.step(DELTA_TIME);
+    let runner = &solver.runners[0];
+    assert!(runner.lane.target < lane);
+    assert!(runner.lane.current < lane);
+}
+
+#[test]
+fn test_first_target_lanes_see_gate_blocking() {
+    // In neighboring gates, the runner outside is blocked from moving inward
+    // from the first step.
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for gate in 1..=2 {
+        let pins = Pins {
+            start_delay: Some(0.0),
+            ..Pins::default()
+        };
+        solver.add_runner(Entrant {
+            gate: Some(gate),
+            pins,
+            ..Entrant::new(uma(Style::Front), vec![])
+        });
+    }
+    let mut solver = solver.ready_runners();
+    let lanes: Vec<_> = solver.runners.iter().map(|r| r.lane.current).collect();
+    solver.step(DELTA_TIME);
+    assert_eq!(lanes[1], CourseWidths::from_horse_lanes(1.0));
+    for (runner, lane) in solver.runners.iter().zip(lanes) {
+        assert_eq!(runner.lane.current, lane);
+    }
+}
+
+#[test]
 fn test_skill_target_lane_in_course_widths() {
     let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
     let runner = &mut solver.runners[0];
@@ -1579,6 +1619,7 @@ fn test_skill_target_lane_in_course_widths() {
     runner.skill_modifiers.target_lane = Some(CourseWidths(0.5));
     // Fixed mode.
     solver.update_blocking_status(DELTA_TIME);
+    solver.update_target_lanes();
     assert_eq!(solver.runners[0].lane.target, CourseWidths(0.5));
 
     let RaceSolver { runners, state, .. } = &mut solver;
@@ -1769,6 +1810,7 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
 
     solver.resolve_overlaps();
     solver.update_blocking_status(DELTA_TIME);
+    solver.update_target_lanes();
     let bumped = &solver.runners[0];
     assert!(bumped.blocked.side_in);
     // Too close to the runner inside in mid-race, so she targets 2 horse lanes
@@ -4072,6 +4114,7 @@ fn test_skills_see_nearby_state_from_a_frame_earlier() {
         runner.speed = speed;
         runner.is_start_dash = false;
     }
+    solver.update_blocking_status(DELTA_TIME);
 
     for _ in 0..3 {
         solver.step(DELTA_TIME);
