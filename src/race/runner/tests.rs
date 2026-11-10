@@ -453,6 +453,8 @@ fn test_speed_stops_at_target_speed() {
         (19.0, 1.0, 20.0, 19.0 + DELTA_TIME),
         (20.01, -1.0, 20.0, 20.0),
         (21.0, -1.0, 20.0, 21.0 - DELTA_TIME),
+        // At the target speed, she decelerates, but stays there.
+        (20.0, -1.0, 20.0, 20.0),
     ];
     for (speed, acceleration, target_speed, expected) in cases {
         (runner.speed, runner.acceleration) = (speed, acceleration);

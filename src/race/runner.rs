@@ -628,7 +628,9 @@ impl Runner {
         speed_limit: Option<f64>,
     ) {
         // Accelerate or decelerate towards the target speed, without passing it.
-        self.speed = if self.speed <= self.target_speed {
+        // At the target speed, she decelerates (see `update_acceleration`), so
+        // the target holds her speed there.
+        self.speed = if self.speed < self.target_speed {
             (self.speed + self.acceleration * delta_time).min(self.target_speed)
         } else {
             (self.speed + self.acceleration * delta_time).max(self.target_speed)
