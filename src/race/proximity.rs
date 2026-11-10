@@ -92,11 +92,16 @@ pub(crate) fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, OVERLAP_DISTANCE, OVERLAP_LANE_GAP)
 }
 
+/// Rounding margin for lane differences, so that runners exactly at a threshold
+/// (e.g. from their gates) count as at it.
+const LANE_DIFF_TOLERANCE: CourseWidths = CourseWidths(1e-9);
+
 /// Check if a runner is near another runner within a specified distance
 /// and lane difference.
 ///
 /// `distance` and `max_distance` are in meters, `lane_diff` is in course widths
-/// and `max_lane_diff` is in horse lanes.
+/// and `max_lane_diff` is in horse lanes. A lane difference equal to
+/// `max_lane_diff` isn't near (see [`LANE_DIFF_TOLERANCE`]).
 pub(crate) fn is_near_by(
     distance: f64,
     lane_diff: CourseWidths,
@@ -106,7 +111,7 @@ pub(crate) fn is_near_by(
     if !(0.0..max_distance).contains(&distance) {
         return false;
     }
-    lane_diff.abs() < CourseWidths::from_horse_lanes(max_lane_diff)
+    lane_diff.abs() < CourseWidths::from_horse_lanes(max_lane_diff) - LANE_DIFF_TOLERANCE
 }
 
 #[cfg(test)]

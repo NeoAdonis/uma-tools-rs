@@ -17,6 +17,21 @@ fn test_is_near_by() {
 }
 
 #[test]
+fn test_is_near_by_whole_lanes_apart() {
+    let lane = CourseWidths::from_horse_lanes;
+    // Runners exactly 2 horse lanes apart, as gates place them (with or
+    // without extra space), aren't near whatever the rounding of their lanes.
+    for extra in [0.0, 0.6, 1.86] {
+        for inner in 0..17 {
+            let inner = inner as f64 + extra;
+            let lane_diff = lane(inner + 2.0) - lane(inner);
+            assert!(!is_near_by(0.5, lane_diff, 1.05, 2.0), "{inner} lanes");
+        }
+    }
+    assert!(is_near_by(0.5, lane(1.999), 1.05, 2.0));
+}
+
+#[test]
 fn test_is_near_by_version() {
     let lane = CourseWidths::from_horse_lanes;
     // (version, distance, whether near), with as many lanes as meters apart.
