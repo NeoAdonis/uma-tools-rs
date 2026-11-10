@@ -319,6 +319,40 @@ fn test_stamina_limit_break_activates_at_last_spurt_speed() {
 }
 
 #[test]
+fn test_section_speed_modifier_ignored_during_last_spurt() {
+    use crate::race::last_spurt::{LastSpurt, LastSpurtCategory};
+    use crate::test_utils::*;
+
+    // (position, whether the section speed modifier applies), with a last
+    // spurt from 1950m.
+    for (position, applies) in [(1949.0, true), (1950.0, false)] {
+        let mut solver = ready_solver(10105, uma(Style::Pace), vec![], seeded_config(42));
+        let state = &solver.state;
+        let runner = &mut solver.runners[0];
+        runner.phase = Phase::Late;
+        runner.position = position;
+        // Below the last spurt speed, so that nothing else starts.
+        runner.speed = 19.0;
+        runner.last_spurt = Some(LastSpurt {
+            max_speed: 20.0,
+            target_distance: 1950.0,
+            category: LastSpurtCategory::Full,
+        });
+        runner.section_speed_modifier = 0.0;
+        runner.update_target_speed(state);
+        let without = runner.target_speed;
+        runner.section_speed_modifier = 0.1;
+        runner.update_target_speed(state);
+        let expected = if applies { 0.1 } else { 0.0 };
+        assert_close!(
+            runner.target_speed - without,
+            expected,
+            "position {position}"
+        );
+    }
+}
+
+#[test]
 fn test_acceleration_multipliers() {
     use crate::test_utils::*;
 

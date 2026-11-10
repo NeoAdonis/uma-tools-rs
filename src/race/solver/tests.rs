@@ -4245,6 +4245,31 @@ fn test_start_dash_consumes_hp_at_base_speed() {
 }
 
 #[test]
+fn test_uphill_start_holds_the_start_dash_below_min_speed() {
+    // 10404 starts on an uphill steep enough for a weak runner to have a
+    // target speed below the start dash threshold, which holds her in the
+    // start dash, below the minimum speed.
+    let config = Configuration {
+        rushing: Roll::Never,
+        ..seeded_config(0)
+    };
+    let uma = Uma {
+        power: 150,
+        ..uma(Style::End)
+    };
+    let mut solver = ready_solver(10404, uma, vec![], config);
+    let start_dash_speed = 0.85 * solver.state.course.base_speed();
+    for _ in 0..15 {
+        solver.step_frame();
+    }
+    let runner = &solver.runners[0];
+    assert!(runner.is_start_dash);
+    assert!(runner.target_speed < start_dash_speed);
+    assert_eq!(runner.speed, runner.target_speed);
+    assert!(runner.speed < runner.min_speed);
+}
+
+#[test]
 fn test_step_frame_matches_run() {
     let new_solver = || {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));

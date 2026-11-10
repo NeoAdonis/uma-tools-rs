@@ -678,15 +678,18 @@ impl Runner {
 
     /// Update target speed based on various factors.
     pub(crate) fn update_target_speed(&mut self, state: &RaceState) {
-        let game_version = state.config.game_version;
-        let target_speed = if self.hp.is_empty() {
-            self.min_speed
-        } else if let Some(last_spurt) = self.active_last_spurt() {
+        if self.hp.is_empty() {
+            self.target_speed = self.min_speed;
+            return;
+        }
+
+        // Positioning strategies end long before the last spurt can start.
+        let initial_target_speed = if let Some(last_spurt) = self.active_last_spurt() {
             last_spurt.max_speed
         } else {
-            let position_multiplier = self
+            let positioning_multiplier = self
                 .positioning_strategy
-                .speed_multiplier(self.phase, game_version);
+                .speed_multiplier(self.phase, state.config.game_version);
             let base_target_speed = base_target_speed(
                 state.course.base_speed(),
                 self.style,
@@ -694,27 +697,21 @@ impl Runner {
                 self.adjusted.speed,
                 self.raw.distance_aptitude,
             );
-
-            base_target_speed * position_multiplier
+            base_target_speed * positioning_multiplier + self.section_speed_modifier
         };
 
-        // Stamina Limit Break is activated upon reaching last spurt speed (2.5 Anniv.).
-        if self.stamina_limit_break == 0.0
-            && self.stamina_limit_break_base > 0.0
-            && self.has_reached_last_spurt_speed()
-        {
-            self.stamina_limit_break = self.stamina_limit_break_base
-                * stamina_limit_break_random_factor(&mut self.rng.last_spurt);
-        }
+        if self.has_reached_last_spurt_speed() {
+            // Stamina Limit Break is activated upon reaching last spurt speed (2.5 Anniv.).
+            if self.stamina_limit_break == 0.0 && self.stamina_limit_break_base > 0.0 {
+                self.stamina_limit_break = self.stamina_limit_break_base
+                    * stamina_limit_break_random_factor(&mut self.rng.last_spurt);
+            }
 
-        // All-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
-        if self.all_out_spurt == AllOutSpurt::Pending
-            && self.all_out_spurt_base > 0.0
-            && !self.hp.is_empty()
-            && self.has_reached_last_spurt_speed()
-        {
-            self.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.0 };
-            self.schedule_all_out_spurt_triggers(state);
+            // All-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
+            if self.all_out_spurt == AllOutSpurt::Pending && self.all_out_spurt_base > 0.0 {
+                self.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.0 };
+                self.schedule_all_out_spurt_triggers(state);
+            }
         }
 
         // Lane state is updated after target speed within a frame, so `speed` still
@@ -735,10 +732,9 @@ impl Runner {
             0.0
         };
 
-        self.target_speed = (target_speed
+        self.target_speed = (initial_target_speed
             + self.slope_speed_modifier.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
-            + self.section_speed_modifier
             + self.duel.speed_bonus()
             + move_lane_modifier
             + force_in_modifier
