@@ -790,9 +790,41 @@ impl Runner {
         self.finish_time.is_some()
     }
 
-    /// Update the current section and phase from `position`, the one before the
-    /// last move, so they're a frame behind the rest of the state derived from
-    /// positions.
+    /// Update the current section from the current position, before the target
+    /// speed update and the move, along with what depends on it: the section
+    /// speed modifier, which applies from this step's move, the start of a rush
+    /// and the end of a spot struggle.
+    pub(crate) fn update_section(&mut self, state: &mut RaceState) {
+        let prev_section = self.section;
+        self.section = state.course.section_from_position(self.position);
+        if self.section == prev_section {
+            return;
+        }
+
+        // Update section speed modifier.
+        self.section_speed_modifier = roll_section_speed_modifier(
+            &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
+            self.adjusted.wit,
+            state.course.base_speed(),
+        );
+
+        // Start rush if conditions are met (a runner can only rush once).
+        if let Some(rush_state) = &self.rush_state
+            && rush_state.section == self.section
+            && !self.has_rushed()
+        {
+            self.start_rush(state);
+        }
+
+        // ? Assume spot struggles end as the section changes, like rushes start.
+        if self.section == spot_struggle::END_SECTION {
+            self.spot_struggle.stop();
+        }
+    }
+
+    /// Update the current phase from `position`, the one before the last move,
+    /// so it's a frame behind the rest of the state derived from positions,
+    /// the section included.
     ///
     /// The last spurt is decided here a frame after the phase reaches Late,
     /// from `position`, and conserved power is released from the frame
@@ -806,36 +838,7 @@ impl Runner {
             self.last_spurt = Some(self.calculate_last_spurt(position, state));
         }
 
-        // ? Assume sections follow the phase, along with what depends on them
-        // (section speed, rushes, the end of spot struggles).
-        let prev_section = self.section;
-        self.section = state.course.section_from_position(position);
-        if self.section != prev_section {
-            // Update section speed modifier.
-            self.section_speed_modifier = roll_section_speed_modifier(
-                &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
-                self.adjusted.wit,
-                state.course.base_speed(),
-            );
-
-            // Start rush if conditions are met (a runner can only rush once).
-            if let Some(rush_state) = &self.rush_state
-                && rush_state.section == self.section
-                && !self.has_rushed()
-            {
-                self.start_rush(state);
-            }
-
-            if self.section == spot_struggle::END_SECTION {
-                self.spot_struggle.stop();
-            }
-        }
-
-        // Phase can only advance at section boundaries, or at the end of the
-        // run-up (which is part of section 0).
-        if self.section != prev_section || self.phase == Phase::RunUp {
-            self.phase = Phase::from_position(position, &state.course);
-        }
+        self.phase = Phase::from_position(position, &state.course);
 
         self.try_release_charge_up(position, state);
     }

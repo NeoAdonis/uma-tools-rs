@@ -1086,12 +1086,41 @@ fn test_spot_struggle_ends_upon_entering_ninth_section() {
 
     // Section 7 (0-indexed) is still fine.
     runner.position = 355.0;
-    runner.update_phase(runner.position, state);
+    runner.update_section(state);
     assert!(runner.spot_struggle.is_active(elapsed_time));
 
     runner.position = 405.0;
-    runner.update_phase(runner.position, state);
+    runner.update_section(state);
     assert_eq!(runner.spot_struggle, SpotStruggle::Ended);
+}
+
+#[test]
+fn test_section_speed_modifier_applies_from_the_move_after_entering() {
+    let config = Configuration {
+        rushing: Roll::Never,
+        ..seeded_config(0)
+    };
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], config);
+    let boundary = solver.state.course.section_start(12);
+    solver.state.elapsed_time = 30.0;
+    let runner = &mut solver.runners[0];
+    runner.is_start_dash = false;
+    runner.phase = Phase::Mid;
+    runner.section = 11;
+    // Far from any real roll, so that the stale one would show.
+    runner.section_speed_modifier = 1.0;
+    // Just past the boundary before moving.
+    runner.position = boundary + 0.01;
+    runner.speed = 20.0;
+    solver.step(DELTA_TIME);
+
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    assert_eq!(runner.section, 12);
+    assert!(runner.section_speed_modifier.abs() < 0.5);
+    let target_speed = runner.target_speed;
+    runner.update_target_speed(state);
+    assert_close!(target_speed, runner.target_speed);
 }
 
 #[test]

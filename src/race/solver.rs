@@ -944,13 +944,14 @@ impl RaceSolver<Runner> {
     /// every runner are checked, so that the result doesn't depend on which
     /// runner checked first. Then, effects targeting other runners are applied.
     ///
-    /// After that, the **state is updated**. Each runner (in gate order) moves
-    /// and updates everything derived from her position: corners, straights and
-    /// slopes from her new one, but phase and section from the one before the
-    /// move. Then her lane and HP. Only front blocking reads another runner then:
-    /// the blocker's speed, already updated if her gate is lower. Multi-runner
-    /// values (order, overlaps, blocking and nearby state, duels...) are updated
-    /// last.
+    /// After that, the **state is updated**. Each runner (in gate order) updates
+    /// her section from her position, then moves and updates everything else
+    /// derived from her position: corners, straights and slopes from her new
+    /// one, but the phase from the one before the move, so her target speed
+    /// sees the section a frame before the phase. Then her lane and HP. Only
+    /// front blocking reads another runner then: the blocker's speed, already
+    /// updated if her gate is lower. Multi-runner values (order, overlaps,
+    /// blocking and nearby state, duels...) are updated last.
     ///
     /// Events detected during the update (e.g. entering a straight) are stored
     /// and handled by the next skill check. Update functions never check skills
@@ -999,6 +1000,7 @@ impl RaceSolver<Runner> {
             }
             let speed_limit = self.front_blocking_limit(index, &index_by_gate);
             let runner = &mut self.runners[index];
+            runner.update_section(&mut self.state);
             runner.update_rush_state(&mut self.state);
             runner.update_target_speed(&self.state);
             runner.update_acceleration(self.state.elapsed_time);
@@ -1012,8 +1014,8 @@ impl RaceSolver<Runner> {
                 self.state.finish_time = Some(self.state.elapsed_time);
             }
 
-            // Update everything derived from the new position, except for the phase
-            // and section, which follow the position before the move.
+            // Update everything derived from the new position, except for the phase,
+            // which follows the position before the move.
             runner.update_phase(prev_position, &mut self.state);
             let transitions = runner.segments.update(runner.position, &self.state.course);
             runner.update_final_extra_move_lane(

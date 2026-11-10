@@ -237,7 +237,7 @@ fn test_rush_penalty() {
     runner.section = rush_section - 1;
     runner.position = solver.state.course.distance as f64 / 24.0 * rush_section as f64 + 1.0;
     solver.state.elapsed_time = 10.0;
-    runner.update_phase(runner.position, &mut solver.state);
+    runner.update_section(&mut solver.state);
     assert!(runner.is_rushed());
     assert_close!(conserved(runner), 80.0);
 
