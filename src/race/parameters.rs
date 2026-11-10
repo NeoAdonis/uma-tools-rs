@@ -16,6 +16,7 @@
 //!     time: Time::Noon,
 //!     grade: Grade::G1,
 //!     gates: 18,
+//!     career: false,
 //! };
 //! let heavy = RaceParameters {
 //!     track_condition: TrackCondition::Heavy,
@@ -129,7 +130,16 @@ pub struct RaceParameters {
     /// Number of gates (participants) in the race, from 1 to [`MAX_GATES`].
     #[serde(deserialize_with = "deserialize_gates")]
     pub gates: u8,
+    /// Whether the race is run in a career (training mode), where every runner
+    /// gains a [stat bonus](`CAREER_STAT_BONUS`) on each adjusted stat. Optional
+    /// in JSON, `false` when missing.
+    #[serde(default)]
+    pub career: bool,
 }
+
+/// Bonus to every adjusted stat of every runner in a career race (see
+/// [`RaceParameters::career`]), added before stats are clamped to at least 1.
+pub const CAREER_STAT_BONUS: f64 = 400.0;
 
 /// Maximum number of gates (participants) in a race.
 ///
@@ -201,6 +211,7 @@ mod tests {
                 "time": "Evening",
                 "grade": "PreOP",
                 "gates": {gates},
+                "career": true,
                 "courseId": "10101"
             }}"#
         )
@@ -216,6 +227,7 @@ mod tests {
                 time: Time::Evening,
                 grade: Grade::PreOp,
                 gates: 12,
+                career: true,
             },
             course_id: "10101".to_string(),
         };

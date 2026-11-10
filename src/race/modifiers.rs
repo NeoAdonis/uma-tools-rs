@@ -254,28 +254,34 @@ pub(crate) fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
     }
 }
 
-/// Calculate adjusted speed after applying course and track modifiers, at
-/// least 1.
+/// Calculate adjusted speed after applying course and track modifiers, before
+/// the career bonus and the clamp to at least 1.
+///
+/// Takes all base stats, since the course speed modifier depends on the
+/// course's threshold stats, not just on speed.
 pub(crate) fn calculate_adjusted_speed(
-    base_speed: f64,
+    base: &Stats,
     track_condition: TrackCondition,
-    course_modifier: f64,
+    course_set_status: &[ThresholdStat],
 ) -> f64 {
-    (base_speed * course_modifier - track_speed_modifier(track_condition)).max(1.0)
+    let course_modifier = course_speed_modifier(base, course_set_status);
+    base.speed * course_modifier - track_speed_modifier(track_condition)
 }
 
-/// Calculate adjusted power after applying track modifier, at least 1.
+/// Calculate adjusted power after applying track modifier, before the career
+/// bonus and the clamp to at least 1.
 pub(crate) fn calculate_adjusted_power(
     base_power: f64,
     track: Track,
     track_condition: TrackCondition,
 ) -> f64 {
-    (base_power - track_power_modifier(track, track_condition)).max(1.0)
+    base_power - track_power_modifier(track, track_condition)
 }
 
-/// Calculate adjusted wit after applying style aptitude modifier, at least 1.
+/// Calculate adjusted wit after applying style aptitude modifier, before the
+/// career bonus and the clamp to at least 1.
 pub(crate) fn calculate_adjusted_wit(base_wit: f64, style_aptitude: Aptitude) -> f64 {
-    (base_wit * strategy_proficiency_multiplier(style_aptitude)).max(1.0)
+    base_wit * strategy_proficiency_multiplier(style_aptitude)
 }
 
 /// Calculate course speed modifier based on course set status.
@@ -283,7 +289,7 @@ pub(crate) fn calculate_adjusted_wit(base_wit: f64, style_aptitude: Aptitude) ->
 /// Each course has a set of stats that provide bonuses if the corresponding
 /// base stats exceed certain thresholds. If multiple stats are
 /// present, their bonuses are averaged.
-pub(crate) fn course_speed_modifier(base: &Stats, course_set_status: &[ThresholdStat]) -> f64 {
+fn course_speed_modifier(base: &Stats, course_set_status: &[ThresholdStat]) -> f64 {
     if course_set_status.is_empty() {
         return 1.0;
     }

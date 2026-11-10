@@ -98,6 +98,7 @@ pub(crate) fn race_params() -> RaceParameters {
         time: Time::None,
         grade: Grade::G1,
         gates: 9,
+        career: false,
     }
 }
 

@@ -78,9 +78,9 @@ use crate::race::duel::Duel;
 use crate::race::hp::{HpState, calculate_max_hp};
 use crate::race::modifiers::{
     calculate_adjusted_power, calculate_adjusted_speed, calculate_adjusted_wit,
-    course_speed_modifier, roll_section_speed_modifier, stamina_limit_break_base_buff,
+    roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
-use crate::race::parameters::RaceParameters;
+use crate::race::parameters::{CAREER_STAT_BONUS, RaceParameters};
 use crate::race::pins::{Pins, SkillPin};
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::rng::{RngSeed, RunnerRng, Stream};
@@ -104,14 +104,27 @@ fn adjust_stats(
     course: &Course,
     parameters: &RaceParameters,
 ) -> Stats {
-    let course_modifier = course_speed_modifier(base, &course.course_set_status);
-    // N.B. In single mode, all uma gain 400 on stats after adjustment.
-    // This is not implemented here.
+    let bonus = if parameters.career {
+        CAREER_STAT_BONUS
+    } else {
+        0.0
+    };
+    // Added before the clamp, so a stat below 1 keeps its modifier deficit.
+    let finish = |stat: f64| (stat + bonus).max(1.0);
     Stats {
-        speed: calculate_adjusted_speed(base.speed, parameters.track_condition, course_modifier),
-        power: calculate_adjusted_power(base.power, course.surface, parameters.track_condition),
-        wit: calculate_adjusted_wit(base.wit, style_aptitude),
-        ..*base
+        speed: finish(calculate_adjusted_speed(
+            base,
+            parameters.track_condition,
+            &course.course_set_status,
+        )),
+        stamina: finish(base.stamina),
+        power: finish(calculate_adjusted_power(
+            base.power,
+            course.surface,
+            parameters.track_condition,
+        )),
+        guts: finish(base.guts),
+        wit: finish(calculate_adjusted_wit(base.wit, style_aptitude)),
     }
 }
 

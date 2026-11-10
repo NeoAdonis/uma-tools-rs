@@ -676,3 +676,50 @@ fn test_heavy_track_lowers_adjusted_speed() {
         adjusted_speed(TrackCondition::Firm) - 50.0
     );
 }
+
+#[test]
+fn test_career_bonus_applies_to_every_stat_before_the_clamp() {
+    use crate::race::parameters::TrackCondition;
+
+    let adjusted = |course_id, power, career| {
+        let parameters = RaceParameters {
+            track_condition: TrackCondition::Firm,
+            career,
+            ..race_params()
+        };
+        let state = RaceSolver::new(load_course(course_id), parameters, seeded_config(0)).state;
+        let uma = Uma {
+            power,
+            ..uma(Style::Pace)
+        };
+        UnreadyRunner::new(
+            uma,
+            Mood::Normal,
+            &state,
+            vec![],
+            Pins::default(),
+            RngSeed::new(0),
+        )
+        .adjusted
+    };
+    let normal = adjusted(10104, 800, false);
+    let career = adjusted(10104, 800, true);
+    let bonus = Stats {
+        speed: normal.speed + 400.0,
+        stamina: normal.stamina + 400.0,
+        power: normal.power + 400.0,
+        guts: normal.guts + 400.0,
+        wit: normal.wit + 400.0,
+    };
+    assert_eq!(career, bonus);
+    // 10611 is dirt, where firm ground takes 100 power: 50 power falls to
+    // -50, which the clamp raises to 1 outside a career, but which the
+    // bonus raises to 350 in one.
+    for (career, expected) in [(false, 1.0), (true, 350.0)] {
+        assert_eq!(
+            adjusted(10611, 50, career).power,
+            expected,
+            "career {career}"
+        );
+    }
+}

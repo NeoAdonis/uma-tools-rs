@@ -275,6 +275,7 @@ fn test_race_param_values() {
         time: Time::Night,
         grade: Grade::G2,
         gates: 9,
+        career: false,
     };
 
     let actual = [

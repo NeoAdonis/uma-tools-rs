@@ -479,6 +479,7 @@ impl UmaMoeBuild {
                 time: self.time,
                 grade: Grade::G1,
                 gates: self.runners.len() as u8,
+                career: false,
             },
             course_id: self.course_id.to_string(),
         }
@@ -696,6 +697,7 @@ mod tests {
                     time: Time::Noon,
                     grade: Grade::G1,
                     gates: 9,
+                    career: false,
                 },
                 course_id: "10506".to_string(),
             }
@@ -768,6 +770,7 @@ mod tests {
                 time: Time::Night,
                 grade: Grade::G1,
                 gates: 2,
+                career: false,
             }
         );
         let expected = UmaData {
