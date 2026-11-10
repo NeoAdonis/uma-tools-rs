@@ -20,11 +20,11 @@ fn create_test_race_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
     ready_solver(10101, uma(Style::Late), skills, seeded_config(12345))
 }
 
-/// Integer of an integer value.
+/// Whole number of a single value.
 fn int(value: Value) -> i32 {
     match value {
-        Value::Int(value) => value,
-        _ => panic!("not an integer"),
+        Value::Scalar(value) if value.fract() == 0.0 => value as i32,
+        _ => panic!("not a whole number"),
     }
 }
 
@@ -445,38 +445,51 @@ fn test_lane_type_values() {
 fn test_distance_values() {
     let mut solver = create_test_race_solver(vec![]);
     let diff = &mut solver.runners[0].position_diff;
-    diff.from_prev = 7.6;
-    diff.from_next = 5.0;
     diff.rate_from_first = 42.7;
     diff.from_first = 12.34;
 
     let runner = &solver.runners[0];
     let actual = [
-        DistanceVar::BashinDiffBehind,
-        DistanceVar::BashinDiffInfront,
         DistanceVar::DistanceDiffRate,
         DistanceVar::DistanceDiffTop,
         DistanceVar::DistanceDiffTopFloat,
     ]
-    .map(|var| distance_value(&var, runner));
-    // 1 bashin is 2.5m.
-    assert_eq!(actual, [3, 2, 42, 12, 123]);
+    .map(|var| int(distance_value(&var, runner)));
+    assert_eq!(actual, [42, 12, 123]);
 }
 
 #[test]
-fn test_bashin_diff_without_runner_is_max() {
+fn test_bashin_diff_compares_the_unrounded_gap() {
     let mut solver = create_test_race_solver(vec![]);
-    let diff = &mut solver.runners[0].position_diff;
-    diff.from_prev = f64::INFINITY;
-    diff.from_next = f64::INFINITY;
-
-    let runner = &solver.runners[0];
-    let actual = [
+    // (gap in meters, [<=1, >=1]). 1 bashin is 2.5m, and nobody on that side
+    // counts as an infinite gap.
+    let cases = [
+        (2.49, [true, false]),
+        (2.5, [true, true]),
+        (2.51, [false, true]),
+        (f64::INFINITY, [false, true]),
+    ];
+    let vars = [
         DistanceVar::BashinDiffBehind,
         DistanceVar::BashinDiffInfront,
-    ]
-    .map(|var| distance_value(&var, runner));
-    assert_eq!(actual, [i32::MAX, i32::MAX]);
+    ];
+    for (var, behind) in vars.into_iter().zip([true, false]) {
+        for (gap, expected) in cases {
+            // A gap on the other side that would give other results.
+            let diff = &mut solver.runners[0].position_diff;
+            (diff.from_prev, diff.from_next) = if behind { (gap, 5.0) } else { (5.0, gap) };
+            let value = distance_value(&var, &solver.runners[0]);
+            let actual = [CompOp::LessEqual, CompOp::GreaterEqual].map(|op| {
+                let comp = Comparison {
+                    var: VarType::Distance(var),
+                    op,
+                    value: 1,
+                };
+                comp.holds(value.clone())
+            });
+            assert_eq!(actual, expected, "{var:?} at {gap} m");
+        }
+    }
 }
 
 #[test]
@@ -513,7 +526,7 @@ fn test_order_rate_is_the_range_of_rates_rounding_to_the_order() {
 }
 
 #[test]
-fn test_int_values_hold_if_the_comparison_does() {
+fn test_scalar_values_hold_if_the_comparison_does() {
     // Results for values below, equal to and above 5.
     let cases = [
         (CompOp::Equal, [false, true, false]),
@@ -529,7 +542,7 @@ fn test_int_values_hold_if_the_comparison_does() {
             op,
             value: 5,
         };
-        let actual = [4, 5, 6].map(|value| comp.holds(Value::Int(value)));
+        let actual = [4.99, 5.0, 5.01].map(|value| comp.holds(Value::Scalar(value)));
         assert_eq!(actual, expected, "{op}");
     }
 }

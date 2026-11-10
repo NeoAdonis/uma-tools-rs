@@ -695,7 +695,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
 /// Subdivisions (`phase_firsthalf`...) are -1 outside of them, so they only
 /// narrow the range when they can't hold there.
 fn phase_range(comp: &Comparison) -> Range {
-    let holds = |phase: Phase| comp.holds(Value::Int(phase as i32));
+    let holds = |phase: Phase| comp.holds(Value::Scalar(f64::from(phase as i32)));
     match comp.var {
         VarType::Phase(PhaseVar::Phase) => {}
         VarType::Phase(_) if !holds(Phase::RunUp) => {}

@@ -121,19 +121,19 @@ pub fn bashin_to_meters(bashin: f64) -> f64 {
 ///
 /// # Examples
 ///
-/// Evaluate the `bashin_diff_infront` skill condition variable, which counts
-/// whole bashin to the runner ahead:
+/// Evaluate the `bashin_diff_infront` skill condition variable, the gap to
+/// the runner ahead in bashin, unrounded:
 ///
 /// ```
 /// use uma_tools::units::{bashin_to_meters, meters_to_bashin};
 ///
 /// let runner = 1200.0;
-/// let runner_ahead = 1206.0;
-/// let bashin_diff_infront = meters_to_bashin(runner_ahead - runner).floor();
-/// assert_eq!(bashin_diff_infront, 2.0);
+/// let runner_ahead = 1203.0;
+/// let bashin_diff_infront = meters_to_bashin(runner_ahead - runner);
+/// assert_eq!(bashin_diff_infront, 1.2);
 ///
-/// // `bashin_diff_infront<=1` holds until the gap reaches 2 bashin.
-/// assert_eq!(bashin_to_meters(2.0), 5.0);
+/// // `bashin_diff_infront<=1` holds up to a gap of 2.5 m.
+/// assert_eq!(bashin_to_meters(1.0), 2.5);
 /// ```
 pub fn meters_to_bashin(meters: f64) -> f64 {
     meters / BASHIN_TO_METERS

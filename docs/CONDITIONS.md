@@ -152,7 +152,7 @@ Your wit stat.
 
 ## bashin_diff_behind
 
-Horse lengths between you and the closest uma behind you.
+Horse lengths between you and the closest uma behind you, not rounded.
 
 *Note:* If there's nobody behind you, the distance is treated as infinite.
 
@@ -162,7 +162,7 @@ Horse lengths between you and the closest uma behind you.
 
 ## bashin_diff_infront
 
-Horse lengths between you and the closest uma ahead of you.
+Horse lengths between you and the closest uma ahead of you, not rounded.
 
 *Note:* If there's nobody ahead of you, the distance is treated as infinite.
 

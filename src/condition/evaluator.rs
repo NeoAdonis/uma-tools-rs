@@ -51,8 +51,8 @@
 //!
 //! ## Value Kinds
 //!
-//! Most variables have an integer value ([`Value::Int`]), but some of them
-//! don't:
+//! Most variables have a single number as their value ([`Value::Scalar`]),
+//! but some of them don't:
 //!
 //! - Sets ([`Value::Set`]), whose comparisons test membership: e.g.
 //!   `is_used_skill_id==202051` is true if 202051 is among the IDs of the
@@ -67,9 +67,9 @@
 //!
 //! ## Float Handling
 //!
-//! All comparisons use integer values. Float variables (HP, position,
-//! percentages) are converted using [`f64::floor()`] for consistent rounding
-//! behavior.
+//! Most float variables (HP, position, percentages) are converted using
+//! [`f64::floor()`] for consistent rounding behavior. Horse lengths aren't:
+//! e.g. `bashin_diff_behind<=1` holds up to exactly 1 bashin (2.5 m) behind.
 //!
 //! ## Unimplemented Variables
 //!
@@ -150,8 +150,8 @@ where
 /// Value of a variable (see [Value Kinds](self#value-kinds)).
 #[derive(Debug, Clone)]
 pub enum Value<'a> {
-    /// Integer value, compared with any operator.
-    Int(i32),
+    /// Single number, compared with any operator.
+    Scalar(f64),
     /// Set of values, whose membership `==` and `!=` test.
     Set(ValueSet<'a>),
     /// Range of values, all equivalent: `==`, `<=` and `>=` hold if any value
@@ -211,14 +211,17 @@ impl Comparison {
     /// Panics if `value` is a set and the operator is neither `==` nor `!=`.
     pub fn holds(&self, value: Value) -> bool {
         match value {
-            Value::Int(value) => match self.op {
-                CompOp::Equal => value == self.value,
-                CompOp::NotEqual => value != self.value,
-                CompOp::Greater => value > self.value,
-                CompOp::GreaterEqual => value >= self.value,
-                CompOp::Less => value < self.value,
-                CompOp::LessEqual => value <= self.value,
-            },
+            Value::Scalar(value) => {
+                let target = f64::from(self.value);
+                match self.op {
+                    CompOp::Equal => value == target,
+                    CompOp::NotEqual => value != target,
+                    CompOp::Greater => value > target,
+                    CompOp::GreaterEqual => value >= target,
+                    CompOp::Less => value < target,
+                    CompOp::LessEqual => value <= target,
+                }
+            }
             Value::Set(set) => match self.op {
                 CompOp::Equal => set.contains(self.value),
                 CompOp::NotEqual => !set.contains(self.value),
@@ -337,23 +340,22 @@ pub fn variable_value<'a>(
     runner: &'a Runner,
     logic_ctx: Option<&SkillActivationLogic>,
 ) -> Value<'a> {
-    use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => Int(base_stat(stat_var, &runner.base)),
-        Entry(entry_var) => Int(entry_value(entry_var, &runner.initial_state)),
-        Order(pos_var) => Int(rank_value(pos_var, runner)),
+        BaseStat(stat_var) => scalar(base_stat(stat_var, &runner.base)),
+        Entry(entry_var) => scalar(entry_value(entry_var, &runner.initial_state)),
+        Order(pos_var) => scalar(rank_value(pos_var, runner)),
         OrderRate(rate_var) => order_rate_value(rate_var, &runner.order),
-        Distance(dist_var) => Int(distance_value(dist_var, runner)),
-        Phase(phase_var) => Int(phase_value(phase_var, &state.course, runner)),
-        Course(course_var) => Int(course_value(course_var, &state.course)),
-        Spatial(location_var) => Int(location_value(location_var, &state.course, runner)),
-        Activation(act_var) => Int(activation_value(act_var, state, runner, logic_ctx)),
-        RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => Int(running_style_value(style_var, state, runner.style)),
-        Status(status_var) => Int(status_value(status_var, runner)),
-        Blocking(blocking_var) => Int(blocking_value(blocking_var, runner)),
-        Temptation(tempt_var) => Int(temptation_value(tempt_var, state, runner)),
+        Distance(dist_var) => distance_value(dist_var, runner),
+        Phase(phase_var) => scalar(phase_value(phase_var, &state.course, runner)),
+        Course(course_var) => scalar(course_value(course_var, &state.course)),
+        Spatial(location_var) => scalar(location_value(location_var, &state.course, runner)),
+        Activation(act_var) => scalar(activation_value(act_var, state, runner, logic_ctx)),
+        RaceParam(param_var) => scalar(race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => scalar(running_style_value(style_var, state, runner.style)),
+        Status(status_var) => scalar(status_value(status_var, runner)),
+        Blocking(blocking_var) => scalar(blocking_value(blocking_var, runner)),
+        Temptation(tempt_var) => scalar(temptation_value(tempt_var, state, runner)),
         Lineup(lineup_var) => {
             // Extract the skill being evaluated from logic context.
             let skill_id = logic_ctx
@@ -361,13 +363,13 @@ pub fn variable_value<'a>(
                 .map_or(0, |skill| skill.id);
             lineup_value(lineup_var, state, skill_id)
         }
-        AccumulateTime => Int(state.elapsed_time.floor() as i32),
+        AccumulateTime => Value::Scalar(state.elapsed_time.floor()),
         // Always returns 1 (true).
-        Always => Int(1),
+        Always => scalar(1),
         ActivationQuery(query_var) => activation_query_value(query_var, state, runner),
         // Normally a trigger; evaluates to whether the all-out spurt is active.
         RandomSpatial(RandomSpatialVar::RunAtFullSpeedRandom) => {
-            Int(runner.all_out_spurt.is_active() as i32)
+            scalar(runner.all_out_spurt.is_active())
         }
         Random(_) | RandomSpatial(_) | RandomPhase(_) => {
             panic!(
@@ -384,14 +386,13 @@ pub fn variable_value_out_of_gate<'a>(
     state: &'a RaceState,
     builder: &UnreadyRunner,
 ) -> Value<'a> {
-    use Value::Int;
     use VarType::*;
     match var {
-        BaseStat(stat_var) => Int(base_stat(stat_var, &builder.base)),
-        Entry(entry_var) => Int(entry_value(entry_var, &builder.initial_state)),
-        Course(course_var) => Int(course_value(course_var, &state.course)),
-        RaceParam(param_var) => Int(race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => Int(running_style_value(style_var, state, builder.raw.style)),
+        BaseStat(stat_var) => scalar(base_stat(stat_var, &builder.base)),
+        Entry(entry_var) => scalar(entry_value(entry_var, &builder.initial_state)),
+        Course(course_var) => scalar(course_value(course_var, &state.course)),
+        RaceParam(param_var) => scalar(race_param_value(param_var, &state.params)),
+        RunningStyle(style_var) => scalar(running_style_value(style_var, state, builder.raw.style)),
         Lineup(lineup_var) => lineup_value(lineup_var, state, builder.evaluated_skill_id),
         // "random_lot==X" means X% chance. It should be drawn every time it's
         // read, but it's never read twice for the same skill in practice, so it
@@ -400,9 +401,9 @@ pub fn variable_value_out_of_gate<'a>(
             lot_hits(builder.evaluated_skill_lot)
         }
         // Always returns 1 (true).
-        Always => Int(1),
+        Always => scalar(1),
         // Not applicable in out-of-gate contexts.
-        _ => Int(0),
+        _ => scalar(0),
     }
 }
 
@@ -410,6 +411,11 @@ pub fn variable_value_out_of_gate<'a>(
 /// it: e.g. a draw of 37.4 is hit by `random_lot==38` and above.
 fn lot_hits(draw: f64) -> Value<'static> {
     Value::Range(draw.floor() as i32 + 1..=i32::MAX)
+}
+
+/// A whole number (or flag) as a single value.
+fn scalar(value: impl Into<f64>) -> Value<'static> {
+    Value::Scalar(value.into())
 }
 
 /// Get base stat value, truncated to compare it with whole numbers.
@@ -425,15 +431,17 @@ fn base_stat(stat: &BaseStatVar, base: &Stats) -> i32 {
 }
 
 /// Get values related to distance between runners.
-fn distance_value(var: &DistanceVar, runner: &Runner) -> i32 {
+fn distance_value(var: &DistanceVar, runner: &Runner) -> Value<'static> {
     use DistanceVar::*;
-    match var {
-        BashinDiffBehind => meters_to_bashin(runner.position_diff.from_prev).floor() as i32,
-        BashinDiffInfront => meters_to_bashin(runner.position_diff.from_next).floor() as i32,
-        DistanceDiffRate => runner.position_diff.rate_from_first.floor() as i32,
-        DistanceDiffTop => runner.position_diff.from_first.floor() as i32,
-        DistanceDiffTopFloat => (runner.position_diff.from_first * 10.0).floor() as i32,
-    }
+    let diff = &runner.position_diff;
+    Value::Scalar(match var {
+        // Horse lengths aren't rounded.
+        BashinDiffBehind => meters_to_bashin(diff.from_prev),
+        BashinDiffInfront => meters_to_bashin(diff.from_next),
+        DistanceDiffRate => diff.rate_from_first.floor(),
+        DistanceDiffTop => diff.from_first.floor(),
+        DistanceDiffTopFloat => (diff.from_first * 10.0).floor(),
+    })
 }
 
 /// Get phase-related values.
@@ -649,9 +657,7 @@ fn lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Val
 
     match var {
         // Number of runners with the skill being evaluated.
-        SameSkillHorseCount => {
-            Value::Int(state.existing_skills.get(&skill_id).copied().unwrap_or(0) as i32)
-        }
+        SameSkillHorseCount => scalar(state.existing_skills.get(&skill_id).copied().unwrap_or(0)),
 
         // IDs of the skills of every runner.
         IsExistSkillId => Value::Set(ValueSet::Keys(&state.existing_skills)),
@@ -865,8 +871,8 @@ fn order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
     // `order_rate>=X` (out) held for the entire race, i.e., at the worst or best
     // order. The rounded order counts as both, e.g., always being 2nd in a
     // 9-runner race (9 * 20% = 1.8 => 2) satisfies `in20` and `out20`.
-    let held_in = |rate| Value::Int((*order.worst_rates.start() <= rate) as i32);
-    let held_out = |rate| Value::Int((*order.best_rates.end() >= rate) as i32);
+    let held_in = |rate| scalar(*order.worst_rates.start() <= rate);
+    let held_out = |rate| scalar(*order.best_rates.end() >= rate);
 
     match var {
         // Rates that round to the runner's order (see `OrderState::rates`).
