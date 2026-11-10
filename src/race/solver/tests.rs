@@ -2915,6 +2915,27 @@ fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
 }
 
 #[test]
+fn test_slope_at_the_start_applies_from_the_first_move_after_the_gate() {
+    // 10708 starts on an uphill. A runner who leaves the gate during the
+    // first frame enters it after her first move, which is still flat; one
+    // who stays in the gate longer enters it there, so all her moves are
+    // uphill.
+    let first_move_acceleration = |start_delay: f64| {
+        let mut solver = ready_solver(10708, uma(Style::Pace), vec![], seeded_config(0));
+        solver.runners[0].start_delay = start_delay;
+        while solver.runners[0].position == 0.0 {
+            solver.step(DELTA_TIME);
+        }
+        let runner = &solver.runners[0];
+        assert!(runner.is_going_uphill(), "start delay {start_delay}");
+        runner.acceleration
+    };
+    let flat = first_move_acceleration(0.01) - 24.0;
+    let uphill = first_move_acceleration(0.09) - 24.0;
+    assert_close!(uphill / flat, 0.0004 / 0.0006);
+}
+
+#[test]
 fn test_out_of_gate_timed_effects_apply_from_first_frame() {
     // Like "Perfect Concentration": start delay before the race, then acceleration.
     let concentration = out_of_gate_skill(

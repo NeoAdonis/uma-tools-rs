@@ -1004,28 +1004,31 @@ impl RaceSolver<Runner> {
             index_by_gate[runner.gate_roll as usize] = Some(index);
         }
         for index in index_by_gate.into_iter().flatten() {
-            if self.runners[index].start_delay > self.state.elapsed_time {
-                continue;
-            }
-            let speed_limit = self.front_blocking_limit(index, &index_by_gate);
-            let runner = &mut self.runners[index];
-            runner.update_section(&mut self.state);
-            runner.update_rush_state(&mut self.state);
-            runner.update_target_speed(&self.state);
-            runner.update_acceleration(self.state.elapsed_time);
-            // The start dash may end during the speed update, but that frame
-            // still counts as part of it for HP consumption.
-            let start_dash = runner.is_start_dash;
-            runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
-            let prev_position = runner.position;
-            runner.update_position(delta_time, &self.state);
-            if runner.has_finished() && self.state.finish_time.is_none() {
-                self.state.finish_time = Some(self.state.elapsed_time);
-            }
+            let moves = if self.runners[index].start_delay <= self.state.elapsed_time {
+                let speed_limit = self.front_blocking_limit(index, &index_by_gate);
+                let runner = &mut self.runners[index];
+                runner.update_section(&mut self.state);
+                runner.update_rush_state(&mut self.state);
+                runner.update_target_speed(&self.state);
+                runner.update_acceleration(self.state.elapsed_time);
+                // The start dash may end during the speed update, but that frame
+                // still counts as part of it for HP consumption.
+                let start_dash = runner.is_start_dash;
+                runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
+                let prev_position = runner.position;
+                runner.update_position(delta_time, &self.state);
+                if runner.has_finished() && self.state.finish_time.is_none() {
+                    self.state.finish_time = Some(self.state.elapsed_time);
+                }
+                // The phase follows the position before the move.
+                runner.update_phase(prev_position, &mut self.state);
+                Some(start_dash)
+            } else {
+                None
+            };
 
-            // Update everything derived from the new position, except for the phase,
-            // which follows the position before the move.
-            runner.update_phase(prev_position, &mut self.state);
+            // Update everything else derived from the new position, including slopes.
+            let runner = &mut self.runners[index];
             let transitions = runner.segments.update(runner.position, &self.state.course);
             runner.update_final_extra_move_lane(
                 &transitions,
@@ -1034,6 +1037,9 @@ impl RaceSolver<Runner> {
             );
             runner.update_slope(&self.state.course.slopes, &transitions.slope, delta_time);
 
+            let Some(start_dash) = moves else {
+                continue;
+            };
             runner.update_lane(&self.state.course, delta_time);
             runner.update_hp(delta_time, start_dash, &self.state);
             runner.update_charge_up(delta_time, self.state.elapsed_time);
