@@ -958,13 +958,14 @@ impl RaceSolver<Runner> {
     /// [`Self::update_target_lanes`]).
     ///
     /// After that, the **state is updated**. Each runner (in gate order) updates
-    /// her section from her position, then moves and updates everything else
-    /// derived from her position: corners, straights and slopes from her new
-    /// one, but the phase from the one before the move, so her target speed
-    /// sees the section a frame before the phase. Then her lane and HP. Only
-    /// front blocking reads another runner then: the blocker's speed, already
-    /// updated if her gate is lower. Multi-runner values (order, overlaps,
-    /// blocking and nearby state, duels...) are updated last.
+    /// her section from her position, then moves and updates her phase from the
+    /// position before the move, so her target speed sees the section a frame
+    /// before the phase. Then her HP, and everything else derived from her new
+    /// position: corners and straights, her lane, then slopes, so that a change
+    /// of downhill mode applies to HP from the next frame on. Only front
+    /// blocking reads another runner then: the blocker's speed, already updated
+    /// if her gate is lower. Multi-runner values (order, overlaps, blocking and
+    /// nearby state, duels...) are updated last.
     ///
     /// Events detected during the update (e.g. entering a straight) are stored
     /// and handled by the next skill check. Update functions never check skills
@@ -1027,9 +1028,14 @@ impl RaceSolver<Runner> {
                 }
                 // The phase follows the position before the move.
                 runner.update_phase(prev_position, &mut self.state);
-                Some(start_dash)
+                // Before slopes; so that a downhill mode check only changes HP
+                // consumption from the next frame on.
+                // ? Only seen when entering a downhill at the start.
+                runner.update_hp(delta_time, start_dash, &self.state);
+                runner.update_charge_up(delta_time, self.state.elapsed_time);
+                true
             } else {
-                None
+                false
             };
 
             // Update everything else derived from the new position, including slopes.
@@ -1040,14 +1046,10 @@ impl RaceSolver<Runner> {
                 &self.state.course,
                 self.state.config.game_version,
             );
+            if moves {
+                runner.update_lane(&self.state.course, delta_time);
+            }
             runner.update_slope(&self.state.course.slopes, &transitions.slope, delta_time);
-
-            let Some(start_dash) = moves else {
-                continue;
-            };
-            runner.update_lane(&self.state.course, delta_time);
-            runner.update_hp(delta_time, start_dash, &self.state);
-            runner.update_charge_up(delta_time, self.state.elapsed_time);
         }
 
         self.runners

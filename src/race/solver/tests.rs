@@ -3947,6 +3947,27 @@ fn downhill_modes(solver: &mut RaceSolver<Runner>, course: &Course, end: u32) ->
 }
 
 #[test]
+fn test_downhill_mode_saves_hp_from_the_frame_after_its_check() {
+    // HP lost on the first two frames on course 10906, which starts on a
+    // downhill checked on the first frame, depending on its outcome.
+    let hp_lost = |in_downhill_mode| {
+        let mut solver = ready_solver(10906, uma(Style::Pace), vec![], seeded_config(0));
+        let runner = &mut solver.runners[0];
+        runner.start_delay = 0.0;
+        runner.pins.downhill.insert(0, vec![in_downhill_mode]);
+        let mut hp = vec![solver.runners[0].hp.current()];
+        for _ in 0..2 {
+            solver.step_frame();
+            hp.push(solver.runners[0].hp.current());
+        }
+        [hp[0] - hp[1], hp[1] - hp[2]]
+    };
+    let (outside, inside) = (hp_lost(false), hp_lost(true));
+    assert_eq!(inside[0], outside[0]);
+    assert_close!(inside[1], outside[1] * 0.4);
+}
+
+#[test]
 fn test_pinned_downhill_checks_replace_their_outcomes() {
     let mut solver = timed_skill_solver(vec![]);
     let slopes =
