@@ -1555,7 +1555,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update secure lead (リード確保) state for all runners.
+    /// Update secure lead (リード確保) state for all runners (2.5 Anniversary onward).
     fn update_secure_lead(&mut self) {
         let elapsed_time = self.state.elapsed_time;
         let course_distance = self.state.course.distance as f64;
@@ -1776,7 +1776,8 @@ impl RaceSolver<Runner> {
             && (a.order.rate <= duel::MAX_ORDER_RATE || b.order.rate <= duel::MAX_ORDER_RATE)
     }
 
-    /// Update compete before spurt (位置取り調整) state for all runners.
+    /// Update compete before spurt (位置取り調整) state for all runners (2.5 Anniversary
+    /// onward).
     fn update_compete_before_spurt(&mut self) {
         let elapsed_time = self.state.elapsed_time;
         let course_distance = self.state.course.distance as f64;

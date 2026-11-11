@@ -1,4 +1,5 @@
-//! Compete before spurt (位置取り調整) and Stamina Keep (持久力温存) formulas.
+//! Compete before spurt (位置取り調整) and Stamina Keep (持久力温存) formulas (2.5
+//! Anniversary onward).
 //!
 //! Between sections 11 and 15, a runner that is too far from the lead or has
 //! other runners nearby may speed up for a short time at the cost of HP.
