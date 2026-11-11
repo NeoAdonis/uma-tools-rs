@@ -98,15 +98,24 @@ fn test_overtake_lane_falls_back_to_current_lane() {
     runner.overtake_state = Some(OvertakeState::default());
     runner.lane.target = CourseWidths(0.5);
     let decide = |solver: &RaceSolver<Runner>| {
-        solver.runners[0].overtake_lane_decision(&solver.state.course, &solver.runners)
+        solver.runners[0].overtake_lane_target(&solver.state.course, &solver.runners)
     };
-    assert_close!(decide(&solver).target.0, 0.3);
+    assert_close!(decide(&solver).0, 0.3);
 
-    // The extra move lane, now outside, is still preferred over the current lane.
-    solver.runners[2].position = 115.0;
-    let decision = decide(&solver);
-    assert_eq!(decision.extra_move_lane, Some(CourseWidths(0.5)));
-    assert_close!(decision.target.0, 0.5);
+    // The extra move lane, outside, is still preferred over the current lane.
+    solver.runners[0].extra_move_lane = Some(CourseWidths(0.5));
+    assert_close!(decide(&solver).0, 0.5);
+}
+
+#[test]
+fn test_overtake_lane_ignores_runners_ahead_before_the_final_corner() {
+    // A runner far ahead on the outside doesn't pull her out: the extra move
+    // lane is only set upon entering the final corner.
+    let mut solver = lane_solver(&[(100.0, 0.3), (115.0, 0.5)]);
+    solver.runners[0].overtake_state = Some(OvertakeState::default());
+    let target = solver.runners[0].overtake_lane_target(&solver.state.course, &solver.runners);
+    assert_close!(target.0, 0.3 - LANE);
+    assert_eq!(solver.runners[0].extra_move_lane, None);
 }
 
 #[test]
@@ -241,8 +250,8 @@ fn test_overtake_lane_ignores_blocking_on_the_other_side() {
     let runner = &mut solver.runners[0];
     runner.overtake_state = Some(OvertakeState::default());
     runner.blocked.side_out = true;
-    let decision = solver.runners[0].overtake_lane_decision(&solver.state.course, &solver.runners);
-    assert_close!(decision.target.0, 0.3 - LANE);
+    let target = solver.runners[0].overtake_lane_target(&solver.state.course, &solver.runners);
+    assert_close!(target.0, 0.3 - LANE);
 }
 
 #[test]
@@ -297,23 +306,6 @@ fn test_extra_move_lane_set_upon_entering_final_corner() {
 }
 
 #[test]
-fn test_extra_move_lane_kept_after_mid_race() {
-    let mut solver = lane_solver(&[(100.0, 0.3), (105.0, 0.4)]);
-    let runner = &mut solver.runners[0];
-    runner.extra_move_lane = Some(CourseWidths(0.35));
-    runner.phase = Phase::Late;
-    let runner = &solver.runners[0];
-    let next = runner.next_extra_move_lane(&runner.visible_ahead(&solver.runners));
-    assert_eq!(next, Some(CourseWidths(0.35)));
-
-    // Furthest visible runner ahead during the Mid race.
-    solver.runners[0].phase = Phase::Mid;
-    let runner = &solver.runners[0];
-    let next = runner.next_extra_move_lane(&runner.visible_ahead(&solver.runners));
-    assert_eq!(next, Some(CourseWidths(0.4)));
-}
-
-#[test]
 fn test_target_lane_decision_only_when_target_lane_should_update() {
     let mut solver = lane_solver(&[(100.0, 0.3)]);
     let decide = |solver: &RaceSolver<Runner>| {
@@ -325,17 +317,14 @@ fn test_target_lane_decision_only_when_target_lane_should_update() {
 }
 
 #[test]
-fn test_target_lane_decision_fixed_mode_keeps_extra_move_lane() {
+fn test_target_lane_decision_fixed_mode_overrides_overtake_mode() {
     let mut solver = lane_solver(&[(100.0, 0.3)]);
     let runner = &mut solver.runners[0];
     runner.overtake_state = Some(OvertakeState::default());
     runner.skill_modifiers.target_lane = Some(CourseWidths(0.6));
     runner.extra_move_lane = Some(CourseWidths(0.45));
-    let decision = solver.runners[0]
-        .target_lane_decision(&solver.state.course, &solver.runners)
-        .unwrap();
-    assert_eq!(decision.target, CourseWidths(0.6));
-    assert_eq!(decision.extra_move_lane, Some(CourseWidths(0.45)));
+    let target = solver.runners[0].target_lane_decision(&solver.state.course, &solver.runners);
+    assert_eq!(target, Some(CourseWidths(0.6)));
 }
 
 #[test]
@@ -350,7 +339,7 @@ fn test_target_lane_decision_mode_selection() {
         solver.runners[0].position = position;
         let decision =
             solver.runners[0].target_lane_decision(&solver.state.course, &solver.runners);
-        decision.unwrap().target.0
+        decision.unwrap().0
     };
 
     // Not in overtake mode.

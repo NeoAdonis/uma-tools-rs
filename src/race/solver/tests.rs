@@ -1732,9 +1732,8 @@ fn test_pace_down_lane_target() {
     runner.phase = Phase::Early;
     runner.lane.current = CourseWidths(0.4);
     runner.positioning_strategy = PositioningStrategy::PaceDown(0.0);
-    let decision =
-        solver.runners[0].normal_mode_lane_decision(&solver.state.course, &solver.runners);
-    assert_close!(decision.target.0, 0.18);
+    let target = solver.runners[0].normal_mode_lane_target(&solver.state.course, &solver.runners);
+    assert_close!(target.0, 0.18);
 }
 
 #[test]

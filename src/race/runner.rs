@@ -395,10 +395,9 @@ pub struct Runner {
     pub(crate) overtake_target_time: f64,
     /// Time spent being an overtake target of someone else in seconds.
     pub(crate) being_overtake_target_time: f64,
-    /// Extra move lane position.
-    ///
-    /// It's set during early/mid phase based on furthest visible runner. Used as
-    /// fallback in overtake mode lane selection.
+    /// Extra move lane, set upon entering the final corner (see
+    /// `Self::update_final_extra_move_lane`). From then on, both normal and
+    /// overtake mode move out to it when it's outside and reachable.
     pub(crate) extra_move_lane: Option<CourseWidths>,
     /// State related to order (rank) in the race.
     pub order: OrderState,

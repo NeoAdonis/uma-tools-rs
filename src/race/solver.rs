@@ -1364,16 +1364,13 @@ impl RaceSolver<Runner> {
         for i in 0..self.runners.len() {
             // Borrow all runners along with a single runner in an immutable state first.
             let all_runners = &self.runners;
-            let Some(decision) =
-                all_runners[i].target_lane_decision(&self.state.course, all_runners)
+            let Some(target) = all_runners[i].target_lane_decision(&self.state.course, all_runners)
             else {
                 continue;
             };
 
             // Shared borrow of all runners ends here; result can be written back.
-            let runner = &mut self.runners[i];
-            runner.lane.target = decision.target;
-            runner.extra_move_lane = decision.extra_move_lane;
+            self.runners[i].lane.target = target;
         }
     }
 

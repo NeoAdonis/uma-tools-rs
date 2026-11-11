@@ -49,15 +49,6 @@ impl LaneState {
     }
 }
 
-/// Result of a lane target calculation to be written back to the runner.
-///
-/// Both fields hold the runner's current values when unchanged.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct LaneDecision {
-    pub(crate) target: CourseWidths,
-    pub(crate) extra_move_lane: Option<CourseWidths>,
-}
-
 /// Overtake mode state including persistence timer.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct OvertakeState {
@@ -279,16 +270,13 @@ impl Runner {
         &self,
         course: &Course,
         all_runners: &[Runner],
-    ) -> Option<LaneDecision> {
+    ) -> Option<CourseWidths> {
         if !self.should_update_target_lane() {
             return None;
         }
 
         if let Some(target) = self.fixed_mode_lane_target() {
-            return Some(LaneDecision {
-                target,
-                extra_move_lane: self.extra_move_lane,
-            });
+            return Some(target);
         }
 
         let near_move_lane = course
@@ -296,12 +284,12 @@ impl Runner {
             .is_some_and(|point| (0.0..=200.0).contains(&(point - self.position)));
         let use_normal_mode =
             !self.is_in_overtake_mode() || (self.phase <= Phase::Mid && near_move_lane);
-        let decision = if use_normal_mode {
-            self.normal_mode_lane_decision(course, all_runners)
+        let target = if use_normal_mode {
+            self.normal_mode_lane_target(course, all_runners)
         } else {
-            self.overtake_lane_decision(course, all_runners)
+            self.overtake_lane_target(course, all_runners)
         };
-        Some(decision)
+        Some(target)
     }
 
     /// Check if the target lane should be updated: when the runner is less than
@@ -348,22 +336,14 @@ impl Runner {
         }
     }
 
-    /// Calculate lane target when in normal mode (not overtaking).
-    pub(crate) fn normal_mode_lane_decision(
+    /// Target lane in normal mode (not overtaking).
+    ///
+    /// Rules are checked in priority order; first match wins.
+    pub(crate) fn normal_mode_lane_target(
         &self,
         course: &Course,
         all_runners: &[Runner],
-    ) -> LaneDecision {
-        LaneDecision {
-            target: self.normal_mode_lane_target(course, all_runners),
-            extra_move_lane: self.extra_move_lane,
-        }
-    }
-
-    /// Target lane in normal mode.
-    ///
-    /// Rules are checked in priority order; first match wins.
-    fn normal_mode_lane_target(&self, course: &Course, all_runners: &[Runner]) -> CourseWidths {
+    ) -> CourseWidths {
         // Out of HP - stay in current lane.
         if self.hp.is_empty() {
             return self.lane.current;
@@ -411,27 +391,20 @@ impl Runner {
         self.lane.current
     }
 
-    /// Calculate target lane when in overtake mode.
+    /// Target lane in overtake mode, or the current target if not in it.
     ///
-    /// This should be called every frame after overtake state is finalized.
-    pub(crate) fn overtake_lane_decision(
+    /// This should be called after overtake state is finalized.
+    pub(crate) fn overtake_lane_target(
         &self,
         course: &Course,
         all_runners: &[Runner],
-    ) -> LaneDecision {
-        let mut decision = LaneDecision {
-            target: self.lane.target,
-            extra_move_lane: self.extra_move_lane,
-        };
-
-        // Early exit if not in overtake mode.
+    ) -> CourseWidths {
         let Some(state) = &self.overtake_state else {
-            return decision;
+            return self.lane.target;
         };
 
         // Visibility doesn't depend on the candidate lane, so it's checked once.
         let visible_ahead = self.visible_ahead(all_runners);
-        decision.extra_move_lane = self.next_extra_move_lane(&visible_ahead);
 
         // Candidates from each target (in gate order), then the extra one.
         // The best (lowest score, first on ties) with lane space is accepted,
@@ -451,12 +424,12 @@ impl Runner {
             .map_or(self.lane.current, |(lane, _)| lane);
 
         // Move to the extra move lane instead if it's outside and reachable.
-        let target_lane = match decision.extra_move_lane {
+        // It's only set upon entering the final corner.
+        let target_lane = match self.extra_move_lane {
             Some(extra) if best_lane < extra && self.has_lane_space_to(extra) => extra,
             _ => best_lane,
         };
-        decision.target = target_lane.clamp(CourseWidths(0.0), course.width);
-        decision
+        target_lane.clamp(CourseWidths(0.0), course.width)
     }
 
     /// Runners in `all_runners` other than this one.
@@ -626,25 +599,6 @@ impl Runner {
         } else {
             true
         }
-    }
-
-    /// Next extra_move_lane based on the furthest runner in `visible_ahead` (see
-    /// [`Self::visible_ahead`]) strictly ahead of this one.
-    ///
-    /// Only updated during Early and Mid phases, so that the one set upon
-    /// entering the final corner is kept. Keeps the current value if no runner
-    /// ahead is visible.
-    fn next_extra_move_lane(&self, visible_ahead: &[&Runner]) -> Option<CourseWidths> {
-        if self.phase > Phase::Mid {
-            return self.extra_move_lane;
-        }
-
-        // Find furthest visible runner ahead.
-        visible_ahead
-            .iter()
-            .filter(|r| r.position > self.position)
-            .max_by(|a, b| a.position.total_cmp(&b.position))
-            .map_or(self.extra_move_lane, |furthest| Some(furthest.lane.current))
     }
 
     /// Find the closest uma on the inside (lower lane value), within 5m and 3
