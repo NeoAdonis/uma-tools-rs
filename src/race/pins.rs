@@ -57,6 +57,11 @@ pub struct Pins {
     /// target speed modifier she rolls from her wit when the race starts
     /// (section 0) and upon entering each other section.
     pub section_speed: [Option<f64>; SECTION_COUNT as usize],
+    /// Force-in modifier in m/s: the target speed increase she rolls when the
+    /// race starts, which applies in the Early race while she's away from the
+    /// inner rail and blocked towards the inside. It includes her style's
+    /// share, and applies before the 1st anniversary too.
+    pub force_in: Option<f64>,
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled (see
@@ -156,6 +161,12 @@ impl Pins {
             assert!(
                 delay.is_finite() && delay >= 0.0,
                 "Invalid start delay {delay}: expected a finite, non-negative number"
+            );
+        }
+        if let Some(force_in) = self.force_in {
+            assert!(
+                force_in.is_finite(),
+                "Invalid force-in modifier {force_in}: expected a finite number"
             );
         }
         for (section, speed) in self.section_speed.iter().enumerate() {

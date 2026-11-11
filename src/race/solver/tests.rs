@@ -4474,7 +4474,7 @@ fn test_pins_change_only_their_outcome() {
         rush,
         ..Pins::default()
     };
-    let cases: [(Pins, Check, Restore); 5] = [
+    let cases: [(Pins, Check, Restore); 6] = [
         (
             Pins {
                 start_delay: Some(0.25),
@@ -4515,6 +4515,15 @@ fn test_pins_change_only_their_outcome() {
             section_speed_pins(0, 0.5),
             |r| r.section_speed_modifier == 0.5,
             |r, unpinned| r.section_speed_modifier = unpinned.section_speed_modifier,
+        ),
+        // A force-in modifier beyond what any style rolls.
+        (
+            Pins {
+                force_in: Some(0.5),
+                ..Pins::default()
+            },
+            |r| r.force_in_modifier == 0.5,
+            |r, unpinned| r.force_in_modifier = unpinned.force_in_modifier,
         ),
     ];
     let id = RunnerId(0);
@@ -4602,6 +4611,15 @@ fn test_pinned_section_speed_applies_on_entering_its_section() {
     assert_eq!(unpinned.runner(id).section, 3);
     assert_eq!(pinned.runner(id).section_speed_modifier, 1.0);
     assert_ne!(unpinned.runner(id).section_speed_modifier, 1.0);
+}
+
+#[test]
+#[should_panic(expected = "Invalid force-in modifier inf: expected a finite number")]
+fn test_infinite_force_in_pin_panics() {
+    add_with_pins(Pins {
+        force_in: Some(f64::INFINITY),
+        ..Pins::default()
+    });
 }
 
 #[test]

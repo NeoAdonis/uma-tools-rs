@@ -651,7 +651,7 @@ impl UnreadyRunner {
         };
 
         // Calculate force-in modifier based on style and randomness.
-        let force_in_modifier = if game_version < GameVersion::FirstAnniversary {
+        let rolled_force_in = if game_version < GameVersion::FirstAnniversary {
             0.0
         } else {
             rng.keyed(Stream::ForceIn).random_range(0.0..0.1)
@@ -661,6 +661,7 @@ impl UnreadyRunner {
                     Style::End => 0.03,
                 }
         };
+        let force_in_modifier = self.pins.force_in.unwrap_or(rolled_force_in);
 
         let stamina_keep = StaminaKeep::roll(game_version, &mut rng.stamina_keep);
 
