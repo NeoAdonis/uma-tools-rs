@@ -58,6 +58,10 @@ pub(crate) struct OvertakeState {
     targets: BTreeMap<u8, OvertakeTarget>,
     /// Time when overtake mode should expire (None if active with targets).
     expires_at: Option<f64>,
+    /// Whether she entered overtake mode on the last update, which decides her
+    /// target lane even when it shouldn't be updated (see
+    /// [`Runner::target_lane_decision`]).
+    entered: bool,
 }
 
 /// Information about an overtake target ahead of this runner.
@@ -170,10 +174,19 @@ impl Runner {
     /// Uncheck all overtake targets at the start of an update cycle.
     pub(crate) fn reset_overtake_checks(&mut self) {
         if let Some(state) = &mut self.overtake_state {
+            state.entered = false;
             for target in state.targets.values_mut() {
                 target.is_checked = false;
             }
         }
+    }
+
+    /// Overtake state, entering overtake mode if not in it.
+    fn enter_overtake_mode(&mut self) -> &mut OvertakeState {
+        self.overtake_state.get_or_insert_with(|| OvertakeState {
+            entered: true,
+            ..OvertakeState::default()
+        })
     }
 
     /// Check if another runner qualifies as an overtake target and update tracking.
@@ -198,7 +211,7 @@ impl Runner {
             return false;
         }
 
-        let state = self.overtake_state.get_or_insert_default();
+        let state = self.enter_overtake_mode();
         let entry = state.targets.entry(target.gate_roll).or_default();
         entry.is_checked = true;
         entry.is_closest_blocker = false;
@@ -213,7 +226,7 @@ impl Runner {
     /// roll if she wasn't already a target in this update cycle.
     pub(crate) fn track_front_blocker_target(&mut self, delta_time: f64) -> Option<u8> {
         let gate_roll = self.blocked.front_blocker?;
-        let state = self.overtake_state.get_or_insert_default();
+        let state = self.enter_overtake_mode();
         let entry = state.targets.entry(gate_roll).or_default();
         entry.is_closest_blocker = true;
         if entry.is_checked {
@@ -258,7 +271,8 @@ impl Runner {
     }
 
     /// Calculate the target lane for this frame, or `None` if it shouldn't be
-    /// updated (see [`Self::should_update_target_lane`]).
+    /// updated (see [`Self::should_update_target_lane`]), unless she just
+    /// entered overtake mode and uses it.
     ///
     /// The first mode that applies is used:
     /// 1. Fixed mode, while a skill sets the target lane (see
@@ -271,12 +285,16 @@ impl Runner {
         course: &Course,
         all_runners: &[Runner],
     ) -> Option<CourseWidths> {
-        if !self.should_update_target_lane() {
+        let updates = self.should_update_target_lane();
+        // ? Assume only entering overtake mode decides, not leaving it, nor
+        // switching to it at the end of the move lane point's 200m.
+        let entered_overtake = self.overtake_state.as_ref().is_some_and(|s| s.entered);
+        if !updates && !entered_overtake {
             return None;
         }
 
         if let Some(target) = self.fixed_mode_lane_target() {
-            return Some(target);
+            return updates.then_some(target);
         }
 
         let near_move_lane = course
@@ -284,12 +302,11 @@ impl Runner {
             .is_some_and(|point| (0.0..=200.0).contains(&(point - self.position)));
         let use_normal_mode =
             !self.is_in_overtake_mode() || (self.phase <= Phase::Mid && near_move_lane);
-        let target = if use_normal_mode {
-            self.normal_mode_lane_target(course, all_runners)
+        if use_normal_mode {
+            updates.then(|| self.normal_mode_lane_target(course, all_runners))
         } else {
-            self.overtake_lane_target(course, all_runners)
-        };
-        Some(target)
+            Some(self.overtake_lane_target(course, all_runners))
+        }
     }
 
     /// Check if the target lane should be updated: when the runner is less than

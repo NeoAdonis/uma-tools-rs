@@ -362,3 +362,38 @@ fn test_target_lane_decision_mode_selection() {
     solver.runners[0].overtake_state = None;
     assert_close!(target(&mut solver, move_lane_point - 100.0), 0.3);
 }
+
+#[test]
+fn test_entering_overtake_mode_decides_the_target_lane() {
+    // Far from her target and free to move, so it shouldn't be updated, until
+    // she enters overtake mode behind a blocker in her lane. In the Early
+    // race, the candidate 1 horse lane inside her is the cheapest.
+    let mut solver = lane_solver(&[(0.0, 0.3), (0.0, 0.3)]);
+    let move_lane_point = solver.state.course.move_lane_point().unwrap();
+    let decide = |solver: &RaceSolver<Runner>| {
+        solver.runners[0].target_lane_decision(&solver.state.course, &solver.runners)
+    };
+    let enter = |solver: &mut RaceSolver<Runner>, position: f64| {
+        solver.runners[0].position = position;
+        solver.runners[1].position = position + 1.5;
+        let blocker = solver.runners[1].gate_roll;
+        let runner = &mut solver.runners[0];
+        runner.phase = Phase::Early;
+        runner.overtake_state = None;
+        runner.lane.target = CourseWidths(0.5);
+        runner.blocked.side_in = false;
+        runner.blocked.side_out = false;
+        runner.blocked.front_blocker = Some(blocker);
+        runner.track_front_blocker_target(DELTA_TIME);
+    };
+
+    enter(&mut solver, move_lane_point + 100.0);
+    assert_close!(decide(&solver).unwrap().0, 0.3 - LANE);
+    // Only on the update she entered it.
+    solver.runners[0].reset_overtake_checks();
+    assert_eq!(decide(&solver), None);
+
+    // Not while normal mode is still used before the move lane point.
+    enter(&mut solver, move_lane_point - 100.0);
+    assert_eq!(decide(&solver), None);
+}
