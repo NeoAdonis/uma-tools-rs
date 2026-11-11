@@ -3935,6 +3935,59 @@ fn test_downhill_mode_chance_scales_with_wit() {
     assert!(!solver.runners[0].is_in_downhill_mode());
 }
 
+/// Whether the first runner is in downhill mode at each position from 99m to
+/// `end` meters along `course`, one frame per meter.
+fn downhill_modes(solver: &mut RaceSolver<Runner>, course: &Course, end: u32) -> Vec<bool> {
+    (99..=end)
+        .map(|position| {
+            move_on_slopes(solver, course, position as f64);
+            solver.runners[0].is_in_downhill_mode()
+        })
+        .collect()
+}
+
+#[test]
+fn test_pinned_downhill_checks_replace_their_outcomes() {
+    let mut solver = timed_skill_solver(vec![]);
+    let slopes =
+        [(20.0, 40.0), (100.0, 200.0)].map(|(start, length)| Slope::new(start, length, -2.0));
+    let course = course_with_slopes(slopes.to_vec());
+    // Rolled checks always enter downhill mode.
+    solver.runners[0].adjusted.wit = 2500.0;
+    let pins = &mut solver.runners[0].pins;
+    pins.downhill.insert(1, vec![false, true, false]);
+    // Checks on the first downhill don't count towards the second one's.
+    for position in 0..99 {
+        move_on_slopes(&mut solver, &course, position as f64);
+    }
+    // Checks at 100m, 116m, 131m and 146m (see
+    // `test_downhill_mode_checked_on_entry_then_every_second`); the last one
+    // is rolled.
+    let expected = (99..=150).map(|position| match position {
+        ..116 => false,
+        116..131 => true,
+        131..146 => false,
+        _ => true,
+    });
+    let modes = downhill_modes(&mut solver, &course, 150);
+    assert_eq!(modes, expected.collect::<Vec<_>>());
+}
+
+#[test]
+fn test_downhill_pin_of_its_rolled_outcome_changes_nothing() {
+    // The pinned check still draws its roll, so later checks roll the same.
+    let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
+    let solver = |seed| ready_solver(10101, uma(Style::Late), vec![], seeded_config(seed));
+    for seed in 0..10 {
+        let unpinned = downhill_modes(&mut solver(seed), &course, 290);
+        let mut pinned = solver(seed);
+        let pins = &mut pinned.runners[0].pins;
+        pins.downhill.insert(0, vec![unpinned[1]]);
+        let pinned = downhill_modes(&mut pinned, &course, 290);
+        assert_eq!(pinned, unpinned, "seed {seed}");
+    }
+}
+
 #[test]
 fn test_uphills_climbed_extend_duration() {
     // Base duration of 3 seconds plus 0.5 seconds per uphill, scaled to the
@@ -4619,6 +4672,18 @@ fn test_infinite_force_in_pin_panics() {
     add_with_pins(Pins {
         force_in: Some(f64::INFINITY),
         ..Pins::default()
+    });
+}
+
+#[test]
+#[should_panic(expected = "No downhill 0 to pin")]
+fn test_uphill_downhill_pin_panics() {
+    let mut solver = RaceSolver::new(load_course(10201), race_params(), seeded_config(0));
+    let mut pins = Pins::default();
+    pins.downhill.insert(0, vec![true]);
+    solver.add_runner(Entrant {
+        pins,
+        ..Entrant::new(uma(Style::Pace), vec![])
     });
 }
 

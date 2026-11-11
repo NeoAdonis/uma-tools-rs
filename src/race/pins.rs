@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::course::SECTION_COUNT;
+use crate::course::geometry::Slope;
 use crate::race::solver::RunnerId;
 use crate::skill::Skill;
 use crate::uma::Style;
@@ -62,6 +63,13 @@ pub struct Pins {
     /// inner rail and blocked towards the inside. It includes her style's
     /// share, and applies before the 1st anniversary too.
     pub force_in: Option<f64>,
+    /// Downhill mode outcomes, by slope index (see [`Course::slopes`]): whether
+    /// she's in downhill mode after each check on that downhill, in order (the
+    /// check upon entering it, then one every second). Checks past the end of
+    /// the list are rolled as usual.
+    ///
+    /// [`Course::slopes`]: crate::Course::slopes
+    pub downhill: HashMap<usize, Vec<bool>>,
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled (see
@@ -138,6 +146,13 @@ impl Pins {
         pinned.flatten().unwrap_or(rolled)
     }
 
+    /// Whether she's in downhill mode after check `check` (0-indexed) on the
+    /// slope with index `slope`: the pinned outcome, if any, or `rolled`.
+    pub(crate) fn downhill_mode(&self, slope: usize, check: usize, rolled: bool) -> bool {
+        let pinned = self.downhill.get(&slope).and_then(|c| c.get(check));
+        pinned.copied().unwrap_or(rolled)
+    }
+
     /// Pinned activations of the skill with ID `id`, if they are.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
@@ -155,8 +170,8 @@ impl Pins {
     }
 
     /// Panic if a pinned value would break the simulation or never take effect,
-    /// for a runner with `skills`.
-    pub(crate) fn validate(&self, skills: &[Arc<Skill>]) {
+    /// for a runner with `skills` on a course with `slopes`.
+    pub(crate) fn validate(&self, skills: &[Arc<Skill>], slopes: &[Slope]) {
         if let Some(delay) = self.start_delay {
             assert!(
                 delay.is_finite() && delay >= 0.0,
@@ -183,6 +198,10 @@ impl Pins {
                 (1..=last).contains(&section),
                 "Invalid rush section {section}: expected 1 to {last}"
             );
+        }
+        for &slope in self.downhill.keys() {
+            let is_downhill = slopes.get(slope).is_some_and(Slope::is_downhill);
+            assert!(is_downhill, "No downhill {slope} to pin");
         }
         for (&id, pin) in &self.skills {
             let skill = skills.iter().find(|skill| skill.id == id);

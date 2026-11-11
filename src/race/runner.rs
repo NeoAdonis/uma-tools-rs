@@ -429,6 +429,8 @@ pub struct Runner {
     ///
     /// Downhill mode is checked upon entering a downhill and then every second.
     pub(crate) downhill_check_timer: f64,
+    /// Downhill mode checks made on the current downhill.
+    pub(crate) downhill_checks: usize,
     /// Number of uphills climbed to the end.
     pub(crate) uphills_climbed: u8,
     /// Current section index (0-23).
@@ -1148,6 +1150,7 @@ impl Runner {
     /// runner may enter downhill mode (Wit * 0.04% chance) or exit it (20% chance)
     /// upon entering them and then every second. Each slope has its own random
     /// stream, so that the checks on a slope don't depend on those before it.
+    /// Pinned checks (see [`Pins::downhill`]) replace the outcome they roll.
     pub(crate) fn update_slope(
         &mut self,
         slopes: &[Slope],
@@ -1178,6 +1181,7 @@ impl Runner {
 
         if transition.entered.is_some() {
             self.downhill_check_timer = 0.0;
+            self.downhill_checks = 0;
             let rng = &mut self.rng;
             rng.slope = rng.keyed(Stream::Slope(slope_idx));
         } else {
@@ -1189,18 +1193,18 @@ impl Runner {
             self.downhill_check_timer -= 1.0;
         }
 
-        let in_downhill_mode = self.is_in_downhill_mode();
+        let was_in_downhill_mode = self.is_in_downhill_mode();
+        let chance = (self.adjusted.wit * 0.0004).min(1.0);
         let rng = &mut self.rng.slope;
-        if in_downhill_mode {
-            if rng.random_bool(0.2) {
-                self.slope_speed_modifier = None;
-            }
+        let rolled = if was_in_downhill_mode {
+            !rng.random_bool(0.2)
         } else {
-            let chance = (self.adjusted.wit * 0.0004).min(1.0);
-            if rng.random_bool(chance) {
-                self.slope_speed_modifier = Some(downhill_speed_modifier(slope.grade));
-            }
-        }
+            rng.random_bool(chance)
+        };
+        let check = self.downhill_checks;
+        self.downhill_checks += 1;
+        let in_downhill_mode = self.pins.downhill_mode(slope_idx, check, rolled);
+        self.slope_speed_modifier = in_downhill_mode.then(|| downhill_speed_modifier(slope.grade));
     }
 
     /// Update order (rank) and overtakes based on current order.

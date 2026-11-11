@@ -713,6 +713,7 @@ impl UnreadyRunner {
             positioning_end: f64::INFINITY,
             slope_speed_modifier: None,
             downhill_check_timer: 0.0,
+            downhill_checks: 0,
             uphills_climbed: 0,
             last_spurt: None,
             stamina_limit_break_base: stamina_limit_break_base_buff(
