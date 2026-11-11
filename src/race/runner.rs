@@ -799,11 +799,12 @@ impl Runner {
         }
 
         // Update section speed modifier.
-        self.section_speed_modifier = roll_section_speed_modifier(
+        let rolled = roll_section_speed_modifier(
             &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
             self.adjusted.wit,
             state.course.base_speed(),
         );
+        self.section_speed_modifier = self.pins.section_speed(self.section, rolled);
 
         // Start rush if conditions are met (a runner can only rush once).
         if let Some(rush_state) = &self.rush_state

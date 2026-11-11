@@ -634,10 +634,13 @@ impl UnreadyRunner {
         let rush_state = rush_pins.rushes.unwrap_or(can_rush).then_some(rush_state);
 
         // Calculate section modifier for base speed adjustment.
-        let section_speed_modifier = roll_section_speed_modifier(
-            &mut rng.keyed(Stream::SectionSpeed(0)),
-            self.adjusted.wit,
-            course.base_speed(),
+        let section_speed_modifier = self.pins.section_speed(
+            0,
+            roll_section_speed_modifier(
+                &mut rng.keyed(Stream::SectionSpeed(0)),
+                self.adjusted.wit,
+                course.base_speed(),
+            ),
         );
 
         // Calculate move lane modifier.

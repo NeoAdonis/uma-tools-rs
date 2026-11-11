@@ -4474,7 +4474,7 @@ fn test_pins_change_only_their_outcome() {
         rush,
         ..Pins::default()
     };
-    let cases: [(Pins, Check, Restore); 4] = [
+    let cases: [(Pins, Check, Restore); 5] = [
         (
             Pins {
                 start_delay: Some(0.25),
@@ -4509,6 +4509,12 @@ fn test_pins_change_only_their_outcome() {
             }),
             |r| rush_of(r).section == 12,
             |r, unpinned| r.rush_state.as_mut().unwrap().section = rush_of(unpinned).section,
+        ),
+        // A section speed beyond what her wit rolls.
+        (
+            section_speed_pins(0, 0.5),
+            |r| r.section_speed_modifier == 0.5,
+            |r, unpinned| r.section_speed_modifier = unpinned.section_speed_modifier,
         ),
     ];
     let id = RunnerId(0);
@@ -4574,6 +4580,34 @@ fn test_nan_start_delay_pin_panics() {
         start_delay: Some(f64::NAN),
         ..Pins::default()
     });
+}
+
+#[test]
+fn test_pinned_section_speed_applies_on_entering_its_section() {
+    let mut pinned = ready_with_pins(section_speed_pins(3, 1.0), 0);
+    let mut unpinned = ready_with_pins(Pins::default(), 0);
+    let id = RunnerId(0);
+    // Both races are the same until she enters the pinned section.
+    let state = |solver: &RaceSolver<Runner>| -> Vec<(f64, f64)> {
+        let runners = solver.runners.iter();
+        runners
+            .map(|r| (r.position, r.section_speed_modifier))
+            .collect()
+    };
+    while pinned.runner(id).section < 3 {
+        assert_eq!(state(&pinned), state(&unpinned));
+        assert!(!pinned.step_frame(), "the race ended first");
+        unpinned.step_frame();
+    }
+    assert_eq!(unpinned.runner(id).section, 3);
+    assert_eq!(pinned.runner(id).section_speed_modifier, 1.0);
+    assert_ne!(unpinned.runner(id).section_speed_modifier, 1.0);
+}
+
+#[test]
+#[should_panic(expected = "Invalid section speed NaN for section 5")]
+fn test_nan_section_speed_pin_panics() {
+    add_with_pins(section_speed_pins(5, f64::NAN));
 }
 
 #[test]
@@ -5104,6 +5138,13 @@ fn rush_section_pins(section: u8) -> Pins {
         },
         ..Pins::default()
     }
+}
+
+/// Pins of a runner with the section speed of `section` pinned to `speed`.
+fn section_speed_pins(section: usize, speed: f64) -> Pins {
+    let mut pins = Pins::default();
+    pins.section_speed[section] = Some(speed);
+    pins
 }
 
 /// Add a runner with `pins` to a race.

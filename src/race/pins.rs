@@ -53,6 +53,10 @@ pub struct Pins {
     pub rush: RushPins,
     /// Outcomes of her skills, by skill ID.
     pub skills: HashMap<i32, SkillPin>,
+    /// Section speed modifier in m/s, by section (0-indexed): the random
+    /// target speed modifier she rolls from her wit when the race starts
+    /// (section 0) and upon entering each other section.
+    pub section_speed: [Option<f64>; SECTION_COUNT as usize],
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled (see
@@ -122,6 +126,13 @@ pub struct PinnedActivation {
 }
 
 impl Pins {
+    /// Section speed modifier of `section`: the pinned one, if any, or
+    /// `rolled`. Sections past the goal can't be pinned.
+    pub(crate) fn section_speed(&self, section: u8, rolled: f64) -> f64 {
+        let pinned = self.section_speed.get(section as usize).copied();
+        pinned.flatten().unwrap_or(rolled)
+    }
+
     /// Pinned activations of the skill with ID `id`, if they are.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
@@ -146,6 +157,14 @@ impl Pins {
                 delay.is_finite() && delay >= 0.0,
                 "Invalid start delay {delay}: expected a finite, non-negative number"
             );
+        }
+        for (section, speed) in self.section_speed.iter().enumerate() {
+            if let Some(speed) = speed {
+                assert!(
+                    speed.is_finite(),
+                    "Invalid section speed {speed} for section {section}: expected a finite number"
+                );
+            }
         }
         if let Some(section) = self.rush.section {
             let last = SECTION_COUNT - 1;
