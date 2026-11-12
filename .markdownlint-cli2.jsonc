@@ -4,5 +4,5 @@
     "MD013": { "line_length": 80 }
   },
   "globs": ["**/*.md"],
-  "ignores": ["target/**"]
+  "ignores": ["target/**", "CLAUDE.md"]
 }
