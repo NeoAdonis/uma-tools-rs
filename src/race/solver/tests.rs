@@ -227,13 +227,63 @@ fn test_pace_up_ex_non_front_depends_on_pacemaker() {
     );
     solver.update_positioning_strategy();
     assert!(!is_pace_up_ex(&mut solver, Style::Late));
+
+    // A pacemaker with the same style isn't behind her.
+    let mut solver = positioning_solver(
+        &[(Style::Late, 100.0), (Style::Late, 110.0)],
+        GameVersion::LATEST,
+    );
+    solver.update_positioning_strategy();
+    assert!(
+        !solver
+            .runners
+            .iter()
+            .any(|runner| matches!(runner.positioning_strategy, PositioningStrategy::PaceUpEx))
+    );
+}
+
+/// Strategy of the runner with the given style after one positioning update
+/// with every runner at the gate, gated in the order of `styles` (the first
+/// one from gate 1).
+fn strategy_at_gate(styles: &[Style], style: Style) -> PositioningStrategy {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for (i, &style) in styles.iter().enumerate() {
+        let entrant = Entrant {
+            gate: Some(i as u8 + 1),
+            ..Entrant::new(uma(style), vec![])
+        };
+        solver.add_runner(entrant);
+    }
+    let mut solver = solver.ready_runners();
+    solver.state.elapsed_time = 10.0;
+    solver.update_positioning_strategy();
+    runner_with_style(&mut solver, style).positioning_strategy
+}
+
+#[test]
+fn test_pace_up_ex_gate_order_settles_ties_for_front_runners_only() {
+    // Front runner gated behind a passive runner: the passive one is ahead.
+    assert_eq!(
+        strategy_at_gate(&[Style::Pace, Style::Front], Style::Front),
+        PositioningStrategy::PaceUpEx
+    );
+    // Gated ahead of her instead: nobody is ahead of the front runner.
+    assert_ne!(
+        strategy_at_gate(&[Style::Front, Style::Pace], Style::Front),
+        PositioningStrategy::PaceUpEx
+    );
+    // The pacemaker must be strictly ahead for the others, even in gate 1.
+    assert_ne!(
+        strategy_at_gate(&[Style::End, Style::Pace], Style::Pace),
+        PositioningStrategy::PaceUpEx
+    );
 }
 
 #[test]
 fn test_positioning_is_first_checked_at_the_gate() {
     // A late surger leaves the gate first, but positioning is first checked
-    // before anyone moves: nobody is ahead, so both pace down instead of the pace
-    // chaser entering Pace Up Ex behind her.
+    // before anyone moves: the pacemaker isn't strictly ahead, so both pace down
+    // instead of the pace chaser entering Pace Up Ex behind her.
     let config = Configuration {
         rushing: Roll::Never,
         ..seeded_config(0)

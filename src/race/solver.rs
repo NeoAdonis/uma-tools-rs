@@ -1441,7 +1441,8 @@ impl RaceSolver<Runner> {
     }
 
     /// Update positioning strategy for all runners. Runners must be sorted by
-    /// position in descending order before calling this method.
+    /// position in descending order before calling this method, with ties in
+    /// gate order: the lower gate counts as ahead.
     fn update_positioning_strategy(&mut self) {
         // Debug: check sorting.
         self.assert_runners_sorted();
@@ -1483,18 +1484,17 @@ impl RaceSolver<Runner> {
 
         let has_pace_up_ex = self.state.config.game_version >= GameVersion::OnePointFiveAnniversary;
         let pacemaker_style = self.runners[0].positioning_style();
-        // Most passive style among runners strictly ahead of the current one, so
-        // that nobody is ahead of anybody at the start. Runaways count as front
-        // runners, so neither should be behind the other.
+        // Most passive style among runners ahead of the current one. Runners
+        // earlier in the order are ahead, so at the gate (everybody at 0 m) the
+        // lower gate is ahead. Runaways count as front runners, so neither
+        // should be behind the other.
         let mut max_style_ahead: Option<Style> = None;
-        let mut ahead = 0;
 
         for i in 0..self.runners.len() {
             let position = self.runners[i].position;
-            while self.runners[ahead].position > position {
-                let style = self.runners[ahead].positioning_style().base_style();
+            if i > 0 {
+                let style = self.runners[i - 1].positioning_style().base_style();
                 max_style_ahead = max_style_ahead.max(Some(style));
-                ahead += 1;
             }
             let style = self.runners[i].positioning_style();
             let base_style = style.base_style();

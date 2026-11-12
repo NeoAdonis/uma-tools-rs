@@ -48,11 +48,16 @@ pub(crate) enum PositioningStrategy {
     PaceDown(f64),
     /// *Introduced by 1.5 anniversary update in Japan.* Speed up if there is
     /// another runner ahead whose strategy should actually position her behind.
+    ///
     /// Front-runners enter it when any such runner is ahead; other runners enter it
     /// when the pacemaker is such a runner. Exits once no such runner is ahead.
-    /// Runaways and front runners count as the same strategy here. Takes
-    /// priority over all other strategies at each check from `Normal`, without
-    /// a wit check, but like them, it doesn't interrupt another strategy.
+    /// Runaways and front runners count as the same strategy here.
+    ///
+    /// Among runners at the same position (e.g. at the start), the lower gate
+    /// counts as ahead, but the pacemaker only counts when strictly ahead.
+    ///
+    /// At each check from `Normal`, it's tried first, with no wit check. Like
+    /// the other strategies, it doesn't interrupt one already underway.
     PaceUpEx,
 }
 
