@@ -12,3 +12,6 @@ codecov.json
 *.profraw
 *.profdata
 profile.json*
+
+# cargo-mutants output files.
+/mutants.out*
