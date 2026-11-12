@@ -1320,8 +1320,8 @@ impl RaceSolver<Runner> {
                     }
                 }
 
-                if distance > 5.0 {
-                    // Too far for the following checks.
+                if distance > 5.0 || lane_diff.abs() >= proximity::lane_diff_limit() {
+                    // Too far ahead or to the side for the following checks.
                     continue;
                 }
 

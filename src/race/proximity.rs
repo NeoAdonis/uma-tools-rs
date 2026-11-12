@@ -96,6 +96,16 @@ pub(crate) fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
 /// (e.g. from their gates) count as at it.
 const LANE_DIFF_TOLERANCE: CourseWidths = CourseWidths(1e-9);
 
+/// Lane difference (in horse lanes) of the loosest lane threshold of the
+/// proximity checks used when updating blocking status.
+const MAX_CHECK_LANE_DIFF: f64 = 3.0;
+
+/// Lane difference at or beyond which no proximity check holds, whatever the
+/// distance and game version.
+pub(crate) fn lane_diff_limit() -> CourseWidths {
+    CourseWidths::from_horse_lanes(MAX_CHECK_LANE_DIFF) - LANE_DIFF_TOLERANCE
+}
+
 /// Check if a runner is near another runner within a specified distance
 /// and lane difference.
 ///

@@ -67,3 +67,28 @@ fn test_check_front_blocked() {
         assert_eq!(actual, expected, "{distance}m, {lane_diff:?}");
     }
 }
+
+#[test]
+fn test_lane_diff_limit() {
+    let limit = lane_diff_limit();
+    for lane_diff in [limit, CourseWidths(limit.0 + 0.01)] {
+        for lane_diff in [lane_diff, -lane_diff] {
+            for distance in [0.0, 0.3, 1.0, 1.99, 2.5, 4.99] {
+                let checks = [
+                    check_front_blocked(distance, lane_diff),
+                    check_side_blocked(distance, lane_diff),
+                    is_near_same_lane(distance, lane_diff),
+                    is_near_behind_set1(distance, lane_diff),
+                    is_front_surrounded(distance, lane_diff),
+                    is_side_surrounded(distance, lane_diff),
+                    is_near(distance, lane_diff, GameVersion::Original),
+                    is_near(distance, lane_diff, GameVersion::LATEST),
+                ];
+                assert!(!checks.contains(&true), "{distance}m, {lane_diff:?}");
+            }
+        }
+    }
+    // The limit is tight: the loosest check still holds just below it.
+    let below = CourseWidths(limit.0 - 0.01);
+    assert!(is_near(1.0, below, GameVersion::LATEST));
+}
