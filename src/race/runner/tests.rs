@@ -472,3 +472,25 @@ fn test_speed_stops_at_target_speed() {
     runner.update_speed(DELTA_TIME, base_speed, None);
     assert_eq!(runner.speed, MAX_TARGET_SPEED);
 }
+
+#[test]
+fn test_target_speed_has_a_floor() {
+    use crate::race::modifiers::uphill_speed_modifier;
+    use crate::test_utils::*;
+
+    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let state = &solver.state;
+    let runner = &mut solver.runners[0];
+    runner.slope_speed_modifier = Some(uphill_speed_modifier(1.0, 1.0));
+    assert_eq!(runner.slope_speed_modifier, Some(-200.0));
+
+    // The start dash floor is fixed, whatever the minimum speed.
+    runner.is_start_dash = true;
+    runner.update_target_speed(state);
+    assert_eq!(runner.target_speed, START_DASH_MIN_TARGET_SPEED);
+
+    runner.is_start_dash = false;
+    runner.update_target_speed(state);
+    assert_eq!(runner.target_speed, runner.min_speed);
+    assert_ne!(runner.min_speed, START_DASH_MIN_TARGET_SPEED);
+}

@@ -72,3 +72,17 @@ fn test_positioning_speed_multiplier() {
         assert_eq!(actual, expected, "{phase:?} {version:?}");
     }
 }
+
+#[test]
+fn test_wit_check_never_passes_below_10_wit() {
+    use crate::test_utils::*;
+
+    // The chance is negative below 10 wit and exactly 0 at 10.
+    for wit in [7.68, 10.0] {
+        let (mut runner, _) = ready_runner(Style::Late, seeded_config(0));
+        runner.adjusted.wit = wit;
+        for _ in 0..20 {
+            assert!(!runner.roll_positioning_wit_check(0.2), "{wit}");
+        }
+    }
+}

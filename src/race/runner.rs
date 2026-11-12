@@ -118,6 +118,10 @@ pub(crate) use surroundings::{BlockedState, NearbyState, SurroundState};
 /// Maximum target speed a runner can reach in m/s.
 pub(crate) const MAX_TARGET_SPEED: f64 = 30.0;
 
+/// Lowest target speed (m/s) during the start dash.
+// ? Not documented; it may depend on something not identified yet.
+pub(crate) const START_DASH_MIN_TARGET_SPEED: f64 = 13.0;
+
 /// Distance from the inner fence above which the force-in modifier applies.
 pub(crate) const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
 
@@ -680,6 +684,9 @@ impl Runner {
     }
 
     /// Update target speed based on various factors.
+    ///
+    /// It is capped at [`MAX_TARGET_SPEED`] and floored at the minimum speed,
+    /// or at [`START_DASH_MIN_TARGET_SPEED`] during the start dash.
     pub(crate) fn update_target_speed(&mut self, state: &RaceState) {
         if self.hp.is_empty() {
             self.target_speed = self.min_speed;
@@ -735,6 +742,11 @@ impl Runner {
             0.0
         };
 
+        let floor = if self.is_start_dash {
+            START_DASH_MIN_TARGET_SPEED
+        } else {
+            self.min_speed
+        };
         self.target_speed = (initial_target_speed
             + self.slope_speed_modifier.unwrap_or(0.0)
             + self.skill_modifiers.target_speed
@@ -747,6 +759,8 @@ impl Runner {
             + self.stamina_limit_break
             + self.all_out_spurt.speed_bonus())
         .min(MAX_TARGET_SPEED)
+        // Not `clamp`, which panics if the floor ever exceeds the cap.
+        .max(floor)
     }
 
     /// Update the runner's position based on effective current speed.

@@ -345,8 +345,10 @@ impl Runner {
 
     /// Roll a wit check to change positioning strategy, with a chance of
     /// `coef * log10(wit * 0.1)`.
+    ///
+    /// Below 10 wit, the check never passes.
     fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
-        let chance = coef * (self.adjusted.wit * 0.1).log10();
+        let chance = (coef * (self.adjusted.wit * 0.1).log10()).clamp(0.0, 1.0);
         self.rng.positioning.random_bool(chance)
     }
 }
