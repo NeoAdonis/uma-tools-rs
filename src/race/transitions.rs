@@ -24,7 +24,15 @@ pub(crate) struct Transition {
 /// a kind (e.g. corners) a runner is in.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct SegmentManager {
+    /// Index of the segment currently being traversed, if any.
     current: Option<usize>,
+    /// Index of the first segment not yet passed: the current one while
+    /// inside it, otherwise the next one that may be entered.
+    ///
+    /// Every earlier segment ended at or before a position already seen, so
+    /// it is never looked at again. The index moves past the current segment
+    /// once it is exited.
+    next: usize,
 }
 
 impl SegmentManager {
@@ -32,20 +40,27 @@ impl SegmentManager {
     ///
     /// The current segment is exited before looking for a new one, so that a
     /// segment right after another one is entered in the same update.
+    ///
+    /// Positions must not decrease between updates, and `segments` must be
+    /// the same slice every time, sorted by start and without overlaps. A
+    /// segment passed over entirely between two updates is never reported.
     pub(crate) fn update<S: Segment>(&mut self, position: f64, segments: &[S]) -> Transition {
         let exited = self.current.filter(|&idx| position >= segments[idx].end());
         if exited.is_some() {
             self.current = None;
         }
 
-        let entered = match self.current {
-            Some(_) => None,
-            None => segments
-                .iter()
-                .position(|segment| segment.contains(position)),
-        };
-        if entered.is_some() {
-            self.current = entered;
+        let mut entered = None;
+        if self.current.is_none() {
+            while self.next < segments.len() && position >= segments[self.next].end() {
+                self.next += 1;
+            }
+            if let Some(segment) = segments.get(self.next)
+                && segment.contains(position)
+            {
+                entered = Some(self.next);
+                self.current = entered;
+            }
         }
 
         Transition { exited, entered }

@@ -3886,13 +3886,17 @@ fn move_on_slopes(solver: &mut RaceSolver<Runner>, course: &Course, position: f6
 #[test]
 fn test_downhill_mode_checked_on_entry_then_every_second() {
     let mut solver = timed_skill_solver(vec![]);
-    let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
+    // The uphill comes first on the same course, so slopes are only ever
+    // entered in order.
+    let course = course_with_slopes(vec![
+        Slope::new(50.0, 40.0, 2.0),
+        Slope::new(100.0, 200.0, -2.0),
+    ]);
     // Uphills aren't mistaken for downhill mode.
-    let uphill = course_with_slopes(vec![Slope::new(50.0, 40.0, 2.0)]);
-    move_on_slopes(&mut solver, &uphill, 50.0);
+    move_on_slopes(&mut solver, &course, 50.0);
     assert!(solver.runners[0].is_going_uphill());
     assert!(!solver.runners[0].is_in_downhill_mode());
-    move_on_slopes(&mut solver, &uphill, 90.0);
+    move_on_slopes(&mut solver, &course, 90.0);
 
     // Guaranteed to enter downhill mode on every check.
     solver.runners[0].adjusted.wit = 2500.0;
