@@ -1773,7 +1773,7 @@ impl RaceSolver<Runner> {
         can_duel(a)
             && can_duel(b)
             && duel::are_speeds_similar(a.speed, b.speed)
-            && (a.order.rate <= duel::MAX_ORDER_RATE || b.order.rate <= duel::MAX_ORDER_RATE)
+            && (duel::is_order_high_enough(&a.order) || duel::is_order_high_enough(&b.order))
     }
 
     /// Update compete before spurt (位置取り調整) state for all runners (2.5 Anniversary

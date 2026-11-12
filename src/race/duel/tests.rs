@@ -42,6 +42,32 @@ fn test_speed_difference_is_inclusive() {
 }
 
 #[test]
+fn test_order_rate_limit_is_exact() {
+    // (order, runner count, high enough)
+    let cases = [
+        (1, 1, false),
+        (9, 18, true),
+        (10, 18, false),
+        (4, 9, true),
+        (5, 9, false),
+        (1, 3, true),
+        (2, 3, false),
+    ];
+    for (order, runner_count, expected) in cases {
+        let state = OrderState {
+            order,
+            runner_count,
+            ..Default::default()
+        };
+        assert_eq!(
+            is_order_high_enough(&state),
+            expected,
+            "{order}/{runner_count}"
+        );
+    }
+}
+
+#[test]
 fn test_separation_in_both_directions() {
     assert!(!is_separated(4.99));
     assert!(!is_separated(-4.99));

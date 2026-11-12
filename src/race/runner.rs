@@ -160,8 +160,6 @@ pub struct OrderState {
     pub order: u8,
     /// Number of runners in the race, i.e. its gates, finished ones included.
     pub runner_count: u8,
-    /// Current order rate (percentile; "you are in the top X%"), rounded up.
-    pub rate: u8,
     /// Order rates that round to the current order (see `rates_at_order`).
     pub rates: RangeInclusive<i32>,
     /// Best (lowest) order reached so far.
@@ -191,7 +189,6 @@ impl Default for OrderState {
         OrderState {
             order: 1,
             runner_count: 1,
-            rate: 0,
             rates: rates_at_order(1, 1),
             best: u8::MAX,
             worst: 0,
@@ -1259,7 +1256,6 @@ impl Runner {
     pub(crate) fn update_order_rate(&mut self, total_runners: u8, elapsed_time: f64) {
         let order = self.order.order;
         self.order.runner_count = total_runners;
-        self.order.rate = ((order as f64 / total_runners as f64) * 100.0).ceil() as u8;
         self.order.rates = rates_at_order(order, total_runners);
         if elapsed_time > ORDER_RANGE_START_TIME {
             self.order.best = self.order.best.min(order);

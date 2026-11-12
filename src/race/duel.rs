@@ -5,6 +5,7 @@
 //! runner keeps dueling until her HP runs low or she gets far from everyone
 //! who has dueled during the race. Once she leaves, she can't duel again.
 
+use crate::race::runner::OrderState;
 use crate::units::CourseWidths;
 
 /// Maximum distance (m) between two runners to count as close.
@@ -16,8 +17,8 @@ pub(crate) const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
 pub(crate) const TRIGGER_TIME: f64 = 2.0;
 /// Maximum speed difference (m/s) between two runners to start dueling.
 pub(crate) const MAX_SPEED_DIFF: f64 = 0.6;
-/// Maximum order rate (top X%) at least one of the runners must be at to start
-/// dueling.
+/// Maximum order rate (top X%, exact, not rounded) at least one of the runners
+/// must be at to start dueling.
 pub(crate) const MAX_ORDER_RATE: u8 = 50;
 /// Minimum HP percentage both runners must have to start dueling.
 pub(crate) const MIN_START_HP_PERCENT: f64 = 15.0;
@@ -112,6 +113,12 @@ pub(crate) fn is_close_long_enough(close_time: f64) -> bool {
 /// Check if two runners' speeds (m/s) are similar enough to start dueling.
 pub(crate) fn are_speeds_similar(speed: f64, other_speed: f64) -> bool {
     (speed - other_speed).abs() <= MAX_SPEED_DIFF + TOLERANCE
+}
+
+/// Check if a runner's order is high enough (at most `MAX_ORDER_RATE` percent
+/// of the runners) for her to start dueling.
+pub(crate) fn is_order_high_enough(order: &OrderState) -> bool {
+    100 * u16::from(order.order) <= u16::from(MAX_ORDER_RATE) * u16::from(order.runner_count)
 }
 
 /// Check if a duelist `distance` meters away from another duelist is
