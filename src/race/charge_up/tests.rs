@@ -10,7 +10,7 @@ use crate::uma::*;
 /// Build a solver with a single runner on a 2000m (Medium) course.
 fn solver(
     power: u16,
-    style: Style,
+    style: BaseStyle,
     mood: Mood,
     game_version: GameVersion,
     rng_seed: u64,
@@ -34,7 +34,7 @@ fn solver(
 
 /// Solver with an eligible late surger (raw power 1600, normal mood).
 fn eligible_solver() -> RaceSolver<Runner> {
-    solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, 42)
+    solver(1600, BaseStyle::Late, Mood::Normal, GameVersion::LATEST, 42)
 }
 
 /// Run `update_charge_up` for `seconds`, starting at `start`. Returns end time.
@@ -77,7 +77,7 @@ fn test_charge_power() {
 
 #[test]
 fn test_mood_affects_base_part_only() {
-    let solver = solver(1600, Style::Late, Mood::Great, GameVersion::LATEST, 42);
+    let solver = solver(1600, BaseStyle::Late, Mood::Great, GameVersion::LATEST, 42);
     // Base (1200 + 200) * 1.04 = 1456, plus 0.5 * 400 without mood multiplier.
     let charge_up = solver.runners[0].charge_up.as_ref().unwrap();
     assert_close!(charge_up.power, 1656.0);
@@ -86,7 +86,7 @@ fn test_mood_affects_base_part_only() {
 #[test]
 fn test_eligibility() {
     let is_eligible = |power, mood, version| {
-        solver(power, Style::Late, mood, version, 42).runners[0]
+        solver(power, BaseStyle::Late, mood, version, 42).runners[0]
             .charge_up
             .is_some()
     };
@@ -109,14 +109,14 @@ fn test_coefficients() {
     use DistanceType::*;
 
     // Runaway is assumed to be the same as Front.
-    assert_eq!(style_coefficient(Style::Runaway), 1.0);
-    assert_eq!(style_coefficient(Style::Pace), 0.75);
+    assert_eq!(style_coefficient(EffectiveStyle::Runaway), 1.0);
+    assert_eq!(style_coefficient(EffectiveStyle::Pace), 0.75);
 
     let cases = [
-        (Style::Runaway, Short, 1.0),
-        (Style::Pace, Long, 0.9),
-        (Style::Late, Mile, 0.7),
-        (Style::End, Short, 0.7),
+        (EffectiveStyle::Runaway, Short, 1.0),
+        (EffectiveStyle::Pace, Long, 0.9),
+        (EffectiveStyle::Late, Mile, 0.7),
+        (EffectiveStyle::End, Short, 0.7),
     ];
     for (style, distance_type, expected) in cases {
         let actual = strategy_distance_coefficient(style, distance_type);
@@ -135,7 +135,8 @@ fn test_coefficients() {
 fn test_release_formulas() {
     // Expected: sqrt(400 * 130) * 0.001 * 0.875 * 0.8.
     let expected = 52000f64.sqrt() * 0.001 * 0.875 * 0.8;
-    let acceleration = release_acceleration(1600.0, Style::Late, DistanceType::Medium, 0.8);
+    let acceleration =
+        release_acceleration(1600.0, EffectiveStyle::Late, DistanceType::Medium, 0.8);
     assert_close!(acceleration, expected);
 
     // 100 * sqrt(1600) * 1.0 / 1450.
@@ -175,7 +176,7 @@ fn test_conservation_rate() {
     let time = conserve_for(runner, 1.0, 1.0) - 1.0;
     assert_close!(conserved(runner), 6.7 * time, tolerance = 1e-6);
 
-    let mut end_closer = solver(1600, Style::End, Mood::Normal, GameVersion::LATEST, 42);
+    let mut end_closer = solver(1600, BaseStyle::End, Mood::Normal, GameVersion::LATEST, 42);
     let runner = &mut end_closer.runners[0];
     let time = conserve_for(runner, 0.0, 1.0);
     assert_close!(conserved(runner), 4.2 * 0.7 * time, tolerance = 1e-6);
@@ -208,7 +209,13 @@ fn test_no_conservation_after_section_10() {
 
 #[test]
 fn test_spot_struggle_penalty() {
-    let mut solver = solver(1600, Style::Front, Mood::Normal, GameVersion::LATEST, 42);
+    let mut solver = solver(
+        1600,
+        BaseStyle::Front,
+        Mood::Normal,
+        GameVersion::LATEST,
+        42,
+    );
     let runner = &mut solver.runners[0];
     runner.charge_up.as_mut().unwrap().conserved = 100.0;
     runner.start_spot_struggle(10.0);
@@ -226,7 +233,15 @@ fn test_spot_struggle_penalty() {
 fn test_rush_penalty() {
     // Find a seed where the runner is bound to rush.
     let mut solver = (0..)
-        .map(|seed| solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, seed))
+        .map(|seed| {
+            solver(
+                1600,
+                BaseStyle::Late,
+                Mood::Normal,
+                GameVersion::LATEST,
+                seed,
+            )
+        })
         .find(|s| s.runners[0].rush_state.is_some())
         .unwrap();
     let rush_section = solver.runners[0].rush_state.as_ref().unwrap().section;
@@ -275,12 +290,12 @@ fn test_release_state() {
     let course = load_course(10204);
     let mut charge_up = ChargeUp::new(1600.0, GameVersion::LATEST).unwrap();
     charge_up.conserved = 100.0;
-    charge_up.release(Style::Late, &course, 0.8, 60.0, 1500.0);
+    charge_up.release(EffectiveStyle::Late, &course, 0.8, 60.0, 1500.0);
 
     let duration = release_duration(100.0, 2000, DistanceType::Medium);
     let expected = ChargeUpOutcome::Released(ChargeUpRelease {
         conserved: 100.0,
-        acceleration: release_acceleration(1600.0, Style::Late, DistanceType::Medium, 0.8),
+        acceleration: release_acceleration(1600.0, EffectiveStyle::Late, DistanceType::Medium, 0.8),
         duration,
         start_time: 60.0,
         start_position: 1500.0,
@@ -290,13 +305,13 @@ fn test_release_state() {
 
     // Released only once.
     charge_up.conserved = 500.0;
-    charge_up.release(Style::Late, &course, 1.0, 70.0, 1600.0);
+    charge_up.release(EffectiveStyle::Late, &course, 1.0, 70.0, 1600.0);
     assert_eq!(charge_up.outcome, expected);
 
     // Not enough power conserved.
     let mut charge_up = ChargeUp::new(1600.0, GameVersion::LATEST).unwrap();
     charge_up.conserved = 3.0;
-    charge_up.release(Style::Late, &course, 1.0, 60.0, 1500.0);
+    charge_up.release(EffectiveStyle::Late, &course, 1.0, 60.0, 1500.0);
     assert_eq!(charge_up.outcome, ChargeUpOutcome::Insufficient);
 }
 
@@ -347,7 +362,13 @@ fn test_release_increases_acceleration() {
 #[test]
 fn test_full_race() {
     for seed in 0..5 {
-        let mut solver = solver(1600, Style::Late, Mood::Normal, GameVersion::LATEST, seed);
+        let mut solver = solver(
+            1600,
+            BaseStyle::Late,
+            Mood::Normal,
+            GameVersion::LATEST,
+            seed,
+        );
         solver.run();
         let runner = &solver.runners[0];
         let charge_up = runner.charge_up.as_ref().unwrap();

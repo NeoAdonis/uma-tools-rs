@@ -8,7 +8,7 @@ use crate::uma::*;
 
 #[test]
 fn test_lead_threshold() {
-    use Style::*;
+    use EffectiveStyle::*;
     // At -1000m, the distance term is zero.
     let cases = [
         (Front, -1000.0, 0.0),
@@ -26,10 +26,10 @@ fn test_target_speed_bonus() {
     // Power 1500, guts 3000 -> (1 * 2 + 1) * 0.1.
     let base = 0.3;
     let cases = [
-        (Style::Runaway, true, base * 0.2 * 2.0),
-        (Style::Front, false, base * 0.8),
-        (Style::Front, true, base * 0.8 * 1.1),
-        (Style::Pace, true, base),
+        (EffectiveStyle::Runaway, true, base * 0.2 * 2.0),
+        (EffectiveStyle::Front, false, base * 0.8),
+        (EffectiveStyle::Front, true, base * 0.8 * 1.1),
+        (EffectiveStyle::Pace, true, base),
     ];
     for (style, is_alone, expected) in cases {
         let actual = target_speed_bonus(style, 1500.0, 3000.0, is_alone);
@@ -37,7 +37,7 @@ fn test_target_speed_bonus() {
     }
 
     // Power 375 -> sqrt(0.25) * 2 = 1; guts 3000 * 2^-5 -> 0.5.
-    let actual = target_speed_bonus(Style::Pace, 375.0, 3000.0 / 32.0, false);
+    let actual = target_speed_bonus(EffectiveStyle::Pace, 375.0, 3000.0 / 32.0, false);
     assert_close!(actual, 1.5 * 0.1, tolerance = 1e-3);
 }
 
@@ -45,9 +45,19 @@ fn test_target_speed_bonus() {
 fn test_hp_cost() {
     // 2400m -> distance coefficient 1.0; 1200m -> 0.3.
     let cases = [
-        (Style::Runaway, 2400, true, 20.0 * 1.5),
-        (Style::Pace, 2400, false, 20.0 * (1.0 + NEAR_FACTOR)),
-        (Style::Front, 1200, false, 20.0 * (1.2 * 0.3 + NEAR_FACTOR)),
+        (EffectiveStyle::Runaway, 2400, true, 20.0 * 1.5),
+        (
+            EffectiveStyle::Pace,
+            2400,
+            false,
+            20.0 * (1.0 + NEAR_FACTOR),
+        ),
+        (
+            EffectiveStyle::Front,
+            1200,
+            false,
+            20.0 * (1.2 * 0.3 + NEAR_FACTOR),
+        ),
     ];
     for (style, distance, far_from_lead, expected) in cases {
         let actual = hp_cost(style, distance, far_from_lead);
@@ -68,7 +78,7 @@ fn test_stamina_keep_chance() {
 
 #[test]
 fn test_compete_check_window() {
-    let (mut runner, mut state) = ready_runner(Style::End, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::End, seeded_config(42));
     state.elapsed_time = 100.0;
     for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
@@ -80,7 +90,7 @@ fn test_compete_check_window() {
         game_version: GameVersion::SecondAnniversary,
         ..seeded_config(42)
     };
-    let (mut old_runner, mut state) = ready_runner(Style::Pace, config);
+    let (mut old_runner, mut state) = ready_runner(EffectiveStyle::Pace, config);
     state.elapsed_time = 100.0;
     old_runner.section = 12;
     assert!(!old_runner.is_compete_check_due(&state));
@@ -89,7 +99,7 @@ fn test_compete_check_window() {
 
 #[test]
 fn test_compete_activation_and_expiry() {
-    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::Front, seeded_config(42));
     runner.section = 12;
     // Never enter Stamina Keep.
     runner.stamina_keep.ratio = 0.0;
@@ -109,14 +119,15 @@ fn test_compete_activation_and_expiry() {
     state.elapsed_time = 12.0;
     runner.try_compete_before_spurt(far_from_lead, is_alone, &state);
     let expected_modifier = target_speed_bonus(
-        Style::Front,
+        EffectiveStyle::Front,
         runner.adjusted.power,
         runner.adjusted.guts,
         is_alone,
     );
     let expected_boost = TimedBoost::start(expected_modifier, 12.0, DURATION, COOLDOWN);
     assert_eq!(runner.compete_before_spurt, expected_boost);
-    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
+    let expected_hp =
+        hp_before - hp_cost(EffectiveStyle::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
 
     // The boost ends after its duration.
@@ -136,7 +147,8 @@ fn test_compete_activation_and_expiry() {
         runner.compete_before_spurt,
         TimedBoost::Active { .. }
     ));
-    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance, far_from_lead);
+    let expected_hp =
+        hp_before - hp_cost(EffectiveStyle::Front, state.course.distance, far_from_lead);
     assert_close!(runner.hp.current(), expected_hp);
 }
 
@@ -145,7 +157,7 @@ fn test_stamina_keep_starts_below_the_hp_to_keep() {
     // ? The HP required to finish is assumed (see `hp_required_to_finish`).
     // (HP over the HP to keep, whether she enters Stamina Keep).
     for (offset, enters) in [(-1.0, true), (1.0, false)] {
-        let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(42));
+        let (mut runner, mut state) = ready_runner(EffectiveStyle::Late, seeded_config(42));
         runner.section = 12;
         runner.position = 700.0;
         let to_keep = runner.hp_required_to_finish(&state) * runner.stamina_keep.ratio;
@@ -165,7 +177,7 @@ fn test_stamina_keep_starts_below_the_hp_to_keep() {
 
 #[test]
 fn test_stamina_keep_blocks_compete_until_recovery() {
-    let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::Late, seeded_config(42));
     runner.section = 12;
     runner.position = 700.0;
     runner.hp.set_current(1.0);

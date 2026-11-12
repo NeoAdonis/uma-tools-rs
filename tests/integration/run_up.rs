@@ -22,7 +22,7 @@ const FRAME_DISTANCE: f64 = 30.0 * DELTA_TIME;
 fn run_race(condition: &str, rng_seed: u64) -> Runner {
     let uma = Uma {
         stamina: 1200,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let skills = vec![negligible_skill(condition)];
     let mut solver = ready_solver(COURSE_ID, uma, skills, seeded_config(rng_seed));

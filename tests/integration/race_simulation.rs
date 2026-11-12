@@ -2,7 +2,7 @@
 //!
 //! These tests verify the public API of the race simulation system.
 
-use crate::common::{load_course, race_params, seeded_config, uma};
+use crate::common::{load_course, race_params, ready_solver, runaway_skill, seeded_config, uma};
 use uma_tools::Entrant;
 use uma_tools::configuration::{Configuration, GameVersion};
 use uma_tools::race::parameters::*;
@@ -12,16 +12,17 @@ use uma_tools::uma::*;
 
 /// Final position and time of every runner of a 9-runner race, in gate order.
 fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
+    // The first runner is a Runaway: a Front runner with the Runaway skill.
     let styles = [
-        Style::Runaway,
-        Style::Front,
-        Style::Front,
-        Style::Pace,
-        Style::Pace,
-        Style::Late,
-        Style::Late,
-        Style::End,
-        Style::End,
+        BaseStyle::Front,
+        BaseStyle::Front,
+        BaseStyle::Front,
+        BaseStyle::Pace,
+        BaseStyle::Pace,
+        BaseStyle::Late,
+        BaseStyle::Late,
+        BaseStyle::End,
+        BaseStyle::End,
     ];
     let params = RaceParameters {
         gates: styles.len() as u8,
@@ -32,8 +33,13 @@ fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
         ..seeded_config(seed)
     };
     let mut solver = RaceSolver::new(load_course(10101), params, config);
-    for style in styles {
-        solver.add_runner(Entrant::new(uma(style), vec![]));
+    for (i, style) in styles.into_iter().enumerate() {
+        let skills = if i == 0 {
+            vec![runaway_skill()]
+        } else {
+            vec![]
+        };
+        solver.add_runner(Entrant::new(uma(style), skills));
     }
     let mut solver = solver.ready_runners();
     solver.run();
@@ -45,6 +51,17 @@ fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
         .collect();
     runners.sort_by_key(|(gate, _)| *gate);
     (solver.state.finish_time, runners)
+}
+
+#[test]
+fn test_front_runner_with_runaway_skill_races_as_runaway() {
+    let solver = ready_solver(
+        10101,
+        uma(BaseStyle::Front),
+        vec![runaway_skill()],
+        seeded_config(0),
+    );
+    assert_eq!(solver.runners()[0].style, EffectiveStyle::Runaway);
 }
 
 #[test]

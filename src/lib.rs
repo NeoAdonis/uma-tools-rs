@@ -97,4 +97,6 @@ pub use race::pins::Pins;
 pub use race::runner::Runner;
 pub use race::solver::{Entrant, RaceSolver, RunnerId};
 pub use skill::{Skill, SkillData, SkillDataError};
-pub use uma::{Aptitude, Mood, ResolveSkillsError, Stats, Style, Uma, UmaData, UmaSkill};
+pub use uma::{
+    Aptitude, BaseStyle, EffectiveStyle, Mood, ResolveSkillsError, Stats, Uma, UmaData, UmaSkill,
+};

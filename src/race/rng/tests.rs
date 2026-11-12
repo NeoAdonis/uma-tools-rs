@@ -6,7 +6,7 @@ use super::*;
 use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::{Skill, SkillType};
 use crate::test_utils::*;
-use crate::uma::Style;
+use crate::uma::BaseStyle;
 
 #[test]
 fn test_streams_are_independent() {
@@ -46,8 +46,8 @@ fn finish_times(seed: u64, extra: &[Arc<Skill>]) -> Vec<(u8, f64)> {
         skill_with_wit_check(2, "corner_random==1"),
     ];
     let skills = extra.iter().chain(&first_skills).cloned().collect();
-    solver.add_runner(Entrant::new(uma(Style::Pace), skills));
-    for (style, id) in [(Style::Front, 3), (Style::Late, 4)] {
+    solver.add_runner(Entrant::new(uma(BaseStyle::Pace), skills));
+    for (style, id) in [(BaseStyle::Front, 3), (BaseStyle::Late, 4)] {
         let skills = vec![skill_with_wit_check(id, "phase_laterhalf_random==1")];
         solver.add_runner(Entrant::new(uma(style), skills));
     }

@@ -283,7 +283,7 @@ pub struct Runner {
     /// For the most part, these are the stats used for race calculations.
     pub adjusted: Stats,
     /// Running style, after out-of-gate skills that change it.
-    pub style: Style,
+    pub style: EffectiveStyle,
     /// Set of static values related to the runner at the start of the race.
     pub initial_state: InitialState,
     /// Start delay (i.e. time taken to leave the gate) in seconds.
@@ -514,7 +514,7 @@ impl Runner {
     }
 
     /// Get the base style, treating Runaway as a variant of Front.
-    pub fn base_style(&self) -> Style {
+    pub fn base_style(&self) -> BaseStyle {
         self.style.base_style()
     }
 
@@ -1026,7 +1026,7 @@ impl Runner {
 
     /// Check if the runner should check whether to secure the lead on this frame.
     pub(crate) fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
-        self.style != Style::End
+        self.style != EffectiveStyle::End
             && self.is_boost_check_due(&self.secure_lead, &secure_lead::SECTIONS, state)
     }
 

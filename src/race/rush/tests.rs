@@ -8,7 +8,7 @@ fn rng(seed: u64) -> Pcg64Mcg {
 
 /// A runner who started rushing at 5 seconds.
 fn rushed() -> RushState {
-    let mut rush_state = RushState::roll(Style::Pace, &mut rng(0));
+    let mut rush_state = RushState::roll(EffectiveStyle::Pace, &mut rng(0));
     rush_state.start(5.0);
     rush_state
 }
@@ -31,7 +31,7 @@ fn test_chance() {
 
 #[test]
 fn test_roll() {
-    use Style::*;
+    use EffectiveStyle::*;
     // (style, shares of each rushed style: Runaway, Front, Pace, Late).
     let cases = [
         (Runaway, [1.0, 0.0, 0.0, 0.0]),

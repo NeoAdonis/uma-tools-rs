@@ -40,7 +40,7 @@ fn solver(
         speed,
         stamina: 1600,
         power: 1200,
-        ..uma(Style::Late)
+        ..uma(BaseStyle::Late)
     };
     let config = Configuration {
         game_version,
@@ -159,7 +159,7 @@ fn test_pinned_random_trigger_covers_the_rest_of_the_race() {
         speed: 2500,
         stamina: 1600,
         power: 1200,
-        ..uma(Style::Late)
+        ..uma(BaseStyle::Late)
     };
     let mut pins = Pins::default();
     pins.skills.insert(204222, SkillPin::Activations(vec![]));

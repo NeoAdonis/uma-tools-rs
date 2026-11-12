@@ -16,7 +16,7 @@ fn solver(wit: u16, game_version: GameVersion, rng_seed: u64) -> RaceSolver<Runn
         10204,
         Uma {
             wit,
-            ..uma(Style::Late)
+            ..uma(BaseStyle::Late)
         },
         vec![],
         config,
@@ -90,11 +90,11 @@ fn test_speed_max_above_late_base_target_speed() {
     let mut solver = solver(1000, GameVersion::Original, 0);
     let aptitudes = [Aptitude::S, Aptitude::A, Aptitude::D, Aptitude::G];
     let styles = [
-        Style::Runaway,
-        Style::Front,
-        Style::Pace,
-        Style::Late,
-        Style::End,
+        EffectiveStyle::Runaway,
+        EffectiveStyle::Front,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Late,
+        EffectiveStyle::End,
     ];
     for game_version in [GameVersion::Original, GameVersion::LATEST] {
         solver.state.config.game_version = game_version;
@@ -137,7 +137,7 @@ fn test_speed_max() {
     for (game_version, distance_aptitude, speed, guts, expected) in cases {
         solver.state.config.game_version = game_version;
         let runner = &mut solver.runners[0];
-        runner.style = Style::End;
+        runner.style = EffectiveStyle::End;
         runner.raw.distance_aptitude = distance_aptitude;
         runner.adjusted.speed = speed;
         runner.adjusted.guts = guts;

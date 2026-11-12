@@ -2,7 +2,7 @@ use super::*;
 use crate::configuration::GameVersion;
 use crate::course::Phase;
 use crate::test_utils::assert_close;
-use crate::uma::Style;
+use crate::uma::EffectiveStyle;
 
 #[test]
 fn test_wit_limit_break_multiplier_brackets() {
@@ -34,11 +34,11 @@ fn test_wit_limit_break_phase_coefficient() {
     // One phase per style, covering the arms shared by several styles or
     // phases.
     let cases = [
-        (Style::Runaway, Phase::RunUp, 0.26),
-        (Style::Front, Phase::Last, 0.16),
-        (Style::Pace, Phase::Mid, 0.21),
-        (Style::Late, Phase::Late, 0.23),
-        (Style::End, Phase::Early, 0.15),
+        (EffectiveStyle::Runaway, Phase::RunUp, 0.26),
+        (EffectiveStyle::Front, Phase::Last, 0.16),
+        (EffectiveStyle::Pace, Phase::Mid, 0.21),
+        (EffectiveStyle::Late, Phase::Late, 0.23),
+        (EffectiveStyle::End, Phase::Early, 0.15),
     ];
     for (style, phase, expected) in cases {
         let actual = wit_limit_break_phase_coefficient(style, phase);
@@ -86,8 +86,8 @@ fn test_base_target_speed() {
     // race, scaled by distance aptitude (B: 0.9).
     let late_bonus = f64::sqrt(500.0 * 1000.0) * 0.9 * 0.002;
     let cases = [
-        (Style::Pace, Phase::Mid, 20.0 * 0.991),
-        (Style::Late, Phase::Late, 20.0 * 0.994 + late_bonus),
+        (EffectiveStyle::Pace, Phase::Mid, 20.0 * 0.991),
+        (EffectiveStyle::Late, Phase::Late, 20.0 * 0.994 + late_bonus),
     ];
     for (style, phase, expected) in cases {
         let actual = base_target_speed(20.0, style, phase, 1000.0, Aptitude::B);

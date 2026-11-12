@@ -28,8 +28,13 @@ fn test_position_derived_state_matches_positions_after_each_frame() {
     // phase and section, which match the one before the last move.
     for course_id in [10101, 10104, 10606, 10913] {
         let mut solver = RaceSolver::new(load_course(course_id), race_params(), seeded_config(0));
-        for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
-            solver.add_runner(Entrant::new(uma(style), vec![]));
+        for style in [
+            EffectiveStyle::Front,
+            EffectiveStyle::Pace,
+            EffectiveStyle::Late,
+            EffectiveStyle::End,
+        ] {
+            solver.add_runner(entrant(style));
         }
         let mut solver = solver.ready_runners();
 
@@ -94,7 +99,7 @@ fn test_skills_see_positions_and_phase_from_earlier_frames() {
         let skill = skill(24, condition, SkillType::TargetSpeed, 0.35);
         let uma = Uma {
             stamina: 1200,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
         let mut solver = ready_solver(10108, uma, vec![skill], seeded_config(0));
 
@@ -115,14 +120,17 @@ fn test_skills_see_positions_and_phase_from_earlier_frames() {
 
 /// Solver with one runner per `(style, position)` pair, sorted by position and
 /// past every start delay, ready for positioning strategy updates.
-fn positioning_solver(runners: &[(Style, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
+fn positioning_solver(
+    runners: &[(EffectiveStyle, f64)],
+    game_version: GameVersion,
+) -> RaceSolver<Runner> {
     let config = Configuration {
         game_version,
         ..seeded_config(0)
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     for &(style, _) in runners {
-        solver.add_runner(Entrant::new(uma(style), vec![]));
+        solver.add_runner(entrant(style));
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
@@ -146,15 +154,15 @@ fn sort_by_position(solver: &mut RaceSolver<Runner>) {
         .sort_by(|a, b| b.position.total_cmp(&a.position));
 }
 
-fn runner_with_style(solver: &mut RaceSolver<Runner>, style: Style) -> &mut Runner {
+fn runner_with_style(solver: &mut RaceSolver<Runner>, style: EffectiveStyle) -> &mut Runner {
     solver
         .runners
         .iter_mut()
-        .find(|runner| runner.raw.style == style)
+        .find(|runner| runner.style == style)
         .unwrap()
 }
 
-fn is_pace_up_ex(solver: &mut RaceSolver<Runner>, style: Style) -> bool {
+fn is_pace_up_ex(solver: &mut RaceSolver<Runner>, style: EffectiveStyle) -> bool {
     matches!(
         runner_with_style(solver, style).positioning_strategy,
         PositioningStrategy::PaceUpEx
@@ -164,23 +172,23 @@ fn is_pace_up_ex(solver: &mut RaceSolver<Runner>, style: Style) -> bool {
 #[test]
 fn test_pace_up_ex_front_runner_enters_and_exits() {
     let mut solver = positioning_solver(
-        &[(Style::Front, 100.0), (Style::End, 110.0)],
+        &[(EffectiveStyle::Front, 100.0), (EffectiveStyle::End, 110.0)],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Front));
-    assert!(!is_pace_up_ex(&mut solver, Style::End));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Front));
+    assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::End));
 
     // Still behind: stays in Pace Up Ex.
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Front));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Front));
 
     // Checked again after a 1s cooldown and the 2s interval.
-    runner_with_style(&mut solver, Style::Front).position = 120.0;
+    runner_with_style(&mut solver, EffectiveStyle::Front).position = 120.0;
     sort_by_position(&mut solver);
     solver.update_positioning_strategy();
     let next_check = solver.state.elapsed_time + 3.0;
-    let runner = runner_with_style(&mut solver, Style::Front);
+    let runner = runner_with_style(&mut solver, EffectiveStyle::Front);
     assert_eq!(runner.positioning_strategy, PositioningStrategy::Normal);
     assert_eq!(runner.next_positioning_check, next_check);
 }
@@ -188,8 +196,8 @@ fn test_pace_up_ex_front_runner_enters_and_exits() {
 #[test]
 fn test_pace_up_ex_runaway_and_front_are_the_same_strategy() {
     for (behind, ahead) in [
-        (Style::Runaway, Style::Front),
-        (Style::Front, Style::Runaway),
+        (EffectiveStyle::Runaway, EffectiveStyle::Front),
+        (EffectiveStyle::Front, EffectiveStyle::Runaway),
     ] {
         let mut solver =
             positioning_solver(&[(behind, 100.0), (ahead, 110.0)], GameVersion::LATEST);
@@ -199,38 +207,41 @@ fn test_pace_up_ex_runaway_and_front_are_the_same_strategy() {
     }
     // A runner whose strategy should be behind still counts.
     let mut solver = positioning_solver(
-        &[(Style::Runaway, 100.0), (Style::Pace, 110.0)],
+        &[
+            (EffectiveStyle::Runaway, 100.0),
+            (EffectiveStyle::Pace, 110.0),
+        ],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Runaway));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Runaway));
 }
 
 #[test]
 fn test_pace_up_ex_non_front_depends_on_pacemaker() {
     // End pacemaker should be behind Late.
     let mut solver = positioning_solver(
-        &[(Style::Late, 100.0), (Style::End, 110.0)],
+        &[(EffectiveStyle::Late, 100.0), (EffectiveStyle::End, 110.0)],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Late));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Late));
 
     // Pace pacemaker should be ahead of Late even if an End runner is ahead too.
     let mut solver = positioning_solver(
         &[
-            (Style::Late, 100.0),
-            (Style::Pace, 120.0),
-            (Style::End, 110.0),
+            (EffectiveStyle::Late, 100.0),
+            (EffectiveStyle::Pace, 120.0),
+            (EffectiveStyle::End, 110.0),
         ],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
-    assert!(!is_pace_up_ex(&mut solver, Style::Late));
+    assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::Late));
 
     // A pacemaker with the same style isn't behind her.
     let mut solver = positioning_solver(
-        &[(Style::Late, 100.0), (Style::Late, 110.0)],
+        &[(EffectiveStyle::Late, 100.0), (EffectiveStyle::Late, 110.0)],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
@@ -245,12 +256,12 @@ fn test_pace_up_ex_non_front_depends_on_pacemaker() {
 /// Strategy of the runner with the given style after one positioning update
 /// with every runner at the gate, gated in the order of `styles` (the first
 /// one from gate 1).
-fn strategy_at_gate(styles: &[Style], style: Style) -> PositioningStrategy {
+fn strategy_at_gate(styles: &[EffectiveStyle], style: EffectiveStyle) -> PositioningStrategy {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for (i, &style) in styles.iter().enumerate() {
         let entrant = Entrant {
             gate: Some(i as u8 + 1),
-            ..Entrant::new(uma(style), vec![])
+            ..entrant(style)
         };
         solver.add_runner(entrant);
     }
@@ -264,17 +275,26 @@ fn strategy_at_gate(styles: &[Style], style: Style) -> PositioningStrategy {
 fn test_pace_up_ex_gate_order_settles_ties_for_front_runners_only() {
     // Front runner gated behind a passive runner: the passive one is ahead.
     assert_eq!(
-        strategy_at_gate(&[Style::Pace, Style::Front], Style::Front),
+        strategy_at_gate(
+            &[EffectiveStyle::Pace, EffectiveStyle::Front],
+            EffectiveStyle::Front
+        ),
         PositioningStrategy::PaceUpEx
     );
     // Gated ahead of her instead: nobody is ahead of the front runner.
     assert_ne!(
-        strategy_at_gate(&[Style::Front, Style::Pace], Style::Front),
+        strategy_at_gate(
+            &[EffectiveStyle::Front, EffectiveStyle::Pace],
+            EffectiveStyle::Front
+        ),
         PositioningStrategy::PaceUpEx
     );
     // The pacemaker must be strictly ahead for the others, even in gate 1.
     assert_ne!(
-        strategy_at_gate(&[Style::End, Style::Pace], Style::Pace),
+        strategy_at_gate(
+            &[EffectiveStyle::End, EffectiveStyle::Pace],
+            EffectiveStyle::Pace
+        ),
         PositioningStrategy::PaceUpEx
     );
 }
@@ -289,12 +309,12 @@ fn test_positioning_is_first_checked_at_the_gate() {
         ..seeded_config(0)
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
-    for style in [Style::Late, Style::Pace] {
-        solver.add_runner(Entrant::new(uma(style), vec![]));
+    for style in [EffectiveStyle::Late, EffectiveStyle::Pace] {
+        solver.add_runner(entrant(style));
     }
     let mut solver = solver.ready_runners();
     for runner in &mut solver.runners {
-        runner.start_delay = if runner.style == Style::Late {
+        runner.start_delay = if runner.style == EffectiveStyle::Late {
             0.0
         } else {
             0.05
@@ -317,40 +337,40 @@ fn test_pace_up_ex_waits_for_the_next_check() {
     // normal strategy (not interrupting her Pace Down, 10m from the pacemaker
     // and below its 20m threshold), once her next check is due.
     let mut solver = positioning_solver(
-        &[(Style::Pace, 100.0), (Style::End, 110.0)],
+        &[(EffectiveStyle::Pace, 100.0), (EffectiveStyle::End, 110.0)],
         GameVersion::LATEST,
     );
     let pace_down = PositioningStrategy::PaceDown(20.0);
-    runner_with_style(&mut solver, Style::Pace).positioning_strategy = pace_down;
+    runner_with_style(&mut solver, EffectiveStyle::Pace).positioning_strategy = pace_down;
     solver.update_positioning_strategy();
     let next_check = solver.state.elapsed_time + 0.1;
-    let runner = runner_with_style(&mut solver, Style::Pace);
+    let runner = runner_with_style(&mut solver, EffectiveStyle::Pace);
     assert_eq!(runner.positioning_strategy, pace_down);
 
     runner.positioning_strategy = PositioningStrategy::Normal;
     runner.next_positioning_check = next_check;
     solver.update_positioning_strategy();
-    assert!(!is_pace_up_ex(&mut solver, Style::Pace));
+    assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::Pace));
 
     solver.state.elapsed_time += 0.1;
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Pace));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Pace));
 }
 
 #[test]
 fn test_pace_up_ex_not_before_one_point_five_anniversary() {
     let mut solver = positioning_solver(
         &[
-            (Style::Front, 100.0),
-            (Style::Late, 110.0),
-            (Style::End, 120.0),
+            (EffectiveStyle::Front, 100.0),
+            (EffectiveStyle::Late, 110.0),
+            (EffectiveStyle::End, 120.0),
         ],
         GameVersion::FirstAnniversary,
     );
     for _ in 0..10 {
         solver.update_positioning_strategy();
-        assert!(!is_pace_up_ex(&mut solver, Style::Front));
-        assert!(!is_pace_up_ex(&mut solver, Style::Late));
+        assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::Front));
+        assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::Late));
     }
 }
 
@@ -368,9 +388,9 @@ fn test_pacemaker_changed_in_one_point_five_anniversary() {
     ] {
         let mut solver = positioning_solver(
             &[
-                (Style::Pace, 120.0),
-                (Style::Front, 100.0),
-                (Style::Late, 98.0),
+                (EffectiveStyle::Pace, 120.0),
+                (EffectiveStyle::Front, 100.0),
+                (EffectiveStyle::Late, 98.0),
             ],
             version,
         );
@@ -383,10 +403,10 @@ fn test_pacemaker_changed_in_one_point_five_anniversary() {
     // a Late runner (7.54m to 8.12m on 1200m), unlike 0.2m ahead of the other.
     let mut solver = positioning_solver(
         &[
-            (Style::Pace, 120.0),
-            (Style::Front, 100.0),
-            (Style::Late, 92.2),
-            (Style::Front, 92.0),
+            (EffectiveStyle::Pace, 120.0),
+            (EffectiveStyle::Front, 100.0),
+            (EffectiveStyle::Late, 92.2),
+            (EffectiveStyle::Front, 92.0),
         ],
         GameVersion::FirstAnniversary,
     );
@@ -432,21 +452,25 @@ fn test_front_speed_up_distance_by_front_runner_count() {
     // because they're rushed don't count as front runners.
     // (styles behind, whether the first one is rushed and acting as a front
     // runner, expected).
-    let cases: [(&[Style], bool, PositioningStrategy); 5] = [
-        (&[Style::Pace], false, FrontSpeedUp),
-        (&[Style::Pace, Style::Late], false, FrontSpeedUp),
-        (&[Style::Runaway], false, FrontSpeedUp),
-        (&[Style::Pace], true, FrontSpeedUp),
-        (&[Style::Front], false, Normal),
+    let cases: [(&[EffectiveStyle], bool, PositioningStrategy); 5] = [
+        (&[EffectiveStyle::Pace], false, FrontSpeedUp),
+        (
+            &[EffectiveStyle::Pace, EffectiveStyle::Late],
+            false,
+            FrontSpeedUp,
+        ),
+        (&[EffectiveStyle::Runaway], false, FrontSpeedUp),
+        (&[EffectiveStyle::Pace], true, FrontSpeedUp),
+        (&[EffectiveStyle::Front], false, Normal),
     ];
     for (behind, rushed, expected) in cases {
-        let mut runners = vec![(Style::Front, 108.0)];
+        let mut runners = vec![(EffectiveStyle::Front, 108.0)];
         runners.extend(behind.iter().copied().zip([100.0, 90.0]));
         let mut solver = positioning_solver(&runners, GameVersion::LATEST);
         if rushed {
             set_rushed(&mut solver, 1);
             let rush_state = solver.runners[1].rush_state.as_mut().unwrap();
-            rush_state.style = Style::Front;
+            rush_state.style = EffectiveStyle::Front;
         }
         set_strategy_at(&mut solver, 108.0, FrontSpeedUp);
         solver.update_positioning_strategy();
@@ -464,7 +488,10 @@ fn test_front_speed_up_only_exits_when_far_ahead() {
 
     // Overtaken: stays (before 1.5 anniv., so that Pace Up Ex doesn't apply).
     let mut solver = positioning_solver(
-        &[(Style::Front, 100.0), (Style::Pace, 110.0)],
+        &[
+            (EffectiveStyle::Front, 100.0),
+            (EffectiveStyle::Pace, 110.0),
+        ],
         GameVersion::FirstAnniversary,
     );
     set_strategy_at(&mut solver, 100.0, FrontSpeedUp);
@@ -474,7 +501,10 @@ fn test_front_speed_up_only_exits_when_far_ahead() {
     // First by less than 4.5m: stays; by more: exits.
     for (lead, expected) in [(4.0, FrontSpeedUp), (5.0, Normal)] {
         let mut solver = positioning_solver(
-            &[(Style::Front, 100.0 + lead), (Style::Pace, 100.0)],
+            &[
+                (EffectiveStyle::Front, 100.0 + lead),
+                (EffectiveStyle::Pace, 100.0),
+            ],
             GameVersion::FirstAnniversary,
         );
         set_strategy_at(&mut solver, 100.0 + lead, FrontSpeedUp);
@@ -501,9 +531,9 @@ fn test_front_overtake_when_not_first_in_strategy() {
     // first overall, so no front runner can speed up.
     let mut solver = positioning_solver(
         &[
-            (Style::Pace, 120.0),
-            (Style::Front, 110.0),
-            (Style::Front, 100.0),
+            (EffectiveStyle::Pace, 120.0),
+            (EffectiveStyle::Front, 110.0),
+            (EffectiveStyle::Front, 100.0),
         ],
         GameVersion::FirstAnniversary,
     );
@@ -514,11 +544,15 @@ fn test_front_overtake_when_not_first_in_strategy() {
 
     // Runaways and front runners are the same strategy.
     for (behind, ahead) in [
-        (Style::Front, Style::Runaway),
-        (Style::Runaway, Style::Front),
+        (EffectiveStyle::Front, EffectiveStyle::Runaway),
+        (EffectiveStyle::Runaway, EffectiveStyle::Front),
     ] {
         let mut solver = positioning_solver(
-            &[(Style::Pace, 200.0), (ahead, 150.0), (behind, 110.0)],
+            &[
+                (EffectiveStyle::Pace, 200.0),
+                (ahead, 150.0),
+                (behind, 110.0),
+            ],
             GameVersion::FirstAnniversary,
         );
         update_positioning_repeatedly(&mut solver);
@@ -538,16 +572,45 @@ fn test_front_overtake_exits_when_far_ahead_in_strategy() {
     // runner ahead shows that the lead only counts the same strategy, where
     // runaways and front runners are the same strategy.
     let cases = [
-        (Style::Front, Style::Front, 9.0, FrontOvertake),
-        (Style::Front, Style::Front, 11.0, Normal),
-        (Style::Runaway, Style::Runaway, 27.0, FrontOvertake),
-        (Style::Runaway, Style::Runaway, 28.0, Normal),
-        (Style::Front, Style::Runaway, 9.0, FrontOvertake),
-        (Style::Runaway, Style::Front, 27.0, FrontOvertake),
+        (
+            EffectiveStyle::Front,
+            EffectiveStyle::Front,
+            9.0,
+            FrontOvertake,
+        ),
+        (EffectiveStyle::Front, EffectiveStyle::Front, 11.0, Normal),
+        (
+            EffectiveStyle::Runaway,
+            EffectiveStyle::Runaway,
+            27.0,
+            FrontOvertake,
+        ),
+        (
+            EffectiveStyle::Runaway,
+            EffectiveStyle::Runaway,
+            28.0,
+            Normal,
+        ),
+        (
+            EffectiveStyle::Front,
+            EffectiveStyle::Runaway,
+            9.0,
+            FrontOvertake,
+        ),
+        (
+            EffectiveStyle::Runaway,
+            EffectiveStyle::Front,
+            27.0,
+            FrontOvertake,
+        ),
     ];
     for (style, behind, lead, expected) in cases {
         let mut solver = positioning_solver(
-            &[(Style::Pace, 200.0), (style, 100.0 + lead), (behind, 100.0)],
+            &[
+                (EffectiveStyle::Pace, 200.0),
+                (style, 100.0 + lead),
+                (behind, 100.0),
+            ],
             GameVersion::FirstAnniversary,
         );
         set_strategy_at(&mut solver, 100.0 + lead, FrontOvertake);
@@ -563,29 +626,29 @@ fn test_front_overtake_exits_when_far_ahead_in_strategy() {
 #[test]
 fn test_positioning_only_starts_in_first_ten_sections() {
     let mut solver = positioning_solver(
-        &[(Style::Front, 100.0), (Style::End, 110.0)],
+        &[(EffectiveStyle::Front, 100.0), (EffectiveStyle::End, 110.0)],
         GameVersion::LATEST,
     );
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Front));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Front));
 
     // Still underway after the first 10 sections, until it ends.
-    runner_with_style(&mut solver, Style::Front).section = POSITIONING_END_SECTION;
+    runner_with_style(&mut solver, EffectiveStyle::Front).section = POSITIONING_END_SECTION;
     solver.update_positioning_strategy();
-    assert!(is_pace_up_ex(&mut solver, Style::Front));
+    assert!(is_pace_up_ex(&mut solver, EffectiveStyle::Front));
 
-    runner_with_style(&mut solver, Style::Front).position = 120.0;
+    runner_with_style(&mut solver, EffectiveStyle::Front).position = 120.0;
     sort_by_position(&mut solver);
     solver.update_positioning_strategy();
-    assert!(!is_pace_up_ex(&mut solver, Style::Front));
+    assert!(!is_pace_up_ex(&mut solver, EffectiveStyle::Front));
 
     // Behind the End runner again, once checks would have resumed.
-    runner_with_style(&mut solver, Style::Front).position = 100.0;
+    runner_with_style(&mut solver, EffectiveStyle::Front).position = 100.0;
     sort_by_position(&mut solver);
     solver.state.elapsed_time += 10.0;
     solver.update_positioning_strategy();
     assert_eq!(
-        runner_with_style(&mut solver, Style::Front).positioning_strategy,
+        runner_with_style(&mut solver, EffectiveStyle::Front).positioning_strategy,
         PositioningStrategy::Normal
     );
 }
@@ -598,10 +661,10 @@ fn test_positioning_lasts_one_section_at_most() {
     // or three for runaways.
     let (old, latest) = (GameVersion::FirstAnniversary, GameVersion::LATEST);
     for (style, ahead, version, length) in [
-        (Style::Pace, Style::Front, old, 50.0),
-        (Style::Runaway, Style::Runaway, old, 150.0),
-        (Style::Front, Style::End, latest, 50.0),
-        (Style::Runaway, Style::End, latest, 150.0),
+        (EffectiveStyle::Pace, EffectiveStyle::Front, old, 50.0),
+        (EffectiveStyle::Runaway, EffectiveStyle::Runaway, old, 150.0),
+        (EffectiveStyle::Front, EffectiveStyle::End, latest, 50.0),
+        (EffectiveStyle::Runaway, EffectiveStyle::End, latest, 150.0),
     ] {
         let mut solver = positioning_solver(&[(ahead, 300.0), (style, 100.0)], version);
         update_positioning_repeatedly(&mut solver);
@@ -632,7 +695,7 @@ fn test_positioning_lasts_one_section_at_most() {
 
 /// Solver with a single runner whose start delay is overridden.
 fn start_delay_solver(start_delay: f64, rng_seed: u64) -> RaceSolver<Runner> {
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(rng_seed));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(rng_seed));
     solver.runners[0].start_delay = start_delay;
     // Positioning (checked from the start delay on) would change HP consumption.
     solver.runners[0].next_positioning_check = f64::INFINITY;
@@ -732,7 +795,7 @@ fn test_runners_bound_to_rush_do_rush() {
         // Low wit for a high rush chance.
         let uma = Uma {
             wit: 100,
-            ..uma(Style::Late)
+            ..uma(BaseStyle::Late)
         };
         solver.add_runner(Entrant::new(uma, vec![]));
     }
@@ -753,15 +816,18 @@ fn test_runners_bound_to_rush_do_rush() {
 #[test]
 fn test_all_runners_finish_with_margins() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    for (i, style) in [Style::Front, Style::Pace, Style::Late, Style::End]
-        .into_iter()
-        .enumerate()
+    for (i, style) in [
+        EffectiveStyle::Front,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Late,
+        EffectiveStyle::End,
+    ]
+    .into_iter()
+    .enumerate()
     {
-        let uma = Uma {
-            speed: 1000 + 50 * i as u16,
-            ..uma(style)
-        };
-        solver.add_runner(Entrant::new(uma, vec![]));
+        let mut entrant = entrant(style);
+        entrant.uma.speed = 1000 + 50 * i as u16;
+        solver.add_runner(entrant);
     }
     let mut solver = solver.ready_runners();
 
@@ -790,7 +856,10 @@ fn test_all_runners_finish_with_margins() {
 
 /// Solver with one runner per `(style, position, lane)` on a 1200m course (50m
 /// sections). Runners must be given in descending position order.
-fn struggle_solver(runners: &[(Style, f64, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
+fn struggle_solver(
+    runners: &[(EffectiveStyle, f64, f64)],
+    game_version: GameVersion,
+) -> RaceSolver<Runner> {
     let styles: Vec<_> = runners
         .iter()
         .map(|&(style, position, _)| (style, position))
@@ -838,7 +907,10 @@ fn has_struggled(solver: &RaceSolver<Runner>) -> Vec<bool> {
 fn test_spot_struggle_starts_between_close_front_runners() {
     // 0.16 course widths apart laterally is within 0.165 course widths.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.1), (Style::Front, 197.0, 0.26)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.1),
+            (EffectiveStyle::Front, 197.0, 0.26),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -851,7 +923,10 @@ fn test_spot_struggle_starts_between_close_front_runners() {
 
     // Too far apart laterally.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.1), (Style::Front, 197.0, 0.27)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.1),
+            (EffectiveStyle::Front, 197.0, 0.27),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -861,7 +936,10 @@ fn test_spot_struggle_starts_between_close_front_runners() {
 #[test]
 fn test_spot_struggle_runaways_use_trigger_distance() {
     let mut solver = struggle_solver(
-        &[(Style::Runaway, 200.0, 0.0), (Style::Runaway, 196.0, 0.0)],
+        &[
+            (EffectiveStyle::Runaway, 200.0, 0.0),
+            (EffectiveStyle::Runaway, 196.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -875,7 +953,10 @@ fn test_spot_struggle_runaways_use_trigger_distance() {
 #[test]
 fn test_spot_struggle_needs_any_runner_past_min_position() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 149.0, 0.0), (Style::Front, 147.0, 0.0)],
+        &[
+            (EffectiveStyle::Front, 149.0, 0.0),
+            (EffectiveStyle::Front, 147.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -889,9 +970,9 @@ fn test_spot_struggle_needs_any_runner_past_min_position() {
     // Any runner ahead past it will do, even with another strategy.
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 150.0, 0.5),
-            (Style::Front, 137.0, 0.0),
-            (Style::Front, 135.0, 0.0),
+            (EffectiveStyle::Runaway, 150.0, 0.5),
+            (EffectiveStyle::Front, 137.0, 0.0),
+            (EffectiveStyle::Front, 135.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -900,9 +981,9 @@ fn test_spot_struggle_needs_any_runner_past_min_position() {
 
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 149.0, 0.5),
-            (Style::Front, 137.0, 0.0),
-            (Style::Front, 135.0, 0.0),
+            (EffectiveStyle::Runaway, 149.0, 0.5),
+            (EffectiveStyle::Front, 137.0, 0.0),
+            (EffectiveStyle::Front, 135.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -914,7 +995,10 @@ fn test_spot_struggle_needs_any_runner_past_min_position() {
 fn test_spot_struggle_needs_one_runner_before_end_of_sixth_section() {
     // Both in section 6 (0-indexed).
     let mut solver = struggle_solver(
-        &[(Style::Front, 310.0, 0.0), (Style::Front, 307.0, 0.0)],
+        &[
+            (EffectiveStyle::Front, 310.0, 0.0),
+            (EffectiveStyle::Front, 307.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -922,7 +1006,10 @@ fn test_spot_struggle_needs_one_runner_before_end_of_sixth_section() {
 
     // Leader in section 6, the other still in section 5.
     let mut solver = struggle_solver(
-        &[(Style::Front, 302.0, 0.0), (Style::Front, 299.0, 0.0)],
+        &[
+            (EffectiveStyle::Front, 302.0, 0.0),
+            (EffectiveStyle::Front, 299.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -933,9 +1020,9 @@ fn test_spot_struggle_needs_one_runner_before_end_of_sixth_section() {
 fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 210.0, 0.5),
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
+            (EffectiveStyle::Pace, 210.0, 0.5),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -945,9 +1032,9 @@ fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     // Runaways are expected to be ahead of front runners.
     let mut solver = struggle_solver(
         &[
-            (Style::Runaway, 210.0, 0.5),
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
+            (EffectiveStyle::Runaway, 210.0, 0.5),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -957,9 +1044,9 @@ fn test_spot_struggle_blocked_by_later_strategy_ahead() {
     // But front runners are not expected to be ahead of runaways.
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 210.0, 0.5),
-            (Style::Runaway, 200.0, 0.0),
-            (Style::Runaway, 198.0, 0.0),
+            (EffectiveStyle::Front, 210.0, 0.5),
+            (EffectiveStyle::Runaway, 200.0, 0.0),
+            (EffectiveStyle::Runaway, 198.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -970,7 +1057,10 @@ fn test_spot_struggle_blocked_by_later_strategy_ahead() {
 #[test]
 fn test_spot_struggle_strategies_do_not_mix() {
     let mut solver = struggle_solver(
-        &[(Style::Runaway, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        &[
+            (EffectiveStyle::Runaway, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -981,10 +1071,10 @@ fn test_spot_struggle_strategies_do_not_mix() {
 fn test_spot_struggle_latecomers_do_not_join() {
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 0.1),
-            (Style::Front, 190.0, 0.0),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+            (EffectiveStyle::Front, 197.0, 0.1),
+            (EffectiveStyle::Front, 190.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -999,7 +1089,10 @@ fn test_spot_struggle_latecomers_do_not_join() {
 #[test]
 fn test_spot_struggle_once_per_strategy() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -1022,9 +1115,9 @@ fn test_spot_struggle_once_per_strategy() {
 fn test_spot_struggle_exit_when_far_from_every_struggler() {
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 0.0),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+            (EffectiveStyle::Front, 197.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -1061,7 +1154,10 @@ fn test_spot_struggle_exit_when_far_from_every_struggler() {
 #[test]
 fn test_spot_struggle_lateral_exit_in_both_directions() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+        ],
         GameVersion::LATEST,
     );
     update_struggle(&mut solver);
@@ -1082,9 +1178,9 @@ fn test_spot_struggle_lateral_exit_in_both_directions() {
 fn test_spot_struggle_expired_strugglers_still_count() {
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 0.0),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+            (EffectiveStyle::Front, 197.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -1106,9 +1202,9 @@ fn test_spot_struggle_expired_strugglers_still_count() {
 fn test_spot_struggle_expired_strugglers_can_exit() {
     let mut solver = struggle_solver(
         &[
-            (Style::Front, 200.0, 0.0),
-            (Style::Front, 198.0, 0.0),
-            (Style::Front, 197.0, 0.0),
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+            (EffectiveStyle::Front, 197.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -1128,7 +1224,7 @@ fn test_spot_struggle_expired_strugglers_can_exit() {
 
 #[test]
 fn test_spot_struggle_ends_upon_entering_ninth_section() {
-    let mut solver = struggle_solver(&[(Style::Front, 330.0, 0.0)], GameVersion::LATEST);
+    let mut solver = struggle_solver(&[(EffectiveStyle::Front, 330.0, 0.0)], GameVersion::LATEST);
     let elapsed_time = solver.state.elapsed_time;
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
@@ -1150,7 +1246,7 @@ fn test_section_speed_modifier_applies_from_the_move_after_entering() {
         rushing: Roll::Never,
         ..seeded_config(0)
     };
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], config);
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], config);
     let boundary = solver.state.course.section_start(12);
     solver.state.elapsed_time = 30.0;
     let runner = &mut solver.runners[0];
@@ -1180,7 +1276,10 @@ fn test_spot_struggle_not_before_first_anniversary() {
         (GameVersion::FirstAnniversary, true),
     ] {
         let mut solver = struggle_solver(
-            &[(Style::Front, 200.0, 0.0), (Style::Front, 198.0, 0.0)],
+            &[
+                (EffectiveStyle::Front, 200.0, 0.0),
+                (EffectiveStyle::Front, 198.0, 0.0),
+            ],
             version,
         );
         update_struggle(&mut solver);
@@ -1191,15 +1290,15 @@ fn test_spot_struggle_not_before_first_anniversary() {
 #[test]
 fn test_is_alone_counts_same_style_within_distance() {
     let cases = [
-        (Style::Front, 590.0, 0, false),
-        (Style::Front, 589.9, 0, true),
-        (Style::Pace, 595.0, 0, true),
+        (EffectiveStyle::Front, 590.0, 0, false),
+        (EffectiveStyle::Front, 589.9, 0, true),
+        (EffectiveStyle::Pace, 595.0, 0, true),
         // From the runner behind.
-        (Style::Front, 595.0, 1, false),
+        (EffectiveStyle::Front, 595.0, 1, false),
     ];
     for (style, position, i, expected) in cases {
         let solver = struggle_solver(
-            &[(Style::Front, 600.0, 0.2), (style, position, 0.2)],
+            &[(EffectiveStyle::Front, 600.0, 0.2), (style, position, 0.2)],
             GameVersion::LATEST,
         );
         let actual = solver.is_alone(i, 10.0);
@@ -1209,7 +1308,8 @@ fn test_is_alone_counts_same_style_within_distance() {
 
 #[test]
 fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
-    let lead = secure_lead::desirable_lead(Style::Front, Style::Pace, 1200.0).unwrap();
+    let lead =
+        secure_lead::desirable_lead(EffectiveStyle::Front, EffectiveStyle::Pace, 1200.0).unwrap();
     // Secure lead of the leader after each of 50 checks.
     let checks = |solver: &mut RaceSolver<Runner>| -> Vec<TimedBoost> {
         (1..=50)
@@ -1222,7 +1322,10 @@ fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
     };
     let is_active = |boost: &&TimedBoost| matches!(boost, TimedBoost::Active { .. });
     let pace_behind = |position| {
-        let runners = [(Style::Front, 600.0, 0.2), (Style::Pace, position, 0.2)];
+        let runners = [
+            (EffectiveStyle::Front, 600.0, 0.2),
+            (EffectiveStyle::Pace, position, 0.2),
+        ];
         struggle_solver(&runners, GameVersion::LATEST)
     };
 
@@ -1233,18 +1336,19 @@ fn test_secure_lead_needs_insufficient_lead_over_later_strategy() {
     let boost = *checks(&mut solver).iter().find(is_active).unwrap();
     // Alone: the Pace runner has another style.
     let guts = solver.runners[0].adjusted.guts;
-    let expected = secure_lead::target_speed_bonus(Style::Front, guts, true, GameVersion::LATEST);
+    let expected =
+        secure_lead::target_speed_bonus(EffectiveStyle::Front, guts, true, GameVersion::LATEST);
     assert_eq!(boost.speed_bonus(), expected);
 }
 
 #[test]
 fn test_compete_before_spurt_when_far_from_first() {
-    let threshold = compete_before_spurt::lead_threshold(Style::Front, 1200.0);
+    let threshold = compete_before_spurt::lead_threshold(EffectiveStyle::Front, 1200.0);
     for (behind, expected) in [(threshold + 0.1, true), (threshold - 0.1, false)] {
         let mut solver = struggle_solver(
             &[
-                (Style::Runaway, 610.0, 0.2),
-                (Style::Front, 610.0 - behind, 0.2),
+                (EffectiveStyle::Runaway, 610.0, 0.2),
+                (EffectiveStyle::Front, 610.0 - behind, 0.2),
             ],
             GameVersion::LATEST,
         );
@@ -1274,7 +1378,7 @@ const DUEL_FRAMES: usize = 32;
 fn duel_solver(runners: &[(f64, f64)], game_version: GameVersion) -> RaceSolver<Runner> {
     let styles: Vec<_> = runners
         .iter()
-        .map(|&(position, _)| (Style::Pace, position))
+        .map(|&(position, _)| (EffectiveStyle::Pace, position))
         .collect();
     let mut solver = positioning_solver(&styles, game_version);
     for (i, &(position, lane)) in runners.iter().enumerate() {
@@ -1558,11 +1662,11 @@ fn test_duel_close_time_is_kept_per_pair() {
 #[test]
 fn test_force_in_modifier_strategy_ranges() {
     let cases = [
-        (Style::Runaway, 0.02),
-        (Style::Front, 0.02),
-        (Style::Pace, 0.01),
-        (Style::Late, 0.01),
-        (Style::End, 0.03),
+        (EffectiveStyle::Runaway, 0.02),
+        (EffectiveStyle::Front, 0.02),
+        (EffectiveStyle::Pace, 0.01),
+        (EffectiveStyle::Late, 0.01),
+        (EffectiveStyle::End, 0.03),
     ];
     for (style, strategy_modifier) in cases {
         let solver = positioning_solver(&[(style, 100.0)], GameVersion::LATEST);
@@ -1576,7 +1680,7 @@ fn test_force_in_modifier_strategy_ranges() {
 
 #[test]
 fn test_force_in_applies_only_away_from_inner_fence() {
-    let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::End, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.phase = Phase::Early;
@@ -1604,7 +1708,7 @@ fn test_force_in_applies_only_away_from_inner_fence() {
 
 #[test]
 fn test_force_in_applies_only_when_inside_is_blocked() {
-    let mut solver = positioning_solver(&[(Style::End, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::End, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.phase = Phase::Early;
@@ -1627,7 +1731,7 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
 fn test_target_lane_decided_before_moving() {
     // Alone in the Early race, she targets a lane further in and starts moving
     // towards it on the same step.
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let lane = CourseWidths(0.4);
     solver.runners[0].lane = crate::race::runner::LaneState::new(lane);
     solver.step(DELTA_TIME);
@@ -1649,7 +1753,7 @@ fn test_first_target_lanes_see_gate_blocking() {
         solver.add_runner(Entrant {
             gate: Some(gate),
             pins,
-            ..Entrant::new(uma(Style::Front), vec![])
+            ..Entrant::new(uma(BaseStyle::Front), vec![])
         });
     }
     let mut solver = solver.ready_runners();
@@ -1663,7 +1767,7 @@ fn test_first_target_lanes_see_gate_blocking() {
 
 #[test]
 fn test_skill_target_lane_in_course_widths() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let runner = &mut solver.runners[0];
     runner.lane = crate::race::runner::LaneState::new(CourseWidths(0.4));
     runner.skill_modifiers.target_lane = Some(CourseWidths(0.5));
@@ -1682,7 +1786,7 @@ fn test_skill_target_lane_in_course_widths() {
 
 #[test]
 fn test_move_lane_modifier_requires_skill_and_lane_movement() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.skill_modifiers.lane_speed = 0.1;
@@ -1709,7 +1813,7 @@ fn test_move_lane_modifier_requires_skill_and_lane_movement() {
 
 #[test]
 fn test_lane_speed_is_directional_in_course_widths() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.lane.current = CourseWidths(0.4);
@@ -1735,7 +1839,7 @@ fn test_lane_speed_is_directional_in_course_widths() {
 
 #[test]
 fn test_lane_change_reaching_target_resets_current_speed() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.lane.current = CourseWidths(0.4);
@@ -1754,7 +1858,7 @@ fn test_lane_change_reaching_target_resets_current_speed() {
 
 #[test]
 fn test_side_blocked_runner_keeps_accelerating_without_moving() {
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     runner.lane.current = CourseWidths(0.4);
@@ -1777,7 +1881,7 @@ fn test_side_blocked_runner_keeps_accelerating_without_moving() {
 #[test]
 fn test_pace_down_lane_target() {
     // 0.18 course widths from the inner fence.
-    let mut solver = positioning_solver(&[(Style::Front, 100.0)], GameVersion::LATEST);
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let runner = &mut solver.runners[0];
     runner.phase = Phase::Early;
     runner.lane.current = CourseWidths(0.4);
@@ -1795,8 +1899,8 @@ fn test_overlap_bumps_outer_runner() {
     for (lanes, outer) in [([0.2, 0.19], 0), ([0.19, 0.2], 1), ([0.19, 0.19], 1)] {
         let mut solver = struggle_solver(
             &[
-                (Style::Front, 200.0, lanes[0]),
-                (Style::Front, 199.8, lanes[1]),
+                (EffectiveStyle::Front, 200.0, lanes[0]),
+                (EffectiveStyle::Front, 199.8, lanes[1]),
             ],
             GameVersion::LATEST,
         );
@@ -1814,7 +1918,10 @@ fn test_no_bump_at_the_outer_edge() {
     // Positioned on course 10101.
     let edge = load_course(10101).width.0;
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, edge), (Style::Front, 199.8, edge)],
+        &[
+            (EffectiveStyle::Front, 200.0, edge),
+            (EffectiveStyle::Front, 199.8, edge),
+        ],
         GameVersion::LATEST,
     );
     // Returns, rather than bumping the runner behind in place forever.
@@ -1828,7 +1935,10 @@ fn test_no_bump_at_the_outer_edge() {
 fn test_no_bump_without_overlap() {
     // Too far apart.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.6, 0.19)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.2),
+            (EffectiveStyle::Front, 199.6, 0.19),
+        ],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
@@ -1837,7 +1947,10 @@ fn test_no_bump_without_overlap() {
 
     // Too far apart laterally.
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.215), (Style::Front, 199.8, 0.19)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.215),
+            (EffectiveStyle::Front, 199.8, 0.19),
+        ],
         GameVersion::LATEST,
     );
     solver.resolve_overlaps();
@@ -1848,7 +1961,10 @@ fn test_no_bump_without_overlap() {
 #[test]
 fn test_bumped_runner_updates_target_lane_while_side_blocked() {
     let mut solver = struggle_solver(
-        &[(Style::Front, 200.0, 0.2), (Style::Front, 199.8, 0.19)],
+        &[
+            (EffectiveStyle::Front, 200.0, 0.2),
+            (EffectiveStyle::Front, 199.8, 0.19),
+        ],
         GameVersion::LATEST,
     );
     for runner in &mut solver.runners {
@@ -1872,7 +1988,10 @@ fn test_bumped_runner_updates_target_lane_while_side_blocked() {
 /// and aiming slower, so she can be caught within 15 seconds.
 fn far_ahead_solver(visible_distance: f64) -> RaceSolver<Runner> {
     let mut solver = struggle_solver(
-        &[(Style::Pace, 230.0, 0.2), (Style::Pace, 200.0, 0.2)],
+        &[
+            (EffectiveStyle::Pace, 230.0, 0.2),
+            (EffectiveStyle::Pace, 200.0, 0.2),
+        ],
         GameVersion::LATEST,
     );
     for runner in &mut solver.runners {
@@ -1901,9 +2020,9 @@ fn test_closest_front_blocker_is_overtake_target() {
     // Less than 1m ahead and not slower, so only a target as the closest blocker.
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 201.5, 0.2),
-            (Style::Pace, 200.5, 0.2),
-            (Style::Pace, 200.0, 0.2),
+            (EffectiveStyle::Pace, 201.5, 0.2),
+            (EffectiveStyle::Pace, 200.5, 0.2),
+            (EffectiveStyle::Pace, 200.0, 0.2),
         ],
         GameVersion::LATEST,
     );
@@ -1947,11 +2066,11 @@ fn test_behind_in_checks_only_the_runner_right_behind() {
         (&[(599.0, 0.4), (598.0, 0.1)], false),
     ];
     for (behind, expected) in cases {
-        let mut runners = vec![(Style::Pace, 600.0, 0.3)];
+        let mut runners = vec![(EffectiveStyle::Pace, 600.0, 0.3)];
         runners.extend(
             behind
                 .iter()
-                .map(|&(position, lane)| (Style::Pace, position, lane)),
+                .map(|&(position, lane)| (EffectiveStyle::Pace, position, lane)),
         );
         let mut solver = struggle_solver(&runners, GameVersion::LATEST);
         solver.update_blocking_status(DELTA_TIME);
@@ -1962,7 +2081,10 @@ fn test_behind_in_checks_only_the_runner_right_behind() {
 #[test]
 fn test_runners_close_behind_are_counted() {
     let mut solver = struggle_solver(
-        &[(Style::Pace, 600.0, 0.2), (Style::Pace, 596.0, 0.2)],
+        &[
+            (EffectiveStyle::Pace, 600.0, 0.2),
+            (EffectiveStyle::Pace, 596.0, 0.2),
+        ],
         GameVersion::LATEST,
     );
     solver.update_blocking_status(DELTA_TIME);
@@ -1975,8 +2097,12 @@ fn test_fov_bonus_narrows_field_of_view_at_a_given_distance() {
     // width there is 3.875 horse lanes, but not within a 40m one (2.4375).
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 210.0, CourseWidths::from_horse_lanes(3.0).0),
-            (Style::Pace, 200.0, 0.0),
+            (
+                EffectiveStyle::Pace,
+                210.0,
+                CourseWidths::from_horse_lanes(3.0).0,
+            ),
+            (EffectiveStyle::Pace, 200.0, 0.0),
         ],
         GameVersion::LATEST,
     );
@@ -2001,9 +2127,9 @@ fn test_fov_debuffs_cannot_shorten_field_of_view_below_zero() {
 #[test]
 fn test_team_members_are_allies() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Pace), vec![]);
     solver.add_team(vec![member(), member(), member()]);
-    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![]));
     solver.add_team(vec![member(), member()]);
     let solver = solver.ready_runners();
 
@@ -2026,7 +2152,7 @@ fn test_team_members_are_allies() {
 #[should_panic(expected = "Team must have between 1 and 3 runners")]
 fn test_team_larger_than_max_size_panics() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Pace), vec![]);
     solver.add_team(vec![member(), member(), member(), member()]);
 }
 
@@ -2063,7 +2189,7 @@ fn test_runner_exceeding_gates_panics() {
     // 9 gates.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..10 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     }
 }
 
@@ -2073,9 +2199,9 @@ fn test_team_exceeding_gates_panics() {
     // 9 gates: 8 individual runners leave room for one more, not a team of two.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..8 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     }
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
 }
 
@@ -2084,9 +2210,9 @@ fn test_team_can_fill_the_last_gates() {
     // 9 gates: 6 individual runners leave room for a team of three.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..6 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     }
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Pace), vec![]);
     solver.add_team(vec![member(), member(), member()]);
     assert_eq!(solver.runners().len(), 9);
 }
@@ -2102,9 +2228,9 @@ fn test_style_of_the_most_popular_runner() {
             power: 100,
             guts: 100,
             wit: 100,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
-        let mut umas = [uma(Style::Late), weak];
+        let mut umas = [uma(BaseStyle::Late), weak];
         if !strong_first {
             umas.reverse();
         }
@@ -2117,8 +2243,8 @@ fn test_style_of_the_most_popular_runner() {
             .iter()
             .find(|runner| runner.initial_state.popularity_rank == 1)
             .unwrap();
-        assert_eq!(most_popular.raw.style, Style::Late);
-        assert_eq!(solver.state.style_most_popular, Style::Late);
+        assert_eq!(most_popular.raw.style, BaseStyle::Late);
+        assert_eq!(solver.state.style_most_popular, BaseStyle::Late);
     }
 }
 
@@ -2131,7 +2257,7 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
         max_duration: 12.0,
         is_rushed: true,
         failed_checks: 0,
-        style: Style::Pace,
+        style: EffectiveStyle::Pace,
     });
 }
 
@@ -2139,10 +2265,10 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
 fn test_rush_counters_by_position_count_opponents() {
     // In position order: team 0 (×2), team 1 and team 2.
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || Entrant::new(uma(Style::Pace), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Pace), vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
-    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
     solver.runners.sort_by_key(|r| r.initial_state.team);
@@ -2185,19 +2311,25 @@ fn test_rushed_by_team_matches_runners() {
     let mut solver = RaceSolver::new(load_course(10204), race_params(), seeded_config(0));
     // Low wit for a high rush chance.
     let member = |style| {
-        let uma = Uma {
-            wit: 100,
-            ..uma(style)
-        };
-        Entrant::new(uma, vec![])
+        let mut entrant = entrant(style);
+        entrant.uma.wit = 100;
+        entrant
     };
     solver.add_team(vec![
-        member(Style::Late),
-        member(Style::Late),
-        member(Style::Pace),
+        member(EffectiveStyle::Late),
+        member(EffectiveStyle::Late),
+        member(EffectiveStyle::Pace),
     ]);
-    solver.add_team(vec![member(Style::Late), member(Style::End)]);
-    for style in [Style::Runaway, Style::Runaway, Style::Front, Style::Pace] {
+    solver.add_team(vec![
+        member(EffectiveStyle::Late),
+        member(EffectiveStyle::End),
+    ]);
+    for style in [
+        EffectiveStyle::Runaway,
+        EffectiveStyle::Runaway,
+        EffectiveStyle::Front,
+        EffectiveStyle::Pace,
+    ] {
         solver.add_runner(member(style));
     }
     let mut solver = solver.ready_runners();
@@ -2207,11 +2339,11 @@ fn test_rushed_by_team_matches_runners() {
     while solver.state.finish_time.is_none() {
         solver.step(DELTA_TIME);
 
-        let mut expected = vec![[0; Style::COUNT]; solver.state.team_count as usize];
+        let mut expected = vec![[0; BaseStyle::COUNT]; solver.state.team_count as usize];
         for runner in solver.runners.iter().filter(|r| r.is_rushed()) {
             // Runaways count as Front runners.
             expected[runner.initial_state.team as usize][runner.base_style() as usize] += 1;
-            runaway_rushed |= runner.raw.style == Style::Runaway;
+            runaway_rushed |= runner.style == EffectiveStyle::Runaway;
         }
         assert_eq!(
             solver.state.rushed_by_team, expected,
@@ -2236,10 +2368,16 @@ fn test_team_activations_match_runners_each_frame() {
             skill(24, "phase>=2", SkillType::TargetSpeed, 0.1),
         ]
     };
-    let member = |style| Entrant::new(uma(style), skills());
-    solver.add_team(vec![member(Style::Front), member(Style::Late)]);
-    solver.add_runner(Entrant::new(uma(Style::Pace), skills()));
-    solver.add_runner(Entrant::new(uma(Style::End), vec![]));
+    let member = |style| Entrant {
+        skills: skills(),
+        ..entrant(style)
+    };
+    solver.add_team(vec![
+        member(EffectiveStyle::Front),
+        member(EffectiveStyle::Late),
+    ]);
+    solver.add_runner(Entrant::new(uma(BaseStyle::Pace), skills()));
+    solver.add_runner(Entrant::new(uma(BaseStyle::End), vec![]));
     let mut solver = solver.ready_runners();
 
     while solver.state.finish_time.is_none() {
@@ -2263,16 +2401,16 @@ fn test_team_activations_match_runners_each_frame() {
 
 /// Ready race with one runner per `(style, team)`, placed in that order from
 /// first to last, 10 meters apart.
-fn targeting_solver(runners: &[(Style, u8)]) -> RaceSolver<Runner> {
+fn targeting_solver(runners: &[(EffectiveStyle, u8)]) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in runners {
-        solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![]));
     }
     let mut solver = solver.ready_runners();
     solver.state.elapsed_time = 10.0;
     // Runners are built in gate order, so assign everything here.
     for (i, (runner, &(style, team))) in solver.runners.iter_mut().zip(runners).enumerate() {
-        runner.raw.style = style;
+        runner.raw.style = style.base_style();
         runner.style = style;
         runner.initial_state.team = team;
         runner.position = 1000.0 - 10.0 * i as f64;
@@ -2287,7 +2425,7 @@ fn targets(solver: &RaceSolver<Runner>, caster: usize, target: SkillTarget) -> V
 
 #[test]
 fn test_targets_nearest_runners_ahead_and_behind() {
-    let solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (Style::Late, team)));
+    let solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (EffectiveStyle::Late, team)));
     assert_eq!(
         targets(&solver, 3, SkillTarget::AheadOfSelf { count: 2 }),
         [2, 1]
@@ -2312,10 +2450,10 @@ fn test_targets_nearest_runners_ahead_and_behind() {
 fn test_allies_count_towards_max_targets_but_are_not_debuffed() {
     // Runner 2 is an ally of runner 3.
     let solver = targeting_solver(&[
-        (Style::Late, 0),
-        (Style::Late, 1),
-        (Style::Late, 2),
-        (Style::Late, 2),
+        (EffectiveStyle::Late, 0),
+        (EffectiveStyle::Late, 1),
+        (EffectiveStyle::Late, 2),
+        (EffectiveStyle::Late, 2),
     ]);
     assert_eq!(
         targets(&solver, 3, SkillTarget::AheadOfSelf { count: 2 }),
@@ -2330,10 +2468,10 @@ fn test_allies_count_towards_max_targets_but_are_not_debuffed() {
 fn test_random_team_member_targets_one_ally_or_oneself() {
     // Runners 1 and 3 are allies of runner 2.
     let solver = targeting_solver(&[
-        (Style::Late, 0),
-        (Style::Late, 1),
-        (Style::Late, 1),
-        (Style::Late, 1),
+        (EffectiveStyle::Late, 0),
+        (EffectiveStyle::Late, 1),
+        (EffectiveStyle::Late, 1),
+        (EffectiveStyle::Late, 1),
     ]);
     let mut seen = [false; 4];
     for roll in [0.0, 0.3, 0.5, 0.7, 0.999] {
@@ -2347,10 +2485,10 @@ fn test_random_team_member_targets_one_ally_or_oneself() {
 #[test]
 fn test_targets_opponents_with_style() {
     let solver = targeting_solver(&[
-        (Style::Front, 0),
-        (Style::Runaway, 1),
-        (Style::Front, 2),
-        (Style::Pace, 3),
+        (EffectiveStyle::Front, 0),
+        (EffectiveStyle::Runaway, 1),
+        (EffectiveStyle::Front, 2),
+        (EffectiveStyle::Pace, 3),
     ]);
     // Runaways count as Front runners; allies are excluded.
     assert_eq!(
@@ -2358,7 +2496,7 @@ fn test_targets_opponents_with_style() {
             &solver,
             2,
             SkillTarget::EnemyStrategy {
-                style: Style::Front
+                style: BaseStyle::Front
             }
         ),
         [0, 1]
@@ -2367,7 +2505,7 @@ fn test_targets_opponents_with_style() {
 
 #[test]
 fn test_targets_oneself_and_nobody_by_uma_id() {
-    let solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1)]);
+    let solver = targeting_solver(&[(EffectiveStyle::Late, 0), (EffectiveStyle::Late, 1)]);
     assert_eq!(targets(&solver, 1, SkillTarget::Oneself), [1]);
     assert_eq!(
         targets(&solver, 1, SkillTarget::UmaId { value: 1001 }),
@@ -2378,7 +2516,7 @@ fn test_targets_oneself_and_nobody_by_uma_id() {
 #[test]
 fn test_targets_runners_ahead_in_field_of_view() {
     // Runners 40m, 30m, 20m and 10m ahead of runner 4, all in the same lane.
-    let mut solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (Style::Late, team)));
+    let mut solver = targeting_solver(&[0, 1, 2, 3, 4, 5].map(|team| (EffectiveStyle::Late, team)));
     for runner in &mut solver.runners {
         runner.lane.current = CourseWidths(0.0);
     }
@@ -2396,12 +2534,12 @@ fn test_targets_runners_ahead_in_field_of_view() {
 #[test]
 fn test_targets_rushed_runners() {
     let mut solver = targeting_solver(&[
-        (Style::Runaway, 0),
-        (Style::Pace, 1),
-        (Style::Front, 2),
-        (Style::Late, 3),
-        (Style::Pace, 4),
-        (Style::Front, 5),
+        (EffectiveStyle::Runaway, 0),
+        (EffectiveStyle::Pace, 1),
+        (EffectiveStyle::Front, 2),
+        (EffectiveStyle::Late, 3),
+        (EffectiveStyle::Pace, 4),
+        (EffectiveStyle::Front, 5),
     ]);
     for i in [0, 2, 4, 5] {
         set_rushed(&mut solver, i);
@@ -2417,13 +2555,13 @@ fn test_targets_rushed_runners() {
 
     // Runaways count as Front runners; runner 1 isn't rushed.
     let with_style = |style| SkillTarget::RushedStrategy { style };
-    assert_eq!(targets(&solver, 3, with_style(Style::Front)), [0, 2, 5]);
-    assert_eq!(targets(&solver, 3, with_style(Style::Pace)), [4]);
+    assert_eq!(targets(&solver, 3, with_style(BaseStyle::Front)), [0, 2, 5]);
+    assert_eq!(targets(&solver, 3, with_style(BaseStyle::Pace)), [4]);
 }
 
 #[test]
 fn test_scoreboard_time() {
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
     let min = solver.state.course.finish_time_min;
     let max = solver.state.course.finish_time_max;
 
@@ -2451,7 +2589,11 @@ fn test_scoreboard_time() {
 
 #[test]
 fn test_finished_runners_are_not_counted_as_targets() {
-    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
+    let mut solver = targeting_solver(&[
+        (EffectiveStyle::Late, 0),
+        (EffectiveStyle::Late, 1),
+        (EffectiveStyle::Late, 2),
+    ]);
     solver.runners[1].finish_time = Some(60.0);
     assert_eq!(
         targets(&solver, 2, SkillTarget::AheadOfSelf { count: 1 }),
@@ -2484,8 +2626,8 @@ fn test_activated_effects_on_others_are_queued_for_targets() {
     });
 
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(Entrant::new(uma(Style::Late), vec![debuff]));
-    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![debuff]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![]));
     let mut solver = solver.ready_runners();
     // The caster is ahead.
     for runner in &mut solver.runners {
@@ -2539,7 +2681,7 @@ fn received(skill_type: SkillType, modifier: f64) -> PendingEffect {
 #[test]
 fn test_duration_scaling_extends_activated_skills() {
     let skill = skill(32, "always==1", SkillType::TargetSpeed, 0.15);
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![skill], seeded_config(0));
     let extend = received(SkillType::ExtendEvolvedDuration, 2.0);
     solver.runners[0].receive_skill_effect(&extend, &solver.state);
 
@@ -2556,7 +2698,7 @@ fn test_duration_scaling_extends_activated_skills() {
 
 #[test]
 fn test_rush_time_up_extends_rush_of_runners_bound_to_rush() {
-    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1)]);
+    let mut solver = targeting_solver(&[(EffectiveStyle::Late, 0), (EffectiveStyle::Late, 1)]);
     set_rushed(&mut solver, 0);
     // Not bound to rush (whatever was rolled when readying the race).
     solver.runners[1].rush_state = None;
@@ -2591,7 +2733,7 @@ fn activates_with_most_popular(
         .map(|skills| skills.iter().map(|skill| skill.id).collect())
         .collect();
     for skills in skills {
-        solver.add_runner(Entrant::new(uma(Style::Late), skills));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Late), skills));
     }
     let mut solver = solver.ready_runners();
 
@@ -2723,7 +2865,7 @@ fn test_ignored_popularity_satisfies_popularity_conditions() {
 
 #[test]
 fn test_order_rates_count_every_gate() {
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![], seeded_config(0));
     solver.step(DELTA_TIME);
 
     // A single runner, but every gate counts: 6% to 16% of 9 round to 1st place.
@@ -2735,7 +2877,11 @@ fn test_order_rates_count_every_gate() {
 
 #[test]
 fn test_used_recovery_targets_runners_that_healed_this_frame() {
-    let mut solver = targeting_solver(&[(Style::Late, 0), (Style::Late, 1), (Style::Late, 2)]);
+    let mut solver = targeting_solver(&[
+        (EffectiveStyle::Late, 0),
+        (EffectiveStyle::Late, 1),
+        (EffectiveStyle::Late, 2),
+    ]);
     solver.runners[0]
         .activation_flags
         .buff_activated
@@ -2758,7 +2904,7 @@ fn activated_alternatives(conditions: &[&str]) -> Vec<usize> {
         .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.15))
         .collect();
     let skill = Arc::new(synthetic_skill(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![skill], seeded_config(0));
     solver.run();
 
     let mask = solver.runners[0].activated_alternatives[0];
@@ -2822,7 +2968,7 @@ fn out_of_gate_continuation_mask(condition: &str) -> u8 {
         ),
     ];
     let skill = Arc::new(synthetic_skill(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![skill], seeded_config(0));
     solver.run();
     solver.runners[0].activated_alternatives[0]
 }
@@ -2844,7 +2990,7 @@ fn test_later_alternative_activates_again_after_cooldown() {
         },
     ];
     let skill = Arc::new(synthetic_skill(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![skill], seeded_config(0));
     solver.run();
     assert!(solver.runners[0].activated_skills.len() > 1);
 }
@@ -2860,7 +3006,7 @@ fn test_hp_triggers_activate_within_their_range() {
     ];
     for (condition, percent, activates) in cases {
         let skills = vec![skill(1, condition, SkillType::TargetSpeed, 0.15)];
-        let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+        let mut solver = ready_solver(10101, uma(BaseStyle::Late), skills, seeded_config(0));
         set_hp_percent(&mut solver, 0, percent);
         solver.runners[0].check_skills(&mut solver.state);
         let activated = !solver.runners[0].activated_skills.is_empty();
@@ -2875,7 +3021,7 @@ fn test_forced_activation_disables_other_alternatives() {
         alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.15),
     ];
     let skill = Arc::new(synthetic_skill(alternatives));
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![skill], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![skill], seeded_config(0));
     // Bypassing conditions, like random gold activations.
     solver.runners[0].activate_skill(0, 0, &solver.state);
     solver.run();
@@ -2901,7 +3047,7 @@ fn test_activation_outlasting_race_removes_triggers_that_cant_succeed() {
         Arc::new(synthetic_skill(once_per_race)),
         Arc::new(synthetic_skill(vec![short_cooldown])),
     ];
-    let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), skills, seeded_config(0));
     solver.run();
 
     // Only the continuation and the skill that can activate again are left.
@@ -2947,7 +3093,7 @@ fn activations(solver: &RaceSolver<Runner>) -> Vec<(i32, f64)> {
 #[test]
 fn test_out_of_gate_skill_activates_on_first_frame_of_movement() {
     let speed = out_of_gate_skill(32, f64::INFINITY, &[(SkillType::SpeedUp, 40.0)]);
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![speed], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![speed], seeded_config(0));
     // Longer than a frame: the runner doesn't move during the first one.
     solver.runners[0].start_delay = 0.09;
 
@@ -2970,7 +3116,7 @@ fn test_slope_at_the_start_applies_from_the_first_move_after_the_gate() {
     // who stays in the gate longer enters it there, so all her moves are
     // uphill.
     let first_move_acceleration = |start_delay: f64| {
-        let mut solver = ready_solver(10708, uma(Style::Pace), vec![], seeded_config(0));
+        let mut solver = ready_solver(10708, uma(BaseStyle::Pace), vec![], seeded_config(0));
         solver.runners[0].start_delay = start_delay;
         while solver.runners[0].position == 0.0 {
             solver.step(DELTA_TIME);
@@ -2997,7 +3143,7 @@ fn test_out_of_gate_timed_effects_apply_from_first_frame() {
     );
     let mut solver = ready_solver(
         10101,
-        uma(Style::Pace),
+        uma(BaseStyle::Pace),
         vec![concentration],
         seeded_config(0),
     );
@@ -3035,7 +3181,7 @@ fn test_out_of_gate_effects_last_until_the_end_of_the_race() {
         id: 16,
         ..synthetic_skill(vec![fov])
     });
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![fov], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![fov], seeded_config(0));
 
     solver.run();
     let runner = &solver.runners[0];
@@ -3056,7 +3202,7 @@ fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
     let follow = skill(14, "is_activate_any_skill==1", SkillType::TargetSpeed, 0.15);
     let mut solver = ready_solver(
         10101,
-        uma(Style::Pace),
+        uma(BaseStyle::Pace),
         vec![speed, follow],
         seeded_config(0),
     );
@@ -3070,8 +3216,8 @@ fn test_out_of_gate_skill_triggers_activation_dependent_skills() {
 fn test_out_of_gate_style_change_is_applied_before_the_race() {
     // Like "Great Escape".
     let escape = skill(11, "running_style==1", SkillType::ChangeStyleRunaway, 0.0);
-    let solver = ready_solver(10101, uma(Style::Front), vec![escape], seeded_config(0));
-    assert_eq!(solver.runners[0].style, Style::Runaway);
+    let solver = ready_solver(10101, uma(BaseStyle::Front), vec![escape], seeded_config(0));
+    assert_eq!(solver.runners[0].style, EffectiveStyle::Runaway);
 }
 
 /// Gold skill with the given condition.
@@ -3101,7 +3247,7 @@ fn random_gold_activation_order(modifier: f64, mut skills: Vec<Arc<Skill>>) -> V
         modifier,
     );
     skills.push(adventure);
-    let mut solver = ready_solver(10101, uma(Style::Pace), skills, seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), skills, seeded_config(0));
     solver.run();
     activations(&solver).into_iter().map(|(id, _)| id).collect()
 }
@@ -3204,7 +3350,7 @@ fn test_activate_random_gold_picks_skills_that_failed_the_wit_check() {
         ..seeded_config(0)
     };
     let skills = vec![with_wit_check(forced_gold_skill(15))];
-    let mut solver = ready_solver(10101, uma(Style::Pace), skills, config);
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), skills, config);
     let runner = &mut solver.runners[0];
     assert_eq!(runner.failed_skills().len(), 1);
     let activate_random_gold = |runner: &mut Runner, state: &RaceState| {
@@ -3252,7 +3398,7 @@ fn lasting_alternative(condition: &str, skill_type: SkillType, modifier: f64) ->
 fn unique_reactivation_runner(modifier: f64, mut skills: Vec<Arc<Skill>>) -> Runner {
     let again = skill(4, "distance_rate>=50", SkillType::ActivateUnique, modifier);
     skills.push(again);
-    let mut solver = ready_solver(10101, uma(Style::Pace), skills, seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), skills, seeded_config(0));
     solver.run();
     solver.runners.swap_remove(0)
 }
@@ -3403,7 +3549,7 @@ fn activate_last_skill(solver: &mut RaceSolver<Runner>) -> f64 {
 #[test]
 fn test_direct_values_are_not_scaled() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::Direct,
         seeded_config(0),
@@ -3418,7 +3564,7 @@ fn test_skill_count_scaling() {
         .map(|i| skill(i, "always==1", SkillType::TargetSpeed, 0.1))
         .collect();
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         others,
         ValueScaling::MultiplySkillNum,
         seeded_config(0),
@@ -3435,7 +3581,7 @@ fn test_skill_count_includes_failed_wit_checks() {
     let skills = (0..3)
         .map(|i| with_wit_check(skill(i, "always==1", SkillType::TargetSpeed, 0.1)))
         .collect();
-    let solver = ready_solver(10101, uma(Style::Late), skills, config);
+    let solver = ready_solver(10101, uma(BaseStyle::Late), skills, config);
     let runner = &solver.runners[0];
     assert!(runner.available_skills().is_empty());
     assert_eq!(runner.failed_skills().len(), 3);
@@ -3461,8 +3607,12 @@ fn test_scenario_values_assume_the_maximum() {
         (ValueScaling::PerformanceLevel, 1.2),
     ];
     for (value_scaling, multiplier) in cases {
-        let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
+        let mut solver = scaled_skill_solver(
+            uma(BaseStyle::Late),
+            vec![],
+            value_scaling,
+            seeded_config(0),
+        );
         assert_close!(
             activate_last_skill(&mut solver),
             0.25 * multiplier,
@@ -3474,7 +3624,7 @@ fn test_scenario_values_assume_the_maximum() {
 #[test]
 fn test_fan_count_scaling() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::FanCount,
         seeded_config(0),
@@ -3498,7 +3648,7 @@ fn test_cinderella_gray_scaling() {
         let uma = Uma {
             fan_count: Some(fan_count),
             character_id: Some(100603),
-            ..uma(Style::Late)
+            ..uma(BaseStyle::Late)
         };
         let skills = vec![data_skill(120061)];
         let mut solver = ready_solver(course_id, uma, skills, seeded_config(0));
@@ -3516,7 +3666,7 @@ fn test_cinderella_gray_scaling() {
 #[test]
 fn test_late_race_corner_overtakes_are_tracked() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::CornerOvertakeCount,
         seeded_config(0),
@@ -3554,8 +3704,12 @@ fn test_late_race_corner_overtakes_are_tracked() {
 #[test]
 fn test_random_scaling_distribution() {
     for value_scaling in [ValueScaling::MultiplyRandom1, ValueScaling::MultiplyRandom2] {
-        let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
+        let mut solver = scaled_skill_solver(
+            uma(BaseStyle::Late),
+            vec![],
+            value_scaling,
+            seeded_config(0),
+        );
         let mut counts = [0; 3];
         let rolls = 10000;
         for _ in 0..rolls {
@@ -3577,7 +3731,7 @@ fn test_raw_stat_scaling_uses_the_highest_raw_stat() {
     // Raw stats above 1200 are halved in the base stats, but not here.
     let uma = Uma {
         stamina: 1500,
-        ..uma(Style::Late)
+        ..uma(BaseStyle::Late)
     };
     let mut solver = scaled_skill_solver(
         uma,
@@ -3611,8 +3765,12 @@ fn test_speed_scaling_uses_adjusted_speed() {
         (ValueScaling::MultiplySpeed2, 1500.0, 2.0),
     ];
     for (value_scaling, speed, multiplier) in cases {
-        let mut solver =
-            scaled_skill_solver(uma(Style::Late), vec![], value_scaling, seeded_config(0));
+        let mut solver = scaled_skill_solver(
+            uma(BaseStyle::Late),
+            vec![],
+            value_scaling,
+            seeded_config(0),
+        );
         solver.runners[0].adjusted.speed = speed;
         let gained = activate_last_skill(&mut solver);
         assert_close!(gained, 0.25 * multiplier, "{value_scaling:?}");
@@ -3622,7 +3780,7 @@ fn test_speed_scaling_uses_adjusted_speed() {
 #[test]
 fn test_effects_on_oneself_are_buffs_unless_negative() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::MultiplySpeed1,
         seeded_config(0),
@@ -3639,7 +3797,7 @@ fn test_effects_on_oneself_are_buffs_unless_negative() {
         SkillType::TargetSpeed,
         -0.25,
     )];
-    let mut solver = ready_solver(10101, uma(Style::Late), skills, seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), skills, seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), -0.25);
     let buffs = &solver.runners[0].activation_flags.buff_activated;
     assert!(!buffs.contains(SkillType::TargetSpeed));
@@ -3656,7 +3814,7 @@ fn test_green_skill_count_scaling() {
         skill(26, "is_activate_heal_skill==1", SkillType::SpeedUp, 10.0),
     ];
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         skills,
         ValueScaling::MultiplyActivateSpecificTagSkillCount,
         seeded_config(0),
@@ -3683,7 +3841,7 @@ fn test_green_skill_count_scaling() {
 #[test]
 fn test_distance_from_first_adds_to_value() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::AddDistanceDiffTop,
         seeded_config(0),
@@ -3695,7 +3853,7 @@ fn test_distance_from_first_adds_to_value() {
 #[test]
 fn test_bashin_from_first_adds_to_value() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::AddBashinDiffTop,
         seeded_config(0),
@@ -3709,14 +3867,14 @@ fn test_bashin_from_first_adds_to_value() {
 fn test_medium_distance_adds_to_value() {
     let skills = vec![scaled_skill(30, ValueScaling::AddDistanceTypeMedium, 0.25)];
     // 2400m (Medium).
-    let mut solver = ready_solver(10606, uma(Style::Late), skills, seeded_config(0));
+    let mut solver = ready_solver(10606, uma(BaseStyle::Late), skills, seeded_config(0));
     assert_close!(activate_last_skill(&mut solver), 0.45);
 }
 
 #[test]
 fn test_longest_mid_race_side_block_is_tracked() {
     let mut solver = scaled_skill_solver(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         vec![],
         ValueScaling::MultiplyBlockedSideMaxTimeMidRace,
         seeded_config(0),
@@ -3755,12 +3913,12 @@ fn test_longest_mid_race_side_block_is_tracked() {
 fn test_largest_lead_before_late_race_is_tracked() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let skills = vec![scaled_skill(30, ValueScaling::MultiplyTopLeadAmount, 0.25)];
-    solver.add_runner(Entrant::new(uma(Style::Front), skills));
-    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Front), skills));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![]));
     let mut solver = solver.ready_runners();
     let update = |solver: &mut RaceSolver<Runner>, front, late, phase| {
         for runner in &mut solver.runners {
-            let is_front = runner.raw.style == Style::Front;
+            let is_front = runner.raw.style == BaseStyle::Front;
             runner.position = if is_front { front } else { late };
             runner.phase = phase;
         }
@@ -3773,9 +3931,9 @@ fn test_largest_lead_before_late_race_is_tracked() {
     // Leads in the Late race, or by the other runner, don't count.
     update(&mut solver, 1000.0, 950.0, Phase::Late);
     update(&mut solver, 1100.0, 1200.0, Phase::Late);
-    let front = runner_with_style(&mut solver, Style::Front);
+    let front = runner_with_style(&mut solver, EffectiveStyle::Front);
     assert_close!(front.position_diff.max_lead, 15.0);
-    let late = runner_with_style(&mut solver, Style::Late);
+    let late = runner_with_style(&mut solver, EffectiveStyle::Late);
     assert_close!(late.position_diff.max_lead, 0.0);
 
     // The other runner is ahead now; move the scaled skill's owner first.
@@ -3798,7 +3956,7 @@ fn timed_skill(id: i32, duration_scaling: DurationScaling) -> Arc<Skill> {
 
 /// Ready race on a 1200m course with a single runner having `skills`.
 fn timed_skill_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
-    ready_solver(10101, uma(Style::Late), skills, seeded_config(0))
+    ready_solver(10101, uma(BaseStyle::Late), skills, seeded_config(0))
 }
 
 /// Remaining duration of each of the first runner's active timed effects.
@@ -3818,7 +3976,7 @@ fn test_duration_scaling_by_runner_situation() {
     // = 2480, within the HP bands tested below.
     let uma = Uma {
         stamina: 2000,
-        ..uma(Style::Late)
+        ..uma(BaseStyle::Late)
     };
     /// Changes the runner's situation before activating the skill.
     type Setup = fn(&mut Runner);
@@ -4005,7 +4163,7 @@ fn test_downhill_mode_saves_hp_from_the_frame_after_its_check() {
     // HP lost on the first two frames on course 10906, which starts on a
     // downhill checked on the first frame, depending on its outcome.
     let hp_lost = |in_downhill_mode| {
-        let mut solver = ready_solver(10906, uma(Style::Pace), vec![], seeded_config(0));
+        let mut solver = ready_solver(10906, uma(BaseStyle::Pace), vec![], seeded_config(0));
         let runner = &mut solver.runners[0];
         runner.start_delay = 0.0;
         runner.pins.downhill.insert(0, vec![in_downhill_mode]);
@@ -4052,7 +4210,7 @@ fn test_pinned_downhill_checks_replace_their_outcomes() {
 fn test_downhill_pin_of_its_rolled_outcome_changes_nothing() {
     // The pinned check still draws its roll, so later checks roll the same.
     let course = course_with_slopes(vec![Slope::new(100.0, 200.0, -2.0)]);
-    let solver = |seed| ready_solver(10101, uma(Style::Late), vec![], seeded_config(seed));
+    let solver = |seed| ready_solver(10101, uma(BaseStyle::Late), vec![], seeded_config(seed));
     for seed in 0..10 {
         let unpinned = downhill_modes(&mut solver(seed), &course, 290);
         let mut pinned = solver(seed);
@@ -4171,9 +4329,9 @@ fn test_front_blocker_limits_speed() {
     // limit, at 99.4% of her speed.
     let mut solver = struggle_solver(
         &[
-            (Style::Pace, 201.5, 0.2),
-            (Style::Pace, 201.0, 0.2),
-            (Style::Pace, 200.0, 0.2),
+            (EffectiveStyle::Pace, 201.5, 0.2),
+            (EffectiveStyle::Pace, 201.0, 0.2),
+            (EffectiveStyle::Pace, 200.0, 0.2),
         ],
         GameVersion::LATEST,
     );
@@ -4198,7 +4356,10 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
     // speed otherwise.
     for blocker_moves_first in [true, false] {
         let mut solver = struggle_solver(
-            &[(Style::Pace, 201.0, 0.2), (Style::Pace, 200.0, 0.2)],
+            &[
+                (EffectiveStyle::Pace, 201.0, 0.2),
+                (EffectiveStyle::Pace, 200.0, 0.2),
+            ],
             GameVersion::LATEST,
         );
         let (blocker_gate, behind_gate) = if blocker_moves_first { (1, 2) } else { (2, 1) };
@@ -4236,7 +4397,7 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
 fn pair_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..2 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), skills.clone()));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), skills.clone()));
     }
     solver.ready_runners()
 }
@@ -4290,7 +4451,7 @@ fn test_blocked_time_counts_from_the_first_move() {
 fn test_edge_gaps_are_infinite() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     for _ in 0..3 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     }
     let mut solver = solver.ready_runners();
     for (runner, position) in solver.runners.iter_mut().zip([300.0, 200.0, 100.0]) {
@@ -4310,7 +4471,7 @@ fn test_edge_gaps_are_infinite() {
 #[test]
 fn test_lone_runner_has_no_lead() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    solver.add_runner(Entrant::new(uma(Style::Front), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Front), vec![]));
     let mut solver = solver.ready_runners();
     solver.runners[0].position = 100.0;
     solver.update_order_values();
@@ -4327,7 +4488,7 @@ fn test_distance_rate_is_relative_to_the_field_spread() {
     for (positions, expected) in cases {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
         for _ in positions {
-            solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+            solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
         }
         let mut solver = solver.ready_runners();
         for (runner, &position) in solver.runners.iter_mut().zip(positions) {
@@ -4345,7 +4506,12 @@ fn test_distance_rate_is_relative_to_the_field_spread() {
 
 #[test]
 fn test_lone_runner_keeps_regular_pace() {
-    for style in [Style::Front, Style::Pace, Style::Late, Style::End] {
+    for style in [
+        EffectiveStyle::Front,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Late,
+        EffectiveStyle::End,
+    ] {
         let mut solver = positioning_solver(&[(style, 200.0)], GameVersion::LATEST);
         solver.runners[0].section = 2;
         update_positioning_repeatedly(&mut solver);
@@ -4365,7 +4531,7 @@ fn test_start_dash_consumes_hp_at_base_speed() {
         rushing: Roll::Never,
         ..seeded_config(0)
     };
-    let mut solver = ready_solver(10101, uma(Style::Front), vec![], config);
+    let mut solver = ready_solver(10101, uma(BaseStyle::Front), vec![], config);
     let base_speed = solver.state.course.base_speed();
     let mut dash_frames = 0;
     loop {
@@ -4403,7 +4569,7 @@ fn test_uphill_start_holds_the_start_dash_below_min_speed() {
     };
     let uma = Uma {
         power: 150,
-        ..uma(Style::End)
+        ..uma(BaseStyle::End)
     };
     let mut solver = ready_solver(10404, uma, vec![], config);
     let start_dash_speed = 0.85 * solver.state.course.base_speed();
@@ -4421,8 +4587,8 @@ fn test_uphill_start_holds_the_start_dash_below_min_speed() {
 fn test_step_frame_matches_run() {
     let new_solver = || {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-        solver.add_runner(Entrant::new(uma(Style::Front), vec![]));
-        solver.add_runner(Entrant::new(uma(Style::End), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Front), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::End), vec![]));
         solver.ready_runners()
     };
     let mut run = new_solver();
@@ -4468,7 +4634,7 @@ fn gates_in_order(
     let ids: Vec<_> = (0..4)
         .map(|index| {
             let gate = (set && index == 2).then_some(1);
-            let entrant = Entrant::new(uma(Style::Pace), vec![]);
+            let entrant = Entrant::new(uma(BaseStyle::Pace), vec![]);
             solver.add_runner(Entrant { gate, ..entrant })
         })
         .collect();
@@ -4519,7 +4685,7 @@ fn moods_in_order(mood_assignment: Assignment, default_mood: DefaultMood, seed: 
     };
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     let ids = [Some(Mood::Bad), None, None].map(|mood| {
-        let entrant = Entrant::new(uma(Style::Pace), vec![]);
+        let entrant = Entrant::new(uma(BaseStyle::Pace), vec![]);
         solver.add_runner(Entrant { mood, ..entrant })
     });
     let solver = solver.ready_runners();
@@ -4572,10 +4738,10 @@ fn ready_with_pins(pins: Pins, seed: u64) -> RaceSolver<Runner> {
     let skill = skill(1, "always==1", SkillType::MultiplyStartDelay, 0.4);
     solver.add_runner(Entrant {
         pins,
-        ..Entrant::new(uma(Style::End), vec![skill])
+        ..Entrant::new(uma(BaseStyle::End), vec![skill])
     });
     for _ in 0..2 {
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     }
     solver.ready_runners()
 }
@@ -4623,10 +4789,10 @@ fn test_pins_change_only_their_outcome() {
         // A style end closers never roll.
         (
             rush_pins(RushPins {
-                style: Some(Style::End),
+                style: Some(EffectiveStyle::End),
                 ..RushPins::default()
             }),
-            |r| rush_of(r).style == Style::End,
+            |r| rush_of(r).style == EffectiveStyle::End,
             |r, unpinned| r.rush_state.as_mut().unwrap().style = rush_of(unpinned).style,
         ),
         // A section outside the rolled ones.
@@ -4758,7 +4924,7 @@ fn test_uphill_downhill_pin_panics() {
     pins.downhill.insert(0, vec![true]);
     solver.add_runner(Entrant {
         pins,
-        ..Entrant::new(uma(Style::Pace), vec![])
+        ..Entrant::new(uma(BaseStyle::Pace), vec![])
     });
 }
 
@@ -4807,7 +4973,7 @@ fn test_pinned_wit_checks_override_configuration() {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
         let id = solver.add_runner(Entrant {
             pins,
-            ..Entrant::new(uma(Style::Pace), vec![skill])
+            ..Entrant::new(uma(BaseStyle::Pace), vec![skill])
         });
         let solver = solver.ready_runners();
         let runner = solver.runner(id);
@@ -4862,7 +5028,7 @@ fn activation_pins(id: i32, activations: Vec<PinnedActivation>) -> Pins {
 }
 
 /// Single runner with `skills` and `pins`, ready to race.
-fn ready_alone(style: Style, skills: Vec<Arc<Skill>>, pins: Pins) -> RaceSolver<Runner> {
+fn ready_alone(style: EffectiveStyle, skills: Vec<Arc<Skill>>, pins: Pins) -> RaceSolver<Runner> {
     let config = Configuration {
         wit_checks: Roll::Never,
         ..seeded_config(0)
@@ -4870,7 +5036,8 @@ fn ready_alone(style: Style, skills: Vec<Arc<Skill>>, pins: Pins) -> RaceSolver<
     let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
     solver.add_runner(Entrant {
         pins,
-        ..Entrant::new(uma(style), skills)
+        skills,
+        ..entrant(style)
     });
     solver.ready_runners()
 }
@@ -4882,7 +5049,7 @@ fn test_pinned_activations_happen_at_their_times() {
     for times in [vec![], vec![2.0], vec![5.0, 2.0]] {
         let skill = with_wit_check(skill(1, "always==1", SkillType::TargetSpeed, 0.1));
         let pins = activation_pins(1, times.iter().map(|&time| pinned_at(time)).collect());
-        let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+        let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], pins);
         // Start times of the frames each activation happened on.
         let mut frames = Vec::new();
         loop {
@@ -4908,7 +5075,7 @@ fn test_pinned_activations_happen_at_their_times() {
 
 #[test]
 fn test_pinned_out_of_gate_activations_replace_their_conditions() {
-    let delay = ready_alone(Style::End, vec![], Pins::default()).runners[0].start_delay;
+    let delay = ready_alone(EffectiveStyle::End, vec![], Pins::default()).runners[0].start_delay;
     // (condition, pinned activations, start delay multiplier). End closers
     // aren't front runners (`running_style==1`).
     let cases = [
@@ -4922,7 +5089,7 @@ fn test_pinned_out_of_gate_activations_replace_their_conditions() {
         let pins = activations
             .clone()
             .map_or_else(Pins::default, |a| activation_pins(1, a));
-        let mut solver = ready_alone(Style::End, vec![skill], pins);
+        let mut solver = ready_alone(EffectiveStyle::End, vec![skill], pins);
         let case = (condition, &activations);
         assert_close!(
             solver.runners[0].start_delay,
@@ -4956,7 +5123,7 @@ fn test_forced_activations_skip_pinned_skills() {
             } else {
                 Pins::default()
             };
-            let mut solver = ready_alone(Style::Pace, skills, pins);
+            let mut solver = ready_alone(EffectiveStyle::Pace, skills, pins);
             solver.run();
             let ids: Vec<_> = activations(&solver).into_iter().map(|(id, _)| id).collect();
             let expected = if pinned { vec![3] } else { vec![3, 15] };
@@ -4992,10 +5159,10 @@ fn test_pinned_targets_replace_the_usual_ones() {
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
         solver.add_runner(Entrant {
             pins: activation_pins(1, vec![activation]),
-            ..Entrant::new(uma(Style::Pace), vec![skill])
+            ..Entrant::new(uma(BaseStyle::Pace), vec![skill])
         });
         for _ in 0..2 {
-            solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+            solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
         }
         let mut solver = solver.ready_runners();
         while solver.runner(RunnerId(0)).activated_skills.is_empty() {
@@ -5056,8 +5223,8 @@ fn test_records_give_the_duration_and_affected_runners() {
             ..synthetic_skill(vec![alternative])
         });
         let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![skill]));
-        solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![skill]));
+        solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
         let mut solver = solver.ready_runners();
         while solver.runner(RunnerId(0)).activated_skills.is_empty() {
             assert!(!solver.step_frame(), "the race ended first");
@@ -5103,7 +5270,7 @@ fn test_pinned_out_of_gate_activation_twice_panics() {
 /// the activations they allowed but weren't pinned.
 fn condition_report(skill: Arc<Skill>, times: &[f64]) -> (Vec<bool>, Vec<f64>) {
     let pins = activation_pins(1, times.iter().map(|&time| pinned_at(time)).collect());
-    let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+    let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], pins);
     solver.run();
     let runner = &solver.runners[0];
     let met = runner.activated_skills.iter().map(|r| r.conditions_met);
@@ -5156,7 +5323,7 @@ fn test_pinned_skills_report_what_their_conditions_allow() {
 #[test]
 fn test_unpinned_skills_meet_their_conditions() {
     let skill = skill(1, "accumulatetime>=10", SkillType::TargetSpeed, 0.1);
-    let mut solver = ready_alone(Style::Pace, vec![skill], Pins::default());
+    let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], Pins::default());
     solver.run();
     let runner = &solver.runners[0];
     let [record] = &runner.activated_skills[..] else {
@@ -5183,7 +5350,7 @@ fn test_out_of_gate_activations_are_recorded_at_the_start() {
         ..Pins::default()
     };
     let skill = out_of_gate_skill(1, 1.0, &[(SkillType::SpeedUp, 40.0)]);
-    let mut solver = ready_alone(Style::Pace, vec![skill], pins);
+    let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], pins);
     while solver.state.elapsed_time < delay {
         solver.step_frame();
     }
@@ -5224,7 +5391,7 @@ fn test_pinned_out_of_gate_skills_report_what_their_conditions_allow() {
             &activations,
         );
         let pins = activation_pins(1, activations.clone());
-        let mut solver = ready_alone(Style::End, vec![skill.clone()], pins);
+        let mut solver = ready_alone(EffectiveStyle::End, vec![skill.clone()], pins);
         solver.run();
         let runner = &solver.runners[0];
         let record = runner.activated_skills.first();
@@ -5260,7 +5427,7 @@ fn add_with_activations(skill: Arc<Skill>, activations: Vec<PinnedActivation>) {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     solver.add_runner(Entrant {
         pins: activation_pins(skill.id, activations),
-        ..Entrant::new(uma(Style::Pace), vec![skill])
+        ..Entrant::new(uma(BaseStyle::Pace), vec![skill])
     });
 }
 
@@ -5273,7 +5440,7 @@ fn test_pinned_target_outside_the_race_panics() {
     };
     let skill = skill(1, "always==1", SkillType::TargetSpeed, 0.1);
     ready_alone(
-        Style::Pace,
+        EffectiveStyle::Pace,
         vec![skill],
         activation_pins(1, vec![activation]),
     );
@@ -5310,7 +5477,7 @@ fn add_with_pins(pins: Pins) {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     solver.add_runner(Entrant {
         pins,
-        ..Entrant::new(uma(Style::Pace), vec![])
+        ..Entrant::new(uma(BaseStyle::Pace), vec![])
     });
 }
 
@@ -5318,7 +5485,7 @@ fn add_with_pins(pins: Pins) {
 fn entrant_at(gate: u8) -> Entrant {
     Entrant {
         gate: Some(gate),
-        ..Entrant::new(uma(Style::Pace), vec![])
+        ..Entrant::new(uma(BaseStyle::Pace), vec![])
     }
 }
 
@@ -5360,12 +5527,17 @@ fn test_add_runner_rejects_gates_out_of_range() {
 #[test]
 fn test_runner_finds_runners_by_id_after_reordering() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let styles = [Style::End, Style::Late, Style::Pace, Style::Front];
-    let ids = styles.map(|style| solver.add_runner(Entrant::new(uma(style), vec![])));
+    let styles = [
+        EffectiveStyle::End,
+        EffectiveStyle::Late,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Front,
+    ];
+    let ids = styles.map(|style| solver.add_runner(entrant(style)));
     let mut solver = solver.ready_runners();
     solver.run();
     for (id, style) in ids.into_iter().zip(styles) {
-        assert_eq!(solver.runner(id).raw.style, style);
+        assert_eq!(solver.runner(id).style, style);
     }
 }
 
@@ -5374,9 +5546,9 @@ fn test_runner_finds_runners_by_id_after_reordering() {
 fn test_runner_rejects_runners_of_other_races() {
     let new_solver = || RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let mut other = new_solver();
-    other.add_runner(Entrant::new(uma(Style::Pace), vec![]));
-    let id = other.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    other.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
+    let id = other.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     let mut solver = new_solver();
-    solver.add_runner(Entrant::new(uma(Style::Pace), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     solver.ready_runners().runner(id);
 }

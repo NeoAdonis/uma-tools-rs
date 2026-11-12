@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 /// Ready race with a single Late Surger with the given skills.
 fn create_test_race_solver(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
-    ready_solver(10101, uma(Style::Late), skills, seeded_config(12345))
+    ready_solver(10101, uma(BaseStyle::Late), skills, seeded_config(12345))
 }
 
 /// Whole number of a single value.
@@ -146,9 +146,9 @@ fn test_phase_values_by_position() {
 /// Surger (team 1).
 fn create_team_race_solver() -> RaceSolver<Runner> {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
-    let member = || Entrant::new(uma(Style::Late), vec![]);
+    let member = || Entrant::new(uma(BaseStyle::Late), vec![]);
     solver.add_team(vec![member(), member()]);
-    solver.add_runner(Entrant::new(uma(Style::Late), vec![]));
+    solver.add_runner(Entrant::new(uma(BaseStyle::Late), vec![]));
     solver.ready_runners()
 }
 
@@ -181,11 +181,16 @@ fn test_temptation_opponent_count_by_position() {
 
 #[test]
 fn test_most_popular_runaway_counts_as_front_runner() {
-    let solver = ready_solver(10101, uma(Style::Runaway), vec![], seeded_config(0));
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    solver.add_runner(entrant(EffectiveStyle::Runaway));
+    let solver = solver.ready_runners();
     let runner = &solver.runners[0];
 
     let var = RunningStyleVar::RunningStyleEqualPopularityOne;
-    assert_eq!(running_style_value(&var, &solver.state, runner.style), 1);
+    assert_eq!(
+        running_style_value(&var, &solver.state, runner.base_style()),
+        1
+    );
 }
 
 #[test]
@@ -834,7 +839,7 @@ fn test_temptation_status_values() {
         max_duration: 12.0,
         is_rushed,
         failed_checks: 0,
-        style: Style::Late,
+        style: EffectiveStyle::Late,
     };
 
     // (rush state, is_temptation, temptation_count).
@@ -908,15 +913,15 @@ fn test_compete_fight_count_by_duel_state() {
 fn test_running_style_counts() {
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let styles = [
-        Style::Runaway,
-        Style::Front,
-        Style::Pace,
-        Style::Pace,
-        Style::Late,
-        Style::End,
+        EffectiveStyle::Runaway,
+        EffectiveStyle::Front,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Pace,
+        EffectiveStyle::Late,
+        EffectiveStyle::End,
     ];
     for style in styles {
-        solver.add_runner(Entrant::new(uma(style), vec![]));
+        solver.add_runner(entrant(style));
     }
     let solver = solver.ready_runners();
     let state = &solver.state;
@@ -932,10 +937,10 @@ fn test_running_style_counts() {
     ];
     // Front: 2 (Runaway included), Pace: 2, Late: 1, End: 1, with 9 gates.
     let cases = [
-        // Runaways count as Front Runners, themselves included.
-        (Style::Runaway, [1, 1, 2, 1, 1, 2, 22]),
-        (Style::Pace, [2, 2, 1, 1, 1, 2, 22]),
-        (Style::End, [4, 2, 2, 1, 0, 1, 11]),
+        // Runaways count as Front Runners.
+        (BaseStyle::Front, [1, 1, 2, 1, 1, 2, 22]),
+        (BaseStyle::Pace, [2, 2, 1, 1, 1, 2, 22]),
+        (BaseStyle::End, [4, 2, 2, 1, 0, 1, 11]),
     ];
     for (style, expected) in cases {
         let actual = vars.map(|var| running_style_value(&var, state, style));
@@ -946,11 +951,11 @@ fn test_running_style_counts() {
 #[test]
 fn test_style_temptation_counts() {
     let mut solver = create_team_race_solver();
-    solver.state.rushed_by_team[0][Style::Front as usize] = 1;
-    solver.state.rushed_by_team[0][Style::Pace as usize] = 2;
-    solver.state.rushed_by_team[0][Style::End as usize] = 3;
+    solver.state.rushed_by_team[0][BaseStyle::Front as usize] = 1;
+    solver.state.rushed_by_team[0][BaseStyle::Pace as usize] = 2;
+    solver.state.rushed_by_team[0][BaseStyle::End as usize] = 3;
     // The individual runner, rushed herself.
-    solver.state.rushed_by_team[1][Style::Front as usize] = 1;
+    solver.state.rushed_by_team[1][BaseStyle::Front as usize] = 1;
 
     let vars = [
         TemptationVar::RunningStyleTemptationCountNige,
@@ -977,7 +982,7 @@ fn test_variable_value_dispatch() {
     // to the function of their category, chosen by type.
     let mut solver = create_test_race_solver(vec![]);
     // The current style, not the base one.
-    solver.runners[0].style = Style::End;
+    solver.runners[0].style = EffectiveStyle::End;
     solver.state.elapsed_time = 42.5;
 
     let (state, runner) = (&solver.state, &solver.runners[0]);
@@ -1019,7 +1024,7 @@ fn create_out_of_gate_runner() -> (RaceState, UnreadyRunner) {
     let solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let state = solver.state;
     let mut runner = UnreadyRunner::new(
-        uma(Style::Late),
+        uma(BaseStyle::Late),
         Mood::Good,
         &state,
         vec![],

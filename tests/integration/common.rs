@@ -46,8 +46,8 @@ pub fn seeded_config(seed: u64) -> Configuration {
 
 /// Baseline runner with the given style and A aptitudes.
 ///
-/// Override single stats with `Uma { wit: 100, ..uma(Style::Late) }`.
-pub fn uma(style: Style) -> Uma {
+/// Override single stats with `Uma { wit: 100, ..uma(BaseStyle::Late) }`.
+pub fn uma(style: BaseStyle) -> Uma {
     Uma {
         speed: 1200,
         stamina: 1000,
@@ -61,6 +61,19 @@ pub fn uma(style: Style) -> Uma {
         fan_count: None,
         character_id: None,
     }
+}
+
+/// The Runaway skill, from the game data.
+///
+/// # Panics
+///
+/// Panics if the skill data can't be loaded.
+pub fn runaway_skill() -> Arc<Skill> {
+    SkillData::from_json_file("data/skill_data_jp.json")
+        .unwrap()
+        .get(202051)
+        .unwrap()
+        .clone()
 }
 
 /// Ready race with standard parameters and a single runner with normal mood.

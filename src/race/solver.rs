@@ -75,12 +75,12 @@ pub struct RaceState {
     pub(crate) team_count: u8,
     /// Count of runners by base style (Runaways count as Front runners).
     /// Indexed as `[style as usize]`.
-    pub(crate) runners_by_style: [u8; Style::COUNT],
+    pub(crate) runners_by_style: [u8; BaseStyle::COUNT],
     /// Base style of the most popular runner (Runaway counts as Front).
-    pub(crate) style_most_popular: Style,
+    pub(crate) style_most_popular: BaseStyle,
     /// Count of runners currently rushed, by team and base style (Runaways count
     /// as Front runners). Indexed as `[team][style as usize]`.
-    pub(crate) rushed_by_team: Vec<[u8; Style::COUNT]>,
+    pub(crate) rushed_by_team: Vec<[u8; BaseStyle::COUNT]>,
     /// Skill activations by team (out-of-gate skills included), as of the start
     /// of the current frame. Indexed by team.
     pub(crate) team_activations: Vec<usize>,
@@ -122,7 +122,7 @@ impl RunnerId {
 /// Enter a runner with a mood and a gate, leaving the rest to the solver:
 ///
 /// ```
-/// use uma_tools::{Aptitude, Entrant, Mood, Style, Uma};
+/// use uma_tools::{Aptitude, Entrant, Mood, BaseStyle, Uma};
 ///
 /// let uma = Uma {
 ///     speed: 1200,
@@ -130,7 +130,7 @@ impl RunnerId {
 ///     power: 1000,
 ///     guts: 600,
 ///     wit: 1100,
-///     style: Style::Late,
+///     style: BaseStyle::Late,
 ///     distance_aptitude: Aptitude::A,
 ///     track_aptitude: Aptitude::A,
 ///     style_aptitude: Aptitude::A,
@@ -142,7 +142,7 @@ impl RunnerId {
 ///     gate: Some(3),
 ///     ..Entrant::new(uma, vec![])
 /// };
-/// assert_eq!(entrant.uma.style, Style::Late);
+/// assert_eq!(entrant.uma.style, BaseStyle::Late);
 /// ```
 ///
 /// [`RaceSolver`]: crate::RaceSolver
@@ -316,8 +316,8 @@ impl RaceSolver<Entrant> {
             elapsed_time: 0.0,
             finish_time: None,
             team_count: 0,
-            style_most_popular: Style::Front,
-            runners_by_style: [0; Style::COUNT],
+            style_most_popular: BaseStyle::Front,
+            runners_by_style: [0; BaseStyle::COUNT],
             rushed_by_team: Vec::new(),
             team_activations: Vec::new(),
             existing_skills: HashMap::new(),
@@ -494,7 +494,7 @@ impl RaceSolver<Entrant> {
     fn new_team(&mut self) -> u8 {
         let team = self.state.team_count;
         self.state.team_count += 1;
-        self.state.rushed_by_team.push([0; Style::COUNT]);
+        self.state.rushed_by_team.push([0; BaseStyle::COUNT]);
         self.state.team_activations.push(0);
         team
     }
@@ -519,7 +519,7 @@ impl RaceSolver<Entrant> {
         for skill in &entrant.skills {
             *self.state.existing_skills.entry(skill.id).or_insert(0) += 1;
         }
-        self.state.runners_by_style[entrant.uma.style.base_style() as usize] += 1;
+        self.state.runners_by_style[entrant.uma.style as usize] += 1;
 
         let id = RunnerId(self.runners.len() as u8);
         self.runners.push(entrant);
@@ -628,7 +628,7 @@ impl RaceSolver<Entrant> {
             builder.initial_state.popularity_rank = rank;
             builder.initial_state.judge_scores = judge_scores;
             if builder.initial_state.popularity_rank == 1 {
-                state.style_most_popular = builder.raw.style.base_style();
+                state.style_most_popular = builder.raw.style;
             }
         }
 
@@ -1458,7 +1458,7 @@ impl RaceSolver<Runner> {
         let front_runner_count = self
             .runners
             .iter()
-            .filter(|runner| runner.style == Style::Front)
+            .filter(|runner| runner.style == EffectiveStyle::Front)
             .count();
 
         // Find pacemaker.
@@ -1488,7 +1488,7 @@ impl RaceSolver<Runner> {
         // earlier in the order are ahead, so at the gate (everybody at 0 m) the
         // lower gate is ahead. Runaways count as front runners, so neither
         // should be behind the other.
-        let mut max_style_ahead: Option<Style> = None;
+        let mut max_style_ahead: Option<BaseStyle> = None;
 
         for i in 0..self.runners.len() {
             let position = self.runners[i].position;
@@ -1600,7 +1600,7 @@ impl RaceSolver<Runner> {
 
     /// Start a spot struggle between the frontmost runner with `style` and every
     /// runner with the same style close behind her, if any.
-    fn try_start_spot_struggle(&mut self, style: Style) {
+    fn try_start_spot_struggle(&mut self, style: EffectiveStyle) {
         let Some(leader_index) = self.runners.iter().position(|r| r.style == style) else {
             return;
         };
@@ -1643,7 +1643,7 @@ impl RaceSolver<Runner> {
     /// Strugglers whose effects have expired still count (and can exit too), but
     /// those who have already exited don't. Exits cascade within the same frame,
     /// e.g. the last remaining struggler exits right away.
-    fn exit_spot_struggle(&mut self, style: Style) {
+    fn exit_spot_struggle(&mut self, style: EffectiveStyle) {
         loop {
             let strugglers: Vec<usize> = (0..self.runners.len())
                 .filter(|&i| {

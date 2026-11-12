@@ -35,7 +35,7 @@ use std::sync::Arc;
 use crate::condition::parser::{Comparison, ComparisonList, Condition};
 use crate::condition::variables::{ActivationVar, VarType};
 use crate::configuration::Language;
-use crate::uma::Style;
+use crate::uma::{BaseStyle, EffectiveStyle};
 use crate::units::deserialize_ten_thousandths;
 
 /// Represents the type of skill effect.
@@ -52,7 +52,7 @@ pub enum SkillType {
     GutsUp = 4,
     /// Modify wit stat.
     WitUp = 5,
-    /// Change running style to Runaway.
+    /// Change running style to Runaway (see [`EffectiveStyle::Runaway`]).
     ChangeStyleRunaway = 6,
     /// Modify field of view.
     Fov = 8,
@@ -157,9 +157,9 @@ impl SkillType {
 
     /// Returns the running style this effect type changes to, or `None` if it isn't
     /// a style change.
-    pub(crate) fn style_change(self) -> Option<Style> {
+    pub(crate) fn style_change(self) -> Option<EffectiveStyle> {
         match self {
-            SkillType::ChangeStyleRunaway => Some(Style::Runaway),
+            SkillType::ChangeStyleRunaway => Some(EffectiveStyle::Runaway),
             _ => None,
         }
     }
@@ -245,13 +245,13 @@ pub enum SkillTarget {
     /// Skill affects all team allies, oneself excluded.
     AllAllies,
     /// Skill affects all opponents with a specific running style.
-    EnemyStrategy { style: Style },
+    EnemyStrategy { style: BaseStyle },
     /// Skill affects the `max` nearest rushed runners ahead.
     RushedAhead { max: u8 },
     /// Skill affects the `max` nearest rushed runners behind.
     RushedBehind { max: u8 },
     /// Skill affects rushed runners with a specific running style.
-    RushedStrategy { style: Style },
+    RushedStrategy { style: BaseStyle },
     /// Unknown. Not used by any skill.
     UmaId { value: i32 },
     /// Skill affects runners that have activated recovery skills.
@@ -296,10 +296,10 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
         let RawSkillTarget { target_type, value } = raw;
         let count = || u8::try_from(value).map_err(|_| format!("invalid target count {value}"));
         let style = || match value {
-            1 => Ok(Style::Front),
-            2 => Ok(Style::Pace),
-            3 => Ok(Style::Late),
-            4 => Ok(Style::End),
+            1 => Ok(BaseStyle::Front),
+            2 => Ok(BaseStyle::Pace),
+            3 => Ok(BaseStyle::Late),
+            4 => Ok(BaseStyle::End),
             _ => Err(format!("invalid target style {value}")),
         };
         Ok(match target_type {
@@ -1130,7 +1130,7 @@ mod tests {
         assert_eq!(
             target(18, 1).unwrap(),
             SkillTarget::EnemyStrategy {
-                style: Style::Front
+                style: BaseStyle::Front
             }
         );
         assert_eq!(

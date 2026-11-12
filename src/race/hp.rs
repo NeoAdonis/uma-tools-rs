@@ -2,7 +2,7 @@
 
 use crate::course::*;
 use crate::race::parameters::TrackCondition;
-use crate::uma::Style;
+use crate::uma::EffectiveStyle;
 
 /// Health Points (HP) state.
 ///
@@ -108,20 +108,20 @@ fn hp_guts_modifier(guts_stat: f64) -> f64 {
     1.0 + (200.0 / (600.0 * guts_stat).sqrt())
 }
 
-fn hp_style_multiplier(style: Style) -> f64 {
+fn hp_style_multiplier(style: EffectiveStyle) -> f64 {
     match style {
-        Style::Runaway => 0.86,
-        Style::Front => 0.95,
-        Style::Pace => 0.89,
-        Style::Late => 1.0,
-        Style::End => 0.995,
+        EffectiveStyle::Runaway => 0.86,
+        EffectiveStyle::Front => 0.95,
+        EffectiveStyle::Pace => 0.89,
+        EffectiveStyle::Late => 1.0,
+        EffectiveStyle::End => 0.995,
     }
 }
 
 /// Calculate maximum HP from the stamina stat, running style and course.
 ///
 /// Stats should already include any adjustments applied before the race starts.
-pub(crate) fn calculate_max_hp(style: Style, stamina_stat: f64, course: &Course) -> f64 {
+pub(crate) fn calculate_max_hp(style: EffectiveStyle, stamina_stat: f64, course: &Course) -> f64 {
     0.8 * hp_style_multiplier(style) * stamina_stat + course.distance as f64
 }
 
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn test_max_hp() {
         // 2000m course.
-        let max_hp = calculate_max_hp(Style::Pace, 1000.0, &synthetic_course());
+        let max_hp = calculate_max_hp(EffectiveStyle::Pace, 1000.0, &synthetic_course());
         assert_close!(max_hp, 0.8 * 0.89 * 1000.0 + 2000.0);
     }
 

@@ -9,7 +9,7 @@ use std::ops::RangeInclusive;
 
 use rand::prelude::*;
 
-use crate::uma::Style;
+use crate::uma::EffectiveStyle;
 
 /// Sections (0-indexed) in which a runner may start rushing.
 pub(crate) const SECTIONS: RangeInclusive<u8> = 1..=8;
@@ -40,12 +40,12 @@ pub struct RushState {
     /// Snap out checks failed so far.
     pub failed_checks: u8,
     /// Style used for positioning while rushed.
-    pub style: Style,
+    pub style: EffectiveStyle,
 }
 
 impl RushState {
     /// Roll when and how a runner with `style` will rush.
-    pub(crate) fn roll(style: Style, rng: &mut impl Rng) -> Self {
+    pub(crate) fn roll(style: EffectiveStyle, rng: &mut impl Rng) -> Self {
         let style = roll_style(style, rng);
         let section = rng.random_range(SECTIONS);
         RushState {
@@ -117,28 +117,28 @@ pub(crate) fn chance(wit: f64, modifier: f64) -> f64 {
 }
 
 /// Roll the style a runner with `style` positions as while rushed.
-fn roll_style(style: Style, rng: &mut impl Rng) -> Style {
+fn roll_style(style: EffectiveStyle, rng: &mut impl Rng) -> EffectiveStyle {
     match style {
         // Front-like styles keep their style.
-        Style::Front | Style::Runaway => style,
-        Style::Pace => Style::Front,
+        EffectiveStyle::Front | EffectiveStyle::Runaway => style,
+        EffectiveStyle::Pace => EffectiveStyle::Front,
         // 75% Front, 25% Pace.
-        Style::Late => {
+        EffectiveStyle::Late => {
             if rng.random_bool(0.75) {
-                Style::Front
+                EffectiveStyle::Front
             } else {
-                Style::Pace
+                EffectiveStyle::Pace
             }
         }
         // 70% Front, 20% Pace, 10% Late.
-        Style::End => {
+        EffectiveStyle::End => {
             let roll: f64 = rng.random();
             if roll < 0.7 {
-                Style::Front
+                EffectiveStyle::Front
             } else if roll < 0.9 {
-                Style::Pace
+                EffectiveStyle::Pace
             } else {
-                Style::Late
+                EffectiveStyle::Late
             }
         }
     }

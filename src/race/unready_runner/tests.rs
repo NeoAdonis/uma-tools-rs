@@ -3,6 +3,7 @@ use crate::configuration::{Configuration, Roll};
 use crate::race::solver::{Entrant, RaceSolver};
 use crate::skill::SkillAlternative;
 use crate::test_utils::*;
+use crate::uma::BaseStyle;
 use std::sync::Arc;
 
 /// Build a runner with the given skills on a 2000m turf course (10104), and the
@@ -10,7 +11,7 @@ use std::sync::Arc;
 fn unready_runner(skills: Vec<Arc<Skill>>) -> (UnreadyRunner, RaceState) {
     let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
     let mut runner = UnreadyRunner::new(
-        uma(Style::Pace),
+        uma(BaseStyle::Pace),
         Mood::Normal,
         &state,
         skills,
@@ -124,7 +125,7 @@ fn test_fan_count_falls_back_to_configured_default() {
     let fan_count = |fan_count| {
         let uma = Uma {
             fan_count,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
         UnreadyRunner::new(
             uma,
@@ -237,7 +238,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
         skill(2, "always==1", SkillType::AddStartDelay, 0.1),
         skill(5, "distance_rate>=50", SkillType::TargetSpeed, 0.35),
     ];
-    let mut solver = ready_solver(10104, uma(Style::Pace), skills, seeded_config(0));
+    let mut solver = ready_solver(10104, uma(BaseStyle::Pace), skills, seeded_config(0));
     solver.run();
 
     let activations: Vec<_> = solver.runners[0]
@@ -266,7 +267,7 @@ fn checked_runner(config: Configuration, skill_count: usize) -> Runner {
         .collect();
     let uma = Uma {
         wit: 100,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let mut solver = ready_solver(10104, uma, skills, config);
     solver.runners.remove(0)
@@ -312,7 +313,7 @@ fn test_rushing_can_be_forced() {
 fn runner_with_wit(wit: u16, skills: Vec<Arc<Skill>>, seed: u64) -> Runner {
     let uma = Uma {
         wit,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     ready_solver(10104, uma, skills, seeded_config(seed))
         .runners
@@ -356,7 +357,7 @@ fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {
         // Guts doesn't affect speed, so it tells runners apart.
         let uma = Uma {
             guts: 800 + i as u16,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
         let skills = ids.iter().map(|&id| data_skill(id)).collect();
         solver.add_runner(Entrant::new(uma, skills));
@@ -478,7 +479,7 @@ fn test_gambler_activation_rate() {
         .filter(|&seed| {
             let mut solver = RaceSolver::new(course.clone(), race_params(), seeded_config(seed));
             let gambler = data_skill(GAMBLER_ID);
-            solver.add_runner(Entrant::new(uma(Style::Pace), vec![gambler]));
+            solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![gambler]));
             let runner = &solver.ready_runners().runners[0];
             !race_start_ids(runner.available_skills(), &runner.trigger_scheduler).is_empty()
         })
@@ -527,7 +528,7 @@ fn lottery_speed_gains(lottery: &str) -> std::collections::HashSet<u16> {
             let state = RaceSolver::new(course.clone(), race_params(), seeded_config(seed)).state;
             let skills = vec![skill.clone()];
             let mut runner = UnreadyRunner::new(
-                uma(Style::Pace),
+                uma(BaseStyle::Pace),
                 Mood::Normal,
                 &state,
                 skills,
@@ -642,7 +643,7 @@ fn test_min_speed_scales_with_guts() {
     // 2000m course: 0.85 * 20 m/s, plus sqrt(200 * 800) * 0.001 from guts.
     let uma = Uma {
         guts: 800,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let runner = ready_solver(10104, uma, vec![], seeded_config(0))
         .runners
@@ -662,7 +663,7 @@ fn test_heavy_track_lowers_adjusted_speed() {
         };
         let state = RaceSolver::new(load_course(10104), parameters, seeded_config(0)).state;
         let runner = UnreadyRunner::new(
-            uma(Style::Pace),
+            uma(BaseStyle::Pace),
             Mood::Normal,
             &state,
             vec![],
@@ -690,7 +691,7 @@ fn test_career_bonus_applies_to_every_stat_before_the_clamp() {
         let state = RaceSolver::new(load_course(course_id), parameters, seeded_config(0)).state;
         let uma = Uma {
             power,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
         UnreadyRunner::new(
             uma,

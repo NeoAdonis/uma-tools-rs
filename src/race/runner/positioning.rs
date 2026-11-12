@@ -99,7 +99,7 @@ impl Runner {
     }
 
     /// Get the current style used for positioning strategy decisions.
-    pub(crate) fn positioning_style(&self) -> Style {
+    pub(crate) fn positioning_style(&self) -> EffectiveStyle {
         if self.is_rushed() {
             self.rush_state.as_ref().unwrap().style
         } else {
@@ -114,7 +114,7 @@ impl Runner {
         is_single_front_runner: bool,
         game_version: GameVersion,
     ) -> bool {
-        let distance_threshold = if self.positioning_style() == Style::Runaway {
+        let distance_threshold = if self.positioning_style() == EffectiveStyle::Runaway {
             17.5
         } else if game_version >= GameVersion::OnePointFiveAnniversary && is_single_front_runner {
             12.5
@@ -192,11 +192,12 @@ impl Runner {
             }
             PositioningStrategy::FrontOvertake => {
                 // Exit if well ahead of the rest of the same strategy.
-                let distance_threshold = if matches!(self.positioning_style(), Style::Runaway) {
-                    27.5
-                } else {
-                    10.0
-                };
+                let distance_threshold =
+                    if matches!(self.positioning_style(), EffectiveStyle::Runaway) {
+                        27.5
+                    } else {
+                        10.0
+                    };
                 if strategy_lead.is_some_and(|lead| lead > distance_threshold) {
                     self.exit_positioning(elapsed_time);
                 }
@@ -247,9 +248,9 @@ impl Runner {
                 // Determine target distance range based on style and course length.
                 let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;
                 let range = match self.positioning_style() {
-                    Style::Pace => 3.0..(5.0 * course_multiplier),
-                    Style::Late => (6.5 * course_multiplier)..(7.0 * course_multiplier),
-                    Style::End => (7.5 * course_multiplier)..(8.0 * course_multiplier),
+                    EffectiveStyle::Pace => 3.0..(5.0 * course_multiplier),
+                    EffectiveStyle::Late => (6.5 * course_multiplier)..(7.0 * course_multiplier),
+                    EffectiveStyle::End => (7.5 * course_multiplier)..(8.0 * course_multiplier),
                     _ => 0.0..0.0,
                 };
                 if range.contains(&distance_behind) {
@@ -321,7 +322,7 @@ impl Runner {
     /// runner has run the length of a section in it (rounded down), or three
     /// for runaways.
     fn enter_positioning(&mut self, strategy: PositioningStrategy, state: &RaceState) {
-        let sections = if self.positioning_style() == Style::Runaway {
+        let sections = if self.positioning_style() == EffectiveStyle::Runaway {
             3.0
         } else {
             1.0

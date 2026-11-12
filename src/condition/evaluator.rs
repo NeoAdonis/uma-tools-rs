@@ -352,7 +352,9 @@ pub fn variable_value<'a>(
         Spatial(location_var) => scalar(location_value(location_var, &state.course, runner)),
         Activation(act_var) => scalar(activation_value(act_var, state, runner, logic_ctx)),
         RaceParam(param_var) => scalar(race_param_value(param_var, &state.params)),
-        RunningStyle(style_var) => scalar(running_style_value(style_var, state, runner.style)),
+        RunningStyle(style_var) => {
+            scalar(running_style_value(style_var, state, runner.base_style()))
+        }
         Status(status_var) => scalar(status_value(status_var, runner)),
         Blocking(blocking_var) => scalar(blocking_value(blocking_var, runner)),
         Temptation(tempt_var) => scalar(temptation_value(tempt_var, state, runner)),
@@ -730,40 +732,39 @@ fn activation_value(
 }
 
 /// Get running style values.
-fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: Style) -> i32 {
+fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: BaseStyle) -> i32 {
     use RunningStyleVar::*;
-    let my_style = my_style.base_style();
 
     match var {
         // TODO: generate simulation values for one-runner simulations.
         // Running style: 1=Front, 2=Pace, 3=Late, 4=End.
         RunningStyle => my_style as i32,
-        RunningStyleCountNigeOtherself => style_count_otherself(state, Style::Front, my_style),
-        RunningStyleCountOikomiOtherself => style_count_otherself(state, Style::End, my_style),
+        RunningStyleCountNigeOtherself => style_count_otherself(state, BaseStyle::Front, my_style),
+        RunningStyleCountOikomiOtherself => style_count_otherself(state, BaseStyle::End, my_style),
         RunningStyleCountSame => style_count(state, my_style),
         RunningStyleCountSameRate => {
             (style_count(state, my_style) as f64 / state.params.gates as f64 * 100.0).floor() as i32
         }
-        RunningStyleCountSashiOtherself => style_count_otherself(state, Style::Late, my_style),
-        RunningStyleCountSenkoOtherself => style_count_otherself(state, Style::Pace, my_style),
+        RunningStyleCountSashiOtherself => style_count_otherself(state, BaseStyle::Late, my_style),
+        RunningStyleCountSenkoOtherself => style_count_otherself(state, BaseStyle::Pace, my_style),
         RunningStyleEqualPopularityOne => (my_style == state.style_most_popular) as i32,
     }
 }
 
-fn style_count(state: &RaceState, my_style: Style) -> i32 {
+fn style_count(state: &RaceState, my_style: BaseStyle) -> i32 {
     state.runners_by_style[my_style as usize] as i32
 }
 
-fn style_count_otherself(state: &RaceState, style: Style, my_style: Style) -> i32 {
+fn style_count_otherself(state: &RaceState, style: BaseStyle, my_style: BaseStyle) -> i32 {
     state.runners_by_style[style as usize] as i32 - (my_style == style) as i32
 }
 
-fn style_temptation_count(state: &RaceState, style: Style) -> i32 {
+fn style_temptation_count(state: &RaceState, style: BaseStyle) -> i32 {
     let rushed = state.rushed_by_team.iter().map(|team| team[style as usize]);
     rushed.map(i32::from).sum()
 }
 
-fn style_temptation_opponent_count(state: &RaceState, style: Style, runner: &Runner) -> i32 {
+fn style_temptation_opponent_count(state: &RaceState, style: BaseStyle, runner: &Runner) -> i32 {
     let team = &state.rushed_by_team[runner.initial_state.team as usize];
     style_temptation_count(state, style) - team[style as usize] as i32
 }
@@ -930,21 +931,21 @@ fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> 
         TemptationOpponentCountInfront => runner.rush_counter.opponents_ahead as i32,
 
         // Rush counts by running style.
-        RunningStyleTemptationCountNige => style_temptation_count(state, Style::Front),
-        RunningStyleTemptationCountOikomi => style_temptation_count(state, Style::End),
-        RunningStyleTemptationCountSashi => style_temptation_count(state, Style::Late),
-        RunningStyleTemptationCountSenko => style_temptation_count(state, Style::Pace),
+        RunningStyleTemptationCountNige => style_temptation_count(state, BaseStyle::Front),
+        RunningStyleTemptationCountOikomi => style_temptation_count(state, BaseStyle::End),
+        RunningStyleTemptationCountSashi => style_temptation_count(state, BaseStyle::Late),
+        RunningStyleTemptationCountSenko => style_temptation_count(state, BaseStyle::Pace),
         RunningStyleTemptationOpponentCountNige => {
-            style_temptation_opponent_count(state, Style::Front, runner)
+            style_temptation_opponent_count(state, BaseStyle::Front, runner)
         }
         RunningStyleTemptationOpponentCountOikomi => {
-            style_temptation_opponent_count(state, Style::End, runner)
+            style_temptation_opponent_count(state, BaseStyle::End, runner)
         }
         RunningStyleTemptationOpponentCountSashi => {
-            style_temptation_opponent_count(state, Style::Late, runner)
+            style_temptation_opponent_count(state, BaseStyle::Late, runner)
         }
         RunningStyleTemptationOpponentCountSenko => {
-            style_temptation_opponent_count(state, Style::Pace, runner)
+            style_temptation_opponent_count(state, BaseStyle::Pace, runner)
         }
     }
 }

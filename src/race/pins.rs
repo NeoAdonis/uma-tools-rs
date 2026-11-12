@@ -18,7 +18,7 @@ use crate::course::SECTION_COUNT;
 use crate::course::geometry::Slope;
 use crate::race::solver::RunnerId;
 use crate::skill::Skill;
-use crate::uma::Style;
+use crate::uma::EffectiveStyle;
 
 /// Random outcomes of a runner fixed instead of rolled (see the
 /// [module docs](self)). Unset ones are rolled as usual.
@@ -80,7 +80,7 @@ pub struct RushPins {
     /// Whether she rushes at some point, whatever her chance of rushing.
     pub rushes: Option<bool>,
     /// Style she positions as while rushed.
-    pub style: Option<Style>,
+    pub style: Option<EffectiveStyle>,
     /// Section (0-indexed) upon whose entry she starts rushing, from 1 to 23:
     /// runners start in section 0 rather than entering it.
     pub section: Option<u8>,

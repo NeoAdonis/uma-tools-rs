@@ -116,8 +116,8 @@ pub(crate) fn seeded_config(seed: u64) -> Configuration {
 
 /// Baseline runner with the given style and A aptitudes.
 ///
-/// Override single stats with `Uma { wit: 100, ..uma(Style::Late) }`.
-pub(crate) fn uma(style: Style) -> Uma {
+/// Override single stats with `Uma { wit: 100, ..uma(BaseStyle::Late) }`.
+pub(crate) fn uma(style: BaseStyle) -> Uma {
     Uma {
         speed: 1200,
         stamina: 1000,
@@ -155,10 +155,29 @@ pub(crate) fn ready_solver_on(
     solver.ready_runners()
 }
 
-/// Single ready runner with the given style on Sapporo turf 1200m (course
-/// 10101), taken out of [`ready_solver`] with the race state.
-pub(crate) fn ready_runner(style: Style, config: Configuration) -> (Runner, RaceState) {
-    let solver = ready_solver(10101, uma(style), vec![], config);
+/// The Runaway skill, from the game data.
+pub(crate) fn runaway_skill() -> Arc<Skill> {
+    data_skill(202051)
+}
+
+/// Entrant racing with `style`: Runaway is a Front runner with the Runaway
+/// skill.
+pub(crate) fn entrant(style: impl Into<EffectiveStyle>) -> Entrant {
+    match style.into() {
+        EffectiveStyle::Runaway => Entrant::new(uma(BaseStyle::Front), vec![runaway_skill()]),
+        style => Entrant::new(uma(style.base_style()), vec![]),
+    }
+}
+
+/// Single ready runner racing with the given style on Sapporo turf 1200m
+/// (course 10101), taken out of a solver with the race state.
+pub(crate) fn ready_runner(
+    style: impl Into<EffectiveStyle>,
+    config: Configuration,
+) -> (Runner, RaceState) {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), config);
+    solver.add_runner(entrant(style));
+    let solver = solver.ready_runners();
     let runner = solver.runners.into_iter().next().unwrap();
     (runner, solver.state)
 }

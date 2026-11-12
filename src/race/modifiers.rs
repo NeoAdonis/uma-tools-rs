@@ -9,26 +9,26 @@ use rand::{Rng, RngExt};
 use crate::configuration::GameVersion;
 use crate::course::{Phase, ThresholdStat, Track};
 use crate::race::parameters::TrackCondition;
-use crate::uma::{Aptitude, Stats, Style};
+use crate::uma::{Aptitude, EffectiveStyle, Stats};
 
 /// Calculate acceleration strategy phase multiplier based on running style.
-pub(crate) fn acceleration_strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
+pub(crate) fn acceleration_strategy_phase_multiplier(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
-        (Style::Front, Phase::RunUp | Phase::Early) => 1.0,
-        (Style::Pace, Phase::RunUp | Phase::Early) => 0.985,
-        (Style::Late, Phase::RunUp | Phase::Early) => 0.975,
-        (Style::End, Phase::RunUp | Phase::Early) => 0.945,
-        (Style::Runaway, Phase::RunUp | Phase::Early) => 1.17,
+        (EffectiveStyle::Front, Phase::RunUp | Phase::Early) => 1.0,
+        (EffectiveStyle::Pace, Phase::RunUp | Phase::Early) => 0.985,
+        (EffectiveStyle::Late, Phase::RunUp | Phase::Early) => 0.975,
+        (EffectiveStyle::End, Phase::RunUp | Phase::Early) => 0.945,
+        (EffectiveStyle::Runaway, Phase::RunUp | Phase::Early) => 1.17,
         // Mid-race.
-        (Style::Runaway, Phase::Mid) => 0.94,
+        (EffectiveStyle::Runaway, Phase::Mid) => 0.94,
         (_, Phase::Mid) => 1.0, // All styles except Runaway
         // Late-race and Last spurt.
-        (Style::Front, Phase::Late | Phase::Last) => 0.996,
-        (Style::Pace, Phase::Late | Phase::Last) => 0.996,
-        (Style::Late, Phase::Late | Phase::Last) => 1.0,
-        (Style::End, Phase::Late | Phase::Last) => 0.997,
-        (Style::Runaway, Phase::Late | Phase::Last) => 0.956,
+        (EffectiveStyle::Front, Phase::Late | Phase::Last) => 0.996,
+        (EffectiveStyle::Pace, Phase::Late | Phase::Last) => 0.996,
+        (EffectiveStyle::Late, Phase::Late | Phase::Last) => 1.0,
+        (EffectiveStyle::End, Phase::Late | Phase::Last) => 0.997,
+        (EffectiveStyle::Runaway, Phase::Late | Phase::Last) => 0.956,
     }
 }
 
@@ -51,21 +51,21 @@ pub(crate) fn wit_limit_break_multiplier(wit: f64) -> f64 {
 }
 
 /// Phase strategy coefficient for the wit limit break buff (5th Anniv. onward).
-pub(crate) fn wit_limit_break_phase_coefficient(style: Style, phase: Phase) -> f64 {
+pub(crate) fn wit_limit_break_phase_coefficient(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
-        (Style::Front | Style::Runaway, Phase::RunUp | Phase::Early) => 0.26,
-        (Style::Front | Style::Runaway, Phase::Mid) => 0.23,
-        (Style::Front | Style::Runaway, Phase::Late) => 0.19,
-        (Style::Front | Style::Runaway, Phase::Last) => 0.16,
-        (Style::Pace, _) => 0.21,
-        (Style::Late, Phase::RunUp | Phase::Early) => 0.19,
-        (Style::Late, Phase::Mid) => 0.18,
-        (Style::Late, Phase::Late) => 0.23,
-        (Style::Late, Phase::Last) => 0.24,
-        (Style::End, Phase::RunUp | Phase::Early) => 0.15,
-        (Style::End, Phase::Mid) => 0.17,
-        (Style::End, Phase::Late) => 0.25,
-        (Style::End, Phase::Last) => 0.27,
+        (EffectiveStyle::Front | EffectiveStyle::Runaway, Phase::RunUp | Phase::Early) => 0.26,
+        (EffectiveStyle::Front | EffectiveStyle::Runaway, Phase::Mid) => 0.23,
+        (EffectiveStyle::Front | EffectiveStyle::Runaway, Phase::Late) => 0.19,
+        (EffectiveStyle::Front | EffectiveStyle::Runaway, Phase::Last) => 0.16,
+        (EffectiveStyle::Pace, _) => 0.21,
+        (EffectiveStyle::Late, Phase::RunUp | Phase::Early) => 0.19,
+        (EffectiveStyle::Late, Phase::Mid) => 0.18,
+        (EffectiveStyle::Late, Phase::Late) => 0.23,
+        (EffectiveStyle::Late, Phase::Last) => 0.24,
+        (EffectiveStyle::End, Phase::RunUp | Phase::Early) => 0.15,
+        (EffectiveStyle::End, Phase::Mid) => 0.17,
+        (EffectiveStyle::End, Phase::Late) => 0.25,
+        (EffectiveStyle::End, Phase::Last) => 0.27,
     }
 }
 
@@ -134,26 +134,26 @@ pub(crate) fn acceleration_distance_proficiency_multiplier(distance_aptitude: Ap
 }
 
 /// Calculate strategy phase multiplier based on running style.
-pub(crate) fn strategy_phase_multiplier(style: Style, phase: Phase) -> f64 {
+pub(crate) fn strategy_phase_multiplier(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
-        (Style::Front, Phase::RunUp | Phase::Early) => 1.0,
-        (Style::Pace, Phase::RunUp | Phase::Early) => 0.978,
-        (Style::Late, Phase::RunUp | Phase::Early) => 0.938,
-        (Style::End, Phase::RunUp | Phase::Early) => 0.931,
-        (Style::Runaway, Phase::RunUp | Phase::Early) => 1.063,
+        (EffectiveStyle::Front, Phase::RunUp | Phase::Early) => 1.0,
+        (EffectiveStyle::Pace, Phase::RunUp | Phase::Early) => 0.978,
+        (EffectiveStyle::Late, Phase::RunUp | Phase::Early) => 0.938,
+        (EffectiveStyle::End, Phase::RunUp | Phase::Early) => 0.931,
+        (EffectiveStyle::Runaway, Phase::RunUp | Phase::Early) => 1.063,
         // Mid-race.
-        (Style::Front, Phase::Mid) => 0.98,
-        (Style::Pace, Phase::Mid) => 0.991,
-        (Style::Late, Phase::Mid) => 0.998,
-        (Style::End, Phase::Mid) => 1.0,
-        (Style::Runaway, Phase::Mid) => 0.962,
+        (EffectiveStyle::Front, Phase::Mid) => 0.98,
+        (EffectiveStyle::Pace, Phase::Mid) => 0.991,
+        (EffectiveStyle::Late, Phase::Mid) => 0.998,
+        (EffectiveStyle::End, Phase::Mid) => 1.0,
+        (EffectiveStyle::Runaway, Phase::Mid) => 0.962,
         // Late-race and Last spurt.
-        (Style::Front, Phase::Late | Phase::Last) => 0.962,
-        (Style::Pace, Phase::Late | Phase::Last) => 0.975,
-        (Style::Late, Phase::Late | Phase::Last) => 0.994,
-        (Style::End, Phase::Late | Phase::Last) => 1.0,
-        (Style::Runaway, Phase::Late | Phase::Last) => 0.95,
+        (EffectiveStyle::Front, Phase::Late | Phase::Last) => 0.962,
+        (EffectiveStyle::Pace, Phase::Late | Phase::Last) => 0.975,
+        (EffectiveStyle::Late, Phase::Late | Phase::Last) => 0.994,
+        (EffectiveStyle::End, Phase::Late | Phase::Last) => 1.0,
+        (EffectiveStyle::Runaway, Phase::Late | Phase::Last) => 0.95,
     }
 }
 
@@ -174,7 +174,7 @@ pub(crate) fn distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f6
 /// Calculate base target speed based on various factors.
 pub(crate) fn base_target_speed(
     base_speed: f64,
-    style: Style,
+    style: EffectiveStyle,
     phase: Phase,
     speed_stat: f64,
     distance_aptitude: Aptitude,

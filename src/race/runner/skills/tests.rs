@@ -6,7 +6,7 @@ use crate::skill::{Skill, SkillRarity};
 use crate::test_utils::{
     alternative, assert_close, effect, ready_solver, seeded_config, synthetic_skill, uma,
 };
-use crate::uma::{Style, Uma};
+use crate::uma::{BaseStyle, Uma};
 use std::sync::Arc;
 
 fn timed(skill_type: SkillType, value: f64) -> ActiveTimedEffect {
@@ -63,7 +63,7 @@ fn high_wit_race(rarity: SkillRarity, skill_type: SkillType) -> RaceSolver<Runne
     });
     let uma = Uma {
         wit: 1500,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     ready_solver(10101, uma, vec![skill], seeded_config(42))
 }

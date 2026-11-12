@@ -6,7 +6,7 @@
 
 use crate::configuration::GameVersion;
 use crate::course::{Course, DistanceType};
-use crate::uma::Style;
+use crate::uma::{BaseStyle, EffectiveStyle};
 
 /// Charge power that must be exceeded to be eligible.
 pub(crate) const POWER_THRESHOLD: f64 = 1200.0;
@@ -110,7 +110,7 @@ impl ChargeUp {
     /// `activity` is the [`activity_coefficient`] of the runner.
     pub(crate) fn release(
         &mut self,
-        style: Style,
+        style: EffectiveStyle,
         course: &Course,
         activity: f64,
         elapsed_time: f64,
@@ -163,7 +163,7 @@ pub(crate) fn charge_power(base_power: f64, raw_power: u16, skill_bonus: i32) ->
 
 /// Conservation rate per second, depending on whether the runner is in pace
 /// down mode and her style.
-pub(crate) fn conservation_rate(pace_down: bool, style: Style) -> f64 {
+pub(crate) fn conservation_rate(pace_down: bool, style: EffectiveStyle) -> f64 {
     position_keep_coefficient(pace_down) * style_coefficient(style)
 }
 
@@ -174,30 +174,30 @@ fn position_keep_coefficient(pace_down: bool) -> f64 {
 
 /// Style coefficient of the conservation rate.
 // ? Unknown for Runaway; assumed to be the same as Front.
-fn style_coefficient(style: Style) -> f64 {
+fn style_coefficient(style: EffectiveStyle) -> f64 {
     match style.base_style() {
-        Style::Pace => 0.75,
-        Style::End => 0.7,
+        BaseStyle::Pace => 0.75,
+        BaseStyle::End => 0.7,
         _ => 1.0,
     }
 }
 
 /// Strategy-distance coefficient of the release acceleration.
 // ? Unknown for Runaway; assumed to be the same as Front.
-fn strategy_distance_coefficient(style: Style, distance_type: DistanceType) -> f64 {
+fn strategy_distance_coefficient(style: EffectiveStyle, distance_type: DistanceType) -> f64 {
     use DistanceType::*;
     match (style.base_style(), distance_type) {
-        (Style::Pace, Short) => 0.7,
-        (Style::Pace, Mile) => 0.8,
-        (Style::Pace, Medium | Long) => 0.9,
-        (Style::Late, Short) => 0.75,
-        (Style::Late, Mile) => 0.7,
-        (Style::Late, Medium) => 0.875,
-        (Style::Late, Long) => 1.0,
-        (Style::End, Short) => 0.7,
-        (Style::End, Mile) => 0.75,
-        (Style::End, Medium) => 0.86,
-        (Style::End, Long) => 0.9,
+        (BaseStyle::Pace, Short) => 0.7,
+        (BaseStyle::Pace, Mile) => 0.8,
+        (BaseStyle::Pace, Medium | Long) => 0.9,
+        (BaseStyle::Late, Short) => 0.75,
+        (BaseStyle::Late, Mile) => 0.7,
+        (BaseStyle::Late, Medium) => 0.875,
+        (BaseStyle::Late, Long) => 1.0,
+        (BaseStyle::End, Short) => 0.7,
+        (BaseStyle::End, Mile) => 0.75,
+        (BaseStyle::End, Medium) => 0.86,
+        (BaseStyle::End, Long) => 0.9,
         _ => 1.0,
     }
 }
@@ -228,7 +228,7 @@ pub(crate) fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
 /// Release acceleration bonus in m/s².
 pub(crate) fn release_acceleration(
     power: f64,
-    style: Style,
+    style: EffectiveStyle,
     distance_type: DistanceType,
     activity: f64,
 ) -> f64 {

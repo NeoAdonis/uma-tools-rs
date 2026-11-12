@@ -27,7 +27,12 @@ fn speed_skill(id: i32, condition: &str, precondition: &str) -> Arc<Skill> {
 
 /// Ready race with a single runner with the given skills.
 fn ready_runner(skills: Vec<Arc<Skill>>) -> RaceSolver<Runner> {
-    ready_solver(RUNTIME_COURSE, uma(Style::Front), skills, seeded_config(42))
+    ready_solver(
+        RUNTIME_COURSE,
+        uma(BaseStyle::Front),
+        skills,
+        seeded_config(42),
+    )
 }
 
 /// Run a race with a single runner and return where each skill activated.

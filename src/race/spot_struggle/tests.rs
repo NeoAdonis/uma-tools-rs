@@ -59,10 +59,10 @@ fn test_exit_proximity_in_course_widths() {
 
 #[test]
 fn test_hp_multiplier() {
-    assert_eq!(hp_multiplier(Style::Runaway, false), 3.5);
-    assert_eq!(hp_multiplier(Style::Runaway, true), 7.7);
-    assert_eq!(hp_multiplier(Style::Front, false), 1.4);
-    assert_eq!(hp_multiplier(Style::Front, true), 3.6);
+    assert_eq!(hp_multiplier(EffectiveStyle::Runaway, false), 3.5);
+    assert_eq!(hp_multiplier(EffectiveStyle::Runaway, true), 7.7);
+    assert_eq!(hp_multiplier(EffectiveStyle::Front, false), 1.4);
+    assert_eq!(hp_multiplier(EffectiveStyle::Front, true), 3.6);
 }
 
 #[test]

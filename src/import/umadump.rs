@@ -22,13 +22,13 @@
 //! ```
 //! use uma_tools::course::{DistanceType, Track};
 //! use uma_tools::import::umadump::UmaDumpData;
-//! use uma_tools::{Aptitude, Style};
+//! use uma_tools::{Aptitude, BaseStyle};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! let path = "tests/data/umadump_uma.json";
 //! let data = UmaDumpData::from_json_file(path)?;
 //! let uma_data = data.to_uma_data(DistanceType::Mile, Track::Turf);
-//! assert_eq!(uma_data.uma.style, Style::Late);
+//! assert_eq!(uma_data.uma.style, BaseStyle::Late);
 //! assert_eq!(uma_data.uma.distance_aptitude, Aptitude::A);
 //! assert_eq!(uma_data.uma.character_id, Some(101901));
 //! # Ok(())
@@ -39,7 +39,7 @@ use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;
 
 use crate::course::{DistanceType, Track};
-use crate::uma::{Aptitude, Mood, Style, Uma, UmaData, UmaSkill, deserialize_stat};
+use crate::uma::{Aptitude, BaseStyle, Mood, Uma, UmaData, UmaSkill, deserialize_stat};
 
 /// A trained Uma, or one in training, as exported by umadump.
 ///
@@ -61,7 +61,7 @@ pub struct UmaDumpData {
     fans: u32,
     /// `race_running_style` in careers.
     #[serde(alias = "race_running_style", deserialize_with = "deserialize_style")]
-    running_style: Style,
+    running_style: BaseStyle,
     /// Only in careers.
     #[serde(
         rename = "motivation",
@@ -126,13 +126,15 @@ pub struct UmaDumpData {
 /// Deserialize a running style from its game value, from 1 (Front) to 4
 /// (End).
 ///
-/// Runaway isn't a running style in the game data, but the effect of a skill.
-fn deserialize_style<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Style, D::Error> {
+/// Runaway isn't a running style in the game data, but the effect of the
+/// Runaway skill on a Front runner, so it's imported as Front with the skill
+/// in the skill list, if she has it.
+fn deserialize_style<'de, D: Deserializer<'de>>(deserializer: D) -> Result<BaseStyle, D::Error> {
     match u8::deserialize(deserializer)? {
-        1 => Ok(Style::Front),
-        2 => Ok(Style::Pace),
-        3 => Ok(Style::Late),
-        4 => Ok(Style::End),
+        1 => Ok(BaseStyle::Front),
+        2 => Ok(BaseStyle::Pace),
+        3 => Ok(BaseStyle::Late),
+        4 => Ok(BaseStyle::End),
         value => Err(D::Error::custom(format!(
             "invalid running style {value}: expected 1 to 4"
         ))),
@@ -290,7 +292,7 @@ impl UmaDumpData {
     /// ```
     /// use uma_tools::course::{DistanceType, Track};
     /// use uma_tools::import::umadump::UmaDumpData;
-    /// use uma_tools::{Mood, Style};
+    /// use uma_tools::{Mood, BaseStyle};
     ///
     /// # fn main() -> Result<(), serde_json::Error> {
     /// let data = UmaDumpData::from_career_json(
@@ -309,7 +311,7 @@ impl UmaDumpData {
     ///     } } }"#,
     /// )?;
     /// let uma_data = data.to_uma_data(DistanceType::Mile, Track::Dirt);
-    /// assert_eq!(uma_data.uma.style, Style::Front);
+    /// assert_eq!(uma_data.uma.style, BaseStyle::Front);
     /// assert_eq!(uma_data.mood, Some(Mood::Great));
     /// # Ok(())
     /// # }
@@ -340,10 +342,10 @@ impl UmaDumpData {
     /// `track`, and the style aptitude the one for the Uma's running style.
     pub fn to_uma_data(&self, distance: DistanceType, track: Track) -> UmaData {
         let style_aptitude = match self.running_style {
-            Style::Runaway | Style::Front => self.front_aptitude,
-            Style::Pace => self.pace_aptitude,
-            Style::Late => self.late_aptitude,
-            Style::End => self.end_aptitude,
+            BaseStyle::Front => self.front_aptitude,
+            BaseStyle::Pace => self.pace_aptitude,
+            BaseStyle::Late => self.late_aptitude,
+            BaseStyle::End => self.end_aptitude,
         };
         let distance_aptitude = match distance {
             DistanceType::Short => self.short_aptitude,
@@ -415,7 +417,7 @@ mod tests {
                 power: 1003,
                 guts: 604,
                 wit: 1105,
-                style: Style::Front,
+                style: BaseStyle::Front,
                 distance_aptitude: Aptitude::D,
                 track_aptitude: Aptitude::S,
                 style_aptitude: Aptitude::S,
@@ -457,10 +459,10 @@ mod tests {
     #[test]
     fn test_style_aptitude_follows_running_style() {
         let cases = [
-            (1, Style::Front, Aptitude::S),
-            (2, Style::Pace, Aptitude::A),
-            (3, Style::Late, Aptitude::B),
-            (4, Style::End, Aptitude::C),
+            (1, BaseStyle::Front, Aptitude::S),
+            (2, BaseStyle::Pace, Aptitude::A),
+            (3, BaseStyle::Late, Aptitude::B),
+            (4, BaseStyle::End, Aptitude::C),
         ];
         for (value, style, aptitude) in cases {
             let json = UMA_JSON.replace(
@@ -524,7 +526,7 @@ mod tests {
             (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
             (1305, 495, 1143, 688, 898)
         );
-        assert_eq!(uma.style, Style::Late);
+        assert_eq!(uma.style, BaseStyle::Late);
         assert_eq!(
             (
                 uma.distance_aptitude,
@@ -589,7 +591,7 @@ mod tests {
             (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
             (1168, 682, 1050, 567, 679)
         );
-        assert_eq!(uma.style, Style::Front);
+        assert_eq!(uma.style, BaseStyle::Front);
         assert_eq!(
             (
                 uma.distance_aptitude,

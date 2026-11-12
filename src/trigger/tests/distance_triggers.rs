@@ -15,7 +15,7 @@ const COURSE_DISTANCE: f64 = 2000.0;
 fn run_race(condition: &str, rng_seed: u64) -> Runner {
     let uma = Uma {
         stamina: 1200,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let skills = vec![negligible_skill(condition)];
     let mut solver = ready_solver(10104, uma, skills, seeded_config(rng_seed));

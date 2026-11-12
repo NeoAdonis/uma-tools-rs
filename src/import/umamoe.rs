@@ -20,6 +20,10 @@
 //! [`UmaMoeBuild::entrants`] for the course of the race). Their fan count is
 //! optional.
 //!
+//! uma.moe allows the Runaway style, which the game doesn't have: it's the
+//! effect of the Runaway skill on a Front runner. So runners with that style
+//! are imported as Front runners with the skill, added if missing.
+//!
 //! # Examples
 //!
 //! Race the field of a build code, with its teams and gates:
@@ -64,7 +68,7 @@ use crate::configuration::{Assignment, Configuration, DefaultGate};
 use crate::course::{Course, DistanceType, Track};
 use crate::race::parameters::*;
 use crate::race::solver::{Entrant, MAX_TEAM_SIZE};
-use crate::skill::SkillData;
+use crate::skill::{DEFAULT_SKILL_LEVEL, SkillData};
 use crate::uma::*;
 
 /// Only supported version of the build code format.
@@ -96,7 +100,7 @@ pub struct UmaMoeRunner {
     power: u16,
     guts: u16,
     wit: u16,
-    style: Style,
+    style: BaseStyle,
     /// Short, Mile, Medium and Long aptitudes.
     distance_aptitudes: [Aptitude; 4],
     /// Front, Pace, Late and End aptitudes.
@@ -185,7 +189,8 @@ struct RawTrainee {
     guts: u16,
     #[serde(deserialize_with = "deserialize_string_stat")]
     wisdom: u16,
-    running_style: Style,
+    #[serde(deserialize_with = "deserialize_style")]
+    running_style: (BaseStyle, bool),
     #[serde(deserialize_with = "deserialize_motivation")]
     motivation: Mood,
     distance_aptitudes: [Aptitude; 4],
@@ -217,7 +222,8 @@ struct RawUma {
     guts: u16,
     #[serde(deserialize_with = "deserialize_stat")]
     wisdom: u16,
-    strategy: Style,
+    #[serde(deserialize_with = "deserialize_style")]
+    strategy: (BaseStyle, bool),
     /// Distance, style and track aptitudes, in the same order as the race
     /// field's.
     aptitudes: [Aptitude; 10],
@@ -226,6 +232,34 @@ struct RawUma {
     #[serde_as(as = "TryFromInto<i8>")]
     mood: Mood,
     fans: Option<u32>,
+}
+
+/// ID of the Runaway (大逃げ) skill, which makes a Front runner a Runaway.
+const RUNAWAY_SKILL_ID: i32 = 202051;
+
+/// Deserialize a running style, which uma.moe also allows to be Runaway
+/// (`Oonige`). Returns the basic style (Front for Runaway) and whether it was
+/// Runaway.
+fn deserialize_style<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<(BaseStyle, bool), D::Error> {
+    let name = String::deserialize(deserializer)?;
+    if name == "Oonige" {
+        return Ok((BaseStyle::Front, true));
+    }
+    let style = BaseStyle::deserialize(name.into_deserializer())?;
+    Ok((style, false))
+}
+
+/// Add the Runaway skill to `skills` if `runaway` and it's missing, as
+/// Runaway is the effect of that skill on a Front runner.
+fn add_runaway_skill(skills: &mut Vec<UmaSkill>, runaway: bool) {
+    if runaway && !skills.iter().any(|skill| skill.id == RUNAWAY_SKILL_ID) {
+        skills.push(UmaSkill {
+            id: RUNAWAY_SKILL_ID,
+            level: DEFAULT_SKILL_LEVEL,
+        });
+    }
 }
 
 /// Deserialize a stat from a string, as [`deserialize_stat`] does from a
@@ -251,6 +285,16 @@ fn deserialize_motivation<'de, D: Deserializer<'de>>(deserializer: D) -> Result<
 impl From<RawFieldUma> for UmaMoeRunner {
     fn from(raw: RawFieldUma) -> Self {
         let trainee = raw.trainee;
+        let (style, runaway) = trainee.running_style;
+        let mut skills: Vec<_> = raw
+            .skills
+            .into_iter()
+            .map(|skill| UmaSkill {
+                id: skill.skill_id,
+                level: skill.level,
+            })
+            .collect();
+        add_runaway_skill(&mut skills, runaway);
         UmaMoeRunner {
             character_id: raw.card_id,
             speed: trainee.speed,
@@ -258,20 +302,13 @@ impl From<RawFieldUma> for UmaMoeRunner {
             power: trainee.power,
             guts: trainee.guts,
             wit: trainee.wisdom,
-            style: trainee.running_style,
+            style,
             distance_aptitudes: trainee.distance_aptitudes,
             style_aptitudes: trainee.style_aptitudes,
             track_aptitudes: trainee.ground_aptitudes,
             mood: trainee.motivation,
             fan_count: raw.fan_count,
-            skills: raw
-                .skills
-                .into_iter()
-                .map(|skill| UmaSkill {
-                    id: skill.skill_id,
-                    level: skill.level,
-                })
-                .collect(),
+            skills,
             team: raw.team_id,
             gate: raw.frame_order,
         }
@@ -292,7 +329,7 @@ impl TryFrom<RawUma> for UmaMoeRunner {
                     .map_err(|_| format!("invalid outfit ID {id:?}: expected a number"))?,
             ),
         };
-        let skills = raw
+        let mut skills = raw
             .skills
             .iter()
             .map(|id| {
@@ -303,7 +340,9 @@ impl TryFrom<RawUma> for UmaMoeRunner {
                 let level = if unique { raw.unique_lv } else { 1 };
                 Ok(UmaSkill { id, level })
             })
-            .collect::<Result<_, String>>()?;
+            .collect::<Result<Vec<_>, String>>()?;
+        let (style, runaway) = raw.strategy;
+        add_runaway_skill(&mut skills, runaway);
         let [a0, a1, a2, a3, a4, a5, a6, a7, a8, a9] = raw.aptitudes;
         Ok(UmaMoeRunner {
             character_id,
@@ -312,7 +351,7 @@ impl TryFrom<RawUma> for UmaMoeRunner {
             power: raw.power,
             guts: raw.guts,
             wit: raw.wisdom,
-            style: raw.strategy,
+            style,
             distance_aptitudes: [a0, a1, a2, a3],
             style_aptitudes: [a4, a5, a6, a7],
             track_aptitudes: [a8, a9],
@@ -580,14 +619,13 @@ impl UmaMoeRunner {
     /// track surface.
     ///
     /// The distance and track aptitudes are the ones for `distance` and
-    /// `track`, and the style aptitude the one for the runner's style (Front
-    /// for Runaway).
+    /// `track`, and the style aptitude the one for the runner's style.
     pub fn to_uma_data(&self, distance: DistanceType, track: Track) -> UmaData {
         let style_index = match self.style {
-            Style::Runaway | Style::Front => 0,
-            Style::Pace => 1,
-            Style::Late => 2,
-            Style::End => 3,
+            BaseStyle::Front => 0,
+            BaseStyle::Pace => 1,
+            BaseStyle::Late => 2,
+            BaseStyle::End => 3,
         };
         let distance_index = match distance {
             DistanceType::Short => 0,
@@ -711,7 +749,7 @@ mod tests {
             (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
             (664, 544, 473, 451, 1189)
         );
-        assert_eq!(uma.style, Style::Runaway);
+        assert_eq!(uma.style, BaseStyle::Front);
         assert_eq!(
             (
                 uma.distance_aptitude,
@@ -780,7 +818,7 @@ mod tests {
                 power: 1003,
                 guts: 604,
                 wit: 1105,
-                style: Style::Front,
+                style: BaseStyle::Front,
                 distance_aptitude: Aptitude::S,
                 track_aptitude: Aptitude::A,
                 style_aptitude: Aptitude::D,
@@ -825,13 +863,42 @@ mod tests {
     }
 
     #[test]
+    fn test_runaway_style_adds_the_runaway_skill_once() {
+        // (skill replacing the second one of the first runner, if any, runner
+        // style, resulting skills of the first runner).
+        let cases = [
+            (None, "Oonige", vec![(100011, 4), (200012, 1), (202051, 1)]),
+            (Some((202051, 3)), "Oonige", vec![(100011, 4), (202051, 3)]),
+            (None, "Nige", vec![(100011, 4), (200012, 1)]),
+        ];
+        for (replacement, style, expected) in cases {
+            let mut json = field_json("").replacen(
+                r#""runningStyle": "Nige""#,
+                &format!(r#""runningStyle": "{style}""#),
+                1,
+            );
+            if let Some((id, level)) = replacement {
+                json = json.replacen(
+                    r#""skillId": 200012, "level": 1"#,
+                    &format!(r#""skillId": {id}, "level": {level}"#),
+                    1,
+                );
+            }
+            let build = UmaMoeBuild::from_json(&json).unwrap();
+            let uma_data = build.runners()[0].to_uma_data(DistanceType::Mile, Track::Turf);
+            let skills: Vec<_> = uma_data.skills.iter().map(|s| (s.id, s.level)).collect();
+            assert_eq!(skills, expected, "{style} {replacement:?}");
+        }
+    }
+
+    #[test]
     fn test_style_aptitude_follows_running_style() {
         let cases = [
-            ("Oonige", Style::Runaway, Aptitude::D),
-            ("Nige", Style::Front, Aptitude::D),
-            ("Senko", Style::Pace, Aptitude::E),
-            ("Sashi", Style::Late, Aptitude::F),
-            ("Oikomi", Style::End, Aptitude::G),
+            ("Oonige", BaseStyle::Front, Aptitude::D),
+            ("Nige", BaseStyle::Front, Aptitude::D),
+            ("Senko", BaseStyle::Pace, Aptitude::E),
+            ("Sashi", BaseStyle::Late, Aptitude::F),
+            ("Oikomi", BaseStyle::End, Aptitude::G),
         ];
         for (name, style, aptitude) in cases {
             let json = field_json("").replacen(
@@ -956,7 +1023,7 @@ mod tests {
         let uma = uma_data.uma;
         assert_eq!(uma.character_id, Some(100201));
         assert_eq!(uma.fan_count, Some(654321));
-        assert_eq!(uma.style, Style::Runaway);
+        assert_eq!(uma.style, BaseStyle::Front);
         assert_eq!(
             (
                 uma.distance_aptitude,
@@ -968,7 +1035,8 @@ mod tests {
         assert_eq!(uma_data.mood, Some(Mood::Bad));
         // Only the unique skill gets the unique level, not inherited ones.
         let levels: Vec<_> = uma_data.skills.iter().map(|s| (s.id, s.level)).collect();
-        assert_eq!(levels, [(100021, 5), (200132, 1), (910071, 1)]);
+        // Runaway is a Front runner with the Runaway skill.
+        assert_eq!(levels, [(100021, 5), (200132, 1), (910071, 1), (202051, 1)]);
 
         let uma_data = runners[1].to_uma_data(DistanceType::Long, Track::Turf);
         assert_eq!(uma_data.uma.character_id, None);

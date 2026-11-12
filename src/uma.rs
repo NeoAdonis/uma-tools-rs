@@ -10,7 +10,7 @@
 //! half as fast past that point:
 //!
 //! ```
-//! use uma_tools::{Aptitude, Mood, Style, Uma};
+//! use uma_tools::{Aptitude, Mood, BaseStyle, Uma};
 //!
 //! let uma = Uma {
 //!     speed: 1000,
@@ -18,7 +18,7 @@
 //!     power: 1000,
 //!     guts: 600,
 //!     wit: 1200,
-//!     style: Style::Pace,
+//!     style: BaseStyle::Pace,
 //!     distance_aptitude: Aptitude::A,
 //!     track_aptitude: Aptitude::A,
 //!     style_aptitude: Aptitude::A,
@@ -43,38 +43,28 @@ use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
-/// Running style or strategy of an Uma. The values represent in order, from
-/// most to least aggressive:
+/// Running style or strategy of an Uma, as the game stores it.
 ///
-/// - Runaway (大逃げ): A front runner that tries to outpace others from the start.
-/// - Front runner (逃げ): Aims to lead the race.
-/// - Pace chaser (先行): Stays near the front, behind the front runners (if any).
-/// - Late surger (差し): Stays in the middle, behind front runners and pace
-///   chasers, and makes a late surge.
-/// - End closer (追込): Stays at the back and sprints towards the end.
+/// The values are the four basic styles, from most to least aggressive:
 ///
-/// ## Notes on Runaway vs Front
+/// - Front runner (逃げ, nige): Aims to lead the race.
+/// - Pace chaser (先行, senkō): Stays near the front, behind the front runners
+///   (if any).
+/// - Late surger (差し, sashi): Stays in the middle, behind front runners and
+///   pace chasers, and makes a late surge.
+/// - End closer (追込, oikomi): Stays at the back and sprints towards the end.
 ///
-/// Runaway is a variant of Front running with more aggressive pacing. In many
-/// contexts, they share the same behavior (e.g., positioning strategy, rush
-/// calculations), but in specific situations (e.g., HP multipliers, phase
-/// modifiers, spot struggle), they have distinct values.
-///
-/// When required to treat both Front and Runaway the same way,
-/// [`Style::is_front_like`] can be used. Otherwise, explicit matching on
-/// `Style` should be done to handle their distinct behaviors.
+/// Runaway (大逃げ, ōnige) isn't a style, but the effect of the Runaway skill on
+/// a Front runner. So it's only represented by [`EffectiveStyle`], which is
+/// the style a runner races with, derived from her base style and her skills.
 ///
 /// ## Deserialization
 ///
-/// Styles are deserialized from their romanized Japanese names: `Oonige`,
-/// `Nige`, `Senkou` (or `Senko`), `Sasi` (or `Sashi`) and `Oikomi`.
+/// Styles are deserialized from their romanized Japanese names: `Nige`,
+/// `Senkou` (or `Senko`), `Sasi` (or `Sashi`) and `Oikomi`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "PascalCase")]
-pub enum Style {
-    /// 大逃げ, ōnige - A front runner that tries to outpace others from the start.
-    /// In many contexts, it is treated similarly to [`Style::Front`].
-    #[serde(rename = "Oonige")]
-    Runaway = 0,
+pub enum BaseStyle {
     /// 逃げ, nige - Aims to lead the race.
     #[serde(rename = "Nige")]
     Front = 1,
@@ -90,44 +80,85 @@ pub enum Style {
     End = 4,
 }
 
-impl Style {
-    /// Number of running styles. Styles can be used as array indices
-    /// (`style as usize`).
+impl BaseStyle {
+    /// Length of arrays indexed by style (`style as usize`). The game numbers
+    /// styles from 1, so index 0 is unused.
     pub const COUNT: usize = 5;
+}
 
-    /// Returns `true` if `self` is a front-running style ([`Style::Front`] or
-    /// [`Style::Runaway`]).
+/// The running style a runner races with: her [`BaseStyle`], or Runaway if she
+/// is a Front runner with the Runaway skill.
+///
+/// Runaway is a variant of Front running with more aggressive pacing. In many
+/// contexts, they share the same behavior (e.g., positioning strategy, rush
+/// calculations), but in specific situations (e.g., HP multipliers, phase
+/// modifiers, spot struggle), they have distinct values.
+///
+/// When required to treat both Front and Runaway the same way,
+/// [`EffectiveStyle::is_front_like`] can be used. Otherwise, explicit matching
+/// should be done to handle their distinct behaviors.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EffectiveStyle {
+    /// 大逃げ, ōnige - A front runner that tries to outpace others from the start.
+    /// In many contexts, it is treated similarly to [`EffectiveStyle::Front`].
+    Runaway = 0,
+    /// See [`BaseStyle::Front`].
+    Front = 1,
+    /// See [`BaseStyle::Pace`].
+    Pace = 2,
+    /// See [`BaseStyle::Late`].
+    Late = 3,
+    /// See [`BaseStyle::End`].
+    End = 4,
+}
+
+impl From<BaseStyle> for EffectiveStyle {
+    fn from(style: BaseStyle) -> Self {
+        match style {
+            BaseStyle::Front => EffectiveStyle::Front,
+            BaseStyle::Pace => EffectiveStyle::Pace,
+            BaseStyle::Late => EffectiveStyle::Late,
+            BaseStyle::End => EffectiveStyle::End,
+        }
+    }
+}
+
+impl EffectiveStyle {
+    /// Returns `true` if `self` is a front-running style
+    /// ([`EffectiveStyle::Front`] or [`EffectiveStyle::Runaway`]).
     ///
     /// Used when treating both Front and Runaway the same way is desired, (e.g., in
     /// positioning strategy or rush detection).
     ///
     /// ```rust
-    /// use uma_tools::uma::Style;
+    /// use uma_tools::uma::EffectiveStyle;
     ///
-    /// assert!(Style::Front.is_front_like());
-    /// assert!(Style::Runaway.is_front_like());
-    /// assert!(!Style::Pace.is_front_like());
+    /// assert!(EffectiveStyle::Front.is_front_like());
+    /// assert!(EffectiveStyle::Runaway.is_front_like());
+    /// assert!(!EffectiveStyle::Pace.is_front_like());
     /// ```
     pub fn is_front_like(self) -> bool {
-        matches!(self, Style::Front | Style::Runaway)
+        matches!(self, EffectiveStyle::Front | EffectiveStyle::Runaway)
     }
 
-    /// Returns the base style, treating [`Style::Runaway`] as a variant of
-    /// [`Style::Front`] while leaving all other styles unchanged.
+    /// Returns the [`BaseStyle`] this style is a variant of, treating
+    /// [`EffectiveStyle::Runaway`] as [`BaseStyle::Front`].
     ///
     /// Useful to group styles for condition evaluation or statistical purposes.
     ///
     /// ```rust
-    /// use uma_tools::uma::Style;
+    /// use uma_tools::uma::{EffectiveStyle, BaseStyle};
     ///
-    /// assert_eq!(Style::Runaway.base_style(), Style::Front);
-    /// assert_eq!(Style::Front.base_style(), Style::Front);
-    /// assert_eq!(Style::Pace.base_style(), Style::Pace);
+    /// assert_eq!(EffectiveStyle::Runaway.base_style(), BaseStyle::Front);
+    /// assert_eq!(EffectiveStyle::Front.base_style(), BaseStyle::Front);
+    /// assert_eq!(EffectiveStyle::Pace.base_style(), BaseStyle::Pace);
     /// ```
-    pub fn base_style(self) -> Style {
+    pub fn base_style(self) -> BaseStyle {
         match self {
-            Style::Runaway => Style::Front,
-            _ => self,
+            EffectiveStyle::Runaway | EffectiveStyle::Front => BaseStyle::Front,
+            EffectiveStyle::Pace => BaseStyle::Pace,
+            EffectiveStyle::Late => BaseStyle::Late,
+            EffectiveStyle::End => BaseStyle::End,
         }
     }
 }
@@ -193,8 +224,10 @@ pub struct Uma {
     #[serde(rename = "wisdom", deserialize_with = "deserialize_stat")]
     pub wit: u16,
     /// Running style or strategy. Affects mainly positioning strategy.
+    ///
+    /// Runaway isn't a style: it comes from the Runaway skill on a Front runner.
     #[serde(rename = "strategy")]
-    pub style: Style,
+    pub style: BaseStyle,
     /// Aptitude for the current distance. Affects speed performance depending on
     /// the course distance.
     pub distance_aptitude: Aptitude,
@@ -538,7 +571,7 @@ impl Uma {
     ///
     /// ```
     /// use uma_tools::course::ThresholdStat;
-    /// use uma_tools::{Aptitude, Mood, Style, Uma};
+    /// use uma_tools::{Aptitude, Mood, BaseStyle, Uma};
     ///
     /// let raw = Uma {
     ///     speed: 1601,
@@ -546,7 +579,7 @@ impl Uma {
     ///     power: 1000,
     ///     guts: 600,
     ///     wit: 1200,
-    ///     style: Style::Pace,
+    ///     style: BaseStyle::Pace,
     ///     distance_aptitude: Aptitude::A,
     ///     track_aptitude: Aptitude::A,
     ///     style_aptitude: Aptitude::A,
@@ -598,7 +631,7 @@ mod tests {
             power: 1200,
             guts: 701,
             wit: 1300,
-            ..crate::test_utils::uma(Style::End)
+            ..crate::test_utils::uma(BaseStyle::End)
         };
         // The excess above 1200 is halved, then every stat is multiplied, keeping
         // the fraction.
@@ -640,7 +673,7 @@ mod tests {
                 power: 1203,
                 guts: 704,
                 wit: 1205,
-                style: Style::Pace,
+                style: BaseStyle::Pace,
                 distance_aptitude: Aptitude::S,
                 track_aptitude: Aptitude::B,
                 style_aptitude: Aptitude::C,
@@ -665,11 +698,11 @@ mod tests {
         // Also the ID of a skill, with another name.
         let card = Uma {
             character_id: Some(100101),
-            ..uma(Style::Late)
+            ..uma(BaseStyle::Late)
         };
         let name = card.name(Language::English);
         assert_eq!(name, Some("[Special Dreamer] Special Week"));
-        assert_eq!(uma(Style::Late).name(Language::English), None);
+        assert_eq!(uma(BaseStyle::Late).name(Language::English), None);
     }
 
     #[test]
@@ -680,7 +713,7 @@ mod tests {
             (uma.speed, uma.stamina, uma.power, uma.guts, uma.wit),
             (1500, 800, 1200, 700, 1200)
         );
-        assert_eq!(uma.style, Style::End);
+        assert_eq!(uma.style, BaseStyle::End);
         assert_eq!(data.mood, Some(Mood::Great));
         assert_eq!(data.skills, [skill_level_1(200642)]);
     }
@@ -688,18 +721,25 @@ mod tests {
     #[test]
     fn test_uma_data_style_names() {
         let cases = [
-            ("Oonige", Style::Runaway),
-            ("Nige", Style::Front),
-            ("Senkou", Style::Pace),
-            ("Senko", Style::Pace),
-            ("Sasi", Style::Late),
-            ("Sashi", Style::Late),
-            ("Oikomi", Style::End),
+            ("Nige", BaseStyle::Front),
+            ("Senkou", BaseStyle::Pace),
+            ("Senko", BaseStyle::Pace),
+            ("Sasi", BaseStyle::Late),
+            ("Sashi", BaseStyle::Late),
+            ("Oikomi", BaseStyle::End),
         ];
         for (name, expected) in cases {
             let uma_data = UmaData::from_json(&uma_json(name)).unwrap();
             assert_eq!(uma_data.uma.style, expected, "{name}");
         }
+    }
+
+    #[test]
+    fn test_runaway_style_is_rejected() {
+        // Runaway comes from the Runaway skill on a Front runner, not from a
+        // style.
+        let error = UmaData::from_json(&uma_json("Oonige")).unwrap_err();
+        assert!(error.to_string().contains("Oonige"), "{error}");
     }
 
     #[test]
@@ -733,7 +773,7 @@ mod tests {
     /// Uma data with the given skills.
     fn uma_with_skill_levels(skills: Vec<UmaSkill>) -> UmaData {
         UmaData {
-            uma: crate::test_utils::uma(Style::Pace),
+            uma: crate::test_utils::uma(BaseStyle::Pace),
             mood: Some(Mood::Normal),
             skills,
         }

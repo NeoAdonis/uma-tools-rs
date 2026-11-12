@@ -8,12 +8,12 @@
 use std::ops::RangeInclusive;
 
 use crate::race::modifiers::strategy_proficiency_multiplier;
-use crate::uma::{Aptitude, Style};
+use crate::uma::{Aptitude, EffectiveStyle};
 use crate::units::CourseWidths;
 
 /// Strategies that can struggle. Runners only struggle against others with
 /// the same strategy.
-pub(crate) const STYLES: [Style; 2] = [Style::Runaway, Style::Front];
+pub(crate) const STYLES: [EffectiveStyle; 2] = [EffectiveStyle::Runaway, EffectiveStyle::Front];
 /// Distance (m) any runner (not necessarily one of the strugglers) must have
 /// run before a spot struggle can start.
 pub(crate) const MIN_POSITION: f64 = 150.0;
@@ -119,14 +119,15 @@ pub(crate) fn duration(guts: f64, style_aptitude: Aptitude) -> f64 {
 ///
 /// # Panics
 ///
-/// Panics if `style` is neither [`Style::Runaway`] nor [`Style::Front`], the
-/// only styles that take part in spot struggles.
-pub(crate) fn hp_multiplier(style: Style, rushed: bool) -> f64 {
+/// Panics if `style` is neither [`EffectiveStyle::Runaway`] nor
+/// [`EffectiveStyle::Front`], the only styles that take part in spot
+/// struggles.
+pub(crate) fn hp_multiplier(style: EffectiveStyle, rushed: bool) -> f64 {
     match (style, rushed) {
-        (Style::Runaway, true) => 7.7,
-        (Style::Runaway, false) => 3.5,
-        (Style::Front, true) => 3.6,
-        (Style::Front, false) => 1.4,
+        (EffectiveStyle::Runaway, true) => 7.7,
+        (EffectiveStyle::Runaway, false) => 3.5,
+        (EffectiveStyle::Front, true) => 3.6,
+        (EffectiveStyle::Front, false) => 1.4,
         _ => unreachable!("spot struggle should only apply to Runaway and Front styles"),
     }
 }

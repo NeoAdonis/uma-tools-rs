@@ -40,7 +40,7 @@ fn test_rates_at_order_round_to_nearest() {
 #[test]
 fn test_update_order_rate_tracks_best_and_worst_orders() {
     use crate::test_utils::*;
-    let mut solver = ready_solver(10101, uma(Style::Late), vec![], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![], seeded_config(0));
     let runner = &mut solver.runners[0];
 
     // (order, elapsed time, [best, worst]). The best and worst orders
@@ -87,8 +87,12 @@ fn test_update_position_slows_down_off_rail_in_corners() {
     // at `lane`, after a 1m move at the same lane.
     let advance = |position: f64, lane: f64, frames: usize| {
         let lane = CourseWidths(lane);
-        let mut solver =
-            ready_solver_on(course.clone(), uma(Style::Late), vec![], seeded_config(0));
+        let mut solver = ready_solver_on(
+            course.clone(),
+            uma(BaseStyle::Late),
+            vec![],
+            seeded_config(0),
+        );
         solver.state.elapsed_time = 10.0;
         let runner = &mut solver.runners[0];
         runner.position = position;
@@ -132,7 +136,12 @@ fn test_finish_time_is_interpolated_within_the_frame() {
         ..synthetic_course()
     };
     let lane = CourseWidths(0.0);
-    let mut solver = ready_solver_on(course.clone(), uma(Style::Late), vec![], seeded_config(0));
+    let mut solver = ready_solver_on(
+        course.clone(),
+        uma(BaseStyle::Late),
+        vec![],
+        seeded_config(0),
+    );
     solver.state.elapsed_time = 10.0;
     let runner = &mut solver.runners[0];
     runner.position = 1998.5;
@@ -155,7 +164,7 @@ fn test_start_dash_caps_speed_at_its_end() {
     // speed with 800 guts (17.4 m/s).
     let uma = Uma {
         guts: 800,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let mut solver = ready_solver(10104, uma, vec![], seeded_config(0));
     let base_speed = solver.state.course.base_speed();
@@ -193,7 +202,7 @@ fn test_start_dash_caps_speed_at_its_end() {
 fn test_target_speed_scales_with_positioning_strategy() {
     use crate::test_utils::*;
 
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(42));
     let state = &solver.state;
     let runner = &mut solver.runners[0];
     // Added after scaling.
@@ -212,7 +221,7 @@ fn test_target_speed_scales_with_positioning_strategy() {
 fn test_target_speed_adds_modifiers() {
     use crate::test_utils::*;
 
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(42));
     let state = &solver.state;
     let runner = &mut solver.runners[0];
     // Rolled when readying runners.
@@ -256,7 +265,7 @@ fn test_pace_down_and_downhill_mode_save_hp() {
     ];
     let mut base = None;
     for (pace_down, downhill, multiplier) in cases {
-        let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+        let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(42));
         let state = &solver.state;
         let runner = &mut solver.runners[0];
         runner.speed = 20.0;
@@ -289,7 +298,7 @@ fn test_stamina_limit_break_activates_at_last_spurt_speed() {
         // A high-stamina runner on a long course.
         let uma = Uma {
             stamina: 1600,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         };
         let mut solver = ready_solver(10105, uma, vec![], seeded_config(42));
         let runner = &mut solver.runners[0];
@@ -326,7 +335,7 @@ fn test_section_speed_modifier_ignored_during_last_spurt() {
     // (position, whether the section speed modifier applies), with a last
     // spurt from 1950m.
     for (position, applies) in [(1949.0, true), (1950.0, false)] {
-        let mut solver = ready_solver(10105, uma(Style::Pace), vec![], seeded_config(42));
+        let mut solver = ready_solver(10105, uma(BaseStyle::Pace), vec![], seeded_config(42));
         let state = &solver.state;
         let runner = &mut solver.runners[0];
         runner.phase = Phase::Late;
@@ -361,9 +370,15 @@ fn test_acceleration_multipliers() {
     let base = 0.0006 * f64::sqrt(500.0 * 1000.0);
     // (style, phase, track aptitude, distance aptitude, multipliers).
     let cases = [
-        (Style::Pace, Phase::Early, Aptitude::A, Aptitude::A, 0.985),
         (
-            Style::Front,
+            BaseStyle::Pace,
+            Phase::Early,
+            Aptitude::A,
+            Aptitude::A,
+            0.985,
+        ),
+        (
+            BaseStyle::Front,
             Phase::Late,
             Aptitude::B,
             Aptitude::E,
@@ -393,7 +408,7 @@ fn test_acceleration_multipliers() {
 fn test_acceleration_adds_modifiers() {
     use crate::test_utils::*;
 
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
     let runner = &mut solver.runners[0];
     runner.is_start_dash = false;
     runner.accelerate(0.0);
@@ -420,7 +435,7 @@ fn test_deceleration_by_state() {
         (Phase::Mid, true, true, -1.2),
     ];
     for (phase, pace_down, out_of_hp, expected) in cases {
-        let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(0));
+        let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
         let runner = &mut solver.runners[0];
         runner.phase = phase;
         if pace_down {
@@ -442,7 +457,7 @@ fn test_speed_stops_at_target_speed() {
     use crate::race::solver::DELTA_TIME;
     use crate::test_utils::*;
 
-    let mut solver = ready_solver(10204, uma(Style::Late), vec![], seeded_config(42));
+    let mut solver = ready_solver(10204, uma(BaseStyle::Late), vec![], seeded_config(42));
     let base_speed = solver.state.course.base_speed();
     let runner = &mut solver.runners[0];
     runner.is_start_dash = false;
@@ -478,7 +493,7 @@ fn test_target_speed_has_a_floor() {
     use crate::race::modifiers::uphill_speed_modifier;
     use crate::test_utils::*;
 
-    let mut solver = ready_solver(10101, uma(Style::Pace), vec![], seeded_config(42));
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(42));
     let state = &solver.state;
     let runner = &mut solver.runners[0];
     runner.slope_speed_modifier = Some(uphill_speed_modifier(1.0, 1.0));

@@ -27,7 +27,7 @@ fn skill(condition: &str, base_cooldown: f64) -> Arc<Skill> {
 fn run(condition: &str, base_cooldown: f64) -> Runner {
     let uma = Uma {
         stamina: 1200,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let skills = vec![skill(condition, base_cooldown)];
     let mut solver = ready_solver(COURSE_ID, uma, skills, seeded_config(0));

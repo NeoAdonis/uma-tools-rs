@@ -12,7 +12,7 @@ use rand::prelude::*;
 
 use crate::configuration::GameVersion;
 use crate::race::secure_lead;
-use crate::uma::Style;
+use crate::uma::EffectiveStyle;
 
 /// Sections (0-indexed) in which the runner can compete before spurt.
 pub(crate) const SECTIONS: RangeInclusive<u8> = 10..=14;
@@ -61,12 +61,12 @@ impl StaminaKeep {
 /// far from the lead.
 // ? Threshold should scale with course distance, but the formula is unknown.
 // ? The distance term of secure lead is assumed.
-pub(crate) fn lead_threshold(style: Style, course_distance: f64) -> f64 {
+pub(crate) fn lead_threshold(style: EffectiveStyle, course_distance: f64) -> f64 {
     let coef = match style {
-        Style::Runaway | Style::Front => 0.0,
-        Style::Pace => 2.5,
-        Style::Late => 5.0,
-        Style::End => 10.0,
+        EffectiveStyle::Runaway | EffectiveStyle::Front => 0.0,
+        EffectiveStyle::Pace => 2.5,
+        EffectiveStyle::Late => 5.0,
+        EffectiveStyle::End => 10.0,
     };
     coef + 0.0003 * (course_distance + 1000.0)
 }
@@ -76,15 +76,20 @@ pub(crate) fn lead_threshold(style: Style, course_distance: f64) -> f64 {
 /// `is_alone` is whether no other runner with the same style is within
 /// `ALONE_DISTANCE`. It only has an effect on front-like runners.
 // ? There is an unexplained 20% threshold for the `is_alone` bonus; ignored.
-pub(crate) fn target_speed_bonus(style: Style, power: f64, guts: f64, is_alone: bool) -> f64 {
+pub(crate) fn target_speed_bonus(
+    style: EffectiveStyle,
+    power: f64,
+    guts: f64,
+    is_alone: bool,
+) -> f64 {
     let style_coef = match style {
-        Style::Runaway => 0.2,
-        Style::Front => 0.8,
+        EffectiveStyle::Runaway => 0.2,
+        EffectiveStyle::Front => 0.8,
         _ => 1.0,
     };
     let alone_coef = match (style, is_alone) {
-        (Style::Runaway, true) => 2.0,
-        (Style::Front, true) => 1.1,
+        (EffectiveStyle::Runaway, true) => 2.0,
+        (EffectiveStyle::Front, true) => 1.1,
         _ => 1.0,
     };
     ((power / 1500.0).sqrt() * 2.0 + (guts / 3000.0).powf(0.2)) * 0.1 * style_coef * alone_coef
@@ -94,10 +99,10 @@ pub(crate) fn target_speed_bonus(style: Style, power: f64, guts: f64, is_alone: 
 ///
 /// `far_from_lead` is whether the runner competes because she is too far from
 /// the lead. Otherwise, she competes only because of nearby runners.
-pub(crate) fn hp_cost(style: Style, course_distance: i32, far_from_lead: bool) -> f64 {
+pub(crate) fn hp_cost(style: EffectiveStyle, course_distance: i32, far_from_lead: bool) -> f64 {
     let style_coef = match style {
-        Style::Runaway => 1.5,
-        Style::Front => 1.2,
+        EffectiveStyle::Runaway => 1.5,
+        EffectiveStyle::Front => 1.2,
         _ => 1.0,
     };
     let near_factor = if far_from_lead { 0.0 } else { NEAR_FACTOR };

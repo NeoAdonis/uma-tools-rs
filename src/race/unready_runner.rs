@@ -95,7 +95,7 @@ use crate::race::world_distance::LastMove;
 use crate::skill::{SYMPATHY_ID, Skill, SkillAlternative, SkillType};
 use crate::trigger::skill_activation::{QueuedActivation, SkillActivationRecord};
 use crate::trigger::system::*;
-use crate::uma::{Aptitude, Mood, Stats, Style, Uma};
+use crate::uma::{Aptitude, EffectiveStyle, Mood, Stats, Uma};
 
 /// Adjust base stats according to course, race parameters and style aptitude.
 fn adjust_stats(
@@ -238,7 +238,7 @@ pub struct UnreadyRunner {
     /// For the most part, these are the stats used for race calculations.
     adjusted: Stats,
     /// Running style, which out-of-gate skills may change from the raw one.
-    style: Style,
+    style: EffectiveStyle,
     /// Start delay (i.e. time taken to leave the gate) in seconds.
     start_delay: f64,
     /// Rush chance modifier from out-of-gate skills.
@@ -331,7 +331,7 @@ impl UnreadyRunner {
             raw: uma,
             gate: None,
             adjusted,
-            style: uma.style,
+            style: uma.style.into(),
             initial_state: InitialState {
                 mood,
                 // Assigned with the gate.
@@ -656,9 +656,9 @@ impl UnreadyRunner {
         } else {
             rng.keyed(Stream::ForceIn).random_range(0.0..0.1)
                 + match self.style {
-                    Style::Runaway | Style::Front => 0.02,
-                    Style::Pace | Style::Late => 0.01,
-                    Style::End => 0.03,
+                    EffectiveStyle::Runaway | EffectiveStyle::Front => 0.02,
+                    EffectiveStyle::Pace | EffectiveStyle::Late => 0.01,
+                    EffectiveStyle::End => 0.03,
                 }
         };
         let force_in_modifier = self.pins.force_in.unwrap_or(rolled_force_in);

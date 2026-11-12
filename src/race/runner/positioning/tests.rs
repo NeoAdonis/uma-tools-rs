@@ -11,7 +11,7 @@ fn test_speed_effects_stop_pacing_down() {
         (0.0, 0.0001, true),
     ];
     for (current, target, stops) in cases {
-        let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(0));
+        let (mut runner, mut state) = ready_runner(BaseStyle::Late, seeded_config(0));
         state.elapsed_time = 10.0;
         runner.enter_positioning(PositioningStrategy::PaceDown(10.0), &state);
         runner.skill_modifiers.current_speed = current;
@@ -28,7 +28,7 @@ fn test_speed_effects_stop_pacing_down() {
     // Nor do they start while skills change the speed (the pacemaker is 0m
     // ahead, too close for a Late runner).
     for (target, starts) in [(0.0, true), (0.1, false)] {
-        let (mut runner, mut state) = ready_runner(Style::Late, seeded_config(0));
+        let (mut runner, mut state) = ready_runner(BaseStyle::Late, seeded_config(0));
         state.elapsed_time = 10.0;
         runner.next_positioning_check = 0.0;
         runner.skill_modifiers.target_speed = target;
@@ -79,7 +79,7 @@ fn test_wit_check_never_passes_below_10_wit() {
 
     // The chance is negative below 10 wit and exactly 0 at 10.
     for wit in [7.68, 10.0] {
-        let (mut runner, _) = ready_runner(Style::Late, seeded_config(0));
+        let (mut runner, _) = ready_runner(BaseStyle::Late, seeded_config(0));
         runner.adjusted.wit = wit;
         for _ in 0..20 {
             assert!(!runner.roll_positioning_wit_check(0.2), "{wit}");

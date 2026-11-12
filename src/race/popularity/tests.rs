@@ -76,13 +76,13 @@ fn popularity_skill(conditions: &[&str], wit_check: bool) -> Arc<Skill> {
 fn speed_bonus(skill: &Skill) -> f64 {
     use crate::race::solver::RaceSolver;
     use crate::test_utils::{load_course, race_params, seeded_config, uma};
-    use crate::uma::{Mood, Style, Uma};
+    use crate::uma::{BaseStyle, Mood, Uma};
 
     let state = RaceSolver::new(load_course(10104), race_params(), seeded_config(0)).state;
     let uma = Uma {
         speed: 1000,
         guts: 1000,
-        ..uma(Style::Pace)
+        ..uma(BaseStyle::Pace)
     };
     let mut runner = UnreadyRunner::new(
         uma,
@@ -187,7 +187,7 @@ fn popularity_ranks(umas: &[crate::uma::Uma]) -> Vec<u8> {
 #[test]
 fn test_popularity_ranks_weak_runners() {
     use crate::test_utils::uma;
-    use crate::uma::{Style, Uma};
+    use crate::uma::{BaseStyle, Uma};
 
     // Stats decrease with each runner, so the weakest ones get judge scores
     // well below 54 and tiny (but distinct) points.
@@ -196,7 +196,7 @@ fn test_popularity_ranks_weak_runners() {
             speed: 1200 - 100 * i,
             stamina: 1000 - 100 * i,
             power: 1000 - 100 * i,
-            ..uma(Style::Pace)
+            ..uma(BaseStyle::Pace)
         })
         .collect();
     assert_eq!(popularity_ranks(&umas), [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -205,13 +205,13 @@ fn test_popularity_ranks_weak_runners() {
 #[test]
 fn test_popularity_ranks_ties() {
     use crate::test_utils::uma;
-    use crate::uma::{Style, Uma};
+    use crate::uma::{BaseStyle, Uma};
 
     // Identical runners with the same marks share a rank, also when their
     // points are tiny, and the next rank skips the tied places. Marks follow
     // gate order between identical runners, so the strong ones don't tie
     // except for the two △, and the weak ones get no marks.
-    let strong = uma(Style::Pace);
+    let strong = uma(BaseStyle::Pace);
     let weak = Uma {
         speed: 300,
         stamina: 300,

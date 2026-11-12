@@ -6,7 +6,7 @@ use crate::uma::*;
 
 #[test]
 fn test_desirable_lead() {
-    use Style::*;
+    use EffectiveStyle::*;
     // At -1000m, the distance term is zero.
     let cases = [
         (Runaway, Front, -1000.0, 2.0),
@@ -22,7 +22,7 @@ fn test_desirable_lead() {
 
 #[test]
 fn test_desirable_lead_only_for_later_styles() {
-    use Style::*;
+    use EffectiveStyle::*;
     let styles = [Runaway, Front, Pace, Late, End];
     for style in styles {
         for other in styles {
@@ -38,11 +38,16 @@ fn test_target_speed_bonus() {
     // Guts 2000 -> sqrt(1) * 0.3.
     let base = 0.3;
     let cases = [
-        (Style::Runaway, true, LATEST, base * 0.2 * 7.0),
-        (Style::Front, true, LATEST, base * 4.0),
-        (Style::Front, true, GameVersion::MechaUmaUpdate, base * 2.0),
-        (Style::Pace, true, LATEST, base),
-        (Style::Late, false, LATEST, base * 0.8),
+        (EffectiveStyle::Runaway, true, LATEST, base * 0.2 * 7.0),
+        (EffectiveStyle::Front, true, LATEST, base * 4.0),
+        (
+            EffectiveStyle::Front,
+            true,
+            GameVersion::MechaUmaUpdate,
+            base * 2.0,
+        ),
+        (EffectiveStyle::Pace, true, LATEST, base),
+        (EffectiveStyle::Late, false, LATEST, base * 0.8),
     ];
     for (style, is_alone, version, expected) in cases {
         let actual = target_speed_bonus(style, 2000.0, is_alone, version);
@@ -53,7 +58,7 @@ fn test_target_speed_bonus() {
         );
     }
 
-    let actual = target_speed_bonus(Style::Pace, 500.0, false, LATEST);
+    let actual = target_speed_bonus(EffectiveStyle::Pace, 500.0, false, LATEST);
     assert_close!(actual, 0.5 * 0.3);
 }
 
@@ -72,7 +77,7 @@ fn test_hp_cost_distance_brackets() {
         (2601, 1.2),
     ];
     for (distance, coef) in cases {
-        let actual = hp_cost(Style::Front, distance);
+        let actual = hp_cost(EffectiveStyle::Front, distance);
         let expected = 20.0 * coef;
         assert_close!(actual, expected, "{distance}m");
     }
@@ -80,7 +85,7 @@ fn test_hp_cost_distance_brackets() {
 
 #[test]
 fn test_hp_cost_style_coefficients() {
-    for (style, coef) in [(Style::Runaway, 1.2), (Style::Late, 0.8)] {
+    for (style, coef) in [(EffectiveStyle::Runaway, 1.2), (EffectiveStyle::Late, 0.8)] {
         let actual = hp_cost(style, 2400);
         assert_close!(actual, 20.0 * coef, "{style:?}");
     }
@@ -88,7 +93,7 @@ fn test_hp_cost_style_coefficients() {
 
 #[test]
 fn test_secure_lead_check_window() {
-    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::Front, seeded_config(42));
     state.elapsed_time = 100.0;
     for (section, expected) in [(9, false), (10, true), (14, true), (15, false)] {
         runner.section = section;
@@ -96,7 +101,7 @@ fn test_secure_lead_check_window() {
         assert_eq!(actual, expected, "section {section}");
     }
 
-    let (mut end_closer, mut state) = ready_runner(Style::End, seeded_config(42));
+    let (mut end_closer, mut state) = ready_runner(EffectiveStyle::End, seeded_config(42));
     state.elapsed_time = 100.0;
     end_closer.section = 12;
     assert!(!end_closer.is_secure_lead_check_due(&state));
@@ -104,7 +109,7 @@ fn test_secure_lead_check_window() {
 
 #[test]
 fn test_secure_lead_activation_and_expiry() {
-    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::Front, seeded_config(42));
     runner.section = 12;
 
     // Sufficient lead never triggers.
@@ -129,14 +134,14 @@ fn test_secure_lead_activation_and_expiry() {
     }
 
     let expected_modifier = target_speed_bonus(
-        Style::Front,
+        EffectiveStyle::Front,
         runner.adjusted.guts,
         is_alone,
         GameVersion::LATEST,
     );
     let expected_boost = TimedBoost::start(expected_modifier, elapsed, DURATION, COOLDOWN);
     assert_eq!(runner.secure_lead, expected_boost);
-    let expected_hp = hp_before - hp_cost(Style::Front, state.course.distance);
+    let expected_hp = hp_before - hp_cost(EffectiveStyle::Front, state.course.distance);
     assert_close!(runner.hp.current(), expected_hp);
 
     // The boost ends after its duration.
@@ -148,7 +153,7 @@ fn test_secure_lead_activation_and_expiry() {
 fn test_secure_lead_chance() {
     // ? The chance should scale with wit, but the formula is unknown: this
     // pins the 20% assumed for now, and changes with it.
-    let (mut runner, mut state) = ready_runner(Style::Front, seeded_config(42));
+    let (mut runner, mut state) = ready_runner(EffectiveStyle::Front, seeded_config(42));
     runner.section = 12;
     let checks = 1000;
     let mut activations = 0;
