@@ -3,7 +3,7 @@
 //! These mirror the crate's internal `test_utils`, which isn't available here,
 //! so tests can be moved between both with few changes.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use uma_tools::configuration::{Assignment, Configuration, DefaultMood};
 use uma_tools::course::Course;
 use uma_tools::race::parameters::*;
@@ -65,14 +65,21 @@ pub fn uma(style: BaseStyle) -> Uma {
 
 /// The Runaway skill, from the game data.
 ///
+/// Loaded once, since parsing the skill data is slow in unoptimized builds.
+///
 /// # Panics
 ///
 /// Panics if the skill data can't be loaded.
 pub fn runaway_skill() -> Arc<Skill> {
-    SkillData::from_json_file("data/jp/skill_data.json")
-        .unwrap()
-        .get(202051)
-        .unwrap()
+    static SKILL: OnceLock<Arc<Skill>> = OnceLock::new();
+    SKILL
+        .get_or_init(|| {
+            SkillData::from_json_file("data/jp/skill_data.json")
+                .unwrap()
+                .get(202051)
+                .unwrap()
+                .clone()
+        })
         .clone()
 }
 
