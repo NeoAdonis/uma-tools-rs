@@ -162,11 +162,9 @@ pub struct OrderState {
     pub runner_count: u8,
     /// Order rates that round to the current order (see `rates_at_order`).
     pub rates: RangeInclusive<i32>,
-    /// Best (lowest) order reached so far.
-    /// N.B. This value is tracked only after 5 seconds into the race.
+    /// Best (lowest) order reached so far, excluding the first 5 race seconds.
     pub best: u8,
-    /// Worst (highest) order reached so far.
-    /// N.B. This value is tracked only after 5 seconds into the race.
+    /// Worst (highest) order reached so far, excluding the first 5 race seconds.
     pub worst: u8,
     /// Order rates that round to the best order (see `rates_at_order`).
     pub best_rates: RangeInclusive<i32>,
@@ -251,8 +249,7 @@ pub(crate) struct RushCounter {
     pub(crate) opponents_behind: u8,
 }
 
-/// An Uma with additional data related to racing, that is, an Uma who is
-/// running.
+/// An [`Uma`] with additional data related to racing; an Uma who is running.
 ///
 /// N.B. This structure should be created from an [`UnreadyRunner`] via
 /// [`RaceSolver`].
@@ -273,14 +270,14 @@ pub struct Runner {
     ///
     /// [`RaceSolver::runner`]: crate::race::solver::RaceSolver::runner
     pub gate_roll: u8,
-    /// Base stats before adjustments. After calculating the adjusted stats,
-    /// the base stats are only used to evaluate some skill conditions.
-    pub base: Stats,
     /// Raw stats before halving and mood multiplier, with the aptitudes and the
     /// style before out-of-gate skills. Used for skill value scaling.
     pub raw: Uma,
+    /// Base stats before adjustments. After calculating the adjusted stats,
+    /// the base stats are only used to evaluate some skill conditions.
+    pub base: Stats,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
-    /// For the most part, these are the stats used for race calculations.
+    /// With a few exceptions, these are the stats used for race calculations.
     pub adjusted: Stats,
     /// Running style, after out-of-gate skills that change it.
     pub style: EffectiveStyle,
@@ -631,19 +628,18 @@ impl Runner {
         course_base_speed: f64,
         speed_limit: Option<f64>,
     ) {
-        // Accelerate or decelerate towards the target speed, without passing it.
-        // At the target speed, she decelerates (see `update_acceleration`), so
-        // the target holds her speed there.
+        // Speed cannot accelerate above the target speed, nor decelerate below it.
+        // At the target speed, she decelerates (see `update_acceleration`), so the
+        // target holds her speed there.
         self.speed = if self.speed < self.target_speed {
             (self.speed + self.acceleration * delta_time).min(self.target_speed)
         } else {
             (self.speed + self.acceleration * delta_time).max(self.target_speed)
         };
 
-        // Handle start dash end and min speed. The start dash ends once speed
-        // reaches its threshold, which caps speed so that the start dash
-        // acceleration isn't carried over. A target speed below the threshold
-        // keeps the runner in the start dash, below the minimum speed.
+        // The start dash ends once speed reaches its threshold, which caps speed so
+        // that the start dash acceleration isn't carried over. A target speed below the
+        // threshold keeps the runner in the start dash, below the minimum speed.
         let start_dash_speed = 0.85 * course_base_speed;
         if self.is_start_dash {
             if self.speed >= start_dash_speed {
@@ -653,14 +649,15 @@ impl Runner {
         } else if self.speed < self.min_speed {
             self.speed = self.min_speed;
         }
+
         // Front blocking caps speed, even below the minimum speed.
         // ? Unknown whether the minimum speed takes precedence.
         if let Some(speed_limit) = speed_limit {
             self.speed = self.speed.min(speed_limit);
         }
 
-        // The all-out spurt keeps increasing target speed.
-        // It ignores the usual acceleration formula and acceleration skills.
+        // An all-out spurt bypasses the usual acceleration formula and acceleration
+        // skills.
         if let AllOutSpurt::Active { speed_bonus } = &mut self.all_out_spurt {
             let acceleration = self.all_out_spurt_base
                 + all_out_spurt::SKILL_SCALE * self.skill_modifiers.all_out_spurt_acceleration;
@@ -710,13 +707,11 @@ impl Runner {
         };
 
         if self.has_reached_last_spurt_speed() {
-            // Stamina Limit Break is activated upon reaching last spurt speed (2.5 Anniv.).
             if self.stamina_limit_break == 0.0 && self.stamina_limit_break_base > 0.0 {
                 self.stamina_limit_break = self.stamina_limit_break_base
                     * stamina_limit_break_random_factor(&mut self.rng.last_spurt);
             }
 
-            // All-out spurt is activated upon reaching last spurt speed (from 5th Anniv.).
             if self.all_out_spurt == AllOutSpurt::Pending && self.all_out_spurt_base > 0.0 {
                 self.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.0 };
                 self.schedule_all_out_spurt_triggers(state);
@@ -814,7 +809,6 @@ impl Runner {
             return;
         }
 
-        // Update section speed modifier.
         let rolled = roll_section_speed_modifier(
             &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
             self.adjusted.wit,
