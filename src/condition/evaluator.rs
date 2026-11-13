@@ -396,9 +396,8 @@ pub fn variable_value_out_of_gate<'a>(
         RaceParam(param_var) => scalar(race_param_value(param_var, &state.params)),
         RunningStyle(style_var) => scalar(running_style_value(style_var, state, builder.raw.style)),
         Lineup(lineup_var) => lineup_value(lineup_var, state, builder.evaluated_skill_id),
-        // "random_lot==X" means X% chance. It should be drawn every time it's
-        // read, but it's never read twice for the same skill in practice, so it
-        // uses the skill's draw, like `random_lot_shared`.
+        // No skill yet has two conditions requiring different draws from "random_lot",
+        // so it can use a single draw per skill, like "random_lot_shared".
         Random(RandomVar::RandomLot | RandomVar::RandomLotShared) => {
             lot_hits(builder.evaluated_skill_lot)
         }
@@ -506,7 +505,7 @@ fn course_value(var: &CourseVar, course: &Course) -> i32 {
         // Is basis distance (multiple of 400m).
         IsBasisDistance => course.is_basis_distance() as i32,
 
-        // Is exchange race (dirt grade): races at Oi, Kawasaki, Funabashi or Morioka.
+        // Is an exchange race (dirt grade): races at Oi, Kawasaki, Funabashi, Morioka.
         IsDirtgrade => course.is_exchange_race() as i32,
 
         // Is held on a course with tight corners.
@@ -531,13 +530,13 @@ fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
             .corner()
             .map_or(0, |idx| course.corner_number(idx) as i32),
 
-        // Is on final corner or beyond.
+        // Is on the final corner or beyond.
         IsFinalcorner => {
             if course.corners.is_empty() {
-                // False if no corners.
+                // False if there are no corners.
                 0
             } else {
-                // "Beyond" also applies for a straight after final corner.
+                // "Beyond" also applies for a straight after the final corner.
                 let last_corner_idx = course.corners.len() - 1;
                 let last_corner = &course.corners[last_corner_idx];
                 if runner.position >= last_corner.start {
@@ -548,7 +547,7 @@ fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
             }
         }
 
-        // Is on second half of final corner.
+        // Is on the second half of the final corner.
         IsFinalcornerLaterhalf => {
             if course.corners.is_empty() {
                 0
@@ -564,13 +563,13 @@ fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
             }
         }
 
-        // Is on last straight.
+        // Is on the last straight.
         IsLastStraight => {
             if course.corners.is_empty() {
-                // First (and only) straight is last straight.
+                // The first (and only) straight is also the last.
                 1
             } else {
-                // Last straight starts after final corner ends.
+                // The last straight starts after the final corner ends.
                 let last_corner = course.corners.last().unwrap();
                 if runner.position >= last_corner.end() {
                     1
@@ -633,14 +632,12 @@ fn race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
         // Track condition: 1=firm, 2=good, 3=soft, 4=heavy.
         GroundCondition => params.track_condition as i32,
 
-        // Race grade: refer to Grade enum for values.
+        // Race grade: see `race::parameters::Grade` for values.
         Grade => params.grade as i32,
 
-        // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=sakura.
-        //
-        // N.B. Cherry blossom season is semantically part of spring, so conditions that
-        // check for spring should also match sakura. When applicable, this is handled
-        // directly in the condition definitions (i.e., "season==1@season==5").
+        // Season: 1=spring, 2=summer, 3=autumn, 4=winter, 5=cherry blossom.
+        // Cherry blossom season is part of spring, so all conditions that check for
+        // spring should also check for cherry blossom season ("season==1@season==5").
         Season => params.season as i32,
 
         // Time of day: 0=none/any, 1=morning, 2=noon, 3=evening, 4=night.
@@ -736,8 +733,7 @@ fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: BaseS
     use RunningStyleVar::*;
 
     match var {
-        // TODO: generate simulation values for one-runner simulations.
-        // Running style: 1=Front, 2=Pace, 3=Late, 4=End.
+        // Running style: 1=front, 2=pace, 3=late, 4=end.
         RunningStyle => my_style as i32,
         RunningStyleCountNigeOtherself => style_count_otherself(state, BaseStyle::Front, my_style),
         RunningStyleCountOikomiOtherself => style_count_otherself(state, BaseStyle::End, my_style),
@@ -800,21 +796,21 @@ fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
         // HP is (or has been at some point) empty.
         IsHpEmptyOnetime => runner.hp.has_emptied() as i32,
 
-        // Is in last spurt mode (not the phase).
+        // Is in last spurt mode (not the last phase).
         IsLastspurt => runner.active_last_spurt().is_some() as i32,
 
         // Last spurt state:
-        // 0=can't finish at base speed, 1=above base speed, 2=max speed.
+        // 0 if can't finish at base speed, 1 if above base speed, 2 if max speed.
         // -1 if not calculated yet, so that it doesn't match any state.
         Lastspurt => runner
             .last_spurt
             .as_ref()
             .map_or(-1, |spurt| spurt.category as i32),
 
-        // Start is too late.
+        // Runner's start is late.
         IsBadstart => matches!(runner.start_type(), StartType::Late) as i32,
-        // Start is good.
-        // ? Assumed to be a Good Start; under investigation.
+        // Runner's start is good.
+        // ? Assumed the definition is the same as team trial bonuses.
         IsGoodstart => matches!(runner.start_type(), StartType::Good) as i32,
 
         // Lane movement, after moving in the same direction for a while.
@@ -868,10 +864,10 @@ fn rank_value(var: &OrderVar, runner: &Runner) -> i32 {
 fn order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
     use OrderRateVar::*;
 
-    // Order rate continue checks: whether `order_rate<=X` (in) or
-    // `order_rate>=X` (out) held for the entire race, i.e., at the worst or best
+    // Order rate continue checks: whether "order_rate<=X" (in) or
+    // "order_rate>=X" (out) held for the entire race, i.e., at the worst or best
     // order. The rounded order counts as both, e.g., always being 2nd in a
-    // 9-runner race (9 * 20% = 1.8 => 2) satisfies `in20` and `out20`.
+    // 9-runner race (9 * 20% = 1.8 => 2) satisfies "in20" and "out20".
     let held_in = |rate| scalar(*order.worst_rates.start() <= rate);
     let held_out = |rate| scalar(*order.best_rates.end() >= rate);
 
@@ -924,13 +920,13 @@ fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> 
     use TemptationVar::*;
 
     match var {
-        // Rush counts by position.
+        // Rushed runner counts by position.
         TemptationCountBehind => runner.rush_counter.behind as i32,
         TemptationCountInfront => runner.rush_counter.ahead as i32,
         TemptationOpponentCountBehind => runner.rush_counter.opponents_behind as i32,
         TemptationOpponentCountInfront => runner.rush_counter.opponents_ahead as i32,
 
-        // Rush counts by running style.
+        // Rushed runner counts by running style.
         RunningStyleTemptationCountNige => style_temptation_count(state, BaseStyle::Front),
         RunningStyleTemptationCountOikomi => style_temptation_count(state, BaseStyle::End),
         RunningStyleTemptationCountSashi => style_temptation_count(state, BaseStyle::Late),

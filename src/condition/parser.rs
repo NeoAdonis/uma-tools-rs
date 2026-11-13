@@ -5,9 +5,9 @@
 //!
 //! ## Syntax
 //!
-//! A condition is made of comparisons, each one being a variable, an operator
-//! ([`CompOp`]) and an integer value. For example, `accumulatetime>=5` is true
-//! when the race has been ongoing for at least 5 seconds, and
+//! A condition is made of comparisons, each one consisting of a variable, an
+//! operator ([`CompOp`]) and an integer value. For example, `accumulatetime>=5`
+//! is true when the race has been ongoing for at least 5 seconds, and
 //! `accumulatetime==5` only when it has been ongoing for exactly 5 seconds.
 //! The meaning of each variable is described in the
 //! [variable reference](crate::condition::variable_reference).
@@ -18,16 +18,16 @@
 //! line breaks added for readability):
 //!
 //! ```text
-//! distance_type==1 & ground_type==1   // Sprint on turf...
+//! distance_type==1 & ground_type==1   // Sprint race on turf...
 //!                  @                  // ...or...
-//! distance_type==2 & ground_type==1   // ...mile on turf.
+//! distance_type==2 & ground_type==1   // ...mile race on turf.
 //! ```
 //!
 //! A few variables are sets of values, whose comparisons test membership (e.g.
 //! `is_used_skill_id==202051` checks whether skill 202051 has been activated),
-//! and some are flags. They only support some operators or values; any other
-//! comparison is rejected with [`ParseError::UnsupportedComparison`], as is any
-//! comparison on a variable that isn't implemented.
+//! and some are flags. These variables only support some operators or values;
+//! any other comparison is rejected with [`ParseError::UnsupportedComparison`],
+//! as is any comparison on a variable that isn't implemented.
 //!
 //! ## Examples
 //!
@@ -142,12 +142,14 @@ impl fmt::Display for Comparison {
 /// Error parsing a condition, holding the offending comparison or variable.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ParseError {
+    /// A comparison lacks a valid operator after the variable name.
     ExpectedOperator(String),
+    /// A comparison uses a variable that isn't known.
     UnknownVariable(String),
+    /// A comparison is missing a valid value after the operator.
     InvalidValue(String),
-    /// A comparison the evaluator can't evaluate, such as a skill ID check
-    /// with an operator other than `==` or `!=`, or one on a variable that
-    /// isn't implemented.
+    /// A comparison isn't supported by the evaluator (e.g., a set check which
+    /// operator isn't `==` or `!=`), or has a known yet unsupported variable.
     UnsupportedComparison(String),
 }
 
@@ -253,7 +255,7 @@ impl Comparison {
             }
             // The value is the chance of success, as a percentage.
             Random(_) => is_equal && (0..=100).contains(&self.value),
-            // Flags; any other comparison is potentially a typo.
+            // For special flags, any other comparison is considered malformed.
             Always | RandomSpatial(RandomSpatialVar::AllCornerRandom) => {
                 is_equal && self.value == 1
             }

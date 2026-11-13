@@ -80,9 +80,8 @@ macro_rules! category {
     };
 }
 
-/// Convert a variant name to snake case: an underscore before each uppercase
-/// letter but the first, and everything in lowercase. Digits aren't split
-/// (e.g. `OrderRateIn20Continue` for `order_rate_in20_continue`).
+/// Convert a variant name to snake case. Digits aren't split (e.g.
+/// `OrderRateIn20Continue` becomes `order_rate_in20_continue`).
 fn snake_case(ident: &str) -> impl Iterator<Item = char> + '_ {
     ident.chars().enumerate().flat_map(|(i, c)| {
         let underscore = (i > 0 && c.is_ascii_uppercase()).then_some('_');
@@ -96,7 +95,7 @@ fn snake_case(ident: &str) -> impl Iterator<Item = char> + '_ {
 /// the [variable reference](crate::condition::variable_reference).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VarType {
-    /// Variable representing accumulated (elapsed) time.
+    /// Variable representing the elapsed (accumulated) time in a race.
     AccumulateTime,
     /// Variable representing base stats.
     BaseStat(BaseStatVar),
@@ -105,7 +104,7 @@ pub enum VarType {
     /// Variables related to order/rank.
     Order(OrderVar),
     /// Variables related to order rates (order relative to the runner count,
-    /// i.e. "you are in the top X%").
+    /// e.g. "you are in the top X%").
     OrderRate(OrderRateVar),
     /// Variables related to distance between runners.
     Distance(DistanceVar),
@@ -119,24 +118,24 @@ pub enum VarType {
     Spatial(SpatialVar),
     /// Variables related to random positional aspects.
     RandomSpatial(RandomSpatialVar),
-    /// Variables related to skill activation tracking.
+    /// Variables related to skill activation counts and status.
     Activation(ActivationVar),
-    /// Variables related to skill activation tracking, whose values are sets of
-    /// skill IDs or types (see [`Value::Set`](crate::condition::evaluator::Value)).
+    /// Variables related to skill activation tracking of sets of skill IDs or types
+    /// (see [`Value::Set`](crate::condition::evaluator::Value)).
     ActivationQuery(ActivationQueryVar),
     /// Variables related to race parameters.
     RaceParam(RaceParamVar),
     /// Variables related to the lineup (every runner entered in the race).
     Lineup(LineupVar),
-    /// Variables related to running style.
+    /// Variables related to running styles.
     RunningStyle(RunningStyleVar),
-    /// Variables related to status/flags.
+    /// Variables related to a runner's status.
     Status(StatusVar),
-    /// Variables whose value is determined randomly.
+    /// Variables whose value is determined through a random lottery.
     Random(RandomVar),
-    /// Variables related to blocking/lane position.
+    /// Variables related to blocking or lane position.
     Blocking(BlockingVar),
-    /// Variables related to Rush (Temptation) mechanics.
+    /// Variables related to rush (temptation) mechanics.
     Temptation(TemptationVar),
     /// Special value that is always true.
     Always,
@@ -244,7 +243,6 @@ category! {
         DownSlopeRandom,
         IsFinalcornerRandom,
         LastStraightRandom,
-        /// Random point after the all-out spurt starts. Rolled during the race.
         RunAtFullSpeedRandom,
         StraightRandom,
         UpSlopeRandom,
@@ -340,9 +338,7 @@ category! {
 
 category! {
     pub enum RandomVar {
-        /// Lottery rolled every time it's evaluated.
         RandomLot,
-        /// Lottery rolled once per skill, shared by all its alternatives.
         RandomLotShared,
     }
 }
@@ -461,9 +457,7 @@ impl VarType {
             Status(
                 StatusVar::IsBadstart | StatusVar::IsGoodstart | StatusVar::SuccessionSkillCount,
             ) => true,
-            // N.B. While running style can technically change, it can only do so from Front
-            // Runner to Runaway. Since both styles are considered the same for skill
-            // purposes, we can treat this type as static.
+            // Conditions are based off the base style, which is a static variable.
             RunningStyle(_) => true,
             // Special value - By definition, it never changes.
             Always => true,
@@ -506,7 +500,6 @@ mod tests {
 
     #[test]
     fn test_is_static() {
-        // Known before the race and never changing.
         let static_vars = [
             "ground_condition",
             "is_exist_skill_id",
@@ -522,7 +515,6 @@ mod tests {
             "running_style_count_same",
             "always",
         ];
-        // Changing during the race.
         let dynamic_vars = [
             "accumulatetime",
             "hp_per",
