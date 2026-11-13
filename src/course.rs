@@ -41,6 +41,7 @@ use crate::units::{CourseWidths, deserialize_ten_thousandths};
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::io::Read;
 use std::path::Path;
 
 /// Number of equally-sized sections of a course's nominal distance, after the
@@ -583,14 +584,15 @@ impl Course {
     }
 
     /// Load a specific course by ID from the course data JSON file
-    /// (`data/course_data.json`) and its rail's JSON file in `rail_dir`
+    /// (`data/course_data.json`) and its rail's gzipped JSON file in `rail_dir`
     /// (`data/jp/rails/` or `data/en/rails/`, for the Japanese or English
-    /// version of the game), named after the course ID.
+    /// version of the game), named after the course ID with a `.json.gz`
+    /// extension.
     ///
     /// # Errors
     ///
-    /// Returns an error if a file can't be read, or for the same reasons as
-    /// [`Course::from_json`].
+    /// Returns an error if a file can't be read, the rail file isn't valid
+    /// gzip, or for the same reasons as [`Course::from_json`].
     ///
     /// See [`Course::from_json`] for an example.
     pub fn from_json_files(
@@ -600,12 +602,13 @@ impl Course {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         use std::fs;
         let course_json = fs::read_to_string(course_path)?;
-        let rail_json = fs::read_to_string(rail_dir.as_ref().join(format!("{course_id}.json")))?;
+        let rail_json = read_gzip(rail_dir.as_ref().join(format!("{course_id}.json.gz")))?;
         Self::from_json(&course_json, &rail_json, course_id)
     }
 
     /// Load a specific course by ID from a course data JSON string, and the
-    /// JSON string of its rail.
+    /// JSON string of its rail (already decompressed, unlike the files of
+    /// [`Course::from_json_files`]).
     ///
     /// # Errors
     ///
@@ -625,7 +628,9 @@ impl Course {
     /// compare a runner across distances:
     ///
     /// ```
-    /// use std::fs;
+    /// use std::fs::{self, File};
+    /// use std::io::Read;
+    /// use flate2::read::GzDecoder;
     /// use uma_tools::Course;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -634,7 +639,9 @@ impl Course {
     /// let courses = ["10604", "10606"]
     ///     .into_iter()
     ///     .map(|id| {
-    ///         let rail = fs::read_to_string(format!("data/jp/rails/{id}.json"))?;
+    ///         let mut rail = String::new();
+    ///         let file = File::open(format!("data/jp/rails/{id}.json.gz"))?;
+    ///         GzDecoder::new(file).read_to_string(&mut rail)?;
     ///         Course::from_json(&courses, &rail, id)
     ///     })
     ///     .collect::<Result<Vec<_>, _>>()?;
@@ -683,6 +690,14 @@ impl Course {
         }
         Ok(())
     }
+}
+
+/// Read a gzipped UTF-8 text file.
+fn read_gzip(path: impl AsRef<Path>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let file = std::fs::File::open(path)?;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(file).read_to_string(&mut text)?;
+    Ok(text)
 }
 
 /// Check that `segments` have a positive length, are within a course `length`
@@ -958,7 +973,7 @@ mod tests {
         let courses: serde_json::Value = serde_json::from_str(&json).unwrap();
         let data = &courses["10101"];
         let json = serde_json::json!({ "10101": data, "abc": data }).to_string();
-        let rail = std::fs::read_to_string("data/jp/rails/10101.json").unwrap();
+        let rail = read_gzip("data/jp/rails/10101.json.gz").unwrap();
 
         assert_eq!(Course::from_json(&json, &rail, "10101").unwrap().id, 10101);
         let error = Course::from_json(&json, &rail, "10102").unwrap_err();
@@ -986,10 +1001,12 @@ mod tests {
                     entry
                         .unwrap()
                         .path()
-                        .file_stem()
+                        .file_name()
                         .unwrap()
                         .to_string_lossy()
-                        .into_owned()
+                        .strip_suffix(".json.gz")
+                        .expect("rail files are gzipped JSON")
+                        .to_owned()
                 })
                 .collect();
             ids.sort();

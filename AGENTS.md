@@ -142,7 +142,8 @@ Data, relative to `data/`:
     conditions, etc.).
   - `rails/`: shape of each course's inner rail in the world (base ratio,
     length, and position and outward lane direction of each keyframe on the
-    horizontal plane), one file per course of that version named after its ID.
+    horizontal plane), one gzipped JSON file (`<ID>.json.gz`) per course of
+    that version.
 - `names.json`: names in Japanese and English, by kind (`characters` by card ID,
   outfit and Uma; `skills` by skill ID; `tracks` by track ID).
 - `course_data.json`: course information (distance, corners, straights, slopes,
