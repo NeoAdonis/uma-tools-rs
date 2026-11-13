@@ -1470,12 +1470,11 @@ impl RaceSolver<Runner> {
             // Prior to the 1.5 anniversary update, the pacemaker was the most forward
             // runner with the most aggressive style.
             let mut pacemaker_style = self.runners[0].positioning_style();
-            for i in 0..self.runners.len() {
-                let runner_i = &self.runners[i];
-                let style = runner_i.positioning_style();
+            for runner in &self.runners {
+                let style = runner.positioning_style();
                 if style < pacemaker_style {
                     pacemaker_style = style;
-                    pacemaker_position = runner_i.position;
+                    pacemaker_position = runner.position;
                 }
                 // Because runners are sorted by position descendingly, we only need to update
                 // pacemaker when a more agressive style is found.
