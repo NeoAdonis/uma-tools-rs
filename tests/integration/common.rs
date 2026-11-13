@@ -12,9 +12,9 @@ use uma_tools::race::solver::{Entrant, RaceSolver};
 use uma_tools::skill::*;
 use uma_tools::uma::*;
 
-/// Load a course from `data/course_data.json` and `data/rails/`.
+/// Load a course from `data/course_data.json` and `data/jp/rails/`.
 pub fn load_course(course_id: u32) -> Course {
-    let (courses, rails) = ("data/course_data.json", "data/rails");
+    let (courses, rails) = ("data/course_data.json", "data/jp/rails");
     Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
@@ -69,7 +69,7 @@ pub fn uma(style: BaseStyle) -> Uma {
 ///
 /// Panics if the skill data can't be loaded.
 pub fn runaway_skill() -> Arc<Skill> {
-    SkillData::from_json_file("data/skill_data_jp.json")
+    SkillData::from_json_file("data/jp/skill_data.json")
         .unwrap()
         .get(202051)
         .unwrap()

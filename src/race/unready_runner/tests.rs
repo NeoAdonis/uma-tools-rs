@@ -348,7 +348,7 @@ const CONNECT_ID: i32 = 201632;
 const METI_RESONANCE_ID: i32 = 110502211;
 
 /// Run the out-of-gate step of a race on `course_id` with one runner per skill
-/// set, using skills from `data/skill_data_jp.json`.
+/// set, using skills from `data/jp/skill_data.json`.
 ///
 /// Runners are returned in the order of their skill sets.
 fn sympathy_runners(course_id: u32, skill_sets: &[&[i32]]) -> Vec<Runner> {

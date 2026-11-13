@@ -19,7 +19,7 @@
 //! // Tokyo, turf 2400m.
 //! let course = Course::from_json_files(
 //!     "data/course_data.json",
-//!     "data/rails",
+//!     "data/jp/rails",
 //!     "10606",
 //! )?;
 //! assert_eq!(course.track_name(Language::English), Some("Tokyo"));
@@ -94,7 +94,7 @@ impl Phase {
     /// // Tokyo, turf 2400m.
     /// let course = Course::from_json_files(
     ///     "data/course_data.json",
-    ///     "data/rails",
+    ///     "data/jp/rails",
     ///     "10606",
     /// )?;
     /// assert_eq!(Phase::Last.boundaries(&course), (2000.0, 2400.0));
@@ -168,7 +168,7 @@ impl Phase {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
     /// let course = Course::from_json_files(
     ///     "data/course_data.json",
-    ///     "data/rails",
+    ///     "data/jp/rails",
     ///     "11619",
     /// )?;
     /// assert_eq!(Phase::from_position(30.0, &course), Phase::RunUp);
@@ -398,7 +398,7 @@ impl Course {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
     /// let course = Course::from_json_files(
     ///     "data/course_data.json",
-    ///     "data/rails",
+    ///     "data/jp/rails",
     ///     "11619",
     /// )?;
     /// let position = course.position_at_rate(50.0);
@@ -463,7 +463,7 @@ impl Course {
     /// // Tokyo, turf 3400m, with six corners.
     /// let course = Course::from_json_files(
     ///     "data/course_data.json",
-    ///     "data/rails",
+    ///     "data/jp/rails",
     ///     "10608",
     /// )?;
     /// let starts: Vec<f64> = (0..course.corners.len())
@@ -530,7 +530,7 @@ impl Course {
     /// // Santa Anita Park, dirt 1600m, with a 50m run-up.
     /// let course = Course::from_json_files(
     ///     "data/course_data.json",
-    ///     "data/rails",
+    ///     "data/jp/rails",
     ///     "11619",
     /// )?;
     /// let section = course.section_from_position(1200.0);
@@ -584,7 +584,8 @@ impl Course {
 
     /// Load a specific course by ID from the course data JSON file
     /// (`data/course_data.json`) and its rail's JSON file in `rail_dir`
-    /// (`data/rails/`), named after the course ID.
+    /// (`data/jp/rails/` or `data/en/rails/`, for the Japanese or English
+    /// version of the game), named after the course ID.
     ///
     /// # Errors
     ///
@@ -633,7 +634,7 @@ impl Course {
     /// let courses = ["10604", "10606"]
     ///     .into_iter()
     ///     .map(|id| {
-    ///         let rail = fs::read_to_string(format!("data/rails/{id}.json"))?;
+    ///         let rail = fs::read_to_string(format!("data/jp/rails/{id}.json"))?;
     ///         Course::from_json(&courses, &rail, id)
     ///     })
     ///     .collect::<Result<Vec<_>, _>>()?;
@@ -957,7 +958,7 @@ mod tests {
         let courses: serde_json::Value = serde_json::from_str(&json).unwrap();
         let data = &courses["10101"];
         let json = serde_json::json!({ "10101": data, "abc": data }).to_string();
-        let rail = std::fs::read_to_string("data/rails/10101.json").unwrap();
+        let rail = std::fs::read_to_string("data/jp/rails/10101.json").unwrap();
 
         assert_eq!(Course::from_json(&json, &rail, "10101").unwrap().id, 10101);
         let error = Course::from_json(&json, &rail, "10102").unwrap_err();
@@ -968,44 +969,49 @@ mod tests {
 
     #[test]
     fn test_course_data_is_supported() {
-        // Every course in the data loads with its rail, which checks the
-        // assumptions of the simulation, and has a track name. This is the
-        // test to check after a data update.
+        // Every rail of each version of the game loads with its course, which
+        // checks the assumptions of the simulation (and that there's no rail
+        // without a course), and the course has a track name. The Japanese
+        // version has a rail for every course. This is the test to check after
+        // a data update.
         let json = std::fs::read_to_string("data/course_data.json").unwrap();
         let courses: std::collections::HashMap<String, serde_json::Value> =
             serde_json::from_str(&json).unwrap();
         let mut course_ids: Vec<_> = courses.into_keys().collect();
+        course_ids.sort();
+        let rail_ids = |rails| {
+            let mut ids: Vec<_> = std::fs::read_dir(rails)
+                .unwrap()
+                .map(|entry| {
+                    entry
+                        .unwrap()
+                        .path()
+                        .file_stem()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect();
+            ids.sort();
+            ids
+        };
         let mut errors = Vec::new();
-        for id in &course_ids {
-            match Course::from_json_files("data/course_data.json", "data/rails", id) {
-                Ok(course) => {
-                    for language in [Language::Japanese, Language::English] {
-                        if course.track_name(language).is_none() {
-                            errors.push(format!("course {id}: no {language:?} track name"));
+        for rails in ["data/jp/rails", "data/en/rails"] {
+            for id in rail_ids(rails) {
+                match Course::from_json_files("data/course_data.json", rails, &id) {
+                    Ok(course) => {
+                        for language in [Language::Japanese, Language::English] {
+                            if course.track_name(language).is_none() {
+                                errors.push(format!("course {id}: no {language:?} track name"));
+                            }
                         }
                     }
+                    Err(error) => errors.push(format!("{rails}: {error}")),
                 }
-                Err(error) => errors.push(error.to_string()),
             }
         }
         assert!(errors.is_empty(), "\n{}", errors.join("\n"));
-
-        // No rail without a course.
-        let mut rail_ids: Vec<_> = std::fs::read_dir("data/rails")
-            .unwrap()
-            .map(|entry| {
-                entry
-                    .unwrap()
-                    .path()
-                    .file_stem()
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect();
-        course_ids.sort();
-        rail_ids.sort();
-        assert_eq!(course_ids, rail_ids);
+        assert_eq!(rail_ids("data/jp/rails"), course_ids);
     }
 
     /// Synthetic 2000m course with a straight rail covering it.

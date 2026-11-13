@@ -36,10 +36,10 @@
 //! let path = "tests/data/umamoe_build.txt";
 //! let build = UmaMoeBuild::from_build_code_file(path)?;
 //! let parameters = build.race_parameters();
-//! let (courses, rails) = ("data/course_data.json", "data/rails");
+//! let (courses, rails) = ("data/course_data.json", "data/jp/rails");
 //! let course_id = &parameters.course_id;
 //! let course = Course::from_json_files(courses, rails, course_id)?;
-//! let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
+//! let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
 //!
 //! let mut config = Configuration::default();
 //! build.configure_gates(&mut config);

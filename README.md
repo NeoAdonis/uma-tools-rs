@@ -103,9 +103,10 @@ first `gates` race, with the mood set by `defaultMood`) and `parameters.json`
 (course and race conditions). Use `--config`, `--uma` and `--parameters` to read
 other files instead; for example, `cargo run --release -- --uma my_uma.json`.
 Alternatively, use `--build` to race the setup of an uma.moe build code. Skills
-are read from the English skill data (`data/skill_data_en.json`); use `--skills`
-to read another file, such as `data/skill_data_jp.json`. Use `--focus` to pick
-the runner (by field index, 0 by default) whose skill activations are reported.
+and rails are read from the data of the English (Global) version of the game
+(`data/en/`); use `--data` to read another version's, such as `data/jp/` for the
+Japanese one. Use `--focus` to pick the runner (by field index, 0 by default)
+whose skill activations are reported.
 
 `--races` sets the number of races (1000 by default), and `--threads` the number
 of threads to split them across (one per logical CPU by default). Race N uses

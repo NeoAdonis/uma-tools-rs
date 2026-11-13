@@ -421,7 +421,7 @@ impl UmaData {
     ///         "motivation": "Great", "skills": [200331, 999999]
     ///     }"#,
     /// )?;
-    /// let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
+    /// let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
     /// let error = uma.resolve_skills(&all_skills).err();
     /// assert_eq!(error, Some(ResolveSkillsError::UnknownSkill(999999)));
     /// # Ok(())
@@ -475,7 +475,7 @@ impl UmaData {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     /// let uma = UmaData::from_json_file("tests/data/uma_data.json")?;
-    /// let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
+    /// let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
     /// let entrant = uma.to_entrant(&all_skills)?;
     /// assert_eq!(entrant.mood, Some(Mood::Great));
     /// assert_eq!(entrant.gate, None);

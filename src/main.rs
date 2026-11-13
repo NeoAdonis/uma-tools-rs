@@ -64,7 +64,8 @@ fn main() {
     let mut uma_path = PathBuf::from("uma.json");
     let mut parameters_path = PathBuf::from("parameters.json");
     let mut build_path = None;
-    let mut skills_path = PathBuf::from("data/skill_data_en.json");
+    // Data of the English version of the game by default.
+    let mut data_dir = PathBuf::from("data/en");
     let mut focus = 0;
     let mut races: u64 = 1000;
     // One thread per logical CPU by default, or a single one if unknown.
@@ -90,9 +91,9 @@ fn main() {
                 let value = args.next().expect("--build requires a file path");
                 build_path = Some(PathBuf::from(value));
             }
-            "--skills" => {
-                let value = args.next().expect("--skills requires a file path");
-                skills_path = PathBuf::from(value);
+            "--data" => {
+                let value = args.next().expect("--data requires a directory path");
+                data_dir = PathBuf::from(value);
             }
             "--focus" => {
                 let value = args.next().expect("--focus requires a number");
@@ -118,10 +119,11 @@ fn main() {
     let mut config =
         Configuration::from_json_file(&config_path).expect("Failed to parse config JSON");
     let language = config.language;
-    let all_skills = SkillData::from_json_file(&skills_path).expect("Failed to load skill data");
-    let (courses, rails) = ("data/course_data.json", "data/rails");
+    let skills_path = data_dir.join("skill_data.json");
+    let all_skills = SkillData::from_json_file(skills_path).expect("Failed to load skill data");
+    let (courses, rails) = ("data/course_data.json", data_dir.join("rails"));
     let load_course = |parameters: &RaceParametersData| {
-        Course::from_json_files(courses, rails, &parameters.course_id)
+        Course::from_json_files(courses, &rails, &parameters.course_id)
             .expect("Failed to load course data")
     };
 

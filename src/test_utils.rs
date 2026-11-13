@@ -31,25 +31,25 @@ macro_rules! assert_close {
 }
 pub(crate) use assert_close;
 
-/// Load a course from `data/course_data.json` and `data/rails/`.
+/// Load a course from `data/course_data.json` and `data/jp/rails/`.
 pub(crate) fn load_course(course_id: u32) -> Course {
-    let (courses, rails) = ("data/course_data.json", "data/rails");
+    let (courses, rails) = ("data/course_data.json", "data/jp/rails");
     Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
 /// Skill data files of every game version, to validate them all.
 pub(crate) const SKILL_DATA_FILES: [&str; 2] =
-    ["data/skill_data_jp.json", "data/skill_data_en.json"];
+    ["data/jp/skill_data.json", "data/en/skill_data.json"];
 
-/// Skills in `data/skill_data_jp.json`, loaded once per test binary.
+/// Skills in `data/jp/skill_data.json`, loaded once per test binary.
 pub(crate) fn data_skills() -> &'static SkillData {
     static SKILLS: LazyLock<SkillData> =
         LazyLock::new(|| SkillData::from_json_file(SKILL_DATA_FILES[0]).unwrap());
     &SKILLS
 }
 
-/// Skill from `data/skill_data_jp.json` with the given ID.
+/// Skill from `data/jp/skill_data.json` with the given ID.
 ///
 /// # Panics
 ///

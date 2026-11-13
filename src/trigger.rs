@@ -86,10 +86,10 @@
 //! #         "motivation": "Great", "skills": [200331]
 //! #     }"#,
 //! # )?;
-//! # let (courses, rails) = ("data/course_data.json", "data/rails");
+//! # let (courses, rails) = ("data/course_data.json", "data/jp/rails");
 //! # let course =
 //! #     Course::from_json_files(courses, rails, &parameters.course_id)?;
-//! # let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
+//! # let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
 //! # let entrant = uma.to_entrant(&all_skills)?;
 //! let mut positions = Vec::new();
 //! for seed in 0..20 {

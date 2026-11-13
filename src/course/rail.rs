@@ -15,8 +15,10 @@
 //! - The outward direction of the lanes at each keyframe on that plane (the
 //!   x and z components of the rotation's unit vector pointing outwards).
 //!
-//! The rail data (`data/rails/`, one file per course named after its ID)
-//! stores them, with the course length the keyframes cover.
+//! The rail data (one file per course named after its ID, in `data/jp/rails/`
+//! and `data/en/rails/` for the Japanese and English versions of the game)
+//! stores them, with the course length the keyframes cover. The versions'
+//! rails differ, and the English one only has the courses of its version.
 
 use serde::Deserialize;
 

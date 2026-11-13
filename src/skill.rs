@@ -10,7 +10,7 @@
 //! use uma_tools::skill::SkillType;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//! let all_skills = SkillData::from_json_file("data/skill_data_jp.json")?;
+//! let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
 //! let target_speed = |id| {
 //!     let skill = all_skills.get(id)?;
 //!     let effect = skill.alternatives.first()?.effects.first()?;

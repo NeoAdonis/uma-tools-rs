@@ -17,7 +17,7 @@
 //! // Tokyo, turf 2400m.
 //! let course = Course::from_json_files(
 //!     "data/course_data.json",
-//!     "data/rails",
+//!     "data/jp/rails",
 //!     "10606",
 //! )?;
 //! let position = 2000.0;
