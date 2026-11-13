@@ -822,10 +822,11 @@ impl Runner {
         );
         self.section_speed_modifier = self.pins.section_speed(self.section, rolled);
 
-        // Start rush if conditions are met (a runner can only rush once).
-        if let Some(rush_state) = &self.rush_state
-            && rush_state.section == self.section
-            && !self.has_rushed()
+        // Since sections only go forward, a rush can only start once.
+        if self
+            .rush_state
+            .as_ref()
+            .is_some_and(|rush_state| rush_state.section == self.section)
         {
             self.start_rush(state);
         }
@@ -951,14 +952,12 @@ impl Runner {
         }
     }
 
-    /// Start rushing, unless the runner is already rushed.
+    /// Start rushing, if the runner is bound to rush.
     ///
     /// The runner will move ahead of the position dictated by her style, losing HP
     /// at an increased rate.
     fn start_rush(&mut self, state: &mut RaceState) {
-        if let Some(rush_state) = &mut self.rush_state
-            && !rush_state.is_rushed
-        {
+        if let Some(rush_state) = &mut self.rush_state {
             rush_state.start(state.elapsed_time);
             self.on_rush_change(state);
             if let Some(charge) = &mut self.charge_up {
