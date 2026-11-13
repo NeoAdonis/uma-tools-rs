@@ -94,7 +94,7 @@ use crate::race::spot_struggle::{self, SpotStruggle};
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
-use crate::race::world_distance::{self, LastMove};
+use crate::race::world_distance;
 use crate::skill::*;
 use crate::trigger::skill_activation::{
     ActiveTimedEffect, PendingEffect, QueuedActivation, SkillActivationRecord,
@@ -472,9 +472,11 @@ pub struct Runner {
     pub(crate) pins: Pins,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
-    /// Last move, which slows down the next one if it covered more world
-    /// distance than course distance (see [`world_distance`]).
-    pub(crate) last_move: LastMove,
+    /// World position on the horizontal plane at the start of the last move,
+    /// if it covered any distance. It slows down the next move if the last one
+    /// covered more world distance than course distance (see
+    /// [`world_distance`]).
+    pub(crate) last_move_start: Option<[f64; 2]>,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
     pub(crate) trigger_scheduler: TriggerScheduler,
@@ -774,14 +776,15 @@ impl Runner {
         // along the course by the world distance covered on the last move, which
         // ends at the current lane and position.
         let world = course.rail.world_position(prev_position, self.lane.current);
-        let inverse_ratio = world_distance::inverse_ratio(&course.rail, &self.last_move, world);
+        let step = self.effective_speed() * move_time;
+        let inverse_ratio = self.last_move_start.map_or(1.0, |start| {
+            world_distance::inverse_ratio(&course.rail, start, world, step)
+        });
         let course_speed = self.effective_speed() * inverse_ratio;
         self.position += course_speed * move_time;
         // The lane changes after the move, so the next move ends at the new lane.
-        self.last_move = LastMove {
-            distance: self.position - prev_position,
-            world,
-        };
+        // A frame without a move leaves nothing to compare the next one to.
+        self.last_move_start = (self.position > prev_position).then_some(world);
         if self.finish_time.is_none() && self.position >= course.length() {
             // Calculate exact finish time.
             let remaining_distance = course.length() - prev_position;

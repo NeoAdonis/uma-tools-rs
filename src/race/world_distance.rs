@@ -1,10 +1,10 @@
 //! Extra world distance covered by running wide through corners or changing
 //! lanes, which slows down progress along the course.
 //!
-//! Each frame, the game takes the ratio of world distance to course distance
-//! covered on the last frame, and divides the course distance covered on the
-//! next one by its ratio to the base ratio of the course when above 1 (see
-//! [`Rail`]).
+//! Each frame, the game compares the world distance covered on the previous
+//! move with the course distance the runner would cover on the next one at the
+//! base ratio of the course (see [`Rail`]), and shortens the next move by the
+//! quotient when it is below 1.
 //!
 //! The world distance of a move is the distance on the horizontal plane
 //! between the runner's world positions at its start and end, each moved
@@ -13,39 +13,33 @@
 //! turns towards the inner rail, and less where it turns away from it. The
 //! rail itself also covers slightly more or less world distance than the base
 //! ratio in places, which changes the ratio even on the rail.
+//!
+//! A slowed down move covers the base world distance, so the move after it
+//! isn't slowed down again, and at a steady speed the slowdown alternates
+//! frame by frame. A runner losing speed is slowed down further, since the
+//! next move is shorter than the previous one, while a runner gaining speed
+//! (e.g. in the start dash) isn't sped up, because the quotient is capped at 1.
 
 use crate::course::rail::Rail;
 
-/// Course distance and world position at the start of a runner's last move.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub(crate) struct LastMove {
-    /// Course distance covered in meters.
-    pub(crate) distance: f64,
-    /// World position on the horizontal plane at the start of the move, kept
-    /// from the previous frame so that each frame looks up the rail only once.
-    pub(crate) world: [f64; 2],
-}
-
-/// Inverse of the ratio of world distance to course distance of `last_move`,
-/// relative to the base ratio of `rail`, and at most 1.
+/// Factor, at most 1, that slows down a move whose uncorrected course distance
+/// is `step` meters, after a move from world position `start` to `end` on the
+/// horizontal plane.
 ///
-/// The move ends at world position `end` on the horizontal plane. Its inverse
-/// takes a single division to slow down the next move, and is 1 if the move
-/// covered no world distance.
-pub(crate) fn inverse_ratio(rail: &Rail, last_move: &LastMove, end: [f64; 2]) -> f64 {
-    let LastMove {
-        distance,
-        world: start,
-    } = *last_move;
-    if distance <= 0.0 {
-        return 1.0;
-    }
+/// It is the world distance that `step` covers at the base ratio of `rail`,
+/// over the world distance of the previous move, so it takes a single division
+/// per frame. It is 1 if the previous move covered no world distance.
+pub(crate) fn inverse_ratio(rail: &Rail, start: [f64; 2], end: [f64; 2], step: f64) -> f64 {
     let (dx, dz) = (end[0] - start[0], end[1] - start[1]);
     // `hypot` is much slower and more precise than needed here.
-    let inverse = (distance * rail.base_ratio) / (dx * dx + dz * dz).sqrt();
+    let world_distance = (dx * dx + dz * dz).sqrt();
+    if world_distance <= 0.0 {
+        return 1.0;
+    }
     // Ratio can be less than 1 where the rail covers less than at the base ratio,
-    // or where the course turns the other way while off the rail.
-    inverse.min(1.0)
+    // where the course turns the other way while off the rail, or where the
+    // runner gains speed.
+    (rail.base_ratio * step / world_distance).min(1.0)
 }
 
 #[cfg(test)]
@@ -60,9 +54,23 @@ mod tests {
     /// assume lanes turning evenly rather than between keyframes.
     const TOLERANCE: f64 = 1e-5;
 
-    /// Ratio (the inverse of [`inverse_ratio`]) of a move along `course` from
-    /// `start` to `end` (positions in meters), and from `start_lane` to
-    /// `end_lane`.
+    /// Inverse of [`inverse_ratio`] after a move along `course` from `start` to
+    /// `end` (positions in meters), and from `start_lane` to `end_lane`, for a
+    /// next move of `step` meters.
+    fn ratio_before_step(
+        course: &Course,
+        start: f64,
+        end: f64,
+        start_lane: CourseWidths,
+        end_lane: CourseWidths,
+        step: f64,
+    ) -> f64 {
+        let rail = &course.rail;
+        let start = rail.world_position(start, start_lane);
+        1.0 / inverse_ratio(rail, start, rail.world_position(end, end_lane), step)
+    }
+
+    /// [`ratio_before_step`] with a next move as long as the move.
     fn ratio_of_move(
         course: &Course,
         start: f64,
@@ -70,12 +78,7 @@ mod tests {
         start_lane: CourseWidths,
         end_lane: CourseWidths,
     ) -> f64 {
-        let rail = &course.rail;
-        let last_move = LastMove {
-            distance: end - start,
-            world: rail.world_position(start, start_lane),
-        };
-        1.0 / inverse_ratio(rail, &last_move, rail.world_position(end, end_lane))
+        ratio_before_step(course, start, end, start_lane, end_lane, end - start)
     }
 
     /// Synthetic 2000m course with base ratio `base_ratio`, whose 2m segments
@@ -106,9 +109,21 @@ mod tests {
     fn test_ratio_without_move() {
         let course = course(1.0, 0.0);
         assert_eq!(
-            ratio_of_move(&course, 600.0, 600.0, CourseWidths(0.0), CourseWidths(0.1)),
+            ratio_of_move(&course, 600.0, 600.0, CourseWidths(0.1), CourseWidths(0.1)),
             1.0
         );
+    }
+
+    #[test]
+    fn test_ratio_follows_speed_changes() {
+        // Straight on the rail, after a 2m move.
+        let course = course(1.0, 0.0);
+        let lane = CourseWidths(0.0);
+        let ratio = |step| ratio_before_step(&course, 100.0, 102.0, lane, lane, step);
+        // Losing speed slows down, even where the course doesn't.
+        assert_close!(ratio(1.9), 2.0 / 1.9);
+        // Gaining speed doesn't speed up.
+        assert_eq!(ratio(2.1), 1.0);
     }
 
     #[test]
@@ -194,14 +209,12 @@ mod tests {
         let rail = Rail::new(1.0, 2.0, vec![keyframe(0.0), keyframe(2.0)]);
         let lateral = CourseWidths(0.2).meters();
         let ratio = |start: f64, end: f64| {
-            let last_move = LastMove {
-                distance: 2.0,
-                world: rail.world_position(0.0, CourseWidths(start)),
-            };
+            let start = rail.world_position(0.0, CourseWidths(start));
             1.0 / inverse_ratio(
                 &rail,
-                &last_move,
+                start,
                 rail.world_position(2.0, CourseWidths(end)),
+                2.0,
             )
         };
         // Moving outwards goes backwards, and inwards forwards.

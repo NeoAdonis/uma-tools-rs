@@ -84,8 +84,9 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         ..synthetic_course()
     };
     // Course distance covered in the last of `frames` frames from `position`
-    // at `lane`, after a 1m move at the same lane.
-    let advance = |position: f64, lane: f64, frames: usize| {
+    // at `lane`, after a steady 2m move at the same lane, with `speed` before
+    // the 0.5 m/s of current speed skills.
+    let advance = |position: f64, lane: f64, speed: f64, frames: usize| {
         let lane = CourseWidths(lane);
         let mut solver = ready_solver_on(
             course.clone(),
@@ -97,13 +98,10 @@ fn test_update_position_slows_down_off_rail_in_corners() {
         let runner = &mut solver.runners[0];
         runner.position = position;
         // Current speed skills add to the speed.
-        runner.speed = 19.5;
+        runner.speed = speed;
         runner.skill_modifiers.current_speed = 0.5;
         runner.lane = LaneState::new(lane);
-        runner.last_move = LastMove {
-            distance: 1.0,
-            world: course.rail.world_position(position - 1.0, lane),
-        };
+        runner.last_move_start = Some(course.rail.world_position(position - 2.0, lane));
         let mut start = position;
         for _ in 0..frames {
             start = runner.position;
@@ -113,14 +111,19 @@ fn test_update_position_slows_down_off_rail_in_corners() {
     };
 
     // Straight before the corner, then within it.
-    assert_close!(advance(300.0, 1.0, 1), 2.0);
-    assert_close!(advance(600.0, 0.0, 1), 2.0);
+    assert_close!(advance(300.0, 1.0, 19.5, 1), 2.0);
+    assert_close!(advance(600.0, 0.0, 19.5, 1), 2.0);
     let expected = 2.0 / (1.0 + 0.005 * 11.25);
     // Lanes turn between keyframes rather than evenly.
-    assert_close!(advance(600.0, 1.0, 1), expected, tolerance = 1e-5);
-    // Each move sets the next one's world distance, so the next move in the
-    // corner is slowed down the same.
-    assert_close!(advance(600.0, 1.0, 2), expected, tolerance = 1e-5);
+    assert_close!(advance(600.0, 1.0, 19.5, 1), expected, tolerance = 1e-5);
+    // The slowed down move covers the base world distance, so the next one
+    // isn't slowed down, and the one after it is again.
+    assert_close!(advance(600.0, 1.0, 19.5, 2), 2.0, tolerance = 1e-5);
+    assert_close!(advance(600.0, 1.0, 19.5, 3), expected, tolerance = 1e-5);
+    // On a straight on the rail, losing speed slows down and gaining it doesn't
+    // speed up.
+    assert_close!(advance(300.0, 0.0, 18.5, 1), 1.9 * 1.9 / 2.0);
+    assert_close!(advance(300.0, 0.0, 20.5, 1), 2.1);
 }
 
 #[test]
@@ -130,7 +133,7 @@ fn test_finish_time_is_interpolated_within_the_frame() {
     use crate::test_utils::*;
 
     // Straight 2000m course, finished 1.5m after the start of the frame, at
-    // 30 m/s (2m per frame).
+    // 30 m/s (about 2m per frame).
     let course = Course {
         rail: rail_from_turns(1.0, 2000.0, &[0.0], &[0.0]),
         ..synthetic_course()
@@ -147,10 +150,9 @@ fn test_finish_time_is_interpolated_within_the_frame() {
     runner.position = 1998.5;
     runner.speed = 30.0;
     runner.lane = LaneState::new(lane);
-    runner.last_move = LastMove {
-        distance: 1.0,
-        world: course.rail.world_position(1997.5, lane),
-    };
+    // Steady move, so the frame isn't slowed down.
+    let previous = runner.position - runner.speed * DELTA_TIME;
+    runner.last_move_start = Some(course.rail.world_position(previous, lane));
     runner.update_position(DELTA_TIME, &solver.state);
     let expected = 10.0 - DELTA_TIME + 1.5 / 30.0;
     assert_close!(runner.finish_time.unwrap(), expected);

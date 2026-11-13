@@ -91,7 +91,6 @@ use crate::race::solver::{RaceState, RunnerId};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
-use crate::race::world_distance::LastMove;
 use crate::skill::{SYMPATHY_ID, Skill, SkillAlternative, SkillType};
 use crate::trigger::skill_activation::{QueuedActivation, SkillActivationRecord};
 use crate::trigger::system::*;
@@ -736,7 +735,7 @@ impl UnreadyRunner {
             rng,
             pins: self.pins,
             segments: SegmentState::default(),
-            last_move: LastMove::default(),
+            last_move_start: None,
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
             finish_margin: None,
