@@ -44,8 +44,8 @@ impl TimedBoost {
     }
 
     /// Stops the boost once it expires at `elapsed_time`, waiting for the next
-    /// check after the cooldown.
-    pub(crate) fn expire(&mut self, elapsed_time: f64) {
+    /// check after the cooldown. Returns whether it stopped.
+    pub(crate) fn expire(&mut self, elapsed_time: f64) -> bool {
         if let TimedBoost::Active {
             expires_at,
             next_check,
@@ -54,7 +54,9 @@ impl TimedBoost {
             && elapsed_time >= expires_at
         {
             *self = TimedBoost::Idle { next_check };
+            return true;
         }
+        false
     }
 }
 

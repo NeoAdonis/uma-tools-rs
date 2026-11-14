@@ -240,7 +240,7 @@ fn test_target_speed_adds_modifiers() {
     runner.secure_lead = TimedBoost::start(0.07, time, 2.0, 1.0);
     runner.compete_before_spurt = TimedBoost::start(0.11, time, 2.0, 1.0);
     runner.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.13 };
-    runner.start_duel();
+    runner.start_duel(0.0);
     let (guts, aptitude) = (runner.adjusted.guts, runner.raw.style_aptitude);
     runner.spot_struggle = SpotStruggle::start(guts, aptitude, time);
     let bonuses = runner.duel.speed_bonus() + runner.spot_struggle.speed_bonus(time);
@@ -417,7 +417,7 @@ fn test_acceleration_adds_modifiers() {
     let base = runner.acceleration;
 
     runner.skill_modifiers.acceleration = 0.2;
-    runner.start_duel();
+    runner.start_duel(0.0);
     let duel = runner.duel.acceleration_bonus();
     assert!(duel > 0.0);
     runner.accelerate(0.0);
@@ -510,4 +510,117 @@ fn test_target_speed_has_a_floor() {
     runner.update_target_speed(state);
     assert_eq!(runner.target_speed, runner.min_speed);
     assert_ne!(runner.min_speed, START_DASH_MIN_TARGET_SPEED);
+}
+
+#[test]
+fn test_rush_events_record_the_position_at_each_change() {
+    use crate::race::events::EventEnd;
+    use crate::race::rush::{self, RushState};
+    use crate::race::solver::RaceSolver;
+    use crate::test_utils::{ready_solver, seeded_config, uma};
+
+    let mut solver = ready_solver(10101, uma(BaseStyle::Late), vec![], seeded_config(0));
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.rush_state = Some(RushState {
+        section: 3,
+        start_time: 0.0,
+        end_time: f64::MAX,
+        max_duration: rush::MAX_DURATION,
+        is_rushed: false,
+        failed_checks: 0,
+        style: EffectiveStyle::Pace,
+    });
+    let kind = EventKind::Rush {
+        style: EffectiveStyle::Pace,
+    };
+
+    runner.position = 100.0;
+    state.elapsed_time = 3.0;
+    runner.start_rush(state);
+    assert_eq!(runner.events(), [Event::start(kind, 3.0, 100.0)]);
+
+    runner.position = 150.0;
+    state.elapsed_time = 7.0;
+    runner.end_rush(state);
+    let end = EventEnd {
+        time: 7.0,
+        distance: 150.0,
+    };
+    let event = Event {
+        end: Some(end),
+        ..Event::start(kind, 3.0, 100.0)
+    };
+    assert_eq!(runner.events(), [event]);
+}
+
+#[test]
+fn test_last_spurt_and_charge_up_release_events() {
+    use crate::race::solver::RaceSolver;
+    use crate::test_utils::{ready_solver, seeded_config, uma};
+
+    // (power conserved, position the last spurt starts at). Releasing needs some
+    // power, and both events wait for the spurt.
+    for (conserved, target_distance) in [(500.0, 1000.0), (0.0, 1000.0), (500.0, 1000.1)] {
+        let uma = Uma {
+            power: 1400,
+            ..uma(BaseStyle::Pace)
+        };
+        let mut solver = ready_solver(10810, uma, vec![], seeded_config(0));
+        let RaceSolver { runners, state, .. } = &mut solver;
+        let runner = &mut runners[0];
+        let last_spurt = LastSpurt {
+            max_speed: 20.0,
+            target_distance,
+            category: LastSpurtCategory::Full,
+        };
+        runner.last_spurt = Some(last_spurt);
+        runner.charge_up.as_mut().unwrap().conserved = conserved;
+        let name = format!("conserved {conserved}, spurt at {target_distance}");
+
+        // Events the runner should have after a frame that updates her phase from
+        // `position` at `time`.
+        let expected = |runner: &Runner, time: f64, position: f64| {
+            let mut events = vec![Event::start(EventKind::LastSpurt, time, position)];
+            if conserved > 0.0 {
+                let Some(ChargeUpOutcome::Released(release)) =
+                    runner.charge_up.as_ref().map(|c| c.outcome.clone())
+                else {
+                    panic!("{name}: no release");
+                };
+                let kind = EventKind::ChargeUpRelease {
+                    conserved: release.conserved,
+                    acceleration: release.acceleration,
+                };
+                events.push(Event::start(kind, time, position));
+            }
+            events
+        };
+
+        // The runner already moved on to the next position, so the events are recorded
+        // at the previous one.
+        runner.position = 1010.0;
+        state.elapsed_time = 50.0;
+        runner.update_phase(1000.0, state);
+        if target_distance > 1000.0 {
+            assert!(runner.events().is_empty(), "{name}");
+        } else {
+            assert_eq!(runner.events(), expected(runner, 50.0, 1000.0), "{name}");
+        }
+
+        // Nothing is logged again, even if the last spurt is recalculated.
+        runner.last_spurt = Some(LastSpurt {
+            target_distance: 900.0,
+            ..last_spurt
+        });
+        state.elapsed_time = 51.0;
+        runner.update_phase(1010.0, state);
+        runner.update_phase(1020.0, state);
+        let (time, position) = if target_distance > 1000.0 {
+            (51.0, 1010.0)
+        } else {
+            (50.0, 1000.0)
+        };
+        assert_eq!(runner.events(), expected(runner, time, position), "{name}");
+    }
 }

@@ -22,6 +22,7 @@ use crate::configuration::{Assignment, Configuration, DefaultGate, DefaultMood, 
 use crate::course::Course;
 use crate::race::compete_before_spurt;
 use crate::race::duel;
+use crate::race::events::EventKind;
 use crate::race::parameters::{MAX_GATES, RaceParameters};
 use crate::race::pins::Pins;
 use crate::race::popularity::calculate_popularity;
@@ -1066,6 +1067,9 @@ impl RaceSolver<Runner> {
         self.update_order_values();
         self.resolve_overlaps();
         self.update_blocking_status(delta_time);
+        for runner in &mut self.runners {
+            runner.end_expired_events(self.state.elapsed_time);
+        }
         self.update_spot_struggle();
         self.update_duels(delta_time);
         self.update_secure_lead();
@@ -1577,7 +1581,9 @@ impl RaceSolver<Runner> {
         let course_distance = self.state.course.distance as f64;
 
         for i in 0..self.runners.len() {
-            self.runners[i].secure_lead.expire(elapsed_time);
+            if self.runners[i].secure_lead.expire(elapsed_time) {
+                self.runners[i].log_end(EventKind::SecureLead, elapsed_time);
+            }
             if !self.runners[i].is_secure_lead_check_due(&self.state) {
                 continue;
             }
@@ -1687,7 +1693,7 @@ impl RaceSolver<Runner> {
                 return;
             }
             for i in exiting {
-                self.runners[i].spot_struggle.stop();
+                self.runners[i].stop_spot_struggle(self.state.elapsed_time);
             }
         }
     }
@@ -1721,7 +1727,7 @@ impl RaceSolver<Runner> {
             })
             .collect();
         for i in exiting {
-            self.runners[i].duel.stop();
+            self.runners[i].stop_duel(self.state.elapsed_time);
         }
     }
 
@@ -1763,7 +1769,7 @@ impl RaceSolver<Runner> {
             }
         }
         for i in starting {
-            self.runners[i].start_duel();
+            self.runners[i].start_duel(self.state.elapsed_time);
         }
     }
 
@@ -1800,7 +1806,9 @@ impl RaceSolver<Runner> {
         let course_distance = self.state.course.distance as f64;
 
         for i in 0..self.runners.len() {
-            self.runners[i].compete_before_spurt.expire(elapsed_time);
+            if self.runners[i].compete_before_spurt.expire(elapsed_time) {
+                self.runners[i].log_end(EventKind::CompeteBeforeSpurt, elapsed_time);
+            }
             if !self.runners[i].is_compete_check_due(&self.state) {
                 continue;
             }

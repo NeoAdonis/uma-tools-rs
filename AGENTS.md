@@ -92,6 +92,8 @@ Source code, relative to `src/`:
     simulation.
   - `race/runner.rs`, `race/runner/`: runner properties and calculations during
     simulation.
+  - `race/events.rs`: log of the race mechanics a runner went through (rushes,
+    duels, spurts, etc.), for result display and replays.
   - `race/hp.rs`: HP calculations.
   - `race/popularity.rs`: runner popularity calculations.
   - `race/transitions.rs`: calculations to detect transitions between race

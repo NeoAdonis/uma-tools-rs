@@ -13,10 +13,11 @@
 //!
 //! See [`RaceSolver`](solver::RaceSolver) for examples.
 
-pub mod all_out_spurt;
-pub mod charge_up;
-pub mod compete_before_spurt;
-pub mod duel;
+pub(crate) mod all_out_spurt;
+pub(crate) mod charge_up;
+pub(crate) mod compete_before_spurt;
+pub(crate) mod duel;
+pub mod events;
 pub mod hp;
 pub mod last_spurt;
 pub mod margin;
@@ -27,12 +28,12 @@ pub mod popularity;
 pub(crate) mod proximity;
 pub(crate) mod rng;
 pub mod runner;
-pub mod rush;
+pub(crate) mod rush;
 pub(crate) mod secure_lead;
 pub(crate) mod skill_scaling;
 pub mod solver;
-pub mod spot_struggle;
-pub mod timed_boost;
+pub(crate) mod spot_struggle;
+pub(crate) mod timed_boost;
 pub(crate) mod transitions;
 pub mod unready_runner;
 pub(crate) mod world_distance;

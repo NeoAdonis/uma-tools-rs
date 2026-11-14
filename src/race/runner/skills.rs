@@ -85,6 +85,7 @@ use crate::condition::evaluator::{CompEvaluator, EvaluatorFull, evaluate_compari
 use crate::condition::parser::{Comparison, ComparisonList};
 use crate::configuration::GameVersion;
 use crate::course::*;
+use crate::race::events::EventKind;
 use crate::race::modifiers::*;
 use crate::race::skill_scaling;
 use crate::race::solver::RaceState;
@@ -903,6 +904,7 @@ impl Runner {
 
                     // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
                     self.stamina_keep.is_active = false;
+                    self.log_end(EventKind::StaminaKeep, state.elapsed_time);
 
                     // Recalculate last spurt if in Late phase or later (1st Anniv.
                     // onward).

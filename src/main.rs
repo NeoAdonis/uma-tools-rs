@@ -24,6 +24,7 @@ use std::time::Instant;
 use uma_tools::course::Phase;
 use uma_tools::import::umadump::UmaDumpData;
 use uma_tools::import::umamoe::UmaMoeBuild;
+use uma_tools::race::events::EventKind;
 use uma_tools::race::last_spurt::LastSpurtCategory;
 use uma_tools::race::parameters::RaceParameters;
 use uma_tools::race::solver::{DELTA_TIME, FINISH_TIME_SCALE};
@@ -281,13 +282,17 @@ fn main() {
             for (stats, &id) in stats.iter_mut().zip(&ids) {
                 let runner = solver.runner(id);
                 stats.start_delay = runner.start_delay();
-                stats.rushed_time = runner
-                    .rush_state
-                    .as_ref()
-                    .filter(|rush| rush.has_rushed())
-                    .map(|rush| rush.end_time - rush.start_time);
-                stats.struggled = runner.spot_struggle.has_struggled();
-                stats.dueled = runner.duel.has_dueled();
+                let events = runner.events();
+                let find =
+                    |is_kind: fn(&EventKind) -> bool| events.iter().find(|e| is_kind(&e.kind));
+                // A rush still ongoing lasts until the runner finishes.
+                stats.rushed_time =
+                    find(|kind| matches!(kind, EventKind::Rush { .. })).and_then(|rush| {
+                        let end_time = rush.end.map(|end| end.time).or(runner.finish_time())?;
+                        Some(end_time - rush.start_time)
+                    });
+                stats.struggled = find(|kind| matches!(kind, EventKind::SpotStruggle)).is_some();
+                stats.dueled = find(|kind| matches!(kind, EventKind::Duel)).is_some();
                 if let Some(last_spurt) = runner.last_spurt() {
                     stats.full_spurt = last_spurt.category == LastSpurtCategory::Full;
                     stats.spurt_speed = last_spurt.max_speed;

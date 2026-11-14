@@ -72,9 +72,8 @@ pub struct Pins {
     pub downhill: HashMap<usize, Vec<bool>>,
 }
 
-/// Rushing outcomes of a runner fixed instead of rolled (see
-/// [`crate::race::rush`]). Apart from whether she rushes, they only apply if
-/// she does.
+/// Rushing outcomes of a runner fixed instead of rolled. Apart from whether she
+/// rushes, they only apply if she does.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct RushPins {
     /// Whether she rushes at some point, whatever her chance of rushing.

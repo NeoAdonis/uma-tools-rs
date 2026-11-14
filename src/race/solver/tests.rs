@@ -2,6 +2,7 @@ use super::*;
 use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
+use crate::race::events::EventEnd;
 use crate::race::pins::{PinnedActivation, RushPins, SkillPin};
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
@@ -5551,4 +5552,155 @@ fn test_runner_rejects_runners_of_other_races() {
     let mut solver = new_solver();
     solver.add_runner(Entrant::new(uma(BaseStyle::Pace), vec![]));
     solver.ready_runners().runner(id);
+}
+
+/// Ends of the events of `kind` of runner `i`, in order of start.
+fn event_end_times(solver: &RaceSolver<Runner>, i: usize, kind: EventKind) -> Vec<Option<f64>> {
+    let events = solver.runners[i].events().iter();
+    events
+        .filter(|event| event.kind == kind)
+        .map(|event| event.end.map(|end| end.time))
+        .collect()
+}
+
+#[test]
+fn test_spot_struggle_event_ends_once_by_expiry_or_exit() {
+    let mut solver = struggle_solver(
+        &[
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    let start = solver.state.elapsed_time;
+    let SpotStruggle::Active { expires_at, .. } = solver.runners[0].spot_struggle else {
+        panic!("no struggle");
+    };
+    let ends = |solver: &RaceSolver<Runner>| event_end_times(solver, 0, EventKind::SpotStruggle);
+    assert_eq!(ends(&solver), [None]);
+
+    // Still going just before expiring, although only the log notices.
+    solver.state.elapsed_time = expires_at - 0.01;
+    solver.runners[0].end_expired_events(solver.state.elapsed_time);
+    assert_eq!(ends(&solver), [None]);
+
+    // Expiring closes it, once.
+    let end_time = expires_at + 0.01;
+    solver.state.elapsed_time = end_time;
+    solver.runners[0].end_expired_events(end_time);
+    assert_eq!(ends(&solver), [Some(end_time)]);
+    solver.runners[0].end_expired_events(end_time + 1.0);
+    assert_eq!(ends(&solver), [Some(end_time)]);
+
+    // Neither does exiting afterwards, as an expired struggler can.
+    place(&mut solver, 1, 190.0, 0.0);
+    solver.state.elapsed_time = end_time + 2.0;
+    update_struggle(&mut solver);
+    assert_eq!(solver.runners[0].spot_struggle, SpotStruggle::Ended);
+    assert_eq!(ends(&solver), [Some(end_time)]);
+
+    // Exiting first closes it too, and expiry doesn't change that.
+    let mut solver = struggle_solver(
+        &[
+            (EffectiveStyle::Front, 200.0, 0.0),
+            (EffectiveStyle::Front, 198.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    update_struggle(&mut solver);
+    place(&mut solver, 1, 190.0, 0.0);
+    solver.state.elapsed_time = start + 1.0;
+    update_struggle(&mut solver);
+    assert_eq!(ends(&solver), [Some(start + 1.0)]);
+    solver.runners[0].end_expired_events(expires_at + 5.0);
+    assert_eq!(ends(&solver), [Some(start + 1.0)]);
+}
+
+#[test]
+fn test_duel_event_spans_the_duel() {
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES);
+    let start = solver.state.elapsed_time;
+    for runner in &solver.runners {
+        let event = runner.events().iter().find(|e| e.kind == EventKind::Duel);
+        let event = event.expect("no duel event");
+        assert_eq!(
+            (event.start_time, event.start_distance),
+            (start, runner.position)
+        );
+        assert_eq!(event.end, None);
+    }
+
+    solver.state.elapsed_time = start + 1.0;
+    set_hp_percent(&mut solver, 1, 4.9);
+    update_duels(&mut solver, 1);
+    assert_eq!(event_end_times(&solver, 0, EventKind::Duel), [None]);
+    let end = solver.runners[1].events()[0].end;
+    let position = solver.runners[1].position;
+    assert_eq!(
+        end,
+        Some(EventEnd {
+            time: start + 1.0,
+            distance: position
+        })
+    );
+}
+
+#[test]
+fn test_timed_boost_events_repeat_after_each_cooldown() {
+    // A Front runner with a Pace one right behind her, so that she often needs to
+    // secure the lead, and a Pace runner far behind the Front one.
+    let lead =
+        secure_lead::desirable_lead(EffectiveStyle::Front, EffectiveStyle::Pace, 1200.0).unwrap();
+    let threshold = compete_before_spurt::lead_threshold(EffectiveStyle::Pace, 1200.0);
+    let mut solver = struggle_solver(
+        &[
+            (EffectiveStyle::Front, 600.0, 0.2),
+            (EffectiveStyle::Pace, 600.0 - lead + 0.1, 0.2),
+            (EffectiveStyle::Pace, 600.0 - lead - threshold - 5.0, 0.2),
+        ],
+        GameVersion::LATEST,
+    );
+    for runner in &mut solver.runners {
+        // Never enter Stamina Keep, the only random roll of competing.
+        runner.stamina_keep.ratio = 0.0;
+        runner.reset_blocking_status();
+    }
+    solver.update_order_values();
+    for frame in 1..=(120.0 / DELTA_TIME) as usize {
+        solver.state.elapsed_time = frame as f64 * DELTA_TIME;
+        solver.update_secure_lead();
+        solver.update_compete_before_spurt();
+    }
+
+    for (i, kind, duration, cooldown) in [
+        (
+            0,
+            EventKind::SecureLead,
+            secure_lead::DURATION,
+            secure_lead::COOLDOWN,
+        ),
+        (
+            2,
+            EventKind::CompeteBeforeSpurt,
+            compete_before_spurt::DURATION,
+            compete_before_spurt::COOLDOWN,
+        ),
+    ] {
+        let events: Vec<_> = solver.runners[i]
+            .events()
+            .iter()
+            .filter(|event| event.kind == kind)
+            .collect();
+        assert!(events.len() >= 3, "{kind:?}: {} events", events.len());
+        // Only the last one can be ongoing.
+        for event in &events[..events.len() - 1] {
+            let end = event.end.expect("boost didn't end").time;
+            assert!((0.0..DELTA_TIME).contains(&(end - event.start_time - duration)));
+        }
+        for pair in events.windows(2) {
+            assert!(pair[1].start_time >= pair[0].start_time + duration + cooldown);
+        }
+    }
 }

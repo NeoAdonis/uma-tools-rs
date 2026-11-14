@@ -78,9 +78,10 @@ use crate::configuration::GameVersion;
 use crate::course::geometry::Slope;
 use crate::course::*;
 use crate::race::all_out_spurt::{self, AllOutSpurt};
-use crate::race::charge_up::{self, ChargeUp};
+use crate::race::charge_up::{self, ChargeUp, ChargeUpOutcome};
 use crate::race::compete_before_spurt::{self, StaminaKeep};
 use crate::race::duel::Duel;
+use crate::race::events::{Event, EventKind};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
@@ -300,8 +301,8 @@ pub struct Runner {
     pub(crate) lane: LaneState,
     /// Speed modifier for the current section in m/s.
     pub(crate) section_speed_modifier: f64,
-    /// Skills of the runner: those that passed the wit check first, then those
-    /// that failed it (see [`Self::skills`]).
+    /// Skills of the runner: those that passed the wit check first, then those that
+    /// failed it (see [`Self::skills`]).
     pub(crate) skills: Vec<Arc<Skill>>,
     /// Number of skills that passed the wit check, at the start of `skills`.
     pub(crate) available_skill_count: usize,
@@ -349,20 +350,20 @@ pub struct Runner {
     ///
     /// `None` means that the runner won't rush at all. Otherwise it tells when and
     /// how the rush will happen.
-    pub rush_state: Option<RushState>,
+    pub(crate) rush_state: Option<RushState>,
     /// Whether the runner is in the start dash (see [`Self::is_start_dash`]).
     pub(crate) is_start_dash: bool,
     /// State related to spot struggle (位置取り争い).
-    pub spot_struggle: SpotStruggle,
+    pub(crate) spot_struggle: SpotStruggle,
     /// State related to dueling (追い比べ).
-    pub duel: Duel,
+    pub(crate) duel: Duel,
     /// State related to securing the lead (リード確保).
-    pub secure_lead: TimedBoost,
+    pub(crate) secure_lead: TimedBoost,
     /// State related to competing before spurt (位置取り調整). Stamina Keep is
     /// also checked on the same schedule.
-    pub compete_before_spurt: TimedBoost,
+    pub(crate) compete_before_spurt: TimedBoost,
     /// State related to Stamina Keep (持久力温存).
-    pub stamina_keep: StaminaKeep,
+    pub(crate) stamina_keep: StaminaKeep,
     /// Overtake targets being tracked. If `None`, no overtake mode active.
     pub(crate) overtake_state: Option<OvertakeState>,
     /// Time spent having at least one overtake target in seconds.
@@ -433,12 +434,15 @@ pub struct Runner {
     ///
     /// It is activated once the runner reaches its last spurt speed, and keeps
     /// increasing target speed until the end of the race.
-    pub all_out_spurt: AllOutSpurt,
+    pub(crate) all_out_spurt: AllOutSpurt,
     /// Charge Up (足を貯める) state.
     ///
     /// It records the power conserved during the first 10 sections and its release
     /// upon entering the last spurt. `None` if the runner is not eligible.
-    pub charge_up: Option<ChargeUp>,
+    pub(crate) charge_up: Option<ChargeUp>,
+    /// Race mechanics the runner went through, by start (see
+    /// [`crate::race::events`]).
+    pub(crate) events: Vec<Event>,
     /// Random number streams of the runner (see [`crate::race::rng`]).
     pub(crate) rng: RunnerRng,
     /// Random outcomes fixed instead of rolled.
@@ -482,8 +486,7 @@ impl StartType {
 
 /// Getters of the runner's identity and inputs.
 impl Runner {
-    /// Returns the ID of the runner in the race (see
-    /// [`RaceSolver::add_runner`]).
+    /// Returns the ID of the runner in the race (see [`RaceSolver::add_runner`]).
     ///
     /// [`RaceSolver::add_runner`]: crate::race::solver::RaceSolver::add_runner
     pub fn id(&self) -> RunnerId {
@@ -493,9 +496,9 @@ impl Runner {
     /// Returns the gate number (1-indexed), which determines the starting lane
     /// position.
     ///
-    /// Each runner has a different gate, so the solver also uses it to tell
-    /// runners apart during the race. To find the runner added from some
-    /// input, use [`RaceSolver::runner`] with her [`Self::id`] instead.
+    /// Each runner has a different gate, so the solver also uses it to tell runners
+    /// apart during the race. To find the runner added from some input, use
+    /// [`RaceSolver::runner`] with her [`Self::id`] instead.
     ///
     /// [`RaceSolver::runner`]: crate::race::solver::RaceSolver::runner
     pub fn gate_roll(&self) -> u8 {
@@ -518,8 +521,7 @@ impl Runner {
         &self.base
     }
 
-    /// Returns the adjusted stats after applying modifiers and out-of-gate
-    /// skills.
+    /// Returns the adjusted stats after applying modifiers and out-of-gate skills.
     ///
     /// With a few exceptions, these are the stats used for race calculations.
     pub fn adjusted(&self) -> &Stats {
@@ -540,8 +542,8 @@ impl Runner {
 
     /// Returns the mood level.
     ///
-    /// It affects initial stat adjustments and is also used to evaluate some
-    /// skill conditions.
+    /// It affects initial stat adjustments and is also used to evaluate some skill
+    /// conditions.
     pub fn mood(&self) -> Mood {
         self.initial_state.mood
     }
@@ -553,8 +555,8 @@ impl Runner {
 
     /// Returns the team index, 0-based.
     ///
-    /// In individual races, each runner has her own team. Runners on the same
-    /// team are allies; everyone else is an opponent.
+    /// In individual races, each runner has her own team. Runners on the same team
+    /// are allies; everyone else is an opponent.
     pub fn team(&self) -> u8 {
         self.initial_state.team
     }
@@ -624,11 +626,11 @@ impl Runner {
         self.lane.target
     }
 
-    /// Returns the lateral speed applied on the last lane update, in course
-    /// widths per second.
+    /// Returns the lateral speed applied on the last lane update, in course widths
+    /// per second.
     ///
-    /// Positive values move outward, negative values move inward and zero means
-    /// the runner didn't change lanes on the last frame.
+    /// Positive values move outward, negative values move inward and zero means the
+    /// runner didn't change lanes on the last frame.
     pub fn lane_speed(&self) -> f64 {
         self.lane.speed
     }
@@ -648,14 +650,14 @@ impl Runner {
         self.start_delay
     }
 
-    /// Returns the elapsed time when the runner finished the race, in seconds,
-    /// or `None` if she hasn't.
+    /// Returns the elapsed time when the runner finished the race, in seconds, or
+    /// `None` if she hasn't.
     pub fn finish_time(&self) -> Option<f64> {
         self.finish_time
     }
 
-    /// Returns the distance behind the runner that placed immediately ahead,
-    /// in meters.
+    /// Returns the distance behind the runner that placed immediately ahead, in
+    /// meters.
     ///
     /// `None` for first place or until the race is over.
     pub fn finish_margin(&self) -> Option<f64> {
@@ -670,6 +672,12 @@ impl Runner {
         self.last_spurt.as_ref()
     }
 
+    /// Returns the race mechanics the runner went through, such as rushes and
+    /// duels, in order of start.
+    pub fn events(&self) -> &[Event] {
+        &self.events
+    }
+
     /// Returns the skills that have been activated during the race.
     pub fn activated_skills(&self) -> &[SkillActivationRecord] {
         &self.activated_skills
@@ -682,12 +690,11 @@ impl Runner {
     /// activation is pinned on that frame. Out-of-gate ones are at 0 seconds and
     /// meters.
     ///
-    /// Only those activations a roll couldn't have prevented are recorded: a
-    /// failed wit check is ruled out (the skill has a pinned activation, or no
-    /// wit check), and the condition (the OR branch, or the whole alternative
-    /// out of gate) has no random variable. Their checks then wait for the
-    /// cooldown, as if they activated (see
-    /// [`SkillActivationRecord::conditions_met`]).
+    /// Only those activations a roll couldn't have prevented are recorded: a failed
+    /// wit check is ruled out (the skill has a pinned activation, or no wit check),
+    /// and the condition (the OR branch, or the whole alternative out of gate) has
+    /// no random variable. Their checks then wait for the cooldown, as if they
+    /// activated (see [`SkillActivationRecord::conditions_met`]).
     ///
     /// N.B. A skill activates through a single alternative, but only real
     /// activations count for that: two alternatives can be recorded here.
@@ -908,10 +915,17 @@ impl Runner {
             if self.stamina_limit_break == 0.0 && self.stamina_limit_break_base > 0.0 {
                 self.stamina_limit_break = self.stamina_limit_break_base
                     * stamina_limit_break_random_factor(&mut self.rng.last_spurt);
+                self.log_start(
+                    EventKind::StaminaLimitBreak {
+                        speed_bonus: self.stamina_limit_break,
+                    },
+                    state.elapsed_time,
+                );
             }
 
             if self.all_out_spurt == AllOutSpurt::Pending && self.all_out_spurt_base > 0.0 {
                 self.all_out_spurt = AllOutSpurt::Active { speed_bonus: 0.0 };
+                self.log_start(EventKind::AllOutSpurt, state.elapsed_time);
                 self.schedule_all_out_spurt_triggers(state);
             }
         }
@@ -1027,7 +1041,7 @@ impl Runner {
 
         // ? Assume spot struggles end as the section changes, like rushes start.
         if self.section == spot_struggle::END_SECTION {
-            self.spot_struggle.stop();
+            self.stop_spot_struggle(state.elapsed_time);
         }
     }
 
@@ -1065,10 +1079,24 @@ impl Runner {
         {
             return;
         }
+        // The last spurt can be recalculated later, but it only starts once.
+        if !self
+            .events
+            .iter()
+            .any(|event| event.kind == EventKind::LastSpurt)
+        {
+            self.events.push(Event::start(
+                EventKind::LastSpurt,
+                state.elapsed_time,
+                position,
+            ));
+        }
 
         let activity =
             charge_up::activity_coefficient(self.spot_struggle.has_struggled(), self.has_rushed());
-        if let Some(charge_up) = &mut self.charge_up {
+        if let Some(charge_up) = &mut self.charge_up
+            && charge_up.outcome == ChargeUpOutcome::Pending
+        {
             charge_up.release(
                 self.style,
                 &state.course,
@@ -1076,6 +1104,16 @@ impl Runner {
                 state.elapsed_time,
                 position,
             );
+            if let ChargeUpOutcome::Released(release) = &charge_up.outcome {
+                self.events.push(Event::start(
+                    EventKind::ChargeUpRelease {
+                        conserved: release.conserved,
+                        acceleration: release.acceleration,
+                    },
+                    release.start_time,
+                    release.start_position,
+                ));
+            }
         }
     }
 
@@ -1143,6 +1181,7 @@ impl Runner {
             if self.all_out_spurt.is_active() {
                 self.speed = self.min_speed;
                 self.all_out_spurt = AllOutSpurt::Ended;
+                self.log_end(EventKind::AllOutSpurt, state.elapsed_time);
             }
         }
     }
@@ -1154,6 +1193,8 @@ impl Runner {
     fn start_rush(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state {
             rush_state.start(state.elapsed_time);
+            let style = rush_state.style;
+            self.log_start(EventKind::Rush { style }, state.elapsed_time);
             self.on_rush_change(state);
             if let Some(charge) = &mut self.charge_up {
                 charge.penalize(charge_up::RUSH_PENALTY);
@@ -1167,6 +1208,8 @@ impl Runner {
             && rush_state.is_rushed
         {
             rush_state.end(state.elapsed_time);
+            let style = rush_state.style;
+            self.log_end(EventKind::Rush { style }, state.elapsed_time);
             self.on_rush_change(state);
         }
     }
@@ -1206,7 +1249,7 @@ impl Runner {
     }
 
     /// Checks whether the runner has rushed at some point.
-    pub fn has_rushed(&self) -> bool {
+    pub(crate) fn has_rushed(&self) -> bool {
         self.rush_state.as_ref().is_some_and(RushState::has_rushed)
     }
 
@@ -1217,9 +1260,16 @@ impl Runner {
         }
         self.spot_struggle =
             SpotStruggle::start(self.adjusted.guts, self.raw.style_aptitude, elapsed_time);
+        self.log_start(EventKind::SpotStruggle, elapsed_time);
         if let Some(charge) = &mut self.charge_up {
             charge.penalize(charge_up::STRUGGLE_PENALTY);
         }
+    }
+
+    /// Stops the spot struggle at `elapsed_time`, if it was started.
+    pub(crate) fn stop_spot_struggle(&mut self, elapsed_time: f64) {
+        self.spot_struggle.stop();
+        self.log_end(EventKind::SpotStruggle, elapsed_time);
     }
 
     /// Checks whether the runner should try to secure the lead on this frame.
@@ -1262,6 +1312,7 @@ impl Runner {
             secure_lead::DURATION,
             secure_lead::COOLDOWN,
         );
+        self.log_start(EventKind::SecureLead, elapsed_time);
         self.hp
             .consume(secure_lead::hp_cost(style, state.course.distance));
     }
@@ -1315,6 +1366,7 @@ impl Runner {
                 .random_bool(compete_before_spurt::stamina_keep_chance(self.adjusted.wit))
         {
             self.stamina_keep.is_active = true;
+            self.log_start(EventKind::StaminaKeep, elapsed_time);
         }
         // ? Chance formula is unknown; set to always trigger for now.
         if self.stamina_keep.is_active || !(far_from_lead || self.nearby.count > 0) {
@@ -1337,6 +1389,7 @@ impl Runner {
             compete_before_spurt::DURATION,
             compete_before_spurt::COOLDOWN,
         );
+        self.log_start(EventKind::CompeteBeforeSpurt, elapsed_time);
         self.hp.consume(compete_before_spurt::hp_cost(
             style,
             state.course.distance,
@@ -1345,11 +1398,18 @@ impl Runner {
     }
 
     /// Starts dueling (追い比べ), unless the runner already is.
-    pub(crate) fn start_duel(&mut self) {
+    pub(crate) fn start_duel(&mut self, elapsed_time: f64) {
         if self.duel.is_dueling() {
             return;
         }
         self.duel = Duel::start(self.adjusted.guts);
+        self.log_start(EventKind::Duel, elapsed_time);
+    }
+
+    /// Stops dueling at `elapsed_time`, if the runner is.
+    pub(crate) fn stop_duel(&mut self, elapsed_time: f64) {
+        self.duel.stop();
+        self.log_end(EventKind::Duel, elapsed_time);
     }
 
     /// Applies slope effects after a segment update with `transition` (see

@@ -745,6 +745,7 @@ impl UnreadyRunner {
             trigger_scheduler: self.trigger_scheduler,
             finish_time: None,
             finish_margin: None,
+            events: Vec::new(),
             spot_struggle: SpotStruggle::Pending,
             duel: Duel::Pending,
             secure_lead: TimedBoost::Idle { next_check: 0.0 },
