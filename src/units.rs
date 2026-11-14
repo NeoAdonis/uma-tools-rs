@@ -83,17 +83,17 @@ impl CourseWidths {
     }
 
     /// Returns the minimum of both values.
-    pub fn min(self, other: Self) -> Self {
+    pub(crate) fn min(self, other: Self) -> Self {
         Self(self.0.min(other.0))
     }
 
     /// Returns the maximum of both values.
-    pub fn max(self, other: Self) -> Self {
+    pub(crate) fn max(self, other: Self) -> Self {
         Self(self.0.max(other.0))
     }
 
     /// Restricts the value to `min..=max`.
-    pub fn clamp(self, min: Self, max: Self) -> Self {
+    pub(crate) fn clamp(self, min: Self, max: Self) -> Self {
         Self(self.0.clamp(min.0, max.0))
     }
 }
