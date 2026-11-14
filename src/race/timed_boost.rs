@@ -6,7 +6,7 @@
 
 /// Timed boost state.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum TimedBoost {
+pub(crate) enum TimedBoost {
     /// Waiting for the next check at `next_check` (s).
     Idle { next_check: f64 },
     /// Boosting target speed by `speed_bonus` (m/s) until `expires_at` (s).

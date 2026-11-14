@@ -36,7 +36,7 @@ const TOLERANCE: f64 = 1e-6;
 
 /// Duel state.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Duel {
+pub(crate) enum Duel {
     /// Not started yet.
     Pending,
     /// Dueling, with the given target speed (m/s) and acceleration (m/s²) bonuses.
@@ -59,17 +59,17 @@ impl Duel {
     }
 
     /// Checks if the runner is currently dueling.
-    pub fn is_dueling(&self) -> bool {
+    pub(crate) fn is_dueling(&self) -> bool {
         matches!(self, Duel::Active { .. })
     }
 
     /// Checks if the runner has dueled at some point, even if she already left.
-    pub fn has_dueled(&self) -> bool {
+    pub(crate) fn has_dueled(&self) -> bool {
         !matches!(self, Duel::Pending)
     }
 
     /// Checks if the runner has left a duel, and thus can't duel again.
-    pub fn has_ended(&self) -> bool {
+    pub(crate) fn has_ended(&self) -> bool {
         matches!(self, Duel::Ended)
     }
 

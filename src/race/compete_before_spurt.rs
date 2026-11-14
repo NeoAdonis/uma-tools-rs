@@ -33,13 +33,13 @@ pub(crate) const STAMINA_KEEP_RATIO: RangeInclusive<f64> = 1.035..=1.04;
 
 /// Stamina keep (持久力温存) state (2.5 Anniv. onward).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct StaminaKeep {
+pub(crate) struct StaminaKeep {
     /// Ratio of the HP required to finish the race that the runner tries to
     /// keep. Rolled before the race begins; zero before 2.5 Anniv.
-    pub ratio: f64,
+    pub(crate) ratio: f64,
     /// Whether the runner is keeping stamina. While keeping it, she won't
     /// compete before spurt. Reset by recovery skills.
-    pub is_active: bool,
+    pub(crate) is_active: bool,
 }
 
 impl StaminaKeep {

@@ -26,20 +26,20 @@ pub(crate) const RUSH_ACTIVITY: f64 = 0.8;
 
 /// Charge up state. It is kept after the race as a record of the mechanic.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChargeUp {
+pub(crate) struct ChargeUp {
     /// Power stat used by this mechanic. Fixed at the start of the race.
-    pub power: f64,
+    pub(crate) power: f64,
     /// Power conserved so far.
-    pub conserved: f64,
+    pub(crate) conserved: f64,
     /// Power can't be conserved before this time, in seconds.
     pub(crate) cooldown_until: f64,
     /// Whether the conserved power has been released.
-    pub outcome: ChargeUpOutcome,
+    pub(crate) outcome: ChargeUpOutcome,
 }
 
 /// Outcome of the Charge up upon entering the last spurt.
 #[derive(Clone, Debug, PartialEq)]
-pub enum ChargeUpOutcome {
+pub(crate) enum ChargeUpOutcome {
     /// The last spurt has not been entered yet.
     Pending,
     /// The conserved power was released (Fully Charged, 脚色十分).
@@ -50,19 +50,19 @@ pub enum ChargeUpOutcome {
 
 /// Record of a charge up release.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ChargeUpRelease {
+pub(crate) struct ChargeUpRelease {
     /// Power conserved at the time of release.
-    pub conserved: f64,
+    pub(crate) conserved: f64,
     /// Acceleration bonus in m/s².
-    pub acceleration: f64,
+    pub(crate) acceleration: f64,
     /// Duration of the acceleration bonus in seconds.
-    pub duration: f64,
+    pub(crate) duration: f64,
     /// Time of release in seconds.
-    pub start_time: f64,
+    pub(crate) start_time: f64,
     /// Position of release in meters.
-    pub start_position: f64,
+    pub(crate) start_position: f64,
     /// Time when the acceleration bonus ends, in seconds.
-    pub expires_at: f64,
+    pub(crate) expires_at: f64,
 }
 
 impl ChargeUp {

@@ -17,7 +17,7 @@ pub(crate) const SKILL_SCALE: f64 = 0.1;
 
 /// All-out spurt state.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum AllOutSpurt {
+pub(crate) enum AllOutSpurt {
     /// Not activated yet (or the runner is not eligible).
     Pending,
     /// Active. `speed_bonus` is the target speed gained so far in m/s.
@@ -28,7 +28,7 @@ pub enum AllOutSpurt {
 
 impl AllOutSpurt {
     /// Checks if the all-out spurt is currently active.
-    pub fn is_active(&self) -> bool {
+    pub(crate) fn is_active(&self) -> bool {
         matches!(self, AllOutSpurt::Active { .. })
     }
 

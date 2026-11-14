@@ -101,23 +101,23 @@ impl RngSeed {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct RunnerRng {
     /// Seed of the runner, from which every stream derives.
-    pub seed: RngSeed,
+    pub(crate) seed: RngSeed,
     /// Stream for rush decisions: chance, section, snap-out checks.
-    pub rush: RaceRng,
+    pub(crate) rush: RaceRng,
     /// Stream for stamina keep ratio and checks.
-    pub stamina_keep: RaceRng,
+    pub(crate) stamina_keep: RaceRng,
     /// Stream of the last slope the runner entered (see [`Stream::Slope`]),
     /// replaced upon entering each slope.
-    pub slope: RaceRng,
+    pub(crate) slope: RaceRng,
     /// Stream for positioning strategy checks and thresholds.
-    pub positioning: RaceRng,
+    pub(crate) positioning: RaceRng,
     /// Stream for last spurt candidate checks.
-    pub last_spurt: RaceRng,
+    pub(crate) last_spurt: RaceRng,
     /// Stream for secure lead checks.
-    pub secure_lead: RaceRng,
+    pub(crate) secure_lead: RaceRng,
     /// In-race stream of each skill, in the runner's skill order (see
     /// [`Stream::Skill`]).
-    pub skills: Vec<RaceRng>,
+    pub(crate) skills: Vec<RaceRng>,
 }
 
 impl RunnerRng {

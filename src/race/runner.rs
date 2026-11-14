@@ -159,29 +159,29 @@ pub(crate) struct InitialState {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct OrderState {
     /// Current order (rank), 1-based.
-    pub order: u8,
+    pub(crate) order: u8,
     /// Number of runners in the race, i.e. its gates, finished ones included.
-    pub runner_count: u8,
+    pub(crate) runner_count: u8,
     /// Order rates that round to the current order (see `rates_at_order`).
-    pub rates: RangeInclusive<i32>,
+    pub(crate) rates: RangeInclusive<i32>,
     /// Best (lowest) order reached so far, excluding the first 5 race seconds.
-    pub best: u8,
+    pub(crate) best: u8,
     /// Worst (highest) order reached so far, excluding the first 5 race seconds.
-    pub worst: u8,
+    pub(crate) worst: u8,
     /// Order rates that round to the best order (see `rates_at_order`).
-    pub best_rates: RangeInclusive<i32>,
+    pub(crate) best_rates: RangeInclusive<i32>,
     /// Order rates that round to the worst order (see `rates_at_order`).
-    pub worst_rates: RangeInclusive<i32>,
+    pub(crate) worst_rates: RangeInclusive<i32>,
     /// Change in order since last update.
-    pub delta: i8,
+    pub(crate) delta: i8,
     /// Number of overtakes since entering Mid phase.
-    pub overtakes_since_mid: u16,
+    pub(crate) overtakes_since_mid: u16,
     /// Number of overtakes since entering Late phase.
-    pub overtakes_since_late: u16,
+    pub(crate) overtakes_since_late: u16,
     /// Number of overtakes since entering last corner.
-    pub overtakes_since_last_corner: u16,
+    pub(crate) overtakes_since_last_corner: u16,
     /// Number of overtakes in corners during the Late race or later.
-    pub overtakes_in_late_corners: u16,
+    pub(crate) overtakes_in_late_corners: u16,
 }
 
 impl Default for OrderState {
@@ -223,19 +223,19 @@ pub(crate) fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32>
 #[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
-    pub from_first: f64,
+    pub(crate) from_first: f64,
     /// Distance difference from the next runner ahead in meters, or infinity
     /// if there's nobody ahead.
-    pub from_next: f64,
+    pub(crate) from_next: f64,
     /// Distance difference from the previous runner behind in meters, or
     /// infinity if there's nobody behind.
-    pub from_prev: f64,
+    pub(crate) from_prev: f64,
     /// Distance difference rate from the first-place runner relative to the
     /// distance between first and last place, in percent.
-    pub rate_from_first: f64,
+    pub(crate) rate_from_first: f64,
     /// Largest lead over the second-place runner taken before the Late race, in
     /// meters. A runner with nobody behind has no lead.
-    pub max_lead: f64,
+    pub(crate) max_lead: f64,
 }
 
 /// Rush counters.

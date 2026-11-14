@@ -35,7 +35,7 @@ pub(crate) const EXIT_LANE_GAP: CourseWidths = CourseWidths(0.416);
 
 /// Spot struggle state.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SpotStruggle {
+pub(crate) enum SpotStruggle {
     /// Not started yet.
     Pending,
     /// Started. Effects apply until `expires_at` (in seconds), but the runner
@@ -56,18 +56,18 @@ impl SpotStruggle {
     }
 
     /// Checks if the spot struggle is in effect at `elapsed_time`.
-    pub fn is_active(&self, elapsed_time: f64) -> bool {
+    pub(crate) fn is_active(&self, elapsed_time: f64) -> bool {
         matches!(self, SpotStruggle::Active { expires_at, .. } if elapsed_time < *expires_at)
     }
 
     /// Checks if the runner still counts as a struggler, even if the effects have
     /// expired.
-    pub fn is_struggler(&self) -> bool {
+    pub(crate) fn is_struggler(&self) -> bool {
         matches!(self, SpotStruggle::Active { .. })
     }
 
     /// Checks if the runner has entered a spot struggle at some point.
-    pub fn has_struggled(&self) -> bool {
+    pub(crate) fn has_struggled(&self) -> bool {
         !matches!(self, SpotStruggle::Pending)
     }
 

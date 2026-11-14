@@ -25,22 +25,22 @@ pub(crate) const HP_MULTIPLIER: f64 = 1.5;
 
 /// Rush state of a runner bound to rush.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RushState {
+pub(crate) struct RushState {
     /// Section (0-indexed) upon whose entry the runner starts rushing.
-    pub section: u8,
+    pub(crate) section: u8,
     /// Time in seconds when the runner started rushing, or zero if she hasn't.
-    pub start_time: f64,
+    pub(crate) start_time: f64,
     /// Time in seconds of the next snap out check while rushed, or when the
     /// rush ended once it's over.
-    pub end_time: f64,
+    pub(crate) end_time: f64,
     /// Maximum time in seconds the runner stays rushed.
-    pub max_duration: f64,
+    pub(crate) max_duration: f64,
     /// Whether the runner is currently rushed.
-    pub is_rushed: bool,
+    pub(crate) is_rushed: bool,
     /// Snap out checks failed so far.
-    pub failed_checks: u8,
+    pub(crate) failed_checks: u8,
     /// Style used for positioning while rushed.
-    pub style: EffectiveStyle,
+    pub(crate) style: EffectiveStyle,
 }
 
 impl RushState {
@@ -60,7 +60,7 @@ impl RushState {
     }
 
     /// Checks if the runner has rushed at some point.
-    pub fn has_rushed(&self) -> bool {
+    pub(crate) fn has_rushed(&self) -> bool {
         self.start_time > 0.0
     }
 

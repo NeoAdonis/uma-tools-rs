@@ -19,22 +19,22 @@ use super::Runner;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LaneState {
     /// Current lane position.
-    pub current: CourseWidths,
+    pub(crate) current: CourseWidths,
     /// Target lane position.
-    pub target: CourseWidths,
+    pub(crate) target: CourseWidths,
     /// Lateral speed applied on the last lane update in course widths per second.
     ///
     /// Positive values move outward, negative values move inward and zero means the
     /// runner didn't change lanes on the last frame.
-    pub speed: f64,
+    pub(crate) speed: f64,
     /// Non-directional lane change speed in course widths per second.
     ///
     /// It changes towards the lane change target speed, before skills and direction
     /// are accounted for, and resets when the target lane is reached.
-    pub current_speed: f64,
+    pub(crate) current_speed: f64,
     /// Time spent moving laterally in the same direction until the last lane
     /// update, in seconds, or zero if she didn't change lanes on it.
-    pub move_time: f64,
+    pub(crate) move_time: f64,
 }
 
 impl LaneState {

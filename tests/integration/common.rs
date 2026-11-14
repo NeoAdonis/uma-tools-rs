@@ -13,14 +13,14 @@ use uma_tools::skill::*;
 use uma_tools::uma::*;
 
 /// Load a course from `data/course_data.json` and `data/jp/rails/`.
-pub fn load_course(course_id: u32) -> Course {
+pub(crate) fn load_course(course_id: u32) -> Course {
     let (courses, rails) = ("data/course_data.json", "data/jp/rails");
     Course::from_json_files(courses, rails, &course_id.to_string())
         .unwrap_or_else(|_| panic!("Failed to load course {course_id}"))
 }
 
 /// Standard race parameters (firm turf, sunny spring G1 with 9 gates).
-pub fn race_params() -> RaceParameters {
+pub(crate) fn race_params() -> RaceParameters {
     RaceParameters {
         track_condition: TrackCondition::Firm,
         weather: Weather::Sunny,
@@ -35,7 +35,7 @@ pub fn race_params() -> RaceParameters {
 /// Default configuration with the given RNG seed, keeping the moods set for
 /// runners and giving Normal mood to the rest (see
 /// [`Configuration::mood_assignment`]).
-pub fn seeded_config(seed: u64) -> Configuration {
+pub(crate) fn seeded_config(seed: u64) -> Configuration {
     Configuration {
         seed: Some(seed),
         mood_assignment: Assignment::Unset,
@@ -47,7 +47,7 @@ pub fn seeded_config(seed: u64) -> Configuration {
 /// Baseline runner with the given style and A aptitudes.
 ///
 /// Override single stats with `Uma { wit: 100, ..uma(BaseStyle::Late) }`.
-pub fn uma(style: BaseStyle) -> Uma {
+pub(crate) fn uma(style: BaseStyle) -> Uma {
     Uma {
         speed: 1200,
         stamina: 1000,
@@ -70,7 +70,7 @@ pub fn uma(style: BaseStyle) -> Uma {
 /// # Panics
 ///
 /// Panics if the skill data can't be loaded.
-pub fn runaway_skill() -> Arc<Skill> {
+pub(crate) fn runaway_skill() -> Arc<Skill> {
     static SKILL: OnceLock<Arc<Skill>> = OnceLock::new();
     SKILL
         .get_or_init(|| {
@@ -84,7 +84,7 @@ pub fn runaway_skill() -> Arc<Skill> {
 }
 
 /// Ready race with standard parameters and a single runner with normal mood.
-pub fn ready_solver(
+pub(crate) fn ready_solver(
     course_id: u32,
     uma: Uma,
     skills: Vec<Arc<Skill>>,
@@ -98,7 +98,7 @@ pub fn ready_solver(
 /// Regular skill effect on oneself with a direct value.
 ///
 /// Override fields with `SkillEffect { target, ..effect(...) }`.
-pub fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
+pub(crate) fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
     SkillEffect {
         skill_type,
         target: SkillTarget::Oneself,
@@ -110,7 +110,11 @@ pub fn effect(skill_type: SkillType, modifier: f64) -> SkillEffect {
 
 /// Skill alternative with a single [`effect`], a base duration of 3 seconds and
 /// no precondition.
-pub fn alternative(condition: &str, skill_type: SkillType, modifier: f64) -> SkillAlternative {
+pub(crate) fn alternative(
+    condition: &str,
+    skill_type: SkillType,
+    modifier: f64,
+) -> SkillAlternative {
     SkillAlternative {
         base_duration: 3.0,
         base_cooldown: DEFAULT_COOLDOWN,
@@ -125,7 +129,7 @@ pub fn alternative(condition: &str, skill_type: SkillType, modifier: f64) -> Ski
 /// always available.
 ///
 /// Override fields with `Skill { id, rarity, ..synthetic_skill(...) }`.
-pub fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
+pub(crate) fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
     Skill {
         id: 0,
         rarity: SkillRarity::White,
@@ -139,7 +143,7 @@ pub fn synthetic_skill(alternatives: Vec<SkillAlternative>) -> Skill {
 }
 
 /// Always available white skill with a single [`alternative`].
-pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Arc<Skill> {
+pub(crate) fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> Arc<Skill> {
     Arc::new(Skill {
         id,
         ..synthetic_skill(vec![alternative(condition, skill_type, modifier)])
@@ -148,6 +152,6 @@ pub fn skill(id: i32, condition: &str, skill_type: SkillType, modifier: f64) -> 
 
 /// Always available skill whose target speed effect is too small to change the
 /// race.
-pub fn negligible_skill(condition: &str) -> Arc<Skill> {
+pub(crate) fn negligible_skill(condition: &str) -> Arc<Skill> {
     skill(999999, condition, SkillType::TargetSpeed, 0.0001)
 }
