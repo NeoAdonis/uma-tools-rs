@@ -7,7 +7,7 @@
 use crate::configuration::GameVersion;
 use crate::units::CourseWidths;
 
-/// Check if a runner is blocked by another runner from the front based on
+/// Checks if a runner is blocked by another runner from the front based on
 /// distance and lane difference.
 ///
 /// When front-blocked, the runner's speed is capped. Runners at the same
@@ -22,15 +22,15 @@ pub(crate) fn check_front_blocked(distance: f64, lane_diff: CourseWidths) -> boo
     lane_diff.abs() <= CourseWidths::from_horse_lanes((1.0 - 0.3 * distance) * 0.75)
 }
 
-/// Check if a runner is blocking another runner from the side based on distance
-/// and lane difference.
+/// Checks if a runner is blocking another runner from the side based on
+/// distance and lane difference.
 ///
 /// When side-blocked, the runner cannot change lanes.
 pub(crate) fn check_side_blocked(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 1.05, 2.0)
 }
 
-/// Check if a runner is near another runner based on distance and lane
+/// Checks if a runner is near another runner based on distance and lane
 /// difference.
 ///
 /// Two runners are near if they are less than 3m apart and less than 3 lanes to
@@ -47,7 +47,7 @@ pub(crate) fn is_near(distance: f64, lane_diff: CourseWidths, game_version: Game
     is_near_by(distance, lane_diff, threshold, threshold)
 }
 
-/// Check if a runner is near another runner and in the same lane based on
+/// Checks if a runner is near another runner and in the same lane based on
 /// distance and lane difference.
 ///
 /// This is checked by certain skills.
@@ -55,7 +55,7 @@ pub(crate) fn is_near_same_lane(distance: f64, lane_diff: CourseWidths) -> bool 
     is_near_by(distance, lane_diff, 2.5, 1.0)
 }
 
-/// Check if a runner is behind another runner within a reasonable distance and
+/// Checks if a runner is behind another runner within a reasonable distance and
 /// lane difference.
 ///
 /// This is checked by certain skills.
@@ -63,16 +63,15 @@ pub(crate) fn is_near_behind_set1(distance: f64, lane_diff: CourseWidths) -> boo
     is_near_by(distance, lane_diff, 5.0, 2.7)
 }
 
-/// Check if a runner is surrounding another runner from the front (and
-/// conversely, being surrounded by the other runner from behind) based on
-/// distance and lane difference.
+/// Checks if a runner is surrounding another runner from the front (and being
+/// surrounded by from behind) based on distance and lane difference.
 ///
 /// This is checked by certain skills.
 pub(crate) fn is_front_surrounded(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, 3.0, 1.5)
 }
 
-/// Check if a runner is surrounding (and being surrounded by) another runner
+/// Checks if a runner is surrounding (and being surrounded by) another runner
 /// from the side based on distance and lane difference.
 ///
 /// This is checked by certain skills.
@@ -86,7 +85,7 @@ pub(crate) const OVERLAP_DISTANCE: f64 = 0.4;
 /// overlapping runner is bumped to exactly this far from the other one.
 pub(crate) const OVERLAP_LANE_GAP: f64 = 0.4;
 
-/// Check if a runner is overlapping with another runner based on position and
+/// Checks if a runner is overlapping with another runner based on position and
 /// lane difference.
 pub(crate) fn is_overlapping(distance: f64, lane_diff: CourseWidths) -> bool {
     is_near_by(distance, lane_diff, OVERLAP_DISTANCE, OVERLAP_LANE_GAP)
@@ -100,14 +99,14 @@ const LANE_DIFF_TOLERANCE: CourseWidths = CourseWidths(1e-9);
 /// proximity checks used when updating blocking status.
 const MAX_CHECK_LANE_DIFF: f64 = 3.0;
 
-/// Lane difference at or beyond which no proximity check holds, whatever the
-/// distance and game version.
+/// Returns the lane difference at or beyond which no proximity check holds,
+/// whatever the distance and game version.
 pub(crate) fn lane_diff_limit() -> CourseWidths {
     CourseWidths::from_horse_lanes(MAX_CHECK_LANE_DIFF) - LANE_DIFF_TOLERANCE
 }
 
-/// Check if a runner is near another runner within a specified distance
-/// and lane difference.
+/// Checks if a runner is near another runner within a specified distance and
+/// lane difference.
 ///
 /// `distance` and `max_distance` are in meters, `lane_diff` is in course widths
 /// and `max_lane_diff` is in horse lanes. A lane difference equal to

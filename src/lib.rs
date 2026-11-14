@@ -87,8 +87,7 @@ pub mod units;
 #[cfg(test)]
 mod test_utils;
 
-// Re-export the types needed to load data, build a race, run it and read its
-// results.
+// Re-export the types needed to load data, build/run races, and read results.
 pub use condition::parser::ParseError;
 pub use configuration::Configuration;
 pub use course::Course;

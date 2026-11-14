@@ -1,6 +1,7 @@
-//! Shape of the inner rail (lane 0) of a course in the world, which sets the
-//! extra world distance runners cover by running wide or changing lanes, and
-//! so how much it slows them down.
+//! Shape of the inner rail (lane 0) of a course in the world.
+//!
+//! It sets the extra world distance runners cover by running wide or changing
+//! lanes, and so how much it slows them down.
 //!
 //! The game places runners in the world from 1001 keyframes per course, at
 //! equal course distances from the gate to the goal, each with the position
@@ -105,7 +106,7 @@ impl Default for Rail {
 }
 
 impl Rail {
-    /// Create a rail from its keyframes, equally spaced over `length` meters.
+    /// Creates a rail from its keyframes, equally spaced over `length` meters.
     pub(crate) fn new(base_ratio: f64, length: f64, keyframes: Vec<Keyframe>) -> Self {
         debug_assert!(base_ratio > 0.0 && length > 0.0 && keyframes.len() >= 2);
         Rail {
@@ -116,8 +117,8 @@ impl Rail {
         }
     }
 
-    /// World position on the horizontal plane at `position` in meters and
-    /// `lane`.
+    /// Returns the world position on the horizontal plane at `position` in meters
+    /// and `lane`.
     ///
     /// Positions before the gate are clamped to it, and those past the goal
     /// extend the last segment in a straight line.

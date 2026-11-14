@@ -44,12 +44,12 @@ pub trait Segment: private::Sealed {
     fn start(&self) -> f64;
     fn end(&self) -> f64;
 
-    /// Get the `(start, end)` range of the segment.
+    /// Returns the `(start, end)` range of the segment.
     fn range(&self) -> (f64, f64) {
         (self.start(), self.end())
     }
 
-    /// Check if `position` is within the segment.
+    /// Returns whether `position` is within the segment.
     fn contains(&self, position: f64) -> bool {
         position >= self.start() && position < self.end()
     }
@@ -65,7 +65,7 @@ mod private {
     impl Sealed for super::Straight {}
 }
 
-/// Represents a corner on the course.
+/// A corner on the course.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Corner {
@@ -85,7 +85,7 @@ impl Segment for Corner {
     }
 }
 
-/// Represents the slope type of a course segment.
+/// Slope type of a course segment.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum SlopeType {
@@ -94,7 +94,7 @@ pub enum SlopeType {
     Downhill = 2,
 }
 
-/// Represents a slope segment on the course.
+/// A slope segment on the course.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Slope {
     /// Start position of the slope in meters.
@@ -120,7 +120,7 @@ impl Segment for Slope {
 }
 
 impl Slope {
-    /// Create a new Slope for testing purposes.
+    /// Creates a slope for testing purposes.
     #[cfg(test)]
     pub fn new(start: f64, length: f64, grade: f64) -> Self {
         Slope {
@@ -130,17 +130,17 @@ impl Slope {
         }
     }
 
-    /// Check if the slope is uphill.
+    /// Returns whether the slope is uphill.
     pub fn is_uphill(&self) -> bool {
         self.slope_type() == SlopeType::Uphill
     }
 
-    /// Check if the slope is downhill.
+    /// Returns whether the slope is downhill.
     pub fn is_downhill(&self) -> bool {
         self.slope_type() == SlopeType::Downhill
     }
 
-    /// Get the slope type classification.
+    /// Returns the slope type classification.
     pub fn slope_type(&self) -> SlopeType {
         if self.grade > 0.0 {
             SlopeType::Uphill
@@ -152,7 +152,7 @@ impl Slope {
     }
 }
 
-/// Represents whether a straight segment is facing the audience or not.
+/// Orientation of a straight segment relative to the audience.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FrontType {
@@ -160,10 +160,11 @@ pub enum FrontType {
     Audience = 1,
     /// Away from the audience.
     Opposite = 2,
+    // ? Appears in some courses, but not sure what it means.
     Unknown = 3,
 }
 
-/// Represents a straight segment on the course.
+/// A straight segment on the course.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Straight {

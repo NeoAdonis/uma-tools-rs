@@ -1,7 +1,4 @@
-//! # Random Segments
-//!
-//! This module rolls the random variables of skill conditions when the
-//! scheduler is built.
+//! Rolling of the random variables of skill conditions.
 //!
 //! Random variables don't pick a single point: they pick a random **10m
 //! segment** ([`SEGMENT_LENGTH`]) inside the area they describe (a phase, a
@@ -11,7 +8,7 @@
 //! if the roll failed (a `random_lot` miss, or no matching feature on the
 //! course, e.g. `corner_random==4` without a 4th corner).
 //!
-//! ## Shared Rolls
+//! # Shared Rolls
 //!
 //! Each distinct random comparison (same variable, operator and value) is
 //! rolled **once per skill** ([`RandomRolls`]), and every branch containing it
@@ -31,7 +28,7 @@
 //! through a single alternative; rolled once, the first one satisfied in order
 //! wins at the shared segment.
 //!
-//! ## From Segments to Triggers
+//! # From Segments to Triggers
 //!
 //! When compiling (see [`skill_activation`](crate::trigger::skill_activation)),
 //! each segment `[start, start + 10]` is intersected with the branch's position
@@ -66,7 +63,7 @@ pub(crate) struct RandomRolls<'a> {
 }
 
 impl<'a> RandomRolls<'a> {
-    /// Roll the random variables of every OR branch of a condition.
+    /// Rolls the random variables of every OR branch of a condition.
     ///
     /// Returns one entry per branch (in the order of
     /// [`Condition::branches`]), holding the points where the branch should
@@ -90,7 +87,7 @@ impl<'a> RandomRolls<'a> {
             .collect()
     }
 
-    /// Roll the random variables of an AND chain, reusing the results of
+    /// Rolls the random variables of an AND chain, reusing the results of
     /// comparisons already rolled by another branch.
     ///
     /// Returns the points where the branch should be checked, or `None` if a
@@ -117,8 +114,10 @@ impl<'a> RandomRolls<'a> {
     }
 }
 
-/// Areas of the random variables of every OR branch of a condition, without
-/// rolling them: every segment they could roll, and so where the branch could
+/// Returns the areas of the random variables of every OR branch of a condition,
+/// without rolling them.
+///
+/// The areas hold every segment they could roll, and so where the branch could
 /// be true whatever the rolls. Random lots always hit.
 ///
 /// Returns one entry per branch (in the order of [`Condition::branches`]),
@@ -136,7 +135,7 @@ pub(crate) fn random_areas(condition: &Condition, course: &Course) -> Vec<Option
     condition.branches.iter().map(branch_areas).collect()
 }
 
-/// Process a single comparison that might contain a random variable.
+/// Processes a single comparison that might contain a random variable.
 ///
 /// Returns `Some(points)` with the points where the skill should be checked
 /// (empty for non-positional rolls), or `None` if the roll failed or the
@@ -187,7 +186,7 @@ enum Area {
 }
 
 impl Area {
-    /// Intervals the segments can be in, empty if there's no constraint.
+    /// Returns the intervals the segments can be in. Empty means no constraint.
     fn intervals(self) -> Vec<(f64, f64)> {
         match self {
             Self::Anywhere => vec![],
@@ -199,9 +198,10 @@ impl Area {
     }
 }
 
-/// Area of a comparison that might contain a random variable, or `None` if
-/// it's empty (e.g. `corner_random==4` without a 4th corner) or the condition
-/// is invalid.
+/// Returns the area of a comparison that might contain a random variable.
+///
+/// Returns `None` if the area is empty (e.g. `corner_random==4` without a 4th
+/// corner) or the condition is invalid.
 fn random_area(comp: &Comparison, course: &Course) -> Option<Area> {
     use VarType::*;
 
@@ -308,7 +308,7 @@ fn random_area(comp: &Comparison, course: &Course) -> Option<Area> {
     Some(area)
 }
 
-/// Calculate intersection of two intervals `a` and `b`, each given as
+/// Calculates the intersection of two intervals `a` and `b`, each given as
 /// `(start, end)`.
 ///
 /// Returns `Some((start, end))` if there's an intersection, `None` otherwise.
@@ -322,8 +322,9 @@ fn intersect_intervals(a: (f64, f64), b: (f64, f64)) -> Option<(f64, f64)> {
 /// Length in meters of the segments picked by random conditions.
 pub(crate) const SEGMENT_LENGTH: f64 = 10.0;
 
-/// Pick a random 10m segment within `[start, end]` and return its start. The
-/// start is uniform in `[start, end - 10]`, so the segment always fits.
+/// Picks a random 10m segment within `[start, end]` and returns its start.
+///
+/// The start is uniform in `[start, end - 10]`, so the segment always fits.
 /// Intervals shorter than 10m only have one segment, starting at `start`.
 ///
 /// The skill can activate anywhere in the segment, as long as the other
@@ -337,10 +338,10 @@ pub(crate) fn random_segment(start: f64, end: f64, rng: &mut impl Rng) -> f64 {
     }
 }
 
-/// Pick a random 10m segment from a collection of intervals stitched together
+/// Picks a random 10m segment from a collection of intervals stitched together
 /// end to end, and return its start (see [`random_segment`]).
 ///
-/// Intervals distances must be positive (i.e., `start < end`), otherwise the
+/// Interval distances must be positive (i.e., `start < end`), otherwise the
 /// behavior is undefined. Returns `None` if the intervals are empty.
 fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> Option<f64> {
     #[cfg(debug_assertions)]
@@ -364,7 +365,7 @@ fn random_segment_in_intervals(intervals: &[(f64, f64)], rng: &mut impl Rng) -> 
     Some(last.0 + offset)
 }
 
-/// Pick the segments of `all_corner_random`, in race order.
+/// Picks the segments of `all_corner_random`, in race order.
 ///
 /// Returns up to 4 points, from `corners` (as `(start, end)`, in race order).
 ///

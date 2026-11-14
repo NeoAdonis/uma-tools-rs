@@ -1,6 +1,6 @@
 //! Skill trigger checks, activation and active effects.
 //!
-//! ## Checking Skills
+//! # Checking Skills
 //!
 //! When a trigger fires, [`Runner::try_activate_skill`] checks its logic:
 //!
@@ -18,7 +18,7 @@
 //!    - [`Unlock`]: mark the precondition as satisfied. The logic is never
 //!      checked again.
 //!
-//! ## Activating a Skill
+//! # Activating a Skill
 //!
 //! Activating a skill ([`Runner::activate_skill`]):
 //!
@@ -63,7 +63,7 @@
 //! so a later alternative could win over an activation-dependent earlier one.
 //! No current skill has such alternatives.
 //!
-//! ## Forced Activations
+//! # Forced Activations
 //!
 //! Some effects activate other skills of the runner, bypassing their
 //! conditions: [`SkillType::ActivateRandomGold`] (e.g. "564 Escapades") and
@@ -136,7 +136,7 @@ impl Default for SkillModifiers {
 }
 
 impl SkillModifiers {
-    /// Check if skills are modifying target or current speed, in either
+    /// Checks whether skills are modifying target or current speed, in either
     /// direction.
     pub(crate) fn has_speed_effects(&self) -> bool {
         self.current_speed.abs() >= 0.0001 || self.target_speed.abs() >= 0.0001
@@ -178,8 +178,8 @@ pub struct SkillActivationFlags {
 }
 
 impl Runner {
-    /// Resolve the guards that can't change during the race (e.g.
-    /// `distance_type==3`), so that they aren't checked every frame.
+    /// Resolves the guards that can't change during the race so that they aren't
+    /// checked every frame.
     ///
     /// Guards that are true are removed. Logics with a false guard can never
     /// succeed, so their triggers are removed.
@@ -210,7 +210,7 @@ impl Runner {
         self.trigger_scheduler.remove_triggers(&unsatisfiable);
     }
 
-    /// Check every skill trigger.
+    /// Checks every skill trigger.
     ///
     /// All skills are checked at once, at the start of each frame, against runner's
     /// state at that point. Nothing is updated in between, so every check sees the
@@ -276,7 +276,7 @@ impl Runner {
         }
     }
 
-    /// Activate the pinned skill alternatives due by now, in order.
+    /// Activates the pinned skill alternatives due by now, in order.
     ///
     /// They wait for their conditions to confirm them on this frame (see
     /// [`Self::check_pinned_skill`]), which also start their cooldowns.
@@ -292,11 +292,12 @@ impl Runner {
         }
     }
 
-    /// Handle the conditions of a pinned skill's alternative holding: confirm
-    /// this frame's pinned activation of the alternative, or record it as a
-    /// missing activation if `reports_missing` (see
-    /// [`Runner::missing_activations`]). Either way, its cooldown starts, as
-    /// if it activated.
+    /// Handles the conditions of a pinned skill's alternative holding.
+    ///
+    /// It confirms this frame's pinned activation of the alternative, or records it
+    /// as a missing activation if `reports_missing` (see
+    /// [`Runner::missing_activations`]). Either way, its cooldown starts, as if it
+    /// activated.
     fn check_pinned_skill(
         &mut self,
         skill_index: usize,
@@ -322,8 +323,8 @@ impl Runner {
         self.start_cooldown(skill_index, alternative_index, state);
     }
 
-    /// Record of an activation of a skill alternative at this point, or at the
-    /// race start for out-of-gate alternatives.
+    /// Returns the record of an activation of a skill alternative at this point, or
+    /// at the race start for out-of-gate alternatives.
     ///
     /// The runners reached by effects on others are added once the solver picks
     /// them (see [`SkillActivationRecord::affected`]).
@@ -351,21 +352,23 @@ impl Runner {
         }
     }
 
-    /// Factor every base duration is scaled by: the course distance / 1000, and
-    /// her duration effects.
+    /// Returns the factor every base duration is scaled by (*course distance /
+    /// 1000*), and her duration effects.
     fn duration_factor(&self, state: &RaceState) -> f64 {
         state.course.distance as f64 / 1000.0 * self.skill_modifiers.duration_scaling
     }
 
-    /// Duration of the effects of a skill alternative activating now, in
-    /// seconds. Effects lasting until the end of the race have an infinite base
-    /// duration, which stays infinite.
+    /// Returns the duration of the effects of a skill alternative activating now,
+    /// in seconds.
+    ///
+    /// Effects lasting until the end of the race have an infinite base duration,
+    /// which stays infinite.
     fn scaled_duration(&self, alternative: &SkillAlternative, state: &RaceState) -> f64 {
         self.situational_base_duration(alternative) * self.duration_factor(state)
     }
 
-    /// Check if the runner can activate skills on a check at `time`, at the end
-    /// of a frame.
+    /// Checks whether the runner can activate skills on a check at `time`, at the
+    /// end of a frame.
     ///
     /// For that, she needs to move during the frame (i.e. she has left the gate
     /// by then) and hasn't finished yet.
@@ -373,7 +376,7 @@ impl Runner {
         self.start_delay <= time && !self.has_finished()
     }
 
-    /// Check the preconditions whose window contains the current position.
+    /// Checks the preconditions whose window contains the current position.
     ///
     /// This must be called before any trigger whose logic can wait for a
     /// precondition, so that a skill can activate in the same frame its
@@ -401,7 +404,7 @@ impl Runner {
         }
     }
 
-    /// Check the triggers that don't depend on this frame's activations.
+    /// Checks the triggers that don't depend on this frame's activations.
     ///
     /// Windows (position, phase, time, HP) containing the current values are
     /// checked, as well as entering the last straight since the last check.
@@ -443,8 +446,10 @@ impl Runner {
         });
     }
 
-    /// Check `is_other_character_activate_advantage_skill` and
-    /// `is_popularity_top_character_activate_advantage_skill` triggers.
+    /// Checks activation-dependent triggers.
+    ///
+    /// Used by conditions with `is_other_character_activate_advantage_skill` and
+    /// `is_popularity_top_character_activate_advantage_skill` variables.
     ///
     /// Other runners' activations are only known once every runner has checked
     /// her skills, so this is called by the solver afterwards.
@@ -454,7 +459,7 @@ impl Runner {
         });
     }
 
-    /// Attempt to activate the skills associated with each trigger index, in
+    /// Attempts to activate the skills associated with each trigger index, in
     /// order.
     ///
     /// The indices are added by `collect` to the scheduler's check buffer, which
@@ -478,7 +483,7 @@ impl Runner {
         any_succeeded
     }
 
-    /// Given a trigger index, attempt to activate the associated skill.
+    /// Attempts to activate the skill associated with a trigger index.
     ///
     /// Returns whether the logic succeeded.
     fn try_activate_skill(&mut self, trigger_index: usize, state: &RaceState) -> bool {
@@ -541,7 +546,7 @@ impl Runner {
         should_activate
     }
 
-    /// Activate a skill by its index and alternative index.
+    /// Activates a skill by its index and alternative index.
     pub(crate) fn activate_skill(
         &mut self,
         skill_index: usize,
@@ -551,7 +556,7 @@ impl Runner {
         self.activate_skill_as(skill_index, alternative_index, None, state);
     }
 
-    /// Activate a skill by its index and alternative index, as the `pinned`
+    /// Activates a skill by its index and alternative index, as the `pinned`
     /// activation if it's one.
     ///
     /// The effects of a pinned activation on others reach its targets, if set,
@@ -679,7 +684,7 @@ impl Runner {
         }
     }
 
-    /// Start the cooldown of a skill alternative, shared by all its OR branches.
+    /// Starts the cooldown of a skill alternative, shared by all its OR branches.
     ///
     /// The base cooldown scales with the course distance by a factor of *course
     /// distance / 1000*.
@@ -697,7 +702,7 @@ impl Runner {
         }
     }
 
-    /// Check if a skill alternative is waiting for its cooldown to end.
+    /// Checks whether a skill alternative is waiting for its cooldown to end.
     fn is_in_cooldown(
         &self,
         skill_index: usize,
@@ -707,7 +712,7 @@ impl Runner {
         state.elapsed_time < self.cooldown_until[skill_index][alternative_index]
     }
 
-    /// Check if a skill has activated through any alternative other than the
+    /// Checks whether a skill has activated through any alternative other than the
     /// given one.
     pub(crate) fn other_alternative_activated(
         &self,
@@ -717,16 +722,17 @@ impl Runner {
         self.activated_alternatives[skill_index] & !(1 << alternative_index) != 0
     }
 
-    /// Check if any timed effect applied by a skill is still active.
+    /// Checks whether any timed effect applied by a skill is still active.
     fn is_skill_active(&self, skill_index: usize) -> bool {
         self.active_timed_effects
             .iter()
             .any(|timed| timed.source == Some(skill_index))
     }
 
-    /// Alternative used to activate a skill bypassing its conditions: the (first)
-    /// one that activated before, or the first one if the skill hasn't activated
-    /// yet.
+    /// Returns the alternative used to activate a skill bypassing its conditions.
+    ///
+    /// It is the (first) one that activated before, or the first one if the skill
+    /// hasn't activated yet.
     fn forced_alternative(&self, skill_index: usize) -> usize {
         match self.activated_alternatives[skill_index] {
             0 => 0,
@@ -734,8 +740,8 @@ impl Runner {
         }
     }
 
-    /// Base duration of a skill alternative scaled with the runner's situation
-    /// (see [`DurationScaling`]), before distance scaling.
+    /// Returns the base duration of a skill alternative scaled with the runner's
+    /// situation (see [`DurationScaling`]), before distance scaling.
     fn situational_base_duration(&self, alternative: &SkillAlternative) -> f64 {
         use DurationScaling::*;
         let base = alternative.base_duration;
@@ -762,8 +768,8 @@ impl Runner {
         }
     }
 
-    /// Value of an effect's modifier scaled with its skill's level, then with
-    /// the runner's situation (see [`ValueScaling`]).
+    /// Returns the value of an effect's modifier scaled with its skill's level,
+    /// then with the runner's situation (see [`ValueScaling`]).
     fn scaled_modifier(
         &mut self,
         effect: &SkillEffect,
@@ -846,7 +852,7 @@ impl Runner {
         }
     }
 
-    /// Apply a single skill effect to the runner.
+    /// Applies a single skill effect to the runner.
     ///
     /// Effects can be categorized as follows:
     /// - Timed effects (speed, acceleration...): modify a stat for a certain
@@ -929,8 +935,8 @@ impl Runner {
         }
     }
 
-    /// Activate up to `count` distinct random gold skills (see [`Skill::is_gold`]),
-    /// bypassing their conditions.
+    /// Activates up to `count` distinct random gold skills (see
+    /// [`Skill::is_gold`]), bypassing their conditions.
     ///
     /// Skills that failed the wit check can be picked too, but out-of-gate skills
     /// can't, as their effects are only applied before the race, and neither can
@@ -971,16 +977,17 @@ impl Runner {
         }
     }
 
-    /// Check if a gold skill can be activated by
-    /// [`Self::activate_random_gold_skills`]: it isn't in cooldown, and none of its
-    /// effects are active.
+    /// Checks whether a gold skill can be activated by
+    /// [`Self::activate_random_gold_skills`].
+    ///
+    /// It can when it isn't in cooldown, and none of its effects are active.
     fn can_force_gold_skill(&self, skill_index: usize, state: &RaceState) -> bool {
         let alternative_index = self.forced_alternative(skill_index);
         !self.is_in_cooldown(skill_index, alternative_index, state)
             && !self.is_skill_active(skill_index)
     }
 
-    /// Activate up to `count` unique skills, bypassing their conditions and
+    /// Activates up to `count` unique skills, bypassing their conditions and
     /// cooldowns.
     ///
     /// Each activation is a new instance of the skill: its values (duration, wit
@@ -1010,7 +1017,7 @@ impl Runner {
         }
     }
 
-    /// Apply a skill effect casted by another runner.
+    /// Applies a skill effect cast by another runner.
     pub(crate) fn receive_skill_effect(&mut self, pending: &PendingEffect, state: &RaceState) {
         // Overtakes only extend the caster's own effects.
         self.apply_skill_effect(
@@ -1024,8 +1031,10 @@ impl Runner {
         self.recalculate_skill_modifiers();
     }
 
-    /// Mask of the activated alternatives of the skill with the given ID (see
-    /// [`Self::activated_alternatives`]), or 0 if the runner doesn't have it.
+    /// Returns the mask of the activated alternatives of the skill with the given
+    /// ID (see [`Self::activated_alternatives`]).
+    ///
+    /// It defaults to 0 if the runner doesn't have a skill with that ID.
     pub fn activated_mask(&self, skill_id: i32) -> u8 {
         self.skills
             .iter()
@@ -1033,7 +1042,7 @@ impl Runner {
             .map_or(0, |skill_index| self.activated_alternatives[skill_index])
     }
 
-    /// Check if a skill at the given index is a heal skill.
+    /// Checks whether a skill at the given index is a heal skill.
     ///
     /// A heal skill has an alternative that contains a positive Recovery effect.
     fn is_heal_skill_by_index(&self, skill_index: usize) -> bool {
@@ -1045,7 +1054,7 @@ impl Runner {
         })
     }
 
-    /// Update skill durations and remove expired effects.
+    /// Updates skill durations and removes expired effects.
     pub(crate) fn update_skill_durations(&mut self, elapsed_time: f64) {
         let before_count = self.active_timed_effects.len();
 
@@ -1068,12 +1077,12 @@ impl Runner {
         }
     }
 
-    /// Recalculate skill modifiers from active timed effects.
+    /// Recalculates skill modifiers from active timed effects.
     fn recalculate_skill_modifiers(&mut self) {
         self.skill_modifiers = SkillModifiers::from_effects(&self.active_timed_effects);
     }
 
-    /// Extend the active effects that can still be extended by overtaking, once
+    /// Extends the active effects that can still be extended by overtaking, once
     /// per overtake.
     pub(super) fn extend_effects_on_overtake(&mut self, overtakes: u16) {
         for timed in &mut self.active_timed_effects {
@@ -1084,8 +1093,8 @@ impl Runner {
         }
     }
 
-    /// Trigger the active additional effects applied on any of `triggers`,
-    /// `count` times, up to their maximum.
+    /// Triggers the active additional effects applied on any of `triggers`, `count`
+    /// times, up to their maximum.
     pub(super) fn trigger_additional_effects(
         &mut self,
         triggers: &[AdditionalActivation],
@@ -1106,9 +1115,11 @@ impl Runner {
         }
     }
 
-    /// Schedule skills triggered in a random segment after the all-out spurt
-    /// starts (`run_at_full_speed_random`). The segment is picked between the
-    /// current position and the goal, and checked like any other position window.
+    /// Schedules skills triggered in a random segment after the all-out spurt
+    /// starts (`run_at_full_speed_random`).
+    ///
+    /// The segment is picked between the current position and the goal, and checked
+    /// like any other position window.
     ///
     /// N.B. Unlike other random variables (see
     /// [`RandomRolls::roll`](crate::trigger::random::RandomRolls::roll)),

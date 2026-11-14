@@ -1,6 +1,8 @@
-//! Formulas that scale a skill effect's value or a skill's duration with the
-//! runner's situation (see [`ValueScaling`](crate::skill::ValueScaling) and
-//! [`DurationScaling`](crate::skill::DurationScaling)).
+//! Formulas that scale skill effect values and durations with the runner's
+//! situation.
+//!
+//! See [`ValueScaling`](crate::skill::ValueScaling) and
+//! [`DurationScaling`](crate::skill::DurationScaling).
 
 mod level_values;
 
@@ -9,7 +11,8 @@ use crate::skill::{SkillEffect, SkillType};
 
 use level_values::LEVEL_MULTIPLIERS;
 
-/// Multiplier for an effect of `skill_type` from a skill at `level`.
+/// Returns the multiplier for an effect of `skill_type` from a skill at
+/// `level`.
 ///
 /// Levels beyond the game's table use its closest level, and types missing from
 /// it are 1x.
@@ -19,7 +22,7 @@ pub(crate) fn level_multiplier(skill_type: SkillType, level: u8) -> f64 {
         .map_or(1.0, |row| row[(level.max(1) as usize).min(row.len()) - 1])
 }
 
-/// Modifier of `effect` scaled with the level of its skill (see
+/// Returns the modifier of `effect` scaled with the level of its skill (see
 /// [`level_multiplier`]).
 pub(crate) fn level_scaled_modifier(effect: &SkillEffect, level: u8) -> f64 {
     // ? Only positive effects are assumed to scale, so that neither drawbacks
@@ -113,14 +116,14 @@ pub(crate) const PERFORMANCE_LEVEL_MULTIPLIER: f64 = 1.2;
 /// for now.
 pub(crate) const FAN_LOVE_MULTIPLIER: f64 = 3.0;
 
-/// Multiplier from the number of skills the runner has, up to 1.2x at 20
-/// skills.
+/// Returns the multiplier from the number of skills the runner has, up to 1.2x
+/// at 20 skills.
 pub(crate) fn skill_count_multiplier(skill_count: usize) -> f64 {
     (1.0 + 0.01 * skill_count as f64).min(1.2)
 }
 
-/// Random multiplier given a uniform `roll` in `[0, 1)`: 0x (60%), 0.02x (30%)
-/// or 0.04x (10%).
+/// Returns the random multiplier given a uniform `roll` in `[0, 1)`: 0x (60%),
+/// 0.02x (30%) or 0.04x (10%).
 ///
 /// Shared by both random variants for now (see
 /// [`ValueScaling::MultiplyRandom1`][random]).
@@ -136,7 +139,7 @@ pub(crate) fn random_multiplier(roll: f64) -> f64 {
     }
 }
 
-/// Multiplier from the highest of the runner's raw stats.
+/// Returns the multiplier from the highest of the runner's raw stats.
 pub(crate) fn max_raw_stat_multiplier(stat: u16) -> f64 {
     match stat {
         ..600 => 0.8,
@@ -147,7 +150,8 @@ pub(crate) fn max_raw_stat_multiplier(stat: u16) -> f64 {
     }
 }
 
-/// Multiplier from the number of green skills activated by the runner.
+/// Returns the multiplier from the number of green skills activated by the
+/// runner.
 pub(crate) fn green_skill_count_multiplier(count: usize) -> f64 {
     match count {
         ..3 => 0.0,
@@ -157,13 +161,13 @@ pub(crate) fn green_skill_count_multiplier(count: usize) -> f64 {
     }
 }
 
-/// Bonus added to the value when the runner is at least 20 m behind the first
-/// place.
+/// Returns the bonus added to the value when the runner is at least 20 m behind
+/// the first place.
 pub(crate) fn distance_from_first_bonus(distance: f64) -> f64 {
     if distance >= 20.0 { 0.1 } else { 0.0 }
 }
 
-/// Bonus added to the value in Medium races.
+/// Returns the bonus added to the value in Medium races.
 pub(crate) fn medium_distance_bonus(distance_type: DistanceType) -> f64 {
     if distance_type == DistanceType::Medium {
         0.2
@@ -175,8 +179,8 @@ pub(crate) fn medium_distance_bonus(distance_type: DistanceType) -> f64 {
 /// ID of the Arima Kinen course (Nakayama, turf, 2500m, inner).
 pub(crate) const ARIMA_KINEN_COURSE_ID: u16 = 10506;
 
-/// Bonus added to the value of "Cinderella Gray" Oguri Cap's unique skill: 0.1
-/// in Mile races, and 0.2 on the Arima Kinen course with at least 146738 fans.
+/// Returns the bonus added to the value of "Cinderella Gray" Oguri Cap's unique
+/// skill: 0.1 in Mile races, 0.2 on Arima Kinen with 146738+ fans.
 pub(crate) fn cinderella_gray_bonus(course_id: u16, distance_type: DistanceType, fans: u32) -> f64 {
     if distance_type == DistanceType::Mile {
         0.1
@@ -187,14 +191,14 @@ pub(crate) fn cinderella_gray_bonus(course_id: u16, distance_type: DistanceType,
     }
 }
 
-/// Bonus added to the value when the runner is at least 8 bashin behind the
-/// first place.
+/// Returns the bonus added to the value when the runner is at least 8 bashin
+/// behind the first place.
 pub(crate) fn bashin_from_first_bonus(bashin: f64) -> f64 {
     if bashin >= 8.0 { 0.2 } else { 0.0 }
 }
 
-/// Multiplier from the longest time (in seconds) the runner was side-blocked
-/// during the Mid race.
+/// Returns the multiplier from the longest time (in seconds) the runner was
+/// side-blocked during the mid race.
 ///
 /// Used for both values and durations.
 pub(crate) fn mid_side_blocked_time_multiplier(time: f64) -> f64 {
@@ -209,7 +213,7 @@ pub(crate) fn mid_side_blocked_time_multiplier(time: f64) -> f64 {
     }
 }
 
-/// Multiplier from the runner's adjusted speed, first variant.
+/// Returns the multiplier from the runner's adjusted speed, first variant.
 pub(crate) fn speed_multiplier_1(speed: f64) -> f64 {
     if speed < 1700.0 {
         0.0
@@ -224,7 +228,7 @@ pub(crate) fn speed_multiplier_1(speed: f64) -> f64 {
     }
 }
 
-/// Multiplier from the runner's adjusted speed, second variant.
+/// Returns the multiplier from the runner's adjusted speed, second variant.
 pub(crate) fn speed_multiplier_2(speed: f64) -> f64 {
     if speed < 1400.0 {
         1.0
@@ -235,8 +239,8 @@ pub(crate) fn speed_multiplier_2(speed: f64) -> f64 {
     }
 }
 
-/// Multiplier from the number of overtakes in corners during the Late race or
-/// later.
+/// Returns the multiplier from the number of overtakes in corners during the
+/// late race or later.
 pub(crate) fn late_corner_overtake_multiplier(overtakes: u16) -> f64 {
     match overtakes {
         ..2 => 1.0,
@@ -246,7 +250,7 @@ pub(crate) fn late_corner_overtake_multiplier(overtakes: u16) -> f64 {
     }
 }
 
-/// Multiplier from the runner's fan count.
+/// Returns the multiplier from the runner's fan count.
 pub(crate) fn fan_count_multiplier(fan_count: u32) -> f64 {
     match fan_count {
         ..20000 => 0.8,
@@ -257,8 +261,8 @@ pub(crate) fn fan_count_multiplier(fan_count: u32) -> f64 {
     }
 }
 
-/// Multiplier from the largest lead (in meters) the runner took before the Late
-/// race.
+/// Returns the multiplier from the largest lead (in meters) the runner took
+/// before the late race.
 pub(crate) fn lead_multiplier(lead: f64) -> f64 {
     if lead < 10.0 {
         1.0
@@ -269,13 +273,14 @@ pub(crate) fn lead_multiplier(lead: f64) -> f64 {
     }
 }
 
-/// Duration multiplier from the distance (in meters) behind the first place, up
-/// to 1.6x.
+/// Returns the duration multiplier from the distance (in meters) behind the
+/// first place, up to 1.6x.
 pub(crate) fn distance_from_first_duration_multiplier(distance: f64) -> f64 {
     (0.8 + distance / 62.5).min(1.6)
 }
 
-/// Duration multiplier from the runner's remaining HP, first variant.
+/// Returns the duration multiplier from the runner's remaining HP, first
+/// variant.
 pub(crate) fn remaining_hp_duration_multiplier_1(hp: f64) -> f64 {
     if hp < 2000.0 {
         1.0
@@ -296,7 +301,8 @@ pub(crate) fn remaining_hp_duration_multiplier_1(hp: f64) -> f64 {
     }
 }
 
-/// Duration multiplier from the runner's remaining HP, second variant.
+/// Returns the duration multiplier from the runner's remaining HP, second
+/// variant.
 pub(crate) fn remaining_hp_duration_multiplier_2(hp: f64) -> f64 {
     if hp < 1500.0 {
         1.0
@@ -317,7 +323,8 @@ pub(crate) const UPHILL_EXTENSION: f64 = 0.5;
 /// Maximum number of uphills that extend a skill's base duration.
 pub(crate) const MAX_UPHILL_EXTENSIONS: u8 = 4;
 
-/// Base duration in seconds added for the number of uphills climbed.
+/// Returns the base duration in seconds added for the number of uphills
+/// climbed.
 pub(crate) fn uphill_duration_bonus(uphills: u8) -> f64 {
     UPHILL_EXTENSION * uphills.min(MAX_UPHILL_EXTENSIONS) as f64
 }

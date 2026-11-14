@@ -31,23 +31,23 @@ const EXIT_COOLDOWN: f64 = 1.0;
 /// followed by a 1s cooldown before checks resume.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum PositioningStrategy {
-    /// Run at regular pace.
+    /// Regular pace.
     Normal,
-    /// *(Front-runners only.)*
-    /// Try to stay ahead by pacing up to a certain distance.
+    /// An attempt from a front-runner to stay ahead by pacing up to a certain
+    /// distance.
     FrontSpeedUp,
-    /// *(Front-runners only.)*
-    /// Try to catch up with first place by pacing up to a certain distance.
+    /// An attempt from a front-runner to catch up with first place by pacing up to
+    /// a certain distance.
     /// Runaways and front runners count as the same strategy here.
     FrontOvertake,
-    /// *(Non-front-runners only.)*
-    /// Try to stay within a certain distance from pacemaker by pacing up.
+    /// An attempt from a non-front-runner to stay within a certain distance from
+    /// the pacemaker by pacing up.
     PaceUp(f64),
-    /// *(Non-front-runners only.)*
-    /// Try to fall back within a certain distance from pacemaker by pacing down.
+    /// An attempt from a non-front-runner to fall back within a certain distance
+    /// from the pacemaker by pacing down.
     PaceDown(f64),
-    /// *Introduced by 1.5 anniversary update in Japan.* Speed up if there is
-    /// another runner ahead whose strategy should actually position her behind.
+    /// A speed-up when there is another runner ahead whose strategy should actually
+    /// position her behind (1.5 Anniv. onward).
     ///
     /// Front-runners enter it when any such runner is ahead; other runners enter it
     /// when the pacemaker is such a runner. Exits once no such runner is ahead.
@@ -61,7 +61,8 @@ pub(crate) enum PositioningStrategy {
     PaceUpEx,
 }
 
-/// Whether [`PositioningStrategy::PaceUpEx`]'s conditions are met for a runner.
+/// Conditions of [`PositioningStrategy::PaceUpEx`] for a runner.
+///
 /// Both are false before the 1.5 anniversary update.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct PaceUpExConditions {
@@ -73,7 +74,7 @@ pub(crate) struct PaceUpExConditions {
 }
 
 impl PositioningStrategy {
-    /// Base target speed multiplier while following this strategy.
+    /// Returns the base target speed multiplier while following this strategy.
     pub(crate) fn speed_multiplier(self, phase: Phase, game_version: GameVersion) -> f64 {
         match self {
             PositioningStrategy::Normal => 1.0,
@@ -93,12 +94,12 @@ impl PositioningStrategy {
 }
 
 impl Runner {
-    /// Check if the runner is currently in position keep pace down mode.
+    /// Checks whether the runner is currently in position keep pace down mode.
     pub(crate) fn is_pace_down(&self) -> bool {
         matches!(self.positioning_strategy, PositioningStrategy::PaceDown(_))
     }
 
-    /// Get the current style used for positioning strategy decisions.
+    /// Returns the current style used for positioning strategy decisions.
     pub(crate) fn positioning_style(&self) -> EffectiveStyle {
         if self.is_rushed() {
             self.rush_state.as_ref().unwrap().style
@@ -107,7 +108,7 @@ impl Runner {
         }
     }
 
-    /// Criteria for front-runners to speed up to stay ahead or catch up.
+    /// Returns whether front-runners can speed up to stay ahead or catch up.
     fn can_speed_up_to_front(
         &self,
         distance_ahead: f64,
@@ -125,10 +126,11 @@ impl Runner {
         distance_ahead < distance_threshold
     }
 
-    /// Update positioning strategy for front-runners, which starts during the
-    /// first 10 sections (5/12 of the race). The strategy determines whether to
-    /// pace up to stay ahead (Speed Up) or to catch up with the first runner of
-    /// the same strategy (Overtake).
+    /// Updates the positioning strategy for front-runners.
+    ///
+    /// The strategy starts during the first 10 sections (5/12 of the race). It
+    /// determines whether to pace up to stay ahead (Speed Up) or to catch up with
+    /// the first runner of the same strategy (Overtake).
     ///
     /// `lead` is the distance to the runner behind if this runner is first
     /// overall, or `None` otherwise. `strategy_lead` is the distance to the next
@@ -213,11 +215,10 @@ impl Runner {
         }
     }
 
-    /// Update positioning strategy for non-front-runners, which starts during
-    /// the first 10 sections (5/12 of the race).
+    /// Updates the positioning strategy for non-front-runners.
     ///
-    /// The strategy determines whether to pace up or down to keep distance from the
-    /// pacemaker.
+    /// The strategy starts during the first 10 sections (5/12 of the race). It
+    /// determines whether to pace up or down to keep distance from the pacemaker.
     ///
     /// `distance_behind` is the distance from the pacemaker in meters (0 if we are
     /// the pacemaker).
@@ -318,9 +319,10 @@ impl Runner {
         self.next_positioning_check = next_check;
     }
 
-    /// Enter `strategy`, which lasts until its exit conditions are met or the
-    /// runner has run the length of a section in it (rounded down), or three
-    /// for runaways.
+    /// Enters a positioning strategy and sets its exit position.
+    ///
+    /// The strategy lasts until its exit conditions are met or the runner has run
+    /// the length of a section in it (rounded down), or three for runaways.
     fn enter_positioning(&mut self, strategy: PositioningStrategy, state: &RaceState) {
         let sections = if self.positioning_style() == EffectiveStyle::Runaway {
             3.0
@@ -331,15 +333,16 @@ impl Runner {
         self.positioning_end = self.position + state.course.section_length().floor() * sections;
     }
 
-    /// Exit the current strategy at `elapsed_time` (s), checking again after
+    /// Exits the current strategy at `elapsed_time` (seconds), checking again after
     /// the exit cooldown and the usual check interval.
     fn exit_positioning(&mut self, elapsed_time: f64) {
         self.reset_positioning(elapsed_time + EXIT_COOLDOWN + CHECK_INTERVAL);
     }
 
-    /// Exit the current strategy at `elapsed_time` (s) if the runner has run
-    /// for long enough in it (see [`Self::enter_positioning`]), returning
-    /// whether she did.
+    /// Exits the current strategy at `elapsed_time` (seconds) if the runner has run
+    /// for long enough in it, returning whether she did.
+    ///
+    /// See [`Self::enter_positioning`] for how long that is.
     fn has_positioning_ended(&mut self, elapsed_time: f64) -> bool {
         let ended = self.positioning_strategy != PositioningStrategy::Normal
             && self.position >= self.positioning_end;
@@ -349,7 +352,7 @@ impl Runner {
         ended
     }
 
-    /// Roll a wit check to change positioning strategy, with a chance of
+    /// Rolls a wit check to change positioning strategy, with a chance of
     /// `coef * log10(wit * 0.1)`.
     ///
     /// Below 10 wit, the check never passes.

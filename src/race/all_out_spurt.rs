@@ -27,12 +27,12 @@ pub enum AllOutSpurt {
 }
 
 impl AllOutSpurt {
-    /// Check if the all-out spurt is currently active.
+    /// Checks if the all-out spurt is currently active.
     pub fn is_active(&self) -> bool {
         matches!(self, AllOutSpurt::Active { .. })
     }
 
-    /// Target speed gained so far in m/s (zero if not active).
+    /// Returns the target speed gained so far in m/s (zero if not active).
     pub(crate) fn speed_bonus(&self) -> f64 {
         match self {
             AllOutSpurt::Active { speed_bonus } => *speed_bonus,

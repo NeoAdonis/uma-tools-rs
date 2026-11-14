@@ -20,8 +20,8 @@ pub(crate) struct Transition {
     pub(crate) entered: Option<usize>,
 }
 
-/// Structure used for segment entry/exit operations, tracking which segment of
-/// a kind (e.g. corners) a runner is in.
+/// Tracker of which segment of a kind (e.g. corners) a runner is in, reporting
+/// when she enters and exits segments.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct SegmentManager {
     /// Index of the segment currently being traversed, if any.
@@ -36,7 +36,7 @@ pub(crate) struct SegmentManager {
 }
 
 impl SegmentManager {
-    /// Update the current segment for `position`, returning any transition.
+    /// Updates the current segment for `position`, returning any transition.
     ///
     /// The current segment is exited before looking for a new one, so that a
     /// segment right after another one is entered in the same update.
@@ -66,7 +66,7 @@ impl SegmentManager {
         Transition { exited, entered }
     }
 
-    /// Get the current segment index if in a segment.
+    /// Returns the current segment index if in a segment.
     pub(crate) fn current(&self) -> Option<usize> {
         self.current
     }
@@ -94,7 +94,7 @@ pub(crate) struct SegmentState {
 }
 
 impl SegmentState {
-    /// Update the current segments for `position`, returning the transitions.
+    /// Updates the current segments for `position`, returning the transitions.
     pub(crate) fn update(&mut self, position: f64, course: &Course) -> Transitions {
         let transitions = Transitions {
             corner: self.corner.update(position, &course.corners),
@@ -107,28 +107,28 @@ impl SegmentState {
         transitions
     }
 
-    /// Get the current corner index if in a corner.
+    /// Returns the current corner index if in a corner.
     pub(crate) fn corner(&self) -> Option<usize> {
         self.corner.current()
     }
 
-    /// Get the current straight index if on a straight.
+    /// Returns the current straight index if on a straight.
     pub(crate) fn straight(&self) -> Option<usize> {
         self.straight.current()
     }
 
-    /// Get the current slope index if on a slope.
+    /// Returns the current slope index if on a slope.
     pub(crate) fn slope(&self) -> Option<usize> {
         self.slope.current()
     }
 
-    /// Check if currently on the final straight.
+    /// Checks if currently on the final straight.
     pub(crate) fn is_on_final_straight(&self, course: &Course) -> bool {
         self.straight()
             .is_some_and(|idx| idx + 1 == course.straights.len())
     }
 
-    /// Take the straight entered since the last call, if any.
+    /// Takes the straight entered since the last call, if any.
     pub(crate) fn take_entered_straight(&mut self) -> Option<usize> {
         self.entered_straight.take()
     }

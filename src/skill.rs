@@ -38,61 +38,61 @@ use crate::configuration::Language;
 use crate::uma::{BaseStyle, EffectiveStyle};
 use crate::units::deserialize_ten_thousandths;
 
-/// Represents the type of skill effect.
+/// Type of a skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, Hash, TryFromPrimitive)]
 #[repr(u8)]
 pub enum SkillType {
-    /// Modify speed stat.
+    /// A modifier of the speed stat.
     SpeedUp = 1,
-    /// Modify stamina stat.
+    /// A modifier of the stamina stat.
     StaminaUp = 2,
-    /// Modify power stat.
+    /// A modifier of the power stat.
     PowerUp = 3,
-    /// Modify guts stat.
+    /// A modifier of the guts stat.
     GutsUp = 4,
-    /// Modify wit stat.
+    /// A modifier of the wit stat.
     WitUp = 5,
-    /// Change running style to Runaway (see [`EffectiveStyle::Runaway`]).
+    /// A change of running style to Runaway (see [`EffectiveStyle::Runaway`]).
     ChangeStyleRunaway = 6,
-    /// Modify field of view.
+    /// A modifier of the field of view.
     Fov = 8,
-    /// Recover (heal) some HP.
+    /// A recovery (heal) of some HP.
     Recovery = 9,
-    /// Multiply start delay.
+    /// A multiplier of the start delay.
     MultiplyStartDelay = 10,
-    /// Modify how long a runner can stay rushed.
+    /// A modifier of how long a runner can stay rushed.
     RushTimeUp = 13,
-    /// Add seconds to start delay.
+    /// An addition of seconds to the start delay.
     AddStartDelay = 14,
-    /// Modify current speed directly. The speed drops instantly on expiry.
+    /// A direct modifier of the current speed, which drops instantly on expiry.
     CurrentSpeed = 21,
-    /// Modify current speed but allow for natural deceleration.
+    /// A modifier of the current speed that allows natural deceleration.
     ///
     /// When activated, it behaves like [`SkillType::CurrentSpeed`]. On expiry, the
     /// same amount is added once to the runner's speed, so that it decelerates
     /// naturally instead of dropping instantly.
     CurrentSpeedWithNaturalDeceleration = 22,
-    /// Modify target speed.
+    /// A modifier of the target speed.
     TargetSpeed = 27,
-    /// Modify lane movement speed.
+    /// A modifier of the lane movement speed.
     LaneMovementSpeed = 28,
-    /// Modify chance of becoming rushed.
+    /// A modifier of the chance of becoming rushed.
     RushChanceUp = 29,
-    /// Modify acceleration.
+    /// A modifier of the acceleration.
     Acceleration = 31,
-    /// Modify all stats at once.
+    /// A modifier of all stats at once.
     AllStatsUp = 32,
-    /// Change target lane.
+    /// A change of the target lane.
     LaneChange = 35,
-    /// Activate a random gold skill.
+    /// An activation of a random gold skill.
     ActivateRandomGold = 37,
-    /// Activate "Sympathy" skill.
+    /// An activation of the "Sympathy" skill.
     ActivateSympathy = 41,
-    /// Extend evolved skill duration.
+    /// An extension of the evolved skill duration.
     ExtendEvolvedDuration = 42,
-    /// Modify acceleration during the all-out spurt (5th Anniversary onward).
+    /// A modifier of the acceleration during the all-out spurt (5th Anniv. onward).
     AccelerationAllOutSpurt = 48,
-    /// (Re-)activate a unique skill.
+    /// A (re-)activation of a unique skill.
     ActivateUnique = 49,
     /// Satisfy every popularity requirement: comparisons on `popularity` are
     /// always true. The modifier is ignored.
@@ -104,17 +104,17 @@ pub enum SkillType {
 pub struct SkillTypeSet(u64);
 
 impl SkillTypeSet {
-    /// Add `skill_type` to the set.
+    /// Adds `skill_type` to the set.
     pub(crate) fn insert(&mut self, skill_type: SkillType) {
         self.0 |= Self::bit(skill_type);
     }
 
-    /// Check if `skill_type` is in the set.
+    /// Checks if `skill_type` is in the set.
     pub fn contains(self, skill_type: SkillType) -> bool {
         self.0 & Self::bit(skill_type) != 0
     }
 
-    /// Iterate over the skill types in the set, in ID order.
+    /// Iterates over the skill types in the set, in ID order.
     pub fn iter(self) -> impl Iterator<Item = SkillType> {
         let mut bits = self.0;
         std::iter::from_fn(move || {
@@ -133,12 +133,12 @@ impl SkillTypeSet {
 }
 
 impl SkillType {
-    /// Get the skill type with the given ID, if it's implemented.
+    /// Returns the skill type with the given ID, if it's implemented.
     pub fn from_id(id: i32) -> Option<Self> {
         u8::try_from(id).ok()?.try_into().ok()
     }
 
-    /// Check if this effect type is a stat boost (applied permanently).
+    /// Checks if this effect type is a stat boost (applied permanently).
     pub(crate) fn is_stat_boost(self) -> bool {
         use SkillType::*;
         matches!(
@@ -147,7 +147,7 @@ impl SkillType {
         )
     }
 
-    /// Check if this effect type is a start delay modification.
+    /// Checks if this effect type is a start delay modification.
     pub(crate) fn is_start_delay_modification(self) -> bool {
         matches!(
             self,
@@ -164,12 +164,12 @@ impl SkillType {
         }
     }
 
-    /// Check if this effect type is a rush chance effect.
+    /// Checks if this effect type is a rush chance effect.
     pub(crate) fn is_rush_chance_effect(self) -> bool {
         matches!(self, SkillType::RushChanceUp)
     }
 
-    /// Check if this effect type modifies a parameter that is needed before the
+    /// Checks if this effect type modifies a parameter that is needed before the
     /// race starts (stats, start delay, running style, rush chance, etc.).
     pub(crate) fn is_pre_race_effect(self) -> bool {
         self.is_stat_boost()
@@ -182,7 +182,7 @@ impl SkillType {
             )
     }
 
-    /// Check if this effect type is a timed effect.
+    /// Checks if this effect type is a timed effect.
     pub(crate) fn is_timed_effect(self) -> bool {
         use SkillType::*;
         matches!(
@@ -200,7 +200,7 @@ impl SkillType {
     }
 }
 
-/// Represents the rarity of a skill.
+/// Rarity of a skill.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr)]
 #[repr(u8)]
 pub enum SkillRarity {
@@ -215,12 +215,11 @@ pub enum SkillRarity {
     UniqueUpgraded = 4,
     /// Skill unique to a specific Uma (3+ stars) with no 1 or 2 stars equivalent.
     UniqueNatural = 5,
-    /// Skills evolved from gold skills.
+    /// Skill evolved from a gold skill.
     Evolution = 6,
 }
 
-/// Represents the target of a skill effect, along with the parameter that
-/// narrows it down (number of runners, running style...).
+/// Target of a skill effect, including a parameter to narrow it down if needed.
 ///
 /// As far as targeting is concerned, skills don't distinguish allies from
 /// opponents: allies can be selected and count towards the maximum number of
@@ -263,7 +262,7 @@ pub enum SkillTarget {
 }
 
 impl SkillTarget {
-    /// Check if this target can only select opponents (i.e. allies are excluded
+    /// Checks if this target can only select opponents (i.e. allies are excluded
     /// after selection).
     ///
     /// Every target other than oneself, all runners and team members is a debuff
@@ -322,8 +321,8 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
     }
 }
 
-/// Represents how the value of a skill effect scales with the runner's
-/// situation when the skill activates (see `race::skill_scaling`).
+/// How the value of a skill effect scales with the runner's situation when the
+/// skill activates (see `race::skill_scaling`).
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
@@ -405,8 +404,8 @@ pub enum ValueScaling {
     PerformanceLevel = 41,
 }
 
-/// Represents when a skill effect applies: on activation, or later, each time
-/// an event happens while the skill's effects are active (追加効果).
+/// When a skill effect applies: on activation, or later, each time an event
+/// happens while the skill's effects are active (追加効果).
 ///
 /// Additional effects apply their value once per event, up to a maximum number
 /// of times (see [`AdditionalActivation::max_triggers`]), and expire with the
@@ -428,8 +427,8 @@ pub enum AdditionalActivation {
 }
 
 impl AdditionalActivation {
-    /// Maximum number of times an additional effect applies, or 0 for regular
-    /// effects.
+    /// Returns the maximum number of times an additional effect applies, or 0 for
+    /// regular effects.
     pub fn max_triggers(self) -> u8 {
         match self {
             AdditionalActivation::Regular => 0,
@@ -440,7 +439,7 @@ impl AdditionalActivation {
     }
 }
 
-/// Represents a single effect of a skill.
+/// A single effect of a skill.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillEffect {
@@ -463,7 +462,7 @@ pub struct SkillEffect {
 }
 
 impl SkillEffect {
-    /// Determine whether `self` is positive or negative.
+    /// Determines whether `self` is positive or negative.
     pub(crate) fn is_positive(&self) -> bool {
         match self.skill_type {
             // Purely positive effects.
@@ -483,7 +482,7 @@ impl SkillEffect {
     }
 }
 
-/// Convert a base duration from 10000ths of a second while deserializing. A
+/// Converts a base duration from 10000ths of a second while deserializing. A
 /// negative base duration (-1) means that effects last until the end.
 fn deserialize_base_duration<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
     let duration = deserialize_ten_thousandths(deserializer)?;
@@ -501,7 +500,7 @@ pub const DEFAULT_COOLDOWN: f64 = 500.0;
 /// Level of a skill when not given, e.g. for skills loaded from the skill data.
 pub const DEFAULT_SKILL_LEVEL: u8 = 1;
 
-/// [`DEFAULT_SKILL_LEVEL`], for serde defaults.
+/// Returns [`DEFAULT_SKILL_LEVEL`], for serde defaults.
 fn default_skill_level() -> u8 {
     DEFAULT_SKILL_LEVEL
 }
@@ -514,8 +513,8 @@ fn default_cooldown() -> f64 {
     DEFAULT_COOLDOWN
 }
 
-/// Represents how the duration of a skill scales with the runner's situation
-/// when the skill activates (see `race::skill_scaling`).
+/// How the duration of a skill scales with the runner's situation when the
+/// skill activates (see `race::skill_scaling`).
 ///
 /// The scaling is applied on top of the course distance scaling.
 ///
@@ -541,8 +540,7 @@ pub enum DurationScaling {
     IncrementUphillCount = 8,
 }
 
-/// Represents an alternative version of a skill, with its own conditions and
-/// effects.
+/// An alternative version of a skill, with its own conditions and effects.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillAlternative {
@@ -576,12 +574,12 @@ pub struct SkillAlternative {
 }
 
 impl SkillAlternative {
-    /// Check if this alternative is a continuation of another one of the same
-    /// skill, i.e. it requires another alternative to have activated
-    /// (`is_activate_other_skill_detail`).
+    /// Checks if this alternative is a continuation of another one of the same
+    /// skill.
     ///
-    /// Unlike other alternatives, a continuation can still activate after another
-    /// alternative did.
+    /// That is, if it requires another alternative to have activated
+    /// (`is_activate_other_skill_detail`). Unlike other alternatives, a
+    /// continuation can still activate after another alternative did.
     pub(crate) fn is_continuation(&self) -> bool {
         let requires_other = |condition: &Condition| {
             condition.branches.iter().flatten().any(|comp| {
@@ -591,7 +589,7 @@ impl SkillAlternative {
         requires_other(&self.condition) || self.precondition.as_ref().is_some_and(requires_other)
     }
 
-    /// Check if this alternative activates out of gate (before the race begins).
+    /// Checks if this alternative activates out of gate (before the race begins).
     ///
     /// That is, if any of its effects modifies a parameter that is needed before
     /// the race starts (see [`SkillType::is_pre_race_effect`]). Other alternatives
@@ -602,7 +600,7 @@ impl SkillAlternative {
             .any(|effect| effect.skill_type.is_pre_race_effect())
     }
 
-    /// Check if any effect of this alternative targets the runner herself.
+    /// Checks if any effect of this alternative targets the runner herself.
     pub(crate) fn affects_oneself(&self) -> bool {
         self.effects
             .iter()
@@ -610,7 +608,7 @@ impl SkillAlternative {
     }
 }
 
-/// Parse a condition string while deserializing.
+/// Parses a condition string while deserializing.
 fn deserialize_condition<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Condition, D::Error> {
@@ -622,8 +620,7 @@ fn deserialize_condition<'de, D: Deserializer<'de>>(
     Ok(parsed)
 }
 
-/// Parse a precondition string while deserializing. An empty string means
-/// there's no precondition.
+/// Deserializes and parses a precondition string (empty means no precondition).
 fn deserialize_precondition<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Condition>, D::Error> {
@@ -645,9 +642,11 @@ fn deserialize_precondition<'de, D: Deserializer<'de>>(
     Ok(Some(parsed))
 }
 
-/// Check that no branch of a condition has more than one event (see
-/// [`Comparison::is_event`]): the trigger system checks a branch at the points
-/// of its event, so it can't tell which event they come from.
+/// Checks that no branch of a condition has more than one event (see
+/// [`Comparison::is_event`]).
+///
+/// The trigger system checks a branch at the points of its event, so it can't
+/// tell which event they come from.
 fn check_events(condition: &Condition) -> Result<(), &'static str> {
     let has_many_events =
         |branch: &ComparisonList| branch.iter().filter(|comp| comp.is_event()).count() > 1;
@@ -661,15 +660,21 @@ fn check_events(condition: &Condition) -> Result<(), &'static str> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr)]
 #[repr(u8)]
 pub enum PopularityStat {
+    /// No stat receives popularity points.
     None = 0,
+    /// Speed receives popularity points.
     Speed = 1,
+    /// Stamina receives popularity points.
     Stamina = 2,
+    /// Power receives popularity points.
     Power = 3,
+    /// Guts receives popularity points.
     Guts = 4,
+    /// Wit receives popularity points.
     Wit = 5,
 }
 
-/// Represents the popularity points granted by a skill to a specific stat.
+/// The popularity points granted by a skill to a specific stat.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillPopularity {
@@ -679,7 +684,7 @@ pub struct SkillPopularity {
     pub value: i8,
 }
 
-/// Represents a skill with its ID and data.
+/// A skill with its ID and data.
 ///
 /// Skills are shared as `Arc<Skill>`, so that cloning them for every runner
 /// of every race is cheap.
@@ -727,13 +732,13 @@ pub struct Skill {
 }
 
 impl Skill {
-    /// Get the skill name in the specified language, or `None` if it isn't
+    /// Returns the skill name in the specified language, or `None` if it isn't
     /// available in that language.
     pub fn name(&self, language: Language) -> Option<&'static str> {
         crate::names::skill_name(self.id, language)
     }
 
-    /// Check if `self` is a unique skill (i.e. only available to a specific Uma).
+    /// Checks if `self` is a unique skill (i.e. only available to a specific Uma).
     pub fn is_unique(&self) -> bool {
         matches!(
             self.rarity,
@@ -741,19 +746,20 @@ impl Skill {
         )
     }
 
-    /// Check if `self` is a gold skill, including evolved ones.
+    /// Checks if `self` is a gold skill, including evolved ones.
     pub fn is_gold(&self) -> bool {
         matches!(self.rarity, SkillRarity::Gold | SkillRarity::Evolution)
     }
 
-    /// Check if `self` is the inherited version of a unique skill (継承), whose ID
-    /// is the unique's ID with its first digit replaced by 9 (e.g. 900011 for
-    /// 100011).
+    /// Checks if `self` is the inherited version (継承) of a unique skill.
+    ///
+    /// A skill can be considered inherited if its ID is the unique's ID with its
+    /// first digit replaced by 9 (e.g. 900011 for 100011).
     pub fn is_inherited_unique(&self) -> bool {
         (900_000..1_000_000).contains(&self.id)
     }
 
-    /// Check if `self` is a green skill, i.e. one that boosts stats.
+    /// Checks if `self` is a green skill, i.e. one that boosts stats.
     pub fn is_green(&self) -> bool {
         // TODO: The game defines green skills by tags (601-615), which aren't in the
         // skill data yet.
@@ -763,7 +769,7 @@ impl Skill {
             .any(|effect| effect.skill_type.is_stat_boost())
     }
 
-    /// Check if this skill benefits from the wit limit break buff (5th Anniversary
+    /// Checks if this skill benefits from the wit limit break buff (5th Anniversary
     /// onward).
     ///
     /// Only unique, evolved and gold skills are affected. Inherited uniques
@@ -772,7 +778,7 @@ impl Skill {
         !matches!(self.rarity, SkillRarity::White)
     }
 
-    /// Chance that this skill passes its pre-race activation check.
+    /// Returns the chance that this skill passes its pre-race activation check.
     ///
     /// Skills that don't require a wit check always pass; otherwise the chance
     /// depends on the runner's base wit (minimum 20%).
@@ -783,7 +789,7 @@ impl Skill {
         (1.0 - 90.0 / base_wit).max(0.2)
     }
 
-    /// Check if this skill should activate out of gate (before race begins).
+    /// Checks if this skill should activate out of gate (before race begins).
     ///
     /// That is, if any of its alternatives does (see
     /// [`SkillAlternative::is_out_of_gate`]).
@@ -793,7 +799,7 @@ impl Skill {
             .any(SkillAlternative::is_out_of_gate)
     }
 
-    /// Check if any alternative of this skill satisfies every popularity
+    /// Checks if any alternative of this skill satisfies every popularity
     /// requirement (see [`SkillType::IgnorePopularity`]).
     pub(crate) fn ignores_popularity(&self) -> bool {
         self.alternatives
@@ -820,7 +826,7 @@ pub struct SkillData {
 }
 
 impl SkillData {
-    /// Load the skills in a JSON file.
+    /// Loads the skills in a JSON file.
     ///
     /// # Errors
     ///
@@ -836,7 +842,9 @@ impl SkillData {
         Ok(Self::from_json(&json)?)
     }
 
-    /// Load the skills in a JSON string, e.g. with skill data fetched by a web
+    /// Loads the skills in a JSON string.
+    ///
+    /// This allows, for example, to load skill data that has been fetched by a web
     /// page.
     ///
     /// # Errors
@@ -861,17 +869,17 @@ impl SkillData {
         Ok(data)
     }
 
-    /// Skill with the given ID, if it was loaded.
+    /// Returns the skill with the given ID, if it was loaded.
     pub fn get(&self, id: i32) -> Option<&Arc<Skill>> {
         self.skills.get(&id)
     }
 
-    /// Every loaded skill.
+    /// Iterates over every loaded skill.
     pub fn skills(&self) -> impl Iterator<Item = &Arc<Skill>> {
         self.skills.values()
     }
 
-    /// Why each skill that couldn't be loaded was rejected, by ID.
+    /// Returns why each skill that couldn't be loaded was rejected, by ID.
     ///
     /// # Examples
     ///
@@ -925,7 +933,7 @@ impl fmt::Display for SkillDataError {
 
 impl std::error::Error for SkillDataError {}
 
-/// Collect skills by their [`Skill::id`].
+/// Collects skills by their [`Skill::id`].
 impl FromIterator<Arc<Skill>> for SkillData {
     fn from_iter<I: IntoIterator<Item = Arc<Skill>>>(skills: I) -> Self {
         let skills = skills.into_iter().map(|skill| (skill.id, skill)).collect();

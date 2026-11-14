@@ -66,7 +66,7 @@ pub struct ChargeUpRelease {
 }
 
 impl ChargeUp {
-    /// Create the Charge Up state, or `None` if the runner is not eligible.
+    /// Creates the Charge Up state, or `None` if the runner is not eligible.
     pub(crate) fn new(power: f64, game_version: GameVersion) -> Option<Self> {
         if game_version < GameVersion::SecondAnniversary || power <= POWER_THRESHOLD {
             return None;
@@ -79,9 +79,10 @@ impl ChargeUp {
         })
     }
 
-    /// Conserve power at `rate` for `delta_time` seconds, unless `blocked` or
-    /// within the cooldown at `elapsed_time`. Being blocked restarts the
-    /// cooldown.
+    /// Conserves power at `rate` for `delta_time` seconds.
+    ///
+    /// Nothing is conserved if `blocked` or within the cooldown at `elapsed_time`.
+    /// Being blocked restarts the cooldown.
     pub(crate) fn conserve(
         &mut self,
         rate: f64,
@@ -96,16 +97,16 @@ impl ChargeUp {
         }
     }
 
-    /// Multiply the conserved power by `penalty` (e.g. [`RUSH_PENALTY`]).
+    /// Multiplies the conserved power by `penalty` (e.g. [`RUSH_PENALTY`]).
     pub(crate) fn penalize(&mut self, penalty: f64) {
         self.conserved *= penalty;
     }
 
-    /// Release the conserved power (Fully Charged, 脚色十分) at `elapsed_time`
-    /// and `position`, upon entering the last spurt. Nothing is released if not
-    /// enough power was conserved.
+    /// Releases the conserved power (Fully Charged, 脚色十分) upon entering the last
+    /// spurt at `elapsed_time` and `position`.
     ///
-    /// It happens only once; nothing changes if the outcome is already known.
+    /// Nothing is released if not enough power was conserved. It happens only once;
+    /// nothing changes if the outcome is already known.
     ///
     /// `activity` is the [`activity_coefficient`] of the runner.
     pub(crate) fn release(
@@ -139,7 +140,7 @@ impl ChargeUp {
         };
     }
 
-    /// Acceleration bonus at the given time in m/s² (zero if not active).
+    /// Returns the acceleration bonus at the given time in m/s² (0 if not active).
     pub(crate) fn acceleration(&self, elapsed_time: f64) -> f64 {
         match &self.outcome {
             ChargeUpOutcome::Released(release)
@@ -152,7 +153,7 @@ impl ChargeUp {
     }
 }
 
-/// Power stat used by this mechanic.
+/// Returns the power stat used by this mechanic.
 ///
 /// Unlike the regular base stat, only the part up to 1200 is affected by mood:
 /// `base_power` is the halved stat after mood multiplier, and the halved
@@ -161,13 +162,13 @@ pub(crate) fn charge_power(base_power: f64, raw_power: u16, skill_bonus: i32) ->
     base_power + 0.5 * (f64::from(raw_power) - POWER_THRESHOLD).max(0.0) + skill_bonus as f64
 }
 
-/// Conservation rate per second, depending on whether the runner is in pace
-/// down mode and her style.
+/// Returns the conservation rate per second, depending on whether the runner is
+/// in pace down mode and her style.
 pub(crate) fn conservation_rate(pace_down: bool, style: EffectiveStyle) -> f64 {
     position_keep_coefficient(pace_down) * style_coefficient(style)
 }
 
-/// Position keep coefficient of the conservation rate.
+/// Returns the position keep coefficient of the conservation rate.
 fn position_keep_coefficient(pace_down: bool) -> f64 {
     if pace_down { 6.7 } else { 4.2 }
 }
@@ -202,7 +203,7 @@ fn strategy_distance_coefficient(style: EffectiveStyle, distance_type: DistanceT
     }
 }
 
-/// Distance type coefficient of the release duration.
+/// Returns the distance type coefficient of the release duration.
 fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
     match distance_type {
         DistanceType::Short => 0.45,
@@ -212,8 +213,8 @@ fn distance_type_coefficient(distance_type: DistanceType) -> f64 {
     }
 }
 
-/// Activity coefficient of the release acceleration. Penalties stack
-/// multiplicatively.
+/// Returns the activity coefficient of the release acceleration. Penalties
+/// stack multiplicatively.
 pub(crate) fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
     let mut coefficient = 1.0;
     if struggled {
@@ -225,7 +226,7 @@ pub(crate) fn activity_coefficient(struggled: bool, rushed: bool) -> f64 {
     coefficient
 }
 
-/// Release acceleration bonus in m/s².
+/// Returns the release acceleration bonus in m/s².
 pub(crate) fn release_acceleration(
     power: f64,
     style: EffectiveStyle,
@@ -238,7 +239,7 @@ pub(crate) fn release_acceleration(
         * activity
 }
 
-/// Release duration in seconds.
+/// Returns the release duration in seconds.
 pub(crate) fn release_duration(
     conserved: f64,
     course_distance: i32,

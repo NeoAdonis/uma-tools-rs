@@ -43,7 +43,7 @@ pub struct StaminaKeep {
 }
 
 impl StaminaKeep {
-    /// Roll the HP ratio the runner tries to keep (see [`STAMINA_KEEP_RATIO`]).
+    /// Rolls the HP ratio the runner tries to keep (see [`STAMINA_KEEP_RATIO`]).
     pub(crate) fn roll(game_version: GameVersion, rng: &mut impl Rng) -> Self {
         let ratio = if game_version < GameVersion::TwoPointFiveAnniversary {
             0.0
@@ -95,7 +95,7 @@ pub(crate) fn target_speed_bonus(
     ((power / 1500.0).sqrt() * 2.0 + (guts / 3000.0).powf(0.2)) * 0.1 * style_coef * alone_coef
 }
 
-/// HP consumed upon competing.
+/// Returns the HP consumed upon competing.
 ///
 /// `far_from_lead` is whether the runner competes because she is too far from
 /// the lead. Otherwise, she competes only because of nearby runners.

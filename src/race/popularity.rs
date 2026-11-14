@@ -1,4 +1,4 @@
-//! # Popularity Calculation
+//! Popularity (favorite rank) calculation from three judges.
 //!
 //! A runner's popularity (favorite rank) is obtained from three "judges". Each
 //! judge gives a score based on various stats:
@@ -10,21 +10,21 @@
 //! Where φ(Stat) is the standard deviation score for the computed stat across
 //! all runners (mean 50, std dev 10).
 //!
-//! Stats are adjusted by adding points from activable skills to the raw stats.
-//! Each skill gives a number of points to one or two stats, read from the skill
-//! data (e.g. 20 for white skills, 60 for gold skills; negative skills take
-//! points away), scaled by its activation chance with raw wit. The sum is
-//! then multiplied by mood and aptitude coefficients:
+//! Stats are adjusted by adding points from activatable skills to the raw
+//! stats. Each skill gives a number of points to one or two stats, read from
+//! the skill data (e.g. 20 for white skills, 60 for gold skills; negative
+//! skills take points away), scaled by its activation chance with raw wit. The
+//! sum is then multiplied by mood and aptitude coefficients:
 //!
 //! - **Speed**: mood and distance aptitude.
 //! - **Stamina**: mood.
 //! - **Power**: mood, distance aptitude (acceleration) and ground type
 //!   aptitude.
 //!
-//! For each judge, the runners receive marks based on their rank; first five
-//! places receive, in order, ◎, ○, ▲, or △ (two runners get the last mark). The
-//! other runners receive no mark. Each mark adds a bonus to the impact of that
-//! judge.
+//! For each judge, the runners receive marks based on their rank; the first
+//! five places receive, in order, ◎, ○, ▲, or △ (two runners get the last
+//! mark). The other runners receive no mark. Each mark adds a bonus to the
+//! impact of that judge.
 //!
 //! The impact of a judge is `Score^e + MarkBonus`, where `e` is 1 if the score
 //! is above 55, 0.8 if any of the runner's judge scores is above 70, and
@@ -58,7 +58,7 @@ pub(crate) struct SkillPopularity {
 }
 
 impl SkillPopularity {
-    /// Create popularity points with `points` added to `stat`.
+    /// Creates popularity points with `points` added to `stat`.
     fn with(mut self, stat: PopularityStat, points: f64) -> Self {
         match stat {
             PopularityStat::Speed => self.speed += points,
@@ -72,7 +72,7 @@ impl SkillPopularity {
     }
 }
 
-/// Get the popularity points a skill adds to each stat.
+/// Returns the popularity points a skill adds to each stat.
 ///
 /// If there's no popularity data, it returns zero points for all stats.
 fn skill_popularity(skill: &Skill) -> SkillPopularity {
@@ -86,7 +86,7 @@ fn skill_popularity(skill: &Skill) -> SkillPopularity {
     }
 }
 
-/// Check if a skill adds popularity points to a runner in a race.
+/// Checks if a skill adds popularity points to a runner in a race.
 ///
 /// This evaluates only popularity guards (distance type, ground type, running
 /// style, etc.; see [`VarType::is_popularity_guard`]). Any other condition is
@@ -106,15 +106,20 @@ fn is_popularity_eligible(skill: &Skill, state: &RaceState, runner: &UnreadyRunn
 /// Popularity mark assigned by a judge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PopularityMark {
+    /// No mark.
     None,
-    Fourth, // △
-    Third,  // ▲
-    Second, // ○
-    First,  // ◎
+    /// Fourth mark (△).
+    Fourth,
+    /// Third mark (▲).
+    Third,
+    /// Second mark (○).
+    Second,
+    /// First mark (◎).
+    First,
 }
 
 impl PopularityMark {
-    /// Get the bonus this mark adds to the impact of a judge.
+    /// Returns the bonus this mark adds to the impact of a judge.
     fn points(&self) -> f64 {
         match self {
             PopularityMark::None => 0.0,
@@ -125,7 +130,7 @@ impl PopularityMark {
         }
     }
 
-    /// Get the display character for this mark.
+    /// Returns the display character for this mark.
     pub fn to_char(self) -> char {
         match self {
             PopularityMark::None => '-',
@@ -146,11 +151,17 @@ impl fmt::Display for PopularityMark {
 /// Scores and marks from all three judges.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JudgeScores {
+    /// Score of the left judge.
     pub left_score: f64,
+    /// Mark given by the left judge.
     pub left_mark: PopularityMark,
+    /// Score of the center judge.
     pub center_score: f64,
+    /// Mark given by the center judge.
     pub center_mark: PopularityMark,
+    /// Score of the right judge.
     pub right_score: f64,
+    /// Mark given by the right judge.
     pub right_mark: PopularityMark,
 }
 
@@ -168,7 +179,7 @@ impl Default for JudgeScores {
 }
 
 impl JudgeScores {
-    /// Get total popularity points: the product of the impacts of all judges.
+    /// Returns total popularity points: the product of the impacts of all judges.
     pub fn total_points(&self) -> f64 {
         let high = [self.left_score, self.center_score, self.right_score]
             .iter()
@@ -179,7 +190,7 @@ impl JudgeScores {
     }
 }
 
-/// Calculate the impact of a judge on popularity: `score^e + mark bonus`.
+/// Calculates the impact of a judge on popularity: `score^e + mark bonus`.
 ///
 /// `high` is whether any of the runner's judge scores is above 70.
 fn judge_impact(score: f64, mark: PopularityMark, high: bool) -> f64 {
@@ -193,7 +204,7 @@ fn judge_impact(score: f64, mark: PopularityMark, high: bool) -> f64 {
     score.powf(exponent) + mark.points()
 }
 
-/// Calculate the popularity points added to a runner's stats by its skills.
+/// Calculates the popularity points added to a runner's stats by its skills.
 ///
 /// Skills that don't pass the popularity guards for this race add no points.
 /// The points of each skill are weighted by its activation chance with raw wit,
@@ -219,8 +230,8 @@ pub(crate) fn skill_bonus<'a>(
         })
 }
 
-/// Calculate standard deviation score (φ) for a value given a mean and standard
-/// deviation.
+/// Calculates the standard deviation score (φ) for a value given a mean and
+/// standard deviation.
 ///
 /// Mean value scores 50; each standard deviation adds/subtracts 10
 /// points.
@@ -239,7 +250,7 @@ fn calculate_phi(value: f64, mean: f64, std_dev: f64) -> f64 {
     }
 }
 
-/// Calculate mean and standard deviation for a set of values.
+/// Calculates mean and standard deviation for a set of values.
 fn calculate_stats(values: &[f64]) -> (f64, f64) {
     if values.is_empty() {
         return (0.0, 0.0);
@@ -270,7 +281,7 @@ struct RunnerPopData {
     raw_wit: f64,
 }
 
-/// Calculate the three judge scores for each runner.
+/// Calculates the three judge scores for each runner.
 fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)> {
     let n = runners_data.len();
 
@@ -324,7 +335,7 @@ fn calculate_judge_scores(runners_data: &[RunnerPopData]) -> Vec<(f64, f64, f64)
     scores
 }
 
-/// Assign marks to top 5 runners for a single judge's scores.
+/// Assigns marks to top 5 runners for a single judge's scores.
 fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, PopularityMark> {
     // Sort by score (descending).
     scores.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -346,7 +357,7 @@ fn assign_marks_for_judge(mut scores: Vec<(usize, f64)>) -> HashMap<usize, Popul
     marks
 }
 
-/// Calculate the popularity rank (1-indexed, with ties sharing a rank) and
+/// Calculates the popularity rank (1-indexed, with ties sharing a rank) and
 /// judge scores of every runner, in the same order as `runners`.
 pub(crate) fn calculate_popularity(runners: &[UnreadyRunner]) -> Vec<(u8, JudgeScores)> {
     let n = runners.len();

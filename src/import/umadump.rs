@@ -43,7 +43,7 @@ use crate::uma::{Aptitude, BaseStyle, Mood, Uma, UmaData, UmaSkill, deserialize_
 
 /// A trained Uma, or one in training, as exported by umadump.
 ///
-/// Convert it with [`UmaDumpData::to_uma_data`] to race with it.
+/// Converts it with [`UmaDumpData::to_uma_data`] to race with it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub struct UmaDumpData {
     /// See [`Uma::character_id`].
@@ -123,8 +123,7 @@ pub struct UmaDumpData {
     skills: Vec<UmaSkill>,
 }
 
-/// Deserialize a running style from its game value, from 1 (Front) to 4
-/// (End).
+/// Deserializes a running style from its game value, from 1 (Front) to 4 (End).
 ///
 /// Runaway isn't a running style in the game data, but the effect of the
 /// Runaway skill on a Front runner, so it's imported as Front with the skill
@@ -141,7 +140,7 @@ fn deserialize_style<'de, D: Deserializer<'de>>(deserializer: D) -> Result<BaseS
     }
 }
 
-/// Deserialize a mood from its motivation, from 1 (Awful) to 5 (Great).
+/// Deserializes a mood from its motivation, from 1 (Awful) to 5 (Great).
 fn deserialize_motivation<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Mood>, D::Error> {
@@ -151,13 +150,13 @@ fn deserialize_motivation<'de, D: Deserializer<'de>>(
         .ok_or_else(|| D::Error::custom(format!("invalid motivation {value}: expected 1 to 5")))
 }
 
-/// Deserialize an aptitude from its game value, from 1 (G) to 8 (S).
+/// Deserializes an aptitude from its game value, from 1 (G) to 8 (S).
 fn deserialize_aptitude<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Aptitude, D::Error> {
     let value = u8::deserialize(deserializer)?;
     Aptitude::try_from(value).map_err(D::Error::custom)
 }
 
-/// Deserialize skills from objects with `skill_id` and `level`.
+/// Deserializes skills from objects with `skill_id` and `level`.
 fn deserialize_skills<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Vec<UmaSkill>, D::Error> {
@@ -190,7 +189,7 @@ struct CareerCommon {
 }
 
 impl UmaDumpData {
-    /// Parse `UmaDumpData` from a JSON string.
+    /// Parses `UmaDumpData` from a JSON string.
     ///
     /// # Errors
     ///
@@ -227,7 +226,7 @@ impl UmaDumpData {
         serde_json::from_str(json)
     }
 
-    /// Parse `UmaDumpData` from a JSON file.
+    /// Parses `UmaDumpData` from a JSON file.
     ///
     /// # Errors
     ///
@@ -242,8 +241,9 @@ impl UmaDumpData {
         Ok(Self::from_json(&content)?)
     }
 
-    /// Parse a list of `UmaDumpData` from a JSON array, as umadump
-    /// exports every trained Uma at once.
+    /// Parses a list of `UmaDumpData` from a JSON array.
+    ///
+    /// umadump exports every trained Uma at once.
     ///
     /// # Errors
     ///
@@ -253,7 +253,7 @@ impl UmaDumpData {
         serde_json::from_str(json)
     }
 
-    /// Parse a list of `UmaDumpData` from a JSON file with an array.
+    /// Parses a list of `UmaDumpData` from a JSON file with an array.
     ///
     /// # Errors
     ///
@@ -278,14 +278,13 @@ impl UmaDumpData {
         Ok(Self::all_from_json(&content)?)
     }
 
-    /// Parse `UmaDumpData` from the Uma in training in a career turn, as a
-    /// JSON string.
+    /// Parses `UmaDumpData` from the Uma in training in a career turn, as a JSON
+    /// string.
     ///
     /// # Errors
     ///
-    /// Returns an error if the JSON is invalid, the Uma is missing, or for
-    /// the same reasons as [`UmaDumpData::from_json`] for the Uma, also if
-    /// its mood is out of range.
+    /// Returns an error if the JSON is invalid, the Uma is missing, its mood is out
+    /// of range, or for the same reasons as [`UmaDumpData::from_json`] for the Uma.
     ///
     /// # Examples
     ///
@@ -321,8 +320,8 @@ impl UmaDumpData {
         Ok(career.single_mode_load_common.chara_info)
     }
 
-    /// Parse `UmaDumpData` from the Uma in training in a career turn, from a
-    /// JSON file.
+    /// Parses `UmaDumpData` from the Uma in training in a career turn, from a JSON
+    /// file.
     ///
     /// # Errors
     ///
@@ -335,7 +334,7 @@ impl UmaDumpData {
         Ok(Self::from_career_json(&content)?)
     }
 
-    /// Convert `self` to [`UmaData`] for a race of the given distance type and
+    /// Converts `self` to [`UmaData`] for a race of the given distance type and
     /// track surface, with the mood if known.
     ///
     /// The distance and track aptitudes are the ones for `distance` and

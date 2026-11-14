@@ -1,9 +1,7 @@
-//! # Trigger Scheduler
+//! Data structures the scheduler indexes triggers in, so that only the triggers
+//! that can fire are looked at on each frame.
 //!
-//! This module holds the data structures the scheduler indexes triggers in, so
-//! that only the triggers that can fire are looked at on each frame.
-//!
-//! ## Trigger Types
+//! # Trigger Types
 //!
 //! Each trigger ([`TriggerCondition`]) is stored where it can be checked
 //! cheaply:
@@ -66,8 +64,8 @@ use crate::trigger::skill_activation::{LogicAction, SkillActivationLogic};
 
 /// Main scheduler coordinating all trigger types.
 ///
-/// This scheduler stores [`SkillActivationLogic`] which separates triggers
-/// from guards. When a trigger fires, we evaluate only the guard conditions.
+/// It stores [`SkillActivationLogic`]s, which separate triggers from guards.
+/// When a trigger fires, only the guard conditions are evaluated.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub(crate) struct TriggerScheduler {
     pub(crate) skill_logics: Vec<SkillActivationLogic>,
@@ -111,17 +109,20 @@ pub(crate) struct TriggerScheduler {
 }
 
 impl TriggerScheduler {
-    /// Remove every trigger of the given logics, so they're never checked.
+    /// Removes every trigger of the given logics, so they're never checked.
     pub(crate) fn remove_triggers(&mut self, logic_indices: &[usize]) {
         if !logic_indices.is_empty() {
             self.remove_triggers_if(|logic_idx| logic_indices.contains(&logic_idx));
         }
     }
 
-    /// Remove the triggers of the logics that can no longer activate a skill once
-    /// one of its alternatives activated with a cooldown outlasting the race:
-    /// those of the alternative itself, and those of the other alternatives
-    /// except continuations, which can't activate after another alternative did.
+    /// Removes the triggers of a skill that can't activate again.
+    ///
+    /// It applies once an alternative of the skill activates with a cooldown
+    /// that outlasts the race. The triggers of that alternative are removed, and
+    /// so are those of the other alternatives, except continuations, which can
+    /// still activate after another alternative did. Logics that unlock
+    /// preconditions are kept.
     pub(crate) fn remove_activated_skill_triggers(
         &mut self,
         skill_index: usize,
@@ -141,7 +142,7 @@ impl TriggerScheduler {
         self.skill_logics = logics;
     }
 
-    /// Remove every trigger of the logics matching `removed`, given the logic
+    /// Removes every trigger of the logics matching `removed`, given the logic
     /// index.
     fn remove_triggers_if(&mut self, removed: impl Fn(usize) -> bool) {
         self.precondition_windows
@@ -195,7 +196,7 @@ pub(crate) struct WindowQueue {
 }
 
 impl WindowQueue {
-    /// Add a window, at build time or during the race (e.g. random segments rolled
+    /// Adds a window, at build time or during the race (e.g. random segments rolled
     /// once the all-out spurt starts).
     pub(crate) fn push(&mut self, trigger: WindowTrigger) {
         let idx = self
@@ -204,7 +205,7 @@ impl WindowQueue {
         self.pending.insert(idx, trigger);
     }
 
-    /// Advance the queue to `value` and iterate over the logic indices whose
+    /// Advances the queue to `value` and iterates over the logic indices whose
     /// window contains it. Windows left behind are dropped. Bounds are widened by
     /// `epsilon`.
     pub(crate) fn advance(&mut self, value: f64, epsilon: f64) -> impl Iterator<Item = usize> {
@@ -220,7 +221,7 @@ impl WindowQueue {
         self.active.iter().map(|t| t.logic_idx)
     }
 
-    /// Remove every window matching `predicate`.
+    /// Removes every window matching `predicate`.
     pub(crate) fn remove_if(&mut self, predicate: impl Fn(&WindowTrigger) -> bool) {
         self.pending.retain(|t| !predicate(t));
         self.active.retain(|t| !predicate(t));
@@ -264,8 +265,8 @@ pub(crate) struct ActivationCounts {
 }
 
 impl ActivationCounts {
-    /// Increment activation counts based on current phase and position, given
-    /// the course's `halfway` point.
+    /// Increments activation counts based on current phase and position, given the
+    /// course's `halfway` point.
     pub(crate) fn increment(&mut self, phase: Phase, position: f64, halfway: f64) {
         self.all += 1;
 
@@ -286,7 +287,7 @@ impl ActivationCounts {
         }
     }
 
-    /// Increment heal skill count.
+    /// Increments the heal skill count.
     pub(crate) fn increment_heal(&mut self) {
         self.heal += 1;
     }

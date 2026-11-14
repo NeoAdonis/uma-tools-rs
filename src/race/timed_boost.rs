@@ -19,7 +19,7 @@ pub enum TimedBoost {
 }
 
 impl TimedBoost {
-    /// Start boosting target speed by `speed_bonus` at `elapsed_time`, for
+    /// Starts boosting target speed by `speed_bonus` at `elapsed_time`, for
     /// `duration` seconds followed by a `cooldown` in seconds.
     pub(crate) fn start(speed_bonus: f64, elapsed_time: f64, duration: f64, cooldown: f64) -> Self {
         let expires_at = elapsed_time + duration;
@@ -30,12 +30,12 @@ impl TimedBoost {
         }
     }
 
-    /// Check if the boost is idle and its next check is due at `elapsed_time`.
+    /// Checks if the boost is idle and its next check is due at `elapsed_time`.
     pub(crate) fn is_check_due(&self, elapsed_time: f64) -> bool {
         matches!(self, TimedBoost::Idle { next_check } if elapsed_time >= *next_check)
     }
 
-    /// Target speed increase (m/s); zero if idle.
+    /// Returns the target speed increase (m/s); zero if idle.
     pub(crate) fn speed_bonus(&self) -> f64 {
         match self {
             TimedBoost::Active { speed_bonus, .. } => *speed_bonus,
@@ -43,7 +43,7 @@ impl TimedBoost {
         }
     }
 
-    /// Stop the boost once it expires at `elapsed_time`, waiting for the next
+    /// Stops the boost once it expires at `elapsed_time`, waiting for the next
     /// check after the cooldown.
     pub(crate) fn expire(&mut self, elapsed_time: f64) {
         if let TimedBoost::Active {

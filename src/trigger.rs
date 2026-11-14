@@ -1,10 +1,9 @@
-//! # Skill Activation System
+//! Trigger system that determines skill activation times during a race.
 //!
-//! How skills decide when to activate during a race. This module holds the
-//! trigger system; this page gives an overview of it and of the other modules
-//! involved, which hold the details.
+//! This page gives an overview of it and of the other modules involved, with
+//! the details held in their respective modules.
 //!
-//! ## Triggers and Guards
+//! # Triggers and Guards
 //!
 //! Skill data gives each skill one or more **alternatives**, each with a
 //! condition and an optional precondition. Naively, every condition would be
@@ -29,7 +28,7 @@
 //! trigger, the guards and what to do when they pass. Triggers reference logics
 //! by index.
 //!
-//! ## Where Things Live
+//! # Where Things Live
 //!
 //! - [`condition::parser`]: parse conditions into OR branches of AND chains.
 //! - [`condition::variables`]: variable types, and whether they can change
@@ -45,7 +44,7 @@
 //! - [`solver`]: frame loop, i.e. the order in which everything above is
 //!   called.
 //!
-//! ## Lifecycle
+//! # Lifecycle
 //!
 //! 1. **Runner setup** ([`UnreadyRunner`]): skills that pass the wit check are
 //!    kept, and the `TriggerScheduler` is built for them. Out-of-gate
@@ -60,7 +59,7 @@
 //! 4. **Every frame** ([`RaceSolver`]): every runner checks her skills
 //!    (`Runner::check_skills`), then the race state is updated.
 //!
-//! ## Examples
+//! # Examples
 //!
 //! Find where a skill tends to activate over many races, from the activation
 //! records of each runner. Professor of Curvature activates at a random point

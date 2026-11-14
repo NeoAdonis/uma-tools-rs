@@ -139,21 +139,23 @@ pub struct PinnedActivation {
 }
 
 impl Pins {
-    /// Section speed modifier of `section`: the pinned one, if any, or
-    /// `rolled`. Sections past the goal can't be pinned.
+    /// Returns the section speed modifier of `section`: the pinned one, if any, or
+    /// `rolled`.
+    ///
+    /// Sections past the goal can't be pinned.
     pub(crate) fn section_speed(&self, section: u8, rolled: f64) -> f64 {
         let pinned = self.section_speed.get(section as usize).copied();
         pinned.flatten().unwrap_or(rolled)
     }
 
-    /// Whether she's in downhill mode after check `check` (0-indexed) on the
+    /// Returns whether she's in downhill mode after `check` (0-indexed) on the
     /// slope with index `slope`: the pinned outcome, if any, or `rolled`.
     pub(crate) fn downhill_mode(&self, slope: usize, check: usize, rolled: bool) -> bool {
         let pinned = self.downhill.get(&slope).and_then(|c| c.get(check));
         pinned.copied().unwrap_or(rolled)
     }
 
-    /// Pinned activations of the skill with ID `id`, if they are.
+    /// Returns the pinned activations of the skill with ID `id`, if any.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
             Some(SkillPin::Activations(activations)) => Some(activations),
@@ -161,7 +163,7 @@ impl Pins {
         }
     }
 
-    /// Whether a failed wit check is ruled out for `skill`: it has at least
+    /// Returns whether a failed wit check is ruled out for `skill`: it has at least
     /// one pinned activation, or it has no wit check to fail.
     pub(crate) fn rules_out_failed_wit_check(&self, skill: &Skill) -> bool {
         self.activations(skill.id)
@@ -169,7 +171,7 @@ impl Pins {
             || !skill.wit_check
     }
 
-    /// Panic if a pinned value would break the simulation or never take effect,
+    /// Panics if a pinned value would break the simulation or never take effect,
     /// for a runner with `skills` on a course with `slopes`.
     pub(crate) fn validate(&self, skills: &[Arc<Skill>], slopes: &[Slope]) {
         if let Some(delay) = self.start_delay {
@@ -212,7 +214,7 @@ impl Pins {
         }
     }
 
-    /// Panic if a pinned target isn't among the `runner_count` runners of the
+    /// Panics if a pinned target isn't among the `runner_count` runners of the
     /// race.
     pub(crate) fn validate_targets(&self, runner_count: usize) {
         let activations = self.skills.values().filter_map(|pin| match pin {
@@ -226,7 +228,7 @@ impl Pins {
     }
 }
 
-/// Panic if a pinned activation of `skill` would break the simulation or never
+/// Panics if a pinned activation of `skill` would break the simulation or never
 /// take effect.
 fn validate_activations(skill: &Skill, activations: &[PinnedActivation]) {
     let id = skill.id;

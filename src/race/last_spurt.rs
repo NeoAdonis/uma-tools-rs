@@ -23,7 +23,7 @@ pub struct LastSpurt {
 }
 
 impl LastSpurt {
-    /// Check if the last spurt has started at `position`.
+    /// Checks if the last spurt has started at `position`.
     pub fn has_started(&self, position: f64) -> bool {
         position >= self.target_distance
     }
@@ -49,7 +49,7 @@ struct LastSpurtCandidate {
     time: f64,
 }
 
-/// Calculate the maximum possible last spurt speed for a runner.
+/// Calculates the maximum possible last spurt speed for a runner.
 fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
     let base_speed = state.course.base_speed();
     let stats = &runner.adjusted;
@@ -72,14 +72,14 @@ fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
     base_component + speed_component + guts_component
 }
 
-/// Remaining distance from the start of the Late phase (or `position`, if
-/// later) to the goal line.
+/// Returns the remaining distance from the start of the Late phase (or
+/// `position`, if later) to the goal line.
 fn remaining_spurt_distance(position: f64, course: &Course) -> f64 {
     (course.length() - Phase::Late.boundaries(course).0).min(course.length() - position)
 }
 
-/// HP required to run the last spurt at `speed` from `position` until 60m
-/// before the goal line.
+/// Returns the HP required to run the last spurt at `speed` from `position`
+/// until 60m before the goal line.
 fn spurt_hp_required(runner: &Runner, state: &RaceState, speed: f64, position: f64) -> f64 {
     estimate_hp_last_spurt(
         speed,
@@ -91,7 +91,7 @@ fn spurt_hp_required(runner: &Runner, state: &RaceState, speed: f64, position: f
 }
 
 impl Runner {
-    /// Estimate the HP required to finish the race from the current position.
+    /// Estimates the HP required to finish the race from the current position.
     ///
     /// It is the HP needed to run the rest of the Mid phase at its base target
     /// speed, plus the HP needed for a last spurt at max speed (as estimated by
@@ -125,7 +125,7 @@ impl Runner {
             )
     }
 
-    /// Calculate the last spurt parameters of this runner, from `position`.
+    /// Calculates the last spurt parameters of this runner, from `position`.
     ///
     /// The last spurt is a burst of speed towards the end of the race. It is
     /// determined based on the runner's stats, remaining HP, and course conditions.

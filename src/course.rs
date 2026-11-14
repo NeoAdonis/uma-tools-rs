@@ -44,11 +44,11 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::io::Read;
 use std::path::Path;
 
-/// Number of equally-sized sections of a course's nominal distance, after the
+/// Number of equally sized sections of a course's nominal distance, after the
 /// run-up.
 pub(crate) const SECTION_COUNT: u8 = 24;
 
-/// Represents the phase of a race based on the position on the course.
+/// Phase of a race, based on the position on the course.
 ///
 /// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
 /// the nominal distance, after the run-up.
@@ -67,12 +67,14 @@ pub enum Phase {
     Mid = 1,
     /// Late race (sections 16-19).
     Late = 2,
-    /// Last leg (sections 20-23). Not to be confused with the last spurt mechanic.
+    /// Last leg (sections 20-23).
+    ///
+    /// Not to be confused with the last spurt mechanic.
     Last = 3,
 }
 
 impl Phase {
-    /// Get the boundaries `(start, end)` in meters for `self` on a given course.
+    /// Returns the boundaries `(start, end)` in meters of `self` on a course.
     ///
     /// Phases are defined by the following section ranges, offset by the
     /// run-up:
@@ -113,8 +115,8 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries `(start, end)` in meters for `self`'s first quarter on a
-    /// given course.
+    /// Returns the boundaries `(start, end)` in meters of `self`'s first quarter on
+    /// a course.
     ///
     /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_first_quarter(&self, course: &Course) -> (f64, f64) {
@@ -127,8 +129,8 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries `(start, end)` in meters for `self`'s first half
-    /// on a given course.
+    /// Returns the boundaries `(start, end)` in meters of `self`'s first half on a
+    /// course.
     ///
     /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_first_half(&self, course: &Course) -> (f64, f64) {
@@ -141,8 +143,8 @@ impl Phase {
         }
     }
 
-    /// Get the boundaries `(start, end)` in meters for `self`'s second half
-    /// on a given course.
+    /// Returns the boundaries `(start, end)` in meters of `self`'s second half on a
+    /// course.
     ///
     /// See [`Phase::boundaries`] for an example.
     pub fn boundaries_second_half(&self, course: &Course) -> (f64, f64) {
@@ -155,7 +157,7 @@ impl Phase {
         }
     }
 
-    /// Determine which phase a given position falls into.
+    /// Determines the phase that a given position falls into.
     ///
     /// # Examples
     ///
@@ -264,14 +266,20 @@ pub enum InitialLaneType {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LaneType {
+    /// Inner lane, close to the inner fence (up to 0.2 course widths away from it).
     Inner,
+    /// Middle lane, between the inner and outer lanes.
     Middle,
+    /// Outer lane, away from the inner fence (between 0.4 and 0.6 course widths
+    /// away from it).
     Outer,
+    /// Outside lane, beyond the outer lane.
     Outside,
 }
 
 impl From<CourseWidths> for LaneType {
-    /// Lane type of a runner at `lane`, in course widths from the inner fence.
+    /// Returns the lane type of a runner at `lane`, in course widths from the inner
+    /// fence.
     fn from(lane: CourseWidths) -> Self {
         if lane <= CourseWidths(0.2) {
             LaneType::Inner
@@ -361,19 +369,19 @@ pub struct Course {
     pub rail: Rail,
 }
 
-/// Deserialize the course width from 10000ths of a course width.
+/// Deserializes the course width from 10000ths of a course width.
 fn deserialize_width<'de, D: Deserializer<'de>>(deserializer: D) -> Result<CourseWidths, D::Error> {
     deserialize_ten_thousandths(deserializer).map(CourseWidths)
 }
 
 impl Course {
-    /// Get the distance in meters from the starting gate to the goal, i.e. the
+    /// Returns the distance in meters from the starting gate to the goal, i.e. the
     /// nominal distance plus the run-up.
     pub fn length(&self) -> f64 {
         self.distance as f64 + self.run_up
     }
 
-    /// Get the distance in meters covered from the official start line at
+    /// Returns the distance in meters covered from the official start line at
     /// `position` (0 during the run-up).
     ///
     /// See [`Course::position_at_rate`] for an example.
@@ -381,7 +389,7 @@ impl Course {
         (position - self.run_up).max(0.0)
     }
 
-    /// Get the position in meters where `rate` percent of the nominal distance
+    /// Returns the position in meters where `rate` percent of the nominal distance
     /// has been covered.
     ///
     /// Inverse of [`Course::distance_rate`], but not rounded down.
@@ -413,14 +421,14 @@ impl Course {
         self.run_up + rate / 100.0 * self.distance as f64
     }
 
-    /// Get the length of a single section in meters.
+    /// Returns the length of a single section in meters.
     ///
-    /// There are 24 equally-sized sections in the nominal distance.
+    /// There are 24 equally sized sections in the nominal distance.
     pub fn section_length(&self) -> f64 {
         self.distance as f64 / SECTION_COUNT as f64
     }
 
-    /// Get the start position in meters of section `section` (0-24, the latter
+    /// Returns the start position in meters of section `section` (0-24, the latter
     /// being the goal).
     ///
     /// See [`Course::section_from_position`] for an example.
@@ -432,12 +440,12 @@ impl Course {
         self.run_up + self.section_length() * section as f64
     }
 
-    /// Get the halfway point of the nominal distance in meters.
+    /// Returns the halfway point of the nominal distance in meters.
     pub fn halfway(&self) -> f64 {
         self.section_start(12)
     }
 
-    /// Get the move lane point in meters, or `None` if the course has neither
+    /// Returns the move lane point in meters, or `None` if the course has neither
     /// an explicit one nor corners.
     ///
     /// Courses without an explicit move lane point use the first corner start.
@@ -446,7 +454,8 @@ impl Course {
         self.move_lane_point.or_else(first_corner)
     }
 
-    /// Get the corner number (1-4) of the corner at `idx` in the course corners.
+    /// Returns the corner number (1-4) of the corner at `idx` in the list of course
+    /// corners.
     ///
     /// Corners are numbered backwards from the final corner, which is always the
     /// fourth. If the race goes through the same corner multiple times (i.e. more
@@ -480,7 +489,7 @@ impl Course {
         4 - ((self.corners.len() - 1 - idx) % 4) as u8
     }
 
-    /// Get the distance type of the course, inferred from its distance.
+    /// Returns the distance type of the course, inferred from its distance.
     pub fn distance_type(&self) -> DistanceType {
         match self.distance {
             ..=1400 => DistanceType::Short,
@@ -490,32 +499,34 @@ impl Course {
         }
     }
 
-    /// Check if the course distance is a basis distance (multiple of 400m).
+    /// Returns whether the course distance is a basis distance (multiple of 400m).
     pub fn is_basis_distance(&self) -> bool {
         self.distance % 400 == 0
     }
 
-    /// Get the base speed for this course in m/s.
+    /// Returns the base speed for this course in m/s.
     ///
     /// The longer the distance, the lower the speed an Uma should run at.
     pub(crate) fn base_speed(&self) -> f64 {
         20.0 - (self.distance as f64 - 2000.0) / 1000.0
     }
 
-    /// Get remaining distance in meters from a given position to the goal.
+    /// Returns the remaining distance in meters from a given position to the goal.
     pub fn remain_distance(&self, position: f64) -> f64 {
         (self.length() - position).max(0.0)
     }
 
-    /// Get the distance rate (percentage of the nominal distance completed) from
-    /// a given position. It's 0 during the run-up.
+    /// Returns the distance rate (percentage of the nominal distance completed) at
+    /// a given position.
+    ///
+    /// It's 0 during the run-up.
     ///
     /// See [`Course::position_at_rate`] for an example.
     pub fn distance_rate(&self, position: f64) -> f64 {
         (self.nominal_position(position) / self.distance as f64 * 100.0).floor()
     }
 
-    /// Get the section index (0-23) from a given position in meters.
+    /// Returns the section index (0-23) from a given position in meters.
     ///
     /// The run-up counts as section 0.
     ///
@@ -545,7 +556,7 @@ impl Course {
         (self.nominal_position(position) / self.section_length()).floor() as u8
     }
 
-    /// Get the starting lane position in course widths based on the gate roll
+    /// Returns the starting lane position in course widths for a gate roll
     /// (1-indexed), with gate 1 on the rail.
     pub(crate) fn starting_lane(&self, gate_roll: u8) -> CourseWidths {
         let (last_gate_before_space, extra_space) = match self.initial_lane_type {
@@ -562,13 +573,13 @@ impl Course {
         CourseWidths::from_horse_lanes((gate_roll - 1) as f64 + adjustor)
     }
 
-    /// Get the track name in the specified language, or `None` if the track name is
-    /// not available in that language.
+    /// Returns the track name in the specified language, or `None` if it isn't
+    /// available in that language.
     pub fn track_name(&self, language: Language) -> Option<&'static str> {
         crate::names::track_name(self.race_track_id, language)
     }
 
-    /// Check if this is an exchange race (dirt grade).
+    /// Returns whether this is an exchange race (dirt grade).
     ///
     /// Exchange races take place at Oi (10101), Kawasaki (10103), Funabashi
     /// (10104), or Morioka (10105).
@@ -576,18 +587,19 @@ impl Course {
         matches!(self.race_track_id, 10101 | 10103 | 10104 | 10105)
     }
 
-    /// Check if the race is held at a racetrack outside Japan.
+    /// Returns whether the race is held at a racetrack outside Japan.
     ///
     /// Abroad tracks include Longchamp, Santa Anita Park and Del Mar.
     pub fn is_abroad(&self) -> bool {
         matches!(self.race_track_id, 10201..=10203)
     }
 
-    /// Load a specific course by ID from the course data JSON file
-    /// (`data/course_data.json`) and its rail's gzipped JSON file in `rail_dir`
-    /// (`data/jp/rails/` or `data/en/rails/`, for the Japanese or English
-    /// version of the game), named after the course ID with a `.json.gz`
-    /// extension.
+    /// Loads a course by ID from the course data and rail files.
+    ///
+    /// The course data is the JSON file `data/course_data.json`. The rail is the
+    /// gzipped JSON file in `rail_dir` (`data/jp/rails/` or `data/en/rails/`, for
+    /// the Japanese or English version of the game), named after the course ID with
+    /// a `.json.gz` extension.
     ///
     /// # Errors
     ///
@@ -606,9 +618,10 @@ impl Course {
         Self::from_json(&course_json, &rail_json, course_id)
     }
 
-    /// Load a specific course by ID from a course data JSON string, and the
-    /// JSON string of its rail (already decompressed, unlike the files of
-    /// [`Course::from_json_files`]).
+    /// Loads a course by ID from course data and rail JSON strings.
+    ///
+    /// The rail is already decompressed, unlike the files of
+    /// [`Course::from_json_files`].
     ///
     /// # Errors
     ///
@@ -624,7 +637,7 @@ impl Course {
     ///
     /// # Examples
     ///
-    /// Load several courses while reading the course data only once, e.g. to
+    /// Loads several courses while reading the course data only once, e.g. to
     /// compare a runner across distances:
     ///
     /// ```
@@ -673,7 +686,7 @@ impl Course {
         Ok(course)
     }
 
-    /// Check the assumptions listed in [`Course::from_json`].
+    /// Checks the assumptions listed in [`Course::from_json`].
     fn validate(&self) -> Result<(), String> {
         let length = self.length();
         check_segments("corner", &self.corners, length)?;
@@ -692,7 +705,7 @@ impl Course {
     }
 }
 
-/// Read a gzipped UTF-8 text file.
+/// Reads a gzipped UTF-8 text file.
 fn read_gzip(path: impl AsRef<Path>) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let file = std::fs::File::open(path)?;
     let mut text = String::new();
@@ -700,7 +713,7 @@ fn read_gzip(path: impl AsRef<Path>) -> Result<String, Box<dyn std::error::Error
     Ok(text)
 }
 
-/// Check that `segments` have a positive length, are within a course `length`
+/// Checks that `segments` have a positive length, are within a course `length`
 /// meters long, and are sorted by start without overlapping.
 fn check_segments<S: Segment>(kind: &str, segments: &[S], length: f64) -> Result<(), String> {
     let mut previous_end = 0.0;
@@ -731,7 +744,7 @@ mod tests {
     use crate::course::rail::rail_from_turns;
     use crate::test_utils::{assert_close, synthetic_course};
 
-    /// Create a minimal course at the given racetrack.
+    /// Creates a minimal course at the given racetrack.
     ///
     /// The course ID is unrelated to the racetrack ID, so that checks on the
     /// wrong one fail.
@@ -751,7 +764,7 @@ mod tests {
         assert_eq!(course.slopes[0].grade, 1.0);
     }
 
-    /// Create a 2400m course with a 100m run-up (100m sections).
+    /// Creates a 2400m course with a 100m run-up (100m sections).
     fn create_run_up_course() -> Course {
         Course {
             distance: 2400,

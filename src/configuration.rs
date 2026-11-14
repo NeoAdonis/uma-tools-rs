@@ -1,5 +1,4 @@
-//! Configuration for the simulation behavior, game mechanics and language
-//! settings.
+//! Settings for the simulation behavior, game mechanics and language.
 //!
 //! # Examples
 //!
@@ -29,11 +28,10 @@ use std::path::Path;
 
 use crate::uma::Mood;
 
-/// Represents different versions of the game.
+/// A version of the game, which determines the behavior of some mechanics.
 ///
-/// Used to determine the behavior for some of the mechanics. This list is
-/// sorted in chronological order, from the original release to the latest
-/// update, allowing to compare if a certain version is before or after a
+/// This list is sorted in chronological order, from the original release to the
+/// latest update, allowing to compare if a certain version is before or after a
 /// certain update. The list is not exhaustive, and only includes the versions
 /// that have a significant impact on the game mechanics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
@@ -81,7 +79,7 @@ impl GameVersion {
     pub const LATEST: GameVersion = GameVersion::FifthAnniversary;
 }
 
-/// Supported languages for track names, skill names, etc.
+/// Language to be used for track names, skill names, etc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum Language {
     Japanese,
@@ -104,7 +102,7 @@ pub enum Roll {
 }
 
 impl Roll {
-    /// Resolve a check that succeeds with probability `p`.
+    /// Resolves a check that succeeds with probability `p`.
     ///
     /// The RNG is consumed even if the outcome is forced, so that changing the
     /// mode doesn't shift later draws of the same stream (e.g. a skill's trigger
@@ -123,7 +121,7 @@ impl Roll {
     }
 }
 
-/// Which runners get a default value (e.g. [`DefaultGate`] or
+/// Method used to assign default values to runners (e.g. [`DefaultGate`] or
 /// [`DefaultMood`]) when they get ready to race.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum Assignment {
@@ -181,7 +179,9 @@ impl<'de> Deserialize<'de> for DefaultMood {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Configuration {
+    /// Version of the game whose mechanics are simulated.
     pub game_version: GameVersion,
+    /// Language to be used for track names, skill names, etc.
     pub language: Language,
     /// Seed for pseudo-random number generation. Ensures reproducibility.
     ///
@@ -229,7 +229,7 @@ impl Default for Configuration {
 }
 
 impl Configuration {
-    /// Parse `Configuration` from a JSON string.
+    /// Parses `Configuration` from a JSON string.
     ///
     /// # Errors
     ///
@@ -255,7 +255,7 @@ impl Configuration {
         serde_json::from_str(json)
     }
 
-    /// Parse `Configuration` from a JSON file.
+    /// Parses `Configuration` from a JSON file.
     ///
     /// # Errors
     ///

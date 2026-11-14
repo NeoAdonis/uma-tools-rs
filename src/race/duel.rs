@@ -28,9 +28,10 @@ pub(crate) const EXIT_HP_PERCENT: f64 = 5.0;
 /// exits.
 pub(crate) const EXIT_DISTANCE: f64 = 5.0;
 
-/// Tolerance for floating-point rounding errors in the trigger checks, so that
-/// accumulated frame times aren't thrown off by them, and a speed difference a
-/// hair over `MAX_SPEED_DIFF` still counts.
+/// Tolerance for floating-point rounding errors in the trigger checks.
+///
+/// It keeps accumulated frame times from being thrown off by them, and lets a
+/// speed difference a hair over `MAX_SPEED_DIFF` still count.
 const TOLERANCE: f64 = 1e-6;
 
 /// Duel state.
@@ -49,7 +50,7 @@ pub enum Duel {
 }
 
 impl Duel {
-    /// Start dueling.
+    /// Starts dueling.
     pub(crate) fn start(guts: f64) -> Self {
         Duel::Active {
             speed_bonus: target_speed_bonus(guts),
@@ -57,22 +58,22 @@ impl Duel {
         }
     }
 
-    /// Check if the runner is currently dueling.
+    /// Checks if the runner is currently dueling.
     pub fn is_dueling(&self) -> bool {
         matches!(self, Duel::Active { .. })
     }
 
-    /// Check if the runner has dueled at some point, even if she already left.
+    /// Checks if the runner has dueled at some point, even if she already left.
     pub fn has_dueled(&self) -> bool {
         !matches!(self, Duel::Pending)
     }
 
-    /// Check if the runner has left a duel, and thus can't duel again.
+    /// Checks if the runner has left a duel, and thus can't duel again.
     pub fn has_ended(&self) -> bool {
         matches!(self, Duel::Ended)
     }
 
-    /// Target speed increase (m/s), zero if not dueling.
+    /// Returns the target speed increase (m/s), zero if not dueling.
     pub(crate) fn speed_bonus(&self) -> f64 {
         match self {
             Duel::Active { speed_bonus, .. } => *speed_bonus,
@@ -80,7 +81,7 @@ impl Duel {
         }
     }
 
-    /// Acceleration increase (m/s²), zero if not dueling.
+    /// Returns the acceleration increase (m/s²), zero if not dueling.
     pub(crate) fn acceleration_bonus(&self) -> f64 {
         match self {
             Duel::Active {
@@ -90,7 +91,7 @@ impl Duel {
         }
     }
 
-    /// Leave the duel, if dueling.
+    /// Leaves the duel, if dueling.
     pub(crate) fn stop(&mut self) {
         if self.is_dueling() {
             *self = Duel::Ended;
@@ -98,41 +99,41 @@ impl Duel {
     }
 }
 
-/// Check if two runners `distance` meters and `lane_diff` course widths apart
+/// Checks if two runners `distance` meters and `lane_diff` course widths apart
 /// are close enough to start counting towards a duel.
 pub(crate) fn is_close(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 
-/// Check if two runners have been close for long enough to start dueling,
+/// Checks if two runners have been close for long enough to start dueling,
 /// given how long (in seconds) they have been close in a row.
 pub(crate) fn is_close_long_enough(close_time: f64) -> bool {
     close_time >= TRIGGER_TIME - TOLERANCE
 }
 
-/// Check if two runners' speeds (m/s) are similar enough to start dueling.
+/// Checks if two runners' speeds (m/s) are similar enough to start dueling.
 pub(crate) fn are_speeds_similar(speed: f64, other_speed: f64) -> bool {
     (speed - other_speed).abs() <= MAX_SPEED_DIFF + TOLERANCE
 }
 
-/// Check if a runner's order is high enough (at most `MAX_ORDER_RATE` percent
+/// Checks if a runner's order is high enough (at most `MAX_ORDER_RATE` percent
 /// of the runners) for her to start dueling.
 pub(crate) fn is_order_high_enough(order: &OrderState) -> bool {
     100 * u16::from(order.order) <= u16::from(MAX_ORDER_RATE) * u16::from(order.runner_count)
 }
 
-/// Check if a duelist `distance` meters away from another duelist is
-/// separated from her, either ahead or behind.
+/// Checks if a duelist `distance` meters away from another duelist is separated
+/// from her, either ahead or behind.
 pub(crate) fn is_separated(distance: f64) -> bool {
     distance.abs() >= EXIT_DISTANCE
 }
 
-/// Target speed increase (m/s) while dueling.
+/// Returns the target speed increase (m/s) while dueling.
 fn target_speed_bonus(guts: f64) -> f64 {
     (200.0 * guts).powf(0.708) * 0.0001
 }
 
-/// Acceleration increase (m/s²) while dueling.
+/// Returns the acceleration increase (m/s²) while dueling.
 fn acceleration_bonus(guts: f64) -> f64 {
     (160.0 * guts).powf(0.59) * 0.0001
 }

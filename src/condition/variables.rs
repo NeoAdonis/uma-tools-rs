@@ -1,9 +1,6 @@
-//! # Condition Variables
+//! Definition and classification of the variables used in skill conditions.
 //!
-//! This module defines the variables used in skill conditions, such as
-//! `hp_per` or `phase_random`, and classifies them.
-//!
-//! ## Categories
+//! # Categories
 //!
 //! Every variable is a [`VarType`], grouped by category: most categories are a
 //! variant holding their own enum (e.g. [`VarType::Status`] holds a
@@ -15,7 +12,7 @@
 //! The meaning of each variable is described in the
 //! [variable reference](crate::condition::variable_reference).
 //!
-//! ## Names
+//! # Names
 //!
 //! Enum variants mirror the variable names in condition strings, keeping their
 //! original spelling (e.g. `RunningStyleTemptationCountNige` for
@@ -25,7 +22,7 @@
 //! (e.g. `order_rate_in20_continue`), so a new variant needs no separate
 //! mapping.
 //!
-//! ## Classification
+//! # Classification
 //!
 //! Some properties of a variable are known without evaluating it:
 //!
@@ -38,7 +35,7 @@
 
 use std::fmt::{self, Write as _};
 
-/// Define a category enum, whose variants mirror the variable names in
+/// Defines a category enum, whose variants mirror the variable names in
 /// condition strings.
 ///
 /// Names are the variants' in snake case (see [`snake_case`]): `Display`
@@ -57,14 +54,14 @@ macro_rules! category {
         }
 
         impl $name {
-            /// Variant named `name`, or `None` if there's none.
+            /// Returns the variant named `name`, or `None` if there's none.
             fn from_name(name: &str) -> Option<Self> {
                 [$(Self::$variant),*]
                     .into_iter()
                     .find(|variant| snake_case(variant.ident()).eq(name.chars()))
             }
 
-            /// Name of the variant in Rust.
+            /// Returns the name of the variant in Rust.
             fn ident(&self) -> &'static str {
                 match self {
                     $(Self::$variant => stringify!($variant)),*
@@ -80,7 +77,7 @@ macro_rules! category {
     };
 }
 
-/// Convert a variant name to snake case. Digits aren't split (e.g.
+/// Converts a variant name to snake case. Digits aren't split (e.g.
 /// `OrderRateIn20Continue` becomes `order_rate_in20_continue`).
 fn snake_case(ident: &str) -> impl Iterator<Item = char> + '_ {
     ident.chars().enumerate().flat_map(|(i, c)| {
@@ -89,15 +86,15 @@ fn snake_case(ident: &str) -> impl Iterator<Item = char> + '_ {
     })
 }
 
-/// Variable types used in conditions.
+/// A variable used in conditions, of any category.
 ///
 /// Variables are grouped by category. The meaning of each one is described in
 /// the [variable reference](crate::condition::variable_reference).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VarType {
-    /// Variable representing the elapsed (accumulated) time in a race.
+    /// The elapsed (accumulated) time in a race.
     AccumulateTime,
-    /// Variable representing base stats.
+    /// Base stats.
     BaseStat(BaseStatVar),
     /// Variables related to the runner's entry in the race (gate, popularity...).
     Entry(EntryVar),
@@ -137,7 +134,7 @@ pub enum VarType {
     Blocking(BlockingVar),
     /// Variables related to rush (temptation) mechanics.
     Temptation(TemptationVar),
-    /// Special value that is always true.
+    /// A special variable that is always true.
     Always,
 }
 
@@ -409,8 +406,8 @@ impl fmt::Display for VarType {
 }
 
 impl VarType {
-    /// Parse a variable name string into a [`VarType`], or `None` if the
-    /// variable is unknown.
+    /// Parses a variable name string into a [`VarType`], or `None` if the variable
+    /// is unknown.
     pub fn parse(s: &str) -> Option<Self> {
         use VarType::*;
 
@@ -445,7 +442,7 @@ impl VarType {
 }
 
 impl VarType {
-    /// Whether the value never changes during a race.
+    /// Returns whether the value never changes during a race.
     ///
     /// Determines if a comparison can be evaluated once before the race starts
     /// (e.g. `ground_type`, `running_style`, `motivation`).
@@ -465,8 +462,8 @@ impl VarType {
         }
     }
 
-    /// Whether an unmet condition on this variable prevents a skill from adding
-    /// popularity points.
+    /// Returns whether an unmet condition on this variable prevents a skill from
+    /// adding popularity points.
     ///
     /// These are the variables known before the race about the race itself and
     /// the runner's strategy and gate. Conditions on any other variable are

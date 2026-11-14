@@ -58,7 +58,9 @@ pub const MAX_TEAM_SIZE: usize = 3;
 
 #[derive(Debug, PartialEq)]
 pub struct RaceState {
+    /// Course where the race takes place.
     pub course: Course,
+    /// Race conditions such as track condition, weather, season, time, etc.
     pub params: RaceParameters,
     /// Runtime configuration. Shared by all runners so that they all follow the
     /// same game behavior.
@@ -103,12 +105,13 @@ pub struct RaceState {
 pub struct RunnerId(u8);
 
 impl RunnerId {
-    /// Index of the runner among those added to the race, in order.
+    /// Returns the index of the runner among those added to the race, in order.
     pub(crate) fn index(self) -> usize {
         self.0 as usize
     }
 
-    /// ID of the runner at `index` among those added to the race, in order.
+    /// Returns the ID of the runner at `index` among those added to the race, in
+    /// order.
     pub(crate) fn from_index(index: usize) -> Self {
         Self(index as u8)
     }
@@ -168,8 +171,8 @@ pub struct Entrant {
 }
 
 impl Entrant {
-    /// Entrant with the given raw stats and skills, with no mood, gate nor
-    /// pins set.
+    /// Creates an entrant with the given raw stats and skills, with no mood, gate
+    /// nor pins set.
     pub fn new(uma: Uma, skills: Vec<Arc<Skill>>) -> Self {
         Entrant {
             uma,
@@ -275,7 +278,7 @@ pub struct RaceSolver<T> {
 
 /// Methods available in both phases.
 impl<T> RaceSolver<T> {
-    /// Runners of the race.
+    /// Returns the runners of the race.
     ///
     /// Before they're ready, they're in the order they were added. Once ready,
     /// they're ordered by gate, then by position (leader first) after every
@@ -284,7 +287,7 @@ impl<T> RaceSolver<T> {
         &self.runners
     }
 
-    /// Take the runners out of the solver, in the order of [`Self::runners`].
+    /// Takes the runners out of the solver, in the order of [`Self::runners`].
     pub fn into_runners(self) -> Vec<T> {
         self.runners
     }
@@ -293,7 +296,7 @@ impl<T> RaceSolver<T> {
 /// Methods available BEFORE runners are ready (before stats have been
 /// calculated and out-of-gate skills have been applied).
 impl RaceSolver<Entrant> {
-    /// Create a new RaceSolver for a given course and parameters.
+    /// Creates a `RaceSolver` for the given course and parameters.
     ///
     /// If the configuration has no seed, seed 0 is used.
     ///
@@ -335,7 +338,7 @@ impl RaceSolver<Entrant> {
         }
     }
 
-    /// Add an individual runner to the race BEFORE it starts.
+    /// Adds an individual runner to the race before it starts.
     ///
     /// The runner gets a team of its own, so every other runner is an opponent.
     /// See [`RaceSolver::add_team`] to add allies instead.
@@ -417,7 +420,7 @@ impl RaceSolver<Entrant> {
         self.add_member(entrant, team)
     }
 
-    /// Add a team of 1 to [`MAX_TEAM_SIZE`] runners to the race BEFORE it starts.
+    /// Adds a team of 1 to [`MAX_TEAM_SIZE`] runners before the race starts.
     ///
     /// Members are allies of each other and opponents of everyone else.
     ///
@@ -490,7 +493,7 @@ impl RaceSolver<Entrant> {
             .collect()
     }
 
-    /// Allocate the next team index.
+    /// Allocates the next team index.
     fn new_team(&mut self) -> u8 {
         let team = self.state.team_count;
         self.state.team_count += 1;
@@ -499,8 +502,8 @@ impl RaceSolver<Entrant> {
         team
     }
 
-    /// Add `entrant` as a member of `team`, returning her ID. Gate capacity
-    /// must be checked by the caller.
+    /// Adds `entrant` as a member of `team`, returning her ID. Gate capacity must
+    /// be checked by the caller.
     fn add_member(&mut self, entrant: Entrant, team: u8) -> RunnerId {
         if let Some(gate) = entrant.gate {
             let gates = self.state.params.gates;
@@ -527,11 +530,10 @@ impl RaceSolver<Entrant> {
         id
     }
 
-    /// Get all runners ready: assign their gates and moods (see
-    /// [`Configuration`]), calculate their stats and activate out-of-gate
-    /// skills.
+    /// Gets all runners ready, returning a solver to run the simulation.
     ///
-    /// Returns a new [`RaceSolver`] with ready runners to run the simulation.
+    /// Gates and moods are assigned (see [`Configuration`]), stats are calculated
+    /// and out-of-gate skills are activated.
     ///
     /// # Panics
     ///
@@ -664,7 +666,7 @@ impl RaceSolver<Entrant> {
     }
 }
 
-/// Gate of every entrant, in the same order, according to
+/// Returns the gate of every entrant, in the same order, according to
 /// [`Configuration::gate_assignment`] and [`Configuration::default_gate`].
 ///
 /// Random gates are rolled in order, each runner from her own stream (derived
@@ -710,7 +712,7 @@ fn assign_gates(entrants: &[Entrant], seeds: &[RngSeed], state: &RaceState) -> V
         .collect()
 }
 
-/// Mood of every entrant, in the same order, according to
+/// Returns the mood of every entrant, in the same order, according to
 /// [`Configuration::mood_assignment`] and [`Configuration::default_mood`].
 ///
 /// Random moods are rolled from each runner's own stream (derived from her seed
@@ -740,7 +742,7 @@ fn assign_moods(entrants: &[Entrant], seeds: &[RngSeed], state: &RaceState) -> V
 /// Methods available AFTER runners are ready (stats have been calculated,
 /// out-of-gate skills have been applied...).
 impl RaceSolver<Runner> {
-    /// The runner with ID `id`, wherever she is in [`Self::runners`].
+    /// Returns the runner with ID `id`, wherever she is in [`Self::runners`].
     ///
     /// # Panics
     ///
@@ -749,7 +751,7 @@ impl RaceSolver<Runner> {
         &self.runners[self.runner_index(id)]
     }
 
-    /// Index in [`Self::runners`] of the runner with ID `id`.
+    /// Returns the index in [`Self::runners`] of the runner with ID `id`.
     ///
     /// # Panics
     ///
@@ -763,7 +765,7 @@ impl RaceSolver<Runner> {
             .expect("every ID has a runner")
     }
 
-    /// Get the time as displayed on the scoreboard after a race finishes.
+    /// Returns the time displayed on the scoreboard after a race finishes.
     ///
     /// Simulated times are scaled to match displayed ones, and clamped to the
     /// course's range (see [`Course::finish_time_min`]), so this is the time
@@ -827,13 +829,16 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Run simulation until every runner finishes, then record finish margins.
+    /// Runs the simulation until every runner finishes, then records finish
+    /// margins.
     pub fn run(&mut self) {
         while !self.step_frame() {}
     }
 
-    /// Advance the race by one frame ([`DELTA_TIME`]), e.g. to observe it
-    /// frame by frame, unless every runner has already finished.
+    /// Advances the race by one frame ([`DELTA_TIME`]), unless every runner has
+    /// already finished.
+    ///
+    /// It allows observing the race frame by frame.
     ///
     /// Returns whether every runner has finished. Finish margins are recorded
     /// on the frame the last runner finishes, as [`Self::run`] does.
@@ -909,7 +914,7 @@ impl RaceSolver<Runner> {
         finished
     }
 
-    /// Set each runner's margin behind the runner that placed immediately ahead.
+    /// Sets each runner's margin behind the runner that placed immediately ahead.
     ///
     /// Margin distance is calculated by scaling the difference in *displayed*
     /// finish times between runners by a set multiplier (15 m/s). All runners must
@@ -928,7 +933,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Perform a single simulation step.
+    /// Performs a single simulation step.
     ///
     /// Each step has two main stages: skill activation and state update.
     ///
@@ -1064,9 +1069,10 @@ impl RaceSolver<Runner> {
         self.update_compete_before_spurt();
     }
 
-    /// Speed limit of the runner at `index` set by front blocking, if any, from
-    /// her blocker's current speed. `index_by_gate` has the index of the runner
-    /// with each gate.
+    /// Returns the speed limit of the runner at `index` set by front blocking, if
+    /// any, from her blocker's current speed.
+    ///
+    /// `index_by_gate` has the index of the runner with each gate.
     fn front_blocking_limit(&self, index: usize, index_by_gate: &[Option<usize>]) -> Option<f64> {
         let blocked = &self.runners[index].blocked;
         let ratio = blocked.speed_ratio?;
@@ -1074,9 +1080,11 @@ impl RaceSolver<Runner> {
         Some(ratio * self.runners[blocker].speed)
     }
 
-    /// Check `is_other_character_activate_advantage_skill` and
-    /// `is_popularity_top_character_activate_advantage_skill` triggers of every
-    /// runner, now that this frame's activations are known.
+    /// Checks activation-dependent triggers of every runner after this frame's
+    /// activations are known.
+    ///
+    /// Used by conditions containing `is_other_character_activate_advantage_skill`
+    /// and `is_popularity_top_character_activate_advantage_skill`.
     ///
     /// Skills activated here aren't counted as advantage skills for other runners.
     fn check_advantage_triggers(&mut self) {
@@ -1095,7 +1103,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Apply skill effects that target other runners to their targets.
+    /// Applies skill effects that target other runners to their targets.
     ///
     /// Targets are selected from the state reached at the end of the previous step,
     /// so the result doesn't depend on which runner activated her skills first.
@@ -1125,7 +1133,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Select the indices of the runners targeted by a skill effect casted by the
+    /// Selects the indices of the runners targeted by a skill effect cast by the
     /// runner at index `caster`.
     ///
     /// Allies count towards the maximum number of targets, but they are excluded
@@ -1203,7 +1211,7 @@ impl RaceSolver<Runner> {
             .collect()
     }
 
-    /// Recount skill activations by team from each runner's own counts.
+    /// Recounts skill activations by team from each runner's own counts.
     fn update_team_activations(&mut self) {
         let team_activations = &mut self.state.team_activations;
         team_activations.fill(0);
@@ -1213,7 +1221,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update order (rank) and distance differences for all runners.
+    /// Updates order (rank) and distance differences for all runners.
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn update_order_values(&mut self) {
@@ -1270,7 +1278,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update blocking and overlapping status for all runners.
+    /// Updates blocking and overlapping status for all runners.
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn update_blocking_status(&mut self, delta_time: f64) {
@@ -1363,9 +1371,10 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Decide every runner's target lane, right before runners move, from the
-    /// blocking and overtake state of the end of the previous step, but the
-    /// positioning strategy and skill effects of this one. On the first step,
+    /// Decides every runner's target lane, right before runners move.
+    ///
+    /// It uses the blocking and overtake state of the end of the previous step, but
+    /// the positioning strategy and skill effects of this one. On the first step,
     /// that state comes from the gates.
     fn update_target_lanes(&mut self) {
         for i in 0..self.runners.len() {
@@ -1381,7 +1390,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Bump the outer runner of each overlapping pair to `OVERLAP_LANE_GAP` horse
+    /// Bumps the outer runner of each overlapping pair to `OVERLAP_LANE_GAP` horse
     /// lanes away from the inner one, and force her to update her target lane.
     ///
     /// Runners must be sorted by position in descending order before calling this.
@@ -1440,9 +1449,10 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update positioning strategy for all runners. Runners must be sorted by
-    /// position in descending order before calling this method, with ties in
-    /// gate order: the lower gate counts as ahead.
+    /// Updates positioning strategy for all runners.
+    ///
+    /// Runners must be sorted by position in descending order before calling this
+    /// method, with ties in gate order: the lower gate counts as ahead.
     fn update_positioning_strategy(&mut self) {
         // Debug: check sorting.
         self.assert_runners_sorted();
@@ -1554,7 +1564,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update secure lead (リード確保) state for all runners (2.5 Anniversary onward).
+    /// Updates secure lead (リード確保) state for all runners (2.5 Anniversary onward).
     fn update_secure_lead(&mut self) {
         let elapsed_time = self.state.elapsed_time;
         let course_distance = self.state.course.distance as f64;
@@ -1577,7 +1587,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update spot struggle (位置取り争い) state for all runners.
+    /// Updates spot struggle (位置取り争い) state for all runners.
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn update_spot_struggle(&mut self) {
@@ -1597,7 +1607,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Start a spot struggle between the frontmost runner with `style` and every
+    /// Starts a spot struggle between the frontmost runner with `style` and every
     /// runner with the same style close behind her, if any.
     fn try_start_spot_struggle(&mut self, style: EffectiveStyle) {
         let Some(leader_index) = self.runners.iter().position(|r| r.style == style) else {
@@ -1636,7 +1646,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Make strugglers with `style` exit the spot struggle if they're too far from
+    /// Makes strugglers with `style` exit the spot struggle if they're too far from
     /// every other struggler.
     ///
     /// Strugglers whose effects have expired still count (and can exit too), but
@@ -1675,7 +1685,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Update duel (追い比べ) state for all runners.
+    /// Updates duel (追い比べ) state for all runners.
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn update_duels(&mut self, delta_time: f64) {
@@ -1686,7 +1696,7 @@ impl RaceSolver<Runner> {
         self.try_start_duels(delta_time);
     }
 
-    /// Make duelists exit if their HP runs low or they're separated from every
+    /// Makes duelists exit if their HP runs low or they're separated from every
     /// other runner who has dueled, ahead or behind.
     ///
     /// Runners who already exited still count, so exits never cascade.
@@ -1708,7 +1718,7 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Track how long each pair of runners has been close, and start a duel
+    /// Tracks how long each pair of runners has been close, and starts a duel
     /// between those close for long enough that also meet the other conditions.
     ///
     /// Runners who already exited a duel can't start another one, nor be dueled.
@@ -1750,17 +1760,18 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Index of the pair of runners with gates `a` and `b` in the duel close
-    /// times, the same in either order.
+    /// Returns the index of the pair of runners with gates `a` and `b` in the duel
+    /// close times, the same in either order.
     fn duel_pair_index(&self, a: u8, b: u8) -> usize {
         let gates = self.state.params.gates as usize;
         let (low, high) = (a.min(b) as usize, a.max(b) as usize);
         (low - 1) * gates + (high - 1)
     }
 
-    /// Check if runners `i` and `j`, already close for long enough, meet the
-    /// remaining conditions to start dueling. These only need to hold for a single
-    /// frame.
+    /// Checks whether runners `i` and `j`, already close for long enough, meet the
+    /// remaining conditions to start dueling.
+    ///
+    /// These only need to hold for a single frame.
     fn can_start_duel(&self, i: usize, j: usize) -> bool {
         let course = &self.state.course;
         let can_duel = |runner: &Runner| {
@@ -1775,7 +1786,7 @@ impl RaceSolver<Runner> {
             && (duel::is_order_high_enough(&a.order) || duel::is_order_high_enough(&b.order))
     }
 
-    /// Update compete before spurt (位置取り調整) state for all runners (2.5 Anniversary
+    /// Updates compete before spurt (位置取り調整) state for all runners (2.5 Anniversary
     /// onward).
     fn update_compete_before_spurt(&mut self) {
         let elapsed_time = self.state.elapsed_time;
@@ -1796,8 +1807,8 @@ impl RaceSolver<Runner> {
         }
     }
 
-    /// Check if there's no other runner with the same style as runner `i` within
-    /// `distance`.
+    /// Checks whether there's no other runner with the same style as runner `i`
+    /// within `distance`.
     fn is_alone(&self, i: usize, distance: f64) -> bool {
         let runner = &self.runners[i];
         self.runners.iter().enumerate().all(|(j, other)| {

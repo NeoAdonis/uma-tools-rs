@@ -1,10 +1,7 @@
-//! # Skill Activation Logic
+//! Compilation of skill conditions into **triggers** (which determine WHEN to
+//! check a skill) and **guards** (which must be true AT activation time).
 //!
-//! This module compiles skill conditions into **triggers** (which determine
-//! WHEN to check a skill) and **guards** (which must be true AT activation
-//! time).
-//!
-//! ## Overview
+//! # Overview
 //!
 //! A condition is an OR of AND chains (branches). Each branch is compiled into
 //! a single trigger and a list of guards:
@@ -19,7 +16,7 @@
 //!   - Windows: the range of positions (or time, or HP) where every comparison
 //!     of the branch can be true, checked every frame while inside it.
 //!
-//! ## Compiling a Branch
+//! # Compiling a Branch
 //!
 //! The trigger of a branch is chosen as follows:
 //!
@@ -71,7 +68,7 @@
 //! `distance_rate<=20&is_finalcorner==1` when the final corner starts later),
 //! the branch can never be true and is dropped.
 //!
-//! ## Preconditions
+//! # Preconditions
 //!
 //! A precondition must have been true **at some point** before the skill can
 //! activate; once satisfied, it stays satisfied for the rest of the race.
@@ -97,7 +94,7 @@
 //! - They aren't rolled: skills with random variables in their preconditions
 //!   are rejected when loaded.
 //!
-//! ## Examples
+//! # Examples
 //!
 //! Condition `hp_per>=20 & is_finalcorner_random==1`:
 //!
@@ -165,11 +162,11 @@ pub struct SkillActivationLogic {
 /// What a [`SkillActivationLogic`] does when it succeeds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum LogicAction {
-    /// Activate the skill alternative.
+    /// Activation of the skill alternative.
     Activate,
-    /// Mark the given precondition as satisfied.
+    /// Marking of the given precondition as satisfied.
     Unlock(usize),
-    /// Check the conditions of a skill whose activations are pinned, without
+    /// A check of the conditions of a skill whose activations are pinned, without
     /// activating it (see [`SkillActivationRecord::conditions_met`]).
     ///
     /// `reports_missing` tells whether a missing activation (the skill's
@@ -201,8 +198,10 @@ pub(crate) enum WindowVariable {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum TriggerCondition {
     /// Checked every frame while the position is within any of the `(min, max)`
-    /// ranges (in meters). Used for random segments, trimmed to the positions where
-    /// the rest of the branch can be true.
+    /// ranges (in meters).
+    ///
+    /// Used for random segments, trimmed to the positions where the rest of the
+    /// branch can be true.
     Segments { ranges: Vec<(f64, f64)> },
 
     /// Checked every frame while the variable is within `[min, max]`.
@@ -216,12 +215,14 @@ pub(crate) enum TriggerCondition {
     LastStraightEntry,
 
     /// Checked once, on the first frame the runner moves (i.e. leaves the gate).
+    ///
     /// Used for out-of-gate skills, whose condition is evaluated before the race.
     RaceStart,
 
-    /// Random point after the all-out spurt starts. The point is rolled when the
-    /// sprint starts and scheduled as a position trigger.
-    /// Used for `run_at_full_speed_random==1` conditions.
+    /// Random point after the all-out spurt starts.
+    ///
+    /// The point is rolled when the sprint starts and scheduled as a position
+    /// trigger. Used for `run_at_full_speed_random==1` conditions.
     AllOutSpurtStart,
 
     /// Checked when any skill activates.
@@ -230,11 +231,13 @@ pub(crate) enum TriggerCondition {
 
     /// Checked once every runner has checked her skills, when any runner activated
     /// an advantage (buff) skill, or the most popular runner activated any skill.
+    ///
     /// Used for `is_other_character_activate_advantage_skill` and
     /// `is_popularity_top_character_activate_advantage_skill` conditions.
     BuffSkillActivation,
 
     /// Checked when a heal skill activates.
+    ///
     /// Used for `is_activate_heal_skill==1` conditions.
     HealSkillActivation,
 }
@@ -260,8 +263,10 @@ pub(crate) struct ActiveTimedEffect {
 }
 
 impl ActiveTimedEffect {
-    /// Value currently applied by the effect. An additional effect applies its
-    /// value once per trigger, so nothing until triggered.
+    /// Returns the value currently applied by the effect.
+    ///
+    /// An additional effect applies its value once per trigger, so nothing until
+    /// triggered.
     pub(crate) fn current_value(&self) -> f64 {
         if self.effect.additional == AdditionalActivation::Regular {
             self.value
@@ -388,7 +393,7 @@ pub(crate) struct CompiledBranch {
     pub(crate) random: bool,
 }
 
-/// Compile a condition into one [`CompiledBranch`] per OR branch.
+/// Compiles a condition into one [`CompiledBranch`] per OR branch.
 ///
 /// `segments` holds the intervals `(start, end)` the random variables of each
 /// branch can be checked in: the segments they rolled (see
@@ -440,8 +445,10 @@ pub(crate) fn compile_condition(
         .collect()
 }
 
-/// Compile an AND chain, with the `segments` its random variables can be
-/// checked in. Returns `None` if it can never be true on this course.
+/// Compiles an AND chain, with the `segments` its random variables can be
+/// checked in.
+///
+/// Returns `None` if it can never be true on this course.
 fn compile_branch(
     comps: &[Comparison],
     segments: &[Range],
@@ -551,7 +558,8 @@ fn compile_branch(
     })
 }
 
-/// Trigger of an event on skill activations (see [`Comparison::is_event`]).
+/// Returns the trigger of an event on skill activations (see
+/// [`Comparison::is_event`]).
 fn activation_event(comp: &Comparison) -> TriggerCondition {
     match comp.var {
         VarType::Activation(ActivationVar::IsActivateAnySkill) => {
@@ -587,16 +595,18 @@ fn is_empty(range: Range) -> bool {
     range.0 > range.1
 }
 
-/// Smallest range containing all given ranges.
+/// Returns the smallest range containing all given ranges.
 fn envelope(ranges: impl Iterator<Item = Range>) -> Range {
     ranges.fold(EMPTY_RANGE, |(min, max), (start, end)| {
         (min.min(start), max.max(end))
     })
 }
 
-/// Range of values of a variable, floored when evaluated, where a comparison is
-/// true. As values are floored, `variable<=N` holds until `N + 1`, and
-/// `variable>N` from `N + 1`.
+/// Returns the range of values of a variable, floored when evaluated, where a
+/// comparison is true.
+///
+/// As values are floored, `variable<=N` holds until `N + 1`, and `variable>N`
+/// from `N + 1`.
 fn floored_range(op: CompOp, value: i32) -> Range {
     let value = value as f64;
     match op {
@@ -609,8 +619,8 @@ fn floored_range(op: CompOp, value: i32) -> Range {
     }
 }
 
-/// Get the range of positions (in meters from the start) where a comparison can
-/// be true.
+/// Returns the range of positions (in meters from the start) where a comparison
+/// can be true.
 ///
 /// The range contains every position where it's true, but may contain some
 /// where it isn't (e.g. `corner!=0` covers from the first corner to the last
@@ -690,7 +700,7 @@ fn position_range(comp: &Comparison, course: &Course) -> Option<Range> {
     (!is_empty(range)).then_some(range)
 }
 
-/// Get the range of phases where a comparison can be true.
+/// Returns the range of phases where a comparison can be true.
 ///
 /// Subdivisions (`phase_firsthalf`...) are -1 outside of them, so they only
 /// narrow the range when they can't hold there.
@@ -715,7 +725,8 @@ fn phase_range(comp: &Comparison) -> Range {
     )
 }
 
-/// Get the range of elapsed times (in seconds) where a comparison can be true.
+/// Returns the range of elapsed times (in seconds) where a comparison can be
+/// true.
 fn time_range(comp: &Comparison) -> Range {
     match comp.var {
         VarType::AccumulateTime => intersect(floored_range(comp.op, comp.value), FULL_RANGE),
@@ -723,7 +734,7 @@ fn time_range(comp: &Comparison) -> Range {
     }
 }
 
-/// Get the range of HP percentages where a comparison can be true.
+/// Returns the range of HP percentages where a comparison can be true.
 fn hp_range(comp: &Comparison) -> Range {
     match comp.var {
         VarType::Status(StatusVar::HpPer) => {

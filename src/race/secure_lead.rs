@@ -21,9 +21,10 @@ pub(crate) const COOLDOWN: f64 = 1.0;
 // ? Should scale with wit, but the formula is unknown.
 pub(crate) const CHANCE: f64 = 0.2;
 
-/// Desirable lead (in meters) of a runner with `style` over a runner with
-/// `other` style, or `None` if `other` should not be behind `style` by
-/// strategy.
+/// Returns the desirable lead (in meters) of a runner with `style` over one
+/// with `other` style.
+///
+/// Returns `None` if `other` should not be behind `style` by strategy.
 pub(crate) fn desirable_lead(
     style: EffectiveStyle,
     other: EffectiveStyle,
@@ -70,7 +71,7 @@ pub(crate) fn target_speed_bonus(
     (guts / 2000.0).sqrt() * 0.3 * style_coef * alone_coef
 }
 
-/// HP consumed upon securing the lead.
+/// Returns the HP consumed upon securing the lead.
 pub(crate) fn hp_cost(style: EffectiveStyle, course_distance: i32) -> f64 {
     let style_coef = match style {
         EffectiveStyle::Runaway => 1.2,
@@ -81,8 +82,8 @@ pub(crate) fn hp_cost(style: EffectiveStyle, course_distance: i32) -> f64 {
     20.0 * style_coef * distance_coefficient(course_distance)
 }
 
-/// Course distance coefficient of the HP cost. Shared with compete before
-/// spurt mechanics.
+/// Returns the course distance coefficient of the HP cost. Shared with compete
+/// before spurt mechanics.
 pub(crate) fn distance_coefficient(course_distance: i32) -> f64 {
     match course_distance {
         ..=1800 => 0.3,

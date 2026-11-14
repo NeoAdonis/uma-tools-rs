@@ -11,7 +11,7 @@ use crate::course::{Phase, ThresholdStat, Track};
 use crate::race::parameters::TrackCondition;
 use crate::uma::{Aptitude, EffectiveStyle, Stats};
 
-/// Calculate acceleration strategy phase multiplier based on running style.
+/// Calculates acceleration strategy phase multiplier based on running style.
 pub(crate) fn acceleration_strategy_phase_multiplier(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
@@ -32,7 +32,7 @@ pub(crate) fn acceleration_strategy_phase_multiplier(style: EffectiveStyle, phas
     }
 }
 
-/// Wit multiplier for the wit limit break buff (5th Anniversary onward).
+/// Returns the wit multiplier for the wit limit break buff (5th Anniv. onward).
 ///
 /// Zero at 1200 wit or less; it then grows in brackets up to a maximum of 1.12.
 pub(crate) fn wit_limit_break_multiplier(wit: f64) -> f64 {
@@ -50,7 +50,8 @@ pub(crate) fn wit_limit_break_multiplier(wit: f64) -> f64 {
     }
 }
 
-/// Phase strategy coefficient for the wit limit break buff (5th Anniv. onward).
+/// Returns the phase strategy coefficient for the wit limit break buff (5th
+/// Anniv. onward).
 pub(crate) fn wit_limit_break_phase_coefficient(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
         (EffectiveStyle::Front | EffectiveStyle::Runaway, Phase::RunUp | Phase::Early) => 0.26,
@@ -69,7 +70,8 @@ pub(crate) fn wit_limit_break_phase_coefficient(style: EffectiveStyle, phase: Ph
     }
 }
 
-/// Distance factor for the Stamina Limit Break buff (2.5 Anniversary onward).
+/// Returns the distance factor for the Stamina Limit Break buff (2.5 Anniv.
+/// onward).
 pub(crate) fn stamina_limit_break_distance_factor(distance: i32, game_version: GameVersion) -> f64 {
     let is_mecha_uma = game_version >= GameVersion::MechaUmaUpdate;
     match distance {
@@ -83,8 +85,8 @@ pub(crate) fn stamina_limit_break_distance_factor(distance: i32, game_version: G
     }
 }
 
-/// Stamina Limit Break target speed buff in m/s, without its random factor
-/// (2.5 Anniversary onward).
+/// Returns the Stamina Limit Break target speed buff in m/s, without its random
+/// factor (2.5 Anniv. onward).
 ///
 /// Zero at 1200 stamina or below, or on courses up to 2100m.
 pub(crate) fn stamina_limit_break_base_buff(
@@ -98,7 +100,7 @@ pub(crate) fn stamina_limit_break_base_buff(
     (stamina - 1200.0).sqrt() * 0.0085 * stamina_limit_break_distance_factor(distance, game_version)
 }
 
-/// Random factor of the Stamina Limit Break buff.
+/// Returns the random factor of the Stamina Limit Break buff.
 ///
 /// The game's parameter file lists a weighted random table and a parameter that
 /// suggests power is involved, but observed values stay between 0.98 and
@@ -109,7 +111,7 @@ pub(crate) fn stamina_limit_break_random_factor<R: Rng + ?Sized>(_rng: &mut R) -
     1.0
 }
 
-/// Calculate acceleration multiplier based on track aptitude.
+/// Calculates acceleration multiplier based on track aptitude.
 pub(crate) fn ground_type_proficiency_multiplier(track_aptitude: Aptitude) -> f64 {
     match track_aptitude {
         Aptitude::S => 1.05,
@@ -123,7 +125,7 @@ pub(crate) fn ground_type_proficiency_multiplier(track_aptitude: Aptitude) -> f6
     }
 }
 
-/// Calculate acceleration multiplier based on distance aptitude.
+/// Calculates acceleration multiplier based on distance aptitude.
 pub(crate) fn acceleration_distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f64 {
     match distance_aptitude {
         Aptitude::S | Aptitude::A | Aptitude::B | Aptitude::C | Aptitude::D => 1.0,
@@ -133,7 +135,7 @@ pub(crate) fn acceleration_distance_proficiency_multiplier(distance_aptitude: Ap
     }
 }
 
-/// Calculate strategy phase multiplier based on running style.
+/// Calculates strategy phase multiplier based on running style.
 pub(crate) fn strategy_phase_multiplier(style: EffectiveStyle, phase: Phase) -> f64 {
     match (style, phase) {
         // Early-race.
@@ -157,7 +159,7 @@ pub(crate) fn strategy_phase_multiplier(style: EffectiveStyle, phase: Phase) -> 
     }
 }
 
-/// Calculate speed multiplier based on distance aptitude.
+/// Calculates speed multiplier based on distance aptitude.
 pub(crate) fn distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f64 {
     match distance_aptitude {
         Aptitude::S => 1.05,
@@ -171,7 +173,7 @@ pub(crate) fn distance_proficiency_multiplier(distance_aptitude: Aptitude) -> f6
     }
 }
 
-/// Calculate base target speed based on various factors.
+/// Calculates base target speed based on various factors.
 pub(crate) fn base_target_speed(
     base_speed: f64,
     style: EffectiveStyle,
@@ -192,20 +194,22 @@ pub(crate) fn base_target_speed(
     }
 }
 
-/// Target speed modifier (m/s) in downhill mode on a `slope` (percent; negative
-/// downhill).
+/// Returns the target speed modifier (m/s) in downhill mode on a `slope`
+/// (percent; negative downhill).
 pub(crate) fn downhill_speed_modifier(slope: f64) -> f64 {
     debug_assert!(slope < 0.0, "Not a downhill slope");
     -slope / 10.0 + 0.3
 }
 
-/// Target speed modifier (m/s) on an uphill `slope` (percent), given the power
-/// stat. It's negative, as uphills reduce speed.
+/// Returns the target speed modifier (m/s) on an uphill `slope` (percent),
+/// given the power stat.
+///
+/// This modifier is negative, as uphills reduce speed.
 pub(crate) fn uphill_speed_modifier(slope: f64, power: f64) -> f64 {
     -slope * 200.0 / power
 }
 
-/// Roll section speed modifier range randomly based on wit stat.
+/// Rolls section speed modifier range randomly based on wit stat.
 pub(crate) fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng: &mut R,
     wit_stat: f64,
@@ -216,7 +220,7 @@ pub(crate) fn roll_section_speed_modifier<R: Rng + ?Sized>(
     rng.random_range(min..=max) * base_speed
 }
 
-/// Calculate track speed modifier based on track condition.
+/// Calculates track speed modifier based on track condition.
 pub(crate) fn track_speed_modifier(track_condition: TrackCondition) -> f64 {
     match track_condition {
         TrackCondition::Heavy => 50.0,
@@ -224,7 +228,7 @@ pub(crate) fn track_speed_modifier(track_condition: TrackCondition) -> f64 {
     }
 }
 
-/// Calculate track power modifier based on track type and condition.
+/// Calculates track power modifier based on track type and condition.
 pub(crate) fn track_power_modifier(track: Track, track_condition: TrackCondition) -> f64 {
     match (track, track_condition) {
         (Track::Turf, TrackCondition::Firm) => 0.0,
@@ -238,7 +242,7 @@ pub(crate) fn track_power_modifier(track: Track, track_condition: TrackCondition
     }
 }
 
-/// Strategy (style) proficiency multiplier based on style aptitude.
+/// Returns the style proficiency multiplier based on style aptitude.
 ///
 /// Applied to the wit stat and to the spot struggle duration.
 pub(crate) fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
@@ -254,7 +258,7 @@ pub(crate) fn strategy_proficiency_multiplier(style_aptitude: Aptitude) -> f64 {
     }
 }
 
-/// Calculate adjusted speed after applying course and track modifiers, before
+/// Calculates adjusted speed after applying course and track modifiers, before
 /// the career bonus and the clamp to at least 1.
 ///
 /// Takes all base stats, since the course speed modifier depends on the
@@ -268,7 +272,7 @@ pub(crate) fn calculate_adjusted_speed(
     base.speed * course_modifier - track_speed_modifier(track_condition)
 }
 
-/// Calculate adjusted power after applying track modifier, before the career
+/// Calculates adjusted power after applying track modifier, before the career
 /// bonus and the clamp to at least 1.
 pub(crate) fn calculate_adjusted_power(
     base_power: f64,
@@ -278,13 +282,13 @@ pub(crate) fn calculate_adjusted_power(
     base_power - track_power_modifier(track, track_condition)
 }
 
-/// Calculate adjusted wit after applying style aptitude modifier, before the
+/// Calculates adjusted wit after applying style aptitude modifier, before the
 /// career bonus and the clamp to at least 1.
 pub(crate) fn calculate_adjusted_wit(base_wit: f64, style_aptitude: Aptitude) -> f64 {
     base_wit * strategy_proficiency_multiplier(style_aptitude)
 }
 
-/// Calculate course speed modifier based on course set status.
+/// Calculates course speed modifier based on course set status.
 ///
 /// Each course has a set of stats that provide bonuses if the corresponding
 /// base stats exceed certain thresholds. If multiple stats are
@@ -306,7 +310,7 @@ fn course_speed_modifier(base: &Stats, course_set_status: &[ThresholdStat]) -> f
     1.0 + (total_bonus / course_set_status.len() as f64)
 }
 
-/// Calculate bonus multiplier based on threshold stat value.
+/// Calculates bonus multiplier based on threshold stat value.
 fn threshold_stat_bonus(stat_value: f64) -> f64 {
     if stat_value <= 300.0 {
         0.05

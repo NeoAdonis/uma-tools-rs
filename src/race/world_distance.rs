@@ -22,13 +22,13 @@
 
 use crate::course::rail::Rail;
 
-/// Factor, at most 1, that slows down a move whose uncorrected course distance
-/// is `step` meters, after a move from world position `start` to `end` on the
-/// horizontal plane.
+/// Returns the factor, at most 1, that slows down a move of `step` meters.
 ///
-/// It is the world distance that `step` covers at the base ratio of `rail`,
-/// over the world distance of the previous move, so it takes a single division
-/// per frame. It is 1 if the previous move covered no world distance.
+/// `step` is the uncorrected course distance of the move, which follows a move
+/// from world position `start` to `end` on the horizontal plane. The factor is
+/// the world distance that `step` covers at the base ratio of `rail`, over the
+/// world distance of the previous move, so it takes a single division per
+/// frame. It is 1 if the previous move covered no world distance.
 pub(crate) fn inverse_ratio(rail: &Rail, start: [f64; 2], end: [f64; 2], step: f64) -> f64 {
     let (dx, dz) = (end[0] - start[0], end[1] - start[1]);
     // `hypot` is much slower and more precise than needed here.

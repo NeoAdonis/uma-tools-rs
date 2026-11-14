@@ -6,7 +6,7 @@ use crate::uma::EffectiveStyle;
 
 /// Health Points (HP) state.
 ///
-/// HP determines if the runner can sustain her target speed, decelerating
+/// HP determines whether the runner can sustain her target speed, decelerating
 /// if it reaches 0.
 ///
 /// It's also used to get the distance at which her last spurt can start.
@@ -15,7 +15,7 @@ pub struct HpState {
     /// Current HP.
     ///
     /// HP is set to its maximum at the start of the race and decreases over time.
-    /// It can be restored by skills but cannot exceed `maximum`.
+    /// It can only be restored by skills, which cap it at `maximum`.
     ///
     /// If HP reaches 0, the runner's maximum speed is greatly reduced.
     current: f64,
@@ -23,12 +23,12 @@ pub struct HpState {
     ///
     /// Calculated from the stamina stat at the start of the race.
     maximum: f64,
-    /// Flag indicating if the runner has emptied her HP at least once.
+    /// Whether the runner has emptied her HP at least once.
     has_emptied: bool,
 }
 
 impl HpState {
-    /// Create a new HP state with given maximum HP.
+    /// Creates an HP state with the given maximum HP.
     pub(crate) fn new(maximum: f64) -> Self {
         Self {
             current: maximum,
@@ -37,32 +37,32 @@ impl HpState {
         }
     }
 
-    /// Get the current HP.
+    /// Returns the current HP.
     pub fn current(&self) -> f64 {
         self.current
     }
 
-    /// Get the maximum HP.
+    /// Returns the maximum HP.
     pub fn maximum(&self) -> f64 {
         self.maximum
     }
 
-    /// Check if HP has been emptied at least once.
+    /// Returns whether HP has been emptied at least once.
     pub fn has_emptied(&self) -> bool {
         self.has_emptied
     }
 
-    /// Check if HP is empty (i.e., current HP <= 0).
+    /// Returns whether HP is empty (i.e., current HP <= 0).
     pub fn is_empty(&self) -> bool {
         self.current <= 0.0
     }
 
-    /// Get current HP percentage.
+    /// Returns the current HP as a percentage of the maximum.
     pub fn percent(&self) -> f64 {
         self.current / self.maximum * 100.0
     }
 
-    /// Consume HP by a given amount, recording whether it has been emptied.
+    /// Consumes the given amount of HP, recording whether it has been emptied.
     pub(crate) fn consume(&mut self, amount: f64) {
         self.current -= amount;
         if self.is_empty() {
@@ -70,12 +70,12 @@ impl HpState {
         }
     }
 
-    /// Recover HP by a given amount, clamped to maximum.
+    /// Recovers the given amount of HP, clamped to the maximum.
     pub(crate) fn recover(&mut self, amount: f64) {
         self.current = (self.current + amount).min(self.maximum);
     }
 
-    /// Set the current HP to `value`, recording whether it has been emptied.
+    /// Sets the current HP to `value`, recording whether it has been emptied.
     ///
     /// Unlike [`recover`](Self::recover), `value` isn't clamped to the maximum;
     /// exceeding it fails in debug builds instead.

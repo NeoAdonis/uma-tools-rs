@@ -10,8 +10,11 @@ use crate::units::meters_to_bashin;
 /// ahead, as displayed after a race.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Margin {
+    /// Less than 0.2 meters.
     Nose,
+    /// Between 0.2 and 0.4 meters.
     Head,
+    /// Between 0.4 and 0.8 meters.
     Neck,
     /// Margin in bashin, between a neck and 10 bashin.
     Bashin(f64),
@@ -20,7 +23,7 @@ pub enum Margin {
 }
 
 impl Margin {
-    /// Convert a margin in meters to its displayed category.
+    /// Converts a margin in meters to its displayed category.
     ///
     /// # Examples
     ///

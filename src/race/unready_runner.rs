@@ -6,7 +6,7 @@
 //!
 //! [`Entrant`]: crate::Entrant
 //!
-//! ## Skill Setup
+//! # Skill Setup
 //!
 //! When the runner is created:
 //!
@@ -20,7 +20,7 @@
 //! A pinned wit check (see [`SkillPin::WitCheck`]) replaces the rolled one,
 //! even for skills without a wit check.
 //!
-//! ## Out-of-Gate Skills
+//! # Out-of-Gate Skills
 //!
 //! Out-of-gate skills apply before the race starts: they're the skills with any
 //! alternative that has an effect modifying a parameter needed before the race
@@ -96,7 +96,7 @@ use crate::trigger::skill_activation::{QueuedActivation, SkillActivationRecord};
 use crate::trigger::system::*;
 use crate::uma::{Aptitude, EffectiveStyle, Mood, Stats, Uma};
 
-/// Adjust base stats according to course, race parameters and style aptitude.
+/// Adjusts base stats according to course, race parameters and style aptitude.
 fn adjust_stats(
     base: &Stats,
     style_aptitude: Aptitude,
@@ -127,7 +127,7 @@ fn adjust_stats(
     }
 }
 
-/// Apply a stat boost effect to `uma`.
+/// Applies a stat boost effect to `uma`.
 ///
 /// `modifier` is in stat points.
 fn apply_stat_boost(uma: &mut Stats, effect_type: &SkillType, modifier: f64) {
@@ -149,12 +149,12 @@ fn apply_stat_boost(uma: &mut Stats, effect_type: &SkillType, modifier: f64) {
     }
 }
 
-/// Modify a stat value, ensuring it doesn't go below 1.
+/// Modifies a stat value, ensuring it doesn't go below 1.
 fn modify_stat(stat: &mut f64, modifier: f64) {
     *stat = (*stat + modifier).max(1.0);
 }
 
-/// Whether `skill` passes its wit check for a runner with `base_wit`.
+/// Returns whether `skill` passes its wit check for a runner with `base_wit`.
 ///
 /// [`Configuration::wit_checks`] only forces the checks of skills that have
 /// one, while pins force any. Every check is rolled, so that pinning or
@@ -183,9 +183,11 @@ fn passes_wit_check(
     }
 }
 
-/// Activations of `skills` pinned in `pins` during the race (out-of-gate ones
-/// already happened), by descending time. Activations at the same time keep
-/// their order (by skill, then as pinned), so they're popped in that order.
+/// Returns the activations of `skills` pinned in `pins` during the race, by
+/// descending time.
+///
+/// Out-of-gate ones already happened. Activations at the same time keep their
+/// order (by skill, then as pinned), so they're popped in that order.
 fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedActivation> {
     let mut queue = Vec::new();
     for (skill_index, skill) in skills.iter().enumerate() {
@@ -210,10 +212,12 @@ fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedAct
     queue
 }
 
-/// A data structure that holds all information needed to initialize a
-/// [`Runner`]. It allows for proper activation of out-of-gate skills that can
-/// take into account the runner's base stats, race parameters, and most
-/// importantly, data about other runners.
+/// Everything known about a runner before the race, needed to initialize a
+/// [`Runner`].
+///
+/// It allows for proper activation of out-of-gate skills, which can take into
+/// account the runner's base stats, race parameters and, most importantly, data
+/// about other runners.
 #[derive(Debug)]
 pub struct UnreadyRunner {
     // === Immutable context ===
@@ -290,7 +294,7 @@ pub struct UnreadyRunner {
 }
 
 impl UnreadyRunner {
-    /// Create a new runner with initial values not yet ready for simulation.
+    /// Creates a runner with initial values not yet ready for simulation.
     ///
     /// Its random streams derive from `rng_seed`. Its gate is assigned later
     /// (see [`Self::assign_gate`]).
@@ -359,9 +363,11 @@ impl UnreadyRunner {
         }
     }
 
-    /// Assign `gate` (1-indexed) to the runner, along with her gate bracket
-    /// (post number) and the popularity bonus of her skills, whose guards may
-    /// depend on it.
+    /// Assigns `gate` (1-indexed) to the runner, along with her gate bracket (post
+    /// number).
+    ///
+    /// The popularity bonus of the runner's skills is also calculated, since it
+    /// depends on the runner's gate.
     pub(crate) fn assign_gate(&mut self, gate: u8, state: &RaceState) {
         self.gate = Some(gate);
         self.initial_state.gate_block = Self::gate_bracket(gate, state.params.gates);
@@ -373,8 +379,8 @@ impl UnreadyRunner {
         self.popularity_bonus = popularity::skill_bonus(all_skills, self, state);
     }
 
-    /// Activate an out-of-gate skill alternative: apply its pre-race effects now,
-    /// and activate it on the first frame the runner moves.
+    /// Activates an out-of-gate skill alternative: applies its pre-race effects
+    /// now, and activates it on the first frame the runner moves.
     ///
     /// The activation itself (other effects, cooldown, tracking...) is handled
     /// like any other skill's (see
@@ -423,8 +429,8 @@ impl UnreadyRunner {
             .add_race_start_logic(skill_index, alt_index, is_continuation);
     }
 
-    /// Whether the skill at `skill_index` activates on the first frame the runner
-    /// moves.
+    /// Returns whether the skill at `skill_index` activates on the first frame the
+    /// runner moves.
     fn activates_on_race_start(&self, skill_index: usize) -> bool {
         let scheduler = &self.trigger_scheduler;
         scheduler
@@ -433,7 +439,7 @@ impl UnreadyRunner {
             .any(|&logic_idx| scheduler.skill_logics[logic_idx].skill_index == skill_index)
     }
 
-    /// Determine gate bracket from gate roll and total gates.
+    /// Determines the gate bracket from the gate roll and the total gates.
     ///
     /// There are 8 brackets. In races with eight (or fewer) participants, the gates
     /// will correspond one-to-one to a gate bracket (i.e., gate 1 to bracket 1,
@@ -441,7 +447,7 @@ impl UnreadyRunner {
     ///
     /// In races with more than 8 participants, gates will be added in reverse,
     /// starting from the last bracket. So in a race with 9 participants, the extra
-    /// gate goes to bracket 8 (paticipants in gate numbers 8 and 9 share bracket
+    /// gate goes to bracket 8 (participants in gate numbers 8 and 9 share bracket
     /// 8); with 10 participants, to brackets 8 and 7 (participants in gates 7 and 8
     /// will share bracket 7, gates 8 and 9 will share bracket 8), etc. If there are
     /// more than 16 participants, the process starts from bracket 8 again.
@@ -481,7 +487,7 @@ impl UnreadyRunner {
         gate_roll + 1
     }
 
-    /// Activate every out-of-gate skill whose condition is satisfied (see
+    /// Activates every out-of-gate skill whose condition is satisfied (see
     /// `activate_out_of_gate_skill`).
     pub(crate) fn apply_out_of_gate_skills(&mut self, state: &RaceState) {
         // Skills that ignore popularity requirements go first, so that every other
@@ -578,16 +584,16 @@ impl UnreadyRunner {
         }
     }
 
-    /// Activate "Sympathy" if the runner has it, bypassing its condition
-    /// (`same_skill_horse_count>=5`), unless its activations are pinned.
+    /// Activates "Sympathy" if the runner has it, bypassing its condition.
     ///
     /// This must be called after out-of-gate skills have been applied, so that it
     /// doesn't activate twice when its condition is also satisfied.
+    ///
+    /// If the runner has a pinned activation for it, the pin decides instead.
     pub(crate) fn activate_sympathy(&mut self) {
         let Some(skill_index) = self.skills.iter().position(|skill| skill.id == SYMPATHY_ID) else {
             return;
         };
-        // Pinned activations decide instead.
         if self.pins.activations(SYMPATHY_ID).is_some() {
             return;
         }
@@ -596,7 +602,7 @@ impl UnreadyRunner {
         }
     }
 
-    /// Build the final [`Runner`] with all modifications applied.
+    /// Builds the final [`Runner`] with all modifications applied.
     pub(crate) fn build(self, state: &RaceState) -> Runner {
         let gate_roll = self.gate.expect("gates are assigned before building");
         let course = &state.course;

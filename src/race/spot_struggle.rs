@@ -47,7 +47,7 @@ pub enum SpotStruggle {
 }
 
 impl SpotStruggle {
-    /// Start the spot struggle at `elapsed_time`.
+    /// Starts the spot struggle at `elapsed_time`.
     pub(crate) fn start(guts: f64, style_aptitude: Aptitude, elapsed_time: f64) -> Self {
         SpotStruggle::Active {
             speed_bonus: target_speed_bonus(guts),
@@ -55,23 +55,23 @@ impl SpotStruggle {
         }
     }
 
-    /// Check if the spot struggle is in effect at `elapsed_time`.
+    /// Checks if the spot struggle is in effect at `elapsed_time`.
     pub fn is_active(&self, elapsed_time: f64) -> bool {
         matches!(self, SpotStruggle::Active { expires_at, .. } if elapsed_time < *expires_at)
     }
 
-    /// Check if the runner still counts as a struggler, even if the effects
-    /// have expired.
+    /// Checks if the runner still counts as a struggler, even if the effects have
+    /// expired.
     pub fn is_struggler(&self) -> bool {
         matches!(self, SpotStruggle::Active { .. })
     }
 
-    /// Check if the runner has entered a spot struggle at some point.
+    /// Checks if the runner has entered a spot struggle at some point.
     pub fn has_struggled(&self) -> bool {
         !matches!(self, SpotStruggle::Pending)
     }
 
-    /// Target speed increase (m/s) at `elapsed_time` (zero if not active).
+    /// Returns the target speed increase (m/s) at `elapsed_time` (0 if not active).
     pub(crate) fn speed_bonus(&self, elapsed_time: f64) -> f64 {
         match self {
             SpotStruggle::Active {
@@ -82,7 +82,7 @@ impl SpotStruggle {
         }
     }
 
-    /// Stop the spot struggle, if it was started.
+    /// Stops the spot struggle, if it was started.
     pub(crate) fn stop(&mut self) {
         if self.has_struggled() {
             *self = SpotStruggle::Ended;
@@ -90,32 +90,33 @@ impl SpotStruggle {
     }
 }
 
-/// Check if a runner `distance` meters and `lane_diff` course widths away from
+/// Checks if a runner `distance` meters and `lane_diff` course widths away from
 /// the frontmost runner of her strategy is close enough to struggle with her.
 pub(crate) fn is_close_to_leader(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }
 
-/// Check if a struggler is too far from another struggler to keep struggling,
-/// given her `distance` in meters (positive if ahead) and `lane_diff` in course
-/// widths from the other.
+/// Checks if a struggler is too far from another struggler to keep struggling.
+///
+/// `distance` (in meters, positive if ahead) and `lane_diff` (in course widths)
+/// are those of the struggler from the other.
 ///
 /// Only falling behind counts; getting ahead doesn't.
 pub(crate) fn is_too_far(distance: f64, lane_diff: CourseWidths) -> bool {
     distance < -EXIT_DISTANCE || lane_diff.abs() > EXIT_LANE_GAP
 }
 
-/// Target speed increase (m/s) during the spot struggle.
+/// Returns the target speed increase (m/s) during the spot struggle.
 pub(crate) fn target_speed_bonus(guts: f64) -> f64 {
     (500.0 * guts).powf(0.6) * 0.0001
 }
 
-/// Duration of the spot struggle in seconds.
+/// Returns the duration of the spot struggle in seconds.
 pub(crate) fn duration(guts: f64, style_aptitude: Aptitude) -> f64 {
     (700.0 * guts).sqrt() * 0.012 * strategy_proficiency_multiplier(style_aptitude)
 }
 
-/// HP consumption multiplier during the spot struggle.
+/// Returns the HP consumption multiplier during the spot struggle.
 ///
 /// # Panics
 ///

@@ -1,10 +1,10 @@
-//! Unit conversion utilities for race measurements.
+//! Conversions between units of race measurements.
 
 use derive_more::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 use serde::{Deserialize, Deserializer};
 
-/// Convert a value from 10000ths while deserializing, as most fractional values
-/// are stored in the game data.
+/// Converts a value from 10000ths while deserializing, as most fractional
+/// values are stored in the game data.
 pub(crate) fn deserialize_ten_thousandths<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<f64, D::Error> {
@@ -62,37 +62,37 @@ pub const HORSE_LANES_PER_COURSE_WIDTH: f64 = 18.0;
 pub struct CourseWidths(pub f64);
 
 impl CourseWidths {
-    /// Convert horse lanes to course widths.
+    /// Converts horse lanes to course widths.
     pub const fn from_horse_lanes(lanes: f64) -> Self {
         Self(lanes / HORSE_LANES_PER_COURSE_WIDTH)
     }
 
-    /// Convert to horse lanes.
+    /// Converts to horse lanes.
     pub const fn horse_lanes(self) -> f64 {
         self.0 * HORSE_LANES_PER_COURSE_WIDTH
     }
 
-    /// Convert to meters.
+    /// Converts to meters.
     pub const fn meters(self) -> f64 {
         self.0 * COURSE_WIDTH_TO_METERS
     }
 
-    /// Absolute value, e.g. of a lane difference.
+    /// Returns the absolute value, e.g. of a lane difference.
     pub fn abs(self) -> Self {
         Self(self.0.abs())
     }
 
-    /// Minimum of both values.
+    /// Returns the minimum of both values.
     pub fn min(self, other: Self) -> Self {
         Self(self.0.min(other.0))
     }
 
-    /// Maximum of both values.
+    /// Returns the maximum of both values.
     pub fn max(self, other: Self) -> Self {
         Self(self.0.max(other.0))
     }
 
-    /// Restrict the value to `min..=max`.
+    /// Restricts the value to `min..=max`.
     pub fn clamp(self, min: Self, max: Self) -> Self {
         Self(self.0.clamp(min.0, max.0))
     }
@@ -110,14 +110,14 @@ impl std::ops::Div for CourseWidths {
 /// Bashin (バ身, horse-length) to meters conversion unit. 1 bashin = 2.5 meters.
 pub const BASHIN_TO_METERS: f64 = 2.5;
 
-/// Convert bashin to meters.
+/// Converts bashin to meters.
 ///
 /// Inverse of [`meters_to_bashin`], which has an example.
 pub fn bashin_to_meters(bashin: f64) -> f64 {
     bashin * BASHIN_TO_METERS
 }
 
-/// Convert meters to bashin.
+/// Converts meters to bashin.
 ///
 /// # Examples
 ///
@@ -139,18 +139,19 @@ pub fn meters_to_bashin(meters: f64) -> f64 {
     meters / BASHIN_TO_METERS
 }
 
-/// Furlong to meters conversion unit. 1 furlong = 200 meters, as the game
-/// rounds it, rather than the standard 201.168 meters.
+/// Furlong to meters conversion unit. 1 furlong (in-game) = 200 meters.
+///
+/// N.B. The game uses a rounded value rather than the standard 201.168 meters.
 pub const FURLONG_TO_METERS: f64 = 200.0;
 
-/// Convert furlongs to meters.
+/// Converts furlongs to meters.
 ///
 /// Inverse of [`meters_to_furlongs`], which has an example.
 pub fn furlongs_to_meters(furlongs: f64) -> f64 {
     furlongs * FURLONG_TO_METERS
 }
 
-/// Convert meters to furlongs.
+/// Converts meters to furlongs.
 ///
 /// # Examples
 ///

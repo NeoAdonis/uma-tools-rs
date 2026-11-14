@@ -42,8 +42,8 @@ static NAMES: LazyLock<Names> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../data/names.json")).expect("names.json must be valid")
 });
 
-/// Name with the given ID in `names`, or `None` if the ID or its name in that
-/// language is unknown.
+/// Returns the name with the given ID in `names`, or `None` if the ID or its
+/// name in that language is unknown.
 fn name<K: Eq + Hash>(names: &HashMap<K, NamePair>, id: K, language: Language) -> Option<&str> {
     let [japanese, english] = names.get(&id)?;
     let name = match language {
@@ -53,17 +53,17 @@ fn name<K: Eq + Hash>(names: &HashMap<K, NamePair>, id: K, language: Language) -
     (!name.is_empty()).then_some(name.as_str())
 }
 
-/// Get the name of a character card (outfit and Uma) by card ID.
+/// Gets the name of a character card (outfit and Uma) by card ID.
 pub fn character_name(card_id: u32, language: Language) -> Option<&'static str> {
     name(&NAMES.characters, card_id, language)
 }
 
-/// Get the name of a skill by skill ID.
+/// Gets the name of a skill by skill ID.
 pub fn skill_name(skill_id: i32, language: Language) -> Option<&'static str> {
     name(&NAMES.skills, skill_id, language)
 }
 
-/// Get the name of a racetrack by track ID.
+/// Gets the name of a racetrack by track ID.
 pub fn track_name(track_id: u16, language: Language) -> Option<&'static str> {
     name(&NAMES.tracks, track_id, language)
 }

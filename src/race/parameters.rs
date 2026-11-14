@@ -31,7 +31,7 @@ use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Deserializer, de::Error};
 use std::path::Path;
 
-/// Track condition (a.k.a. ground condition) enumeration.
+/// Track condition (a.k.a. ground condition).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum TrackCondition {
@@ -45,7 +45,7 @@ pub enum TrackCondition {
     Heavy = 4,
 }
 
-/// Weather enumeration.
+/// Weather.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum Weather {
@@ -59,7 +59,7 @@ pub enum Weather {
     Snowy = 4,
 }
 
-/// Season enumeration.
+/// Season.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum Season {
@@ -77,7 +77,7 @@ pub enum Season {
     Sakura = 5,
 }
 
-/// Time of day enumeration.
+/// Time of day.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum Time {
@@ -92,11 +92,11 @@ pub enum Time {
     Night,
 }
 
-/// Race grade enumeration.
+/// Race grade.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum Grade {
-    /// Grade 1 races, as well as other important races (e.g. URA Finals, Champions
-    /// Meeting, etc.).
+    /// Grade 1 races and other important races (e.g. URA Finals, Champions Meeting,
+    /// etc.).
     G1 = 100,
     /// Grade 2 races.
     G2 = 200,
@@ -117,15 +117,19 @@ pub enum Grade {
     Daily = 999,
 }
 
-/// Struct representing the parameters of a race.
+/// Parameters of a race.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RaceParameters {
     /// Track condition. Affects speed, power and HP consumption.
     pub track_condition: TrackCondition,
+    /// Weather.
     pub weather: Weather,
+    /// Season.
     pub season: Season,
+    /// Time of day.
     pub time: Time,
+    /// Race grade.
     pub grade: Grade,
     /// Number of gates (participants) in the race, from 1 to [`MAX_GATES`].
     #[serde(deserialize_with = "deserialize_gates")]
@@ -166,11 +170,12 @@ fn deserialize_gates<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u8, D
 pub struct RaceParametersData {
     #[serde(flatten)]
     pub race: RaceParameters,
+    /// Course ID, used to load the course data for the race.
     pub course_id: String,
 }
 
 impl RaceParametersData {
-    /// Parse `RaceParametersData` from a JSON string.
+    /// Parses `RaceParametersData` from a JSON string.
     ///
     /// # Errors
     ///
@@ -181,7 +186,7 @@ impl RaceParametersData {
         serde_json::from_str(json)
     }
 
-    /// Parse `RaceParametersData` from a JSON file.
+    /// Parses `RaceParametersData` from a JSON file.
     ///
     /// # Errors
     ///

@@ -90,7 +90,7 @@ pub struct UmaMoeBuild {
 
 /// A runner from an uma.moe build code.
 ///
-/// Convert it with [`UmaMoeRunner::to_uma_data`] to race with it.
+/// Converts it with [`UmaMoeRunner::to_uma_data`] to race with it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UmaMoeRunner {
     /// See [`Uma::character_id`].
@@ -237,9 +237,10 @@ struct RawUma {
 /// ID of the Runaway (大逃げ) skill, which makes a Front runner a Runaway.
 const RUNAWAY_SKILL_ID: i32 = 202051;
 
-/// Deserialize a running style, which uma.moe also allows to be Runaway
-/// (`Oonige`). Returns the basic style (Front for Runaway) and whether it was
-/// Runaway.
+/// Deserializes a running style, which uma.moe also allows to be Runaway
+/// (`Oonige`).
+///
+/// Returns the basic style (Front for Runaway) and whether it was Runaway.
 fn deserialize_style<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<(BaseStyle, bool), D::Error> {
@@ -251,7 +252,8 @@ fn deserialize_style<'de, D: Deserializer<'de>>(
     Ok((style, false))
 }
 
-/// Add the Runaway skill to `skills` if `runaway` and it's missing, as
+/// Adds the Runaway skill to `skills` if `runaway` and it's missing.
+///
 /// Runaway is the effect of that skill on a Front runner.
 fn add_runaway_skill(skills: &mut Vec<UmaSkill>, runaway: bool) {
     if runaway && !skills.iter().any(|skill| skill.id == RUNAWAY_SKILL_ID) {
@@ -262,7 +264,7 @@ fn add_runaway_skill(skills: &mut Vec<UmaSkill>, runaway: bool) {
     }
 }
 
-/// Deserialize a stat from a string, as [`deserialize_stat`] does from a
+/// Deserializes a stat from a string, as [`deserialize_stat`] does from a
 /// number.
 fn deserialize_string_stat<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
     let value = String::deserialize(deserializer)?;
@@ -272,7 +274,7 @@ fn deserialize_string_stat<'de, D: Deserializer<'de>>(deserializer: D) -> Result
     deserialize_stat(stat.into_deserializer())
 }
 
-/// Deserialize a mood from a string, from `"1"` (Awful) to `"5"` (Great).
+/// Deserializes a mood from a string, from `"1"` (Awful) to `"5"` (Great).
 fn deserialize_motivation<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Mood, D::Error> {
     let value = String::deserialize(deserializer)?;
     value
@@ -318,9 +320,8 @@ impl From<RawFieldUma> for UmaMoeRunner {
 impl TryFrom<RawUma> for UmaMoeRunner {
     type Error = String;
 
-    /// Convert a runner from `uma1` or `uma2`, with `unique_lv` as the level
-    /// of its unique skills (6-digit IDs starting with 1), and level 1 for the
-    /// rest.
+    /// Converts a runner from `uma1` or `uma2`, with `unique_lv` as the level of
+    /// its unique skills (6-digit IDs starting with 1), and level 1 for the rest.
     fn try_from(raw: RawUma) -> Result<Self, String> {
         let character_id = match raw.outfit_id.as_deref() {
             None | Some("") => None,
@@ -429,7 +430,7 @@ impl TryFrom<RawBuild> for UmaMoeBuild {
 }
 
 impl UmaMoeBuild {
-    /// Parse `UmaMoeBuild` from a build code.
+    /// Parses `UmaMoeBuild` from a build code.
     ///
     /// Surrounding whitespace is ignored.
     ///
@@ -444,7 +445,7 @@ impl UmaMoeBuild {
         Ok(Self::from_json(&json)?)
     }
 
-    /// Parse `UmaMoeBuild` from a file with a build code.
+    /// Parses `UmaMoeBuild` from a file with a build code.
     ///
     /// # Errors
     ///
@@ -459,7 +460,7 @@ impl UmaMoeBuild {
         Self::from_build_code(&content)
     }
 
-    /// Parse `UmaMoeBuild` from the JSON of a decoded build code.
+    /// Parses `UmaMoeBuild` from the JSON of a decoded build code.
     ///
     /// # Errors
     ///
@@ -508,7 +509,8 @@ impl UmaMoeBuild {
         serde_json::from_str(json)
     }
 
-    /// Race parameters and course ID, as a G1 race with one gate per runner.
+    /// Returns the race parameters and course ID, as a G1 race with one gate per
+    /// runner.
     pub fn race_parameters(&self) -> RaceParametersData {
         RaceParametersData {
             race: RaceParameters {
@@ -524,12 +526,14 @@ impl UmaMoeBuild {
         }
     }
 
-    /// Runners, in field order.
+    /// Returns the runners, in field order.
     pub fn runners(&self) -> &[UmaMoeRunner] {
         &self.runners
     }
 
-    /// Runners grouped by team, in order of first appearance in the field.
+    /// Returns the runners grouped by team, in order of first appearance in the
+    /// field.
+    ///
     /// Runners without a team are alone in theirs.
     ///
     /// Teams have at most [`MAX_TEAM_SIZE`] runners, so that each can be added
@@ -550,9 +554,10 @@ impl UmaMoeBuild {
         teams
     }
 
-    /// Runners as [`Entrant`]s to race on `course`, grouped by team as in
-    /// [`Self::teams`], so that each team can be added with
-    /// [`RaceSolver::add_team`].
+    /// Returns the runners as [`Entrant`]s to race on `course`, grouped by team as
+    /// in [`Self::teams`].
+    ///
+    /// Each team can be added with [`RaceSolver::add_team`].
     ///
     /// Each runner takes her aptitudes for the course (see
     /// [`UmaMoeRunner::to_uma_data`]), her mood and her gate (see
@@ -586,9 +591,11 @@ impl UmaMoeBuild {
             .collect()
     }
 
-    /// Make `config` assign gates as the build code says, if it does: gates as
-    /// sent ([`Assignment::Unset`] and [`DefaultGate::InOrder`]), or random
-    /// ones for every runner ([`Assignment::All`] and [`DefaultGate::Random`]).
+    /// Configures `config` to assign gates as the build code says, if it does.
+    ///
+    /// Gates are either as sent ([`Assignment::Unset`] and
+    /// [`DefaultGate::InOrder`]), or random ones for every runner
+    /// ([`Assignment::All`] and [`DefaultGate::Random`]).
     ///
     /// As sent, runners without a gate (see [`UmaMoeRunner::gate`]) take the
     /// free ones in field order. The solver gives them in the order runners are
@@ -605,17 +612,18 @@ impl UmaMoeBuild {
 }
 
 impl UmaMoeRunner {
-    /// Team ID in the build code, if any.
+    /// Returns the team ID in the build code, if any.
     pub fn team(&self) -> Option<u8> {
         self.team
     }
 
-    /// Gate (1-indexed) set in the build code, if any (see [`Entrant::gate`]).
+    /// Returns the gate (1-indexed) set in the build code, if any (see
+    /// [`Entrant::gate`]).
     pub fn gate(&self) -> Option<u8> {
         self.gate
     }
 
-    /// Convert `self` to [`UmaData`] for a race of the given distance type and
+    /// Converts `self` to [`UmaData`] for a race of the given distance type and
     /// track surface.
     ///
     /// The distance and track aptitudes are the ones for `distance` and

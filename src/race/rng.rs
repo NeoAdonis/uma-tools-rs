@@ -80,7 +80,7 @@ impl RngSeed {
         Self(seed)
     }
 
-    /// Seed of the sub-stream identified by `stream`.
+    /// Returns the seed of a specific stream.
     pub(crate) fn derive(self, stream: Stream) -> Self {
         let mut hasher = DefaultHasher::new();
         self.0.hash(&mut hasher);
@@ -88,7 +88,7 @@ impl RngSeed {
         Self(hasher.finish())
     }
 
-    /// Random number generator of the sub-stream identified by `stream`.
+    /// Returns the random number generator of a specific stream.
     pub(crate) fn rng(self, stream: Stream) -> RaceRng {
         RaceRng::seed_from_u64(self.derive(stream).0)
     }
@@ -102,13 +102,18 @@ impl RngSeed {
 pub(crate) struct RunnerRng {
     /// Seed of the runner, from which every stream derives.
     pub seed: RngSeed,
+    /// Stream for rush decisions: chance, section, snap-out checks.
     pub rush: RaceRng,
+    /// Stream for stamina keep ratio and checks.
     pub stamina_keep: RaceRng,
     /// Stream of the last slope the runner entered (see [`Stream::Slope`]),
     /// replaced upon entering each slope.
     pub slope: RaceRng,
+    /// Stream for positioning strategy checks and thresholds.
     pub positioning: RaceRng,
+    /// Stream for last spurt candidate checks.
     pub last_spurt: RaceRng,
+    /// Stream for secure lead checks.
     pub secure_lead: RaceRng,
     /// In-race stream of each skill, in the runner's skill order (see
     /// [`Stream::Skill`]).
@@ -116,7 +121,7 @@ pub(crate) struct RunnerRng {
 }
 
 impl RunnerRng {
-    /// Create the streams of a runner with the given `skill_ids`, in order.
+    /// Creates the streams of a runner with the given `skill_ids`, in order.
     pub(crate) fn new(seed: RngSeed, skill_ids: impl IntoIterator<Item = i32>) -> Self {
         Self {
             seed,
@@ -133,8 +138,8 @@ impl RunnerRng {
         }
     }
 
-    /// Stream of the runner identified by `stream`, used for one-off draws or
-    /// draws keyed by event.
+    /// Returns the stream of the runner identified by `stream`, used for one-off
+    /// draws or draws keyed by event.
     pub(crate) fn keyed(&self, stream: Stream) -> RaceRng {
         self.seed.rng(stream)
     }

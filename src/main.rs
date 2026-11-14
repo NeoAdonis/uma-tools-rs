@@ -1,7 +1,9 @@
 //! Simulates the same race many times with different seeds and summarizes how
-//! every runner performed: finish times, placings, last spurt and HP, race
-//! behavior (positions, blocking, rushing, downhill mode, position fights,
-//! duels) and, for one runner, how often each skill activates.
+//! every runner performed.
+//!
+//! The summary covers finish times, placings, last spurt and HP, race behavior
+//! (positions, blocking, rushing, downhill mode, position fights, duels) and,
+//! for one runner, how often each skill activates.
 //!
 //! Runners come from an umadump export (`--uma`, raced with the race
 //! parameters of `--parameters`), or from an uma.moe build code (`--build`),
@@ -27,7 +29,7 @@ use uma_tools::race::parameters::RaceParameters;
 use uma_tools::race::solver::{DELTA_TIME, FINISH_TIME_SCALE};
 use uma_tools::{Configuration, Course, Entrant, RaceParametersData, RaceSolver, SkillData};
 
-/// What a runner did in a single race.
+/// The results of a runner in a single race.
 #[derive(Default)]
 struct RunnerRace {
     /// Simulated finish time (s).
@@ -439,13 +441,13 @@ fn main() {
     }
 }
 
-/// Mean of `values`, or NaN if there are none.
+/// Returns the mean of `values`, or NaN if there are none.
 fn mean(values: impl Iterator<Item = f64>) -> f64 {
     let (sum, count) = values.fold((0.0, 0), |(sum, count), v| (sum + v, count + 1));
     sum / count as f64
 }
 
-/// Format `seconds` as `m:ss.ss`.
+/// Formats `seconds` as `m:ss.ss`.
 fn format_time(seconds: f64) -> String {
     let minutes = (seconds / 60.0).floor();
     format!("{minutes}:{:05.2}", seconds - minutes * 60.0)
@@ -461,7 +463,7 @@ struct Summary {
 }
 
 impl Summary {
-    /// Summarize a non-empty sample, sorting it in place.
+    /// Summarizes a non-empty sample, sorting it in place.
     fn new(values: &mut [f64]) -> Self {
         values.sort_by(f64::total_cmp);
         let n = values.len();

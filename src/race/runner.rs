@@ -201,8 +201,8 @@ impl Default for OrderState {
     }
 }
 
-/// Order rates (top X%) that round to `order` in a race with `runner_count`
-/// runners.
+/// Returns the order rates (top X%) that round to `order` in a race with
+/// `runner_count` runners.
 ///
 /// Order rate conditions convert their rate into an order, rounding to the
 /// nearest (half up): e.g. 50% in a 9-runner race is 4.5, rounded to 5th
@@ -323,10 +323,12 @@ pub struct Runner {
     pub finish_margin: Option<f64>,
     /// List of skills that have been activated during the race.
     pub activated_skills: Vec<SkillActivationRecord>,
-    /// Activations missing from the pins: where the conditions of a skill whose
-    /// activations are pinned (see [`SkillPin::Activations`]) say it should
-    /// have activated, but no activation is pinned on that frame. Out-of-gate
-    /// ones are at 0 seconds and meters.
+    /// Activations missing from the pins.
+    ///
+    /// Each one is a frame where the conditions of a skill whose activations are
+    /// pinned (see [`SkillPin::Activations`]) say it should have activated, but no
+    /// activation is pinned on that frame. Out-of-gate ones are at 0 seconds and
+    /// meters.
     ///
     /// Only those activations a roll couldn't have prevented are recorded: a
     /// failed wit check is ruled out (the skill has a pinned activation, or no
@@ -343,10 +345,11 @@ pub struct Runner {
     /// Indices in `activated_skills` of this frame's pinned activations, until
     /// their skills' conditions confirm them.
     pub(crate) pinned_this_frame: Vec<usize>,
-    /// IDs of the skills whose conditions didn't allow their pinned
-    /// out-of-gate alternative to activate. Emptied on the first frame she
-    /// moves, when those activations are recorded as unmet (see
-    /// [`SkillActivationRecord::conditions_met`]).
+    /// IDs of the skills whose conditions didn't allow their pinned out-of-gate
+    /// alternative to activate.
+    ///
+    /// Emptied on the first frame she moves, when those activations are recorded as
+    /// unmet (see [`SkillActivationRecord::conditions_met`]).
     pub(crate) unmet_out_of_gate: Vec<i32>,
     /// Activated alternatives of each skill in `skills`, as a mask (bit `i` set
     /// when alternative `i` activated).
@@ -394,8 +397,10 @@ pub struct Runner {
     /// Time spent being an overtake target of someone else in seconds.
     pub(crate) being_overtake_target_time: f64,
     /// Extra move lane, set upon entering the final corner (see
-    /// `Self::update_final_extra_move_lane`). From then on, both normal and
-    /// overtake mode move out to it when it's outside and reachable.
+    /// `Self::update_final_extra_move_lane`).
+    ///
+    /// From then on, both normal and overtake mode move out to it when it's outside
+    /// and reachable.
     pub(crate) extra_move_lane: Option<CourseWidths>,
     /// State related to order (rank) in the race.
     pub order: OrderState,
@@ -469,10 +474,11 @@ pub struct Runner {
     pub(crate) pins: Pins,
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
-    /// World position on the horizontal plane at the start of the last move,
-    /// if it covered any distance. It slows down the next move if the last one
-    /// covered more world distance than course distance (see
-    /// [`world_distance`]).
+    /// World position on the horizontal plane at the start of the last move, if it
+    /// covered any distance.
+    ///
+    /// It slows down the next move if the last one covered more world distance than
+    /// course distance (see [`world_distance`]).
     pub(crate) last_move_start: Option<[f64; 2]>,
     /// Scheduler for skill triggers. It contains many queues for different trigger
     /// types, each with their own criteria (distance, time, etc).
@@ -489,7 +495,7 @@ pub enum StartType {
 }
 
 impl StartType {
-    /// Type of start given the start delay in seconds:
+    /// Returns the type of start given the start delay in seconds:
     ///
     /// - Good Start: start delay < 0.02s; gives bonus points in Team Trials.
     /// - Normal Start: 0.02s <= start delay <= 0.08s.
@@ -504,7 +510,7 @@ impl StartType {
 }
 
 impl Runner {
-    /// Create a new Runner from an UnreadyRunner, whose out-of-gate skills have
+    /// Creates a new Runner from an UnreadyRunner, whose out-of-gate skills have
     /// already been applied, and RaceState.
     pub(crate) fn new(builder: UnreadyRunner, state: &RaceState) -> Self {
         let mut runner = builder.build(state);
@@ -512,38 +518,40 @@ impl Runner {
         runner
     }
 
-    /// Get the base style, treating Runaway as a variant of Front.
+    /// Returns the base style, treating Runaway as a variant of Front.
     pub fn base_style(&self) -> BaseStyle {
         self.style.base_style()
     }
 
-    /// Number of skills the runner has, including those that failed the wit check.
+    /// Returns the number of skills the runner has, including those that failed the
+    /// wit check.
     pub fn skill_count(&self) -> usize {
         self.skills.len()
     }
 
-    /// Skills that passed the wit check, so they can activate on their own.
+    /// Returns the skills that passed the wit check, so they can activate on their
+    /// own.
     pub fn available_skills(&self) -> &[Arc<Skill>] {
         &self.skills[..self.available_skill_count]
     }
 
-    /// Skills that failed the wit check, so they can only be activated by other
-    /// skills (see [`SkillType::ActivateRandomGold`]).
+    /// Returns the skills that failed the wit check, so they can only be activated
+    /// by other skills (see [`SkillType::ActivateRandomGold`]).
     pub fn failed_skills(&self) -> &[Arc<Skill>] {
         &self.skills[self.available_skill_count..]
     }
 
-    /// Determine the lane type based on the current lane position.
+    /// Determines the lane type based on the current lane position.
     pub fn lane_type(&self) -> LaneType {
         LaneType::from(self.lane.current)
     }
 
-    /// Determine the type of start (see [`StartType::from_delay`]).
+    /// Determines the type of start (see [`StartType::from_delay`]).
     pub fn start_type(&self) -> StartType {
         StartType::from_delay(self.start_delay)
     }
 
-    /// Update acceleration based on current speed and target speed.
+    /// Updates acceleration based on current speed and target speed.
     pub(crate) fn update_acceleration(&mut self, elapsed_time: f64) {
         if self.speed < self.target_speed {
             self.accelerate(elapsed_time);
@@ -552,7 +560,7 @@ impl Runner {
         }
     }
 
-    /// Calculate increasing acceleration.
+    /// Calculates increasing acceleration.
     fn accelerate(&mut self, elapsed_time: f64) {
         let base_accel = if self.is_going_uphill() {
             0.0004
@@ -588,7 +596,7 @@ impl Runner {
             + charge_up_modifier;
     }
 
-    /// Calculate decreasing acceleration (i.e., deceleration).
+    /// Calculates decreasing acceleration (i.e., deceleration).
     fn decelerate(&mut self) {
         self.acceleration = if self.hp.is_empty() {
             -1.2
@@ -603,25 +611,27 @@ impl Runner {
         };
     }
 
-    /// Check if the runner is in downhill mode (i.e. not only going downhill but
-    /// also experiencing a speed gain).
+    /// Checks whether the runner is in downhill mode (i.e. not only going downhill
+    /// but also experiencing a speed boost from the slope).
     pub fn is_in_downhill_mode(&self) -> bool {
         self.slope_speed_modifier.is_some_and(|s| s > 0.0)
     }
 
-    /// Check if the runner is going uphill, thus experiencing a speed reduction.
+    /// Checks whether the runner is going uphill, thus experiencing a speed
+    /// reduction.
     pub fn is_going_uphill(&self) -> bool {
         self.slope_speed_modifier.is_some_and(|s| s < 0.0)
     }
 
-    /// Get the effective speed including skill modifiers.
+    /// Returns the effective speed including skill modifiers.
+    ///
     /// This is the actual speed used for position calculations.
     fn effective_speed(&self) -> f64 {
         self.speed + self.skill_modifiers.current_speed
     }
 
-    /// Update the runner's speed based on acceleration and constraints,
-    /// including the `speed_limit` set by front blocking, if any.
+    /// Updates the runner's speed based on acceleration and constraints, including
+    /// the `speed_limit` set by front blocking, if any.
     pub(crate) fn update_speed(
         &mut self,
         delta_time: f64,
@@ -665,21 +675,20 @@ impl Runner {
         }
     }
 
-    /// Last spurt of the runner, if she has entered it (i.e. it has been
-    /// calculated and she has reached its target distance).
+    /// Returns the last spurt of the runner, if she has started it.
     pub fn active_last_spurt(&self) -> Option<&LastSpurt> {
         self.last_spurt
             .as_ref()
             .filter(|last_spurt| last_spurt.has_started(self.position))
     }
 
-    /// Check if the runner is in her last spurt and has reached its speed.
+    /// Checks whether the runner is in her last spurt and has reached its speed.
     fn has_reached_last_spurt_speed(&self) -> bool {
         self.active_last_spurt()
             .is_some_and(|last_spurt| self.speed >= last_spurt.max_speed)
     }
 
-    /// Update target speed based on various factors.
+    /// Updates target speed based on various factors.
     ///
     /// It is capped at [`MAX_TARGET_SPEED`] and floored at the minimum speed,
     /// or at [`START_DASH_MIN_TARGET_SPEED`] during the start dash.
@@ -757,7 +766,7 @@ impl Runner {
         .max(floor)
     }
 
-    /// Update the runner's position based on effective current speed.
+    /// Updates the runner's position based on effective current speed.
     pub(crate) fn update_position(&mut self, delta_time: f64, state: &RaceState) {
         let course = &state.course;
         // Runner only moves for the part of the frame after her start delay.
@@ -788,20 +797,22 @@ impl Runner {
         }
     }
 
-    /// Check if `other` is an opponent (i.e. on a different team).
+    /// Checks whether `other` is an opponent (i.e. on a different team).
     pub fn is_opponent(&self, other: &Runner) -> bool {
         self.initial_state.team != other.initial_state.team
     }
 
-    /// Check if the runner has finished the race.
+    /// Checks whether the runner has finished the race.
     pub fn has_finished(&self) -> bool {
         self.finish_time.is_some()
     }
 
-    /// Update the current section from the current position, before the target
-    /// speed update and the move, along with what depends on it: the section
-    /// speed modifier, which applies from this step's move, the start of a rush
-    /// and the end of a spot struggle.
+    /// Updates the current section from the current position, before the target
+    /// speed update and the move.
+    ///
+    /// It also updates what depends on the section: the section speed modifier,
+    /// which applies from this step's move, the start of a rush and the end of a
+    /// spot struggle.
     pub(crate) fn update_section(&mut self, state: &mut RaceState) {
         let prev_section = self.section;
         self.section = state.course.section_from_position(self.position);
@@ -831,9 +842,10 @@ impl Runner {
         }
     }
 
-    /// Update the current phase from `position`, the one before the last move,
-    /// so it's a frame behind the rest of the state derived from positions,
-    /// the section included.
+    /// Updates the current phase from `position`, the one before the last move.
+    ///
+    /// Because it updates from a previous position, the phase is a frame behind the
+    /// rest of the state derived from the current position, the section included.
     ///
     /// The last spurt is decided here a frame after the phase reaches Late,
     /// from `position`, and conserved power is released from the frame
@@ -852,7 +864,7 @@ impl Runner {
         self.try_release_charge_up(position, state);
     }
 
-    /// Release conserved power (脚色十分) once `position` reaches the start of the
+    /// Releases conserved power (脚色十分) once `position` reaches the start of the
     /// last spurt.
     ///
     /// Called after the position update, so the acceleration bonus starts on the
@@ -878,7 +890,7 @@ impl Runner {
         }
     }
 
-    /// Conserve power (足を貯める) during the first 10 sections.
+    /// Conserves power (足を貯める) during the first 10 sections.
     ///
     /// Power is conserved while keeping position calmly. Speeding up, rushing or
     /// struggling for the lead prevent it, and impose a cooldown upon exit.
@@ -901,7 +913,7 @@ impl Runner {
         }
     }
 
-    /// Update HP based on current speed, phase, and modifiers.
+    /// Updates HP based on current speed, phase, and modifiers.
     ///
     /// `start_dash` tells whether the runner was in the start dash when the
     /// frame began, so the frame that reaches its threshold still counts. During
@@ -946,7 +958,7 @@ impl Runner {
         }
     }
 
-    /// Start rushing, if the runner is bound to rush.
+    /// Starts rushing, if the runner is bound to rush.
     ///
     /// The runner will move ahead of the position dictated by her style, losing HP
     /// at an increased rate.
@@ -960,7 +972,7 @@ impl Runner {
         }
     }
 
-    /// Stop rushing, if the runner is rushed.
+    /// Stops rushing, if the runner is rushed.
     fn end_rush(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
@@ -970,7 +982,7 @@ impl Runner {
         }
     }
 
-    /// Update the race's count of rushed runners after this runner started or
+    /// Updates the race's count of rushed runners after this runner started or
     /// stopped rushing, and force a positioning strategy change immediately.
     fn on_rush_change(&mut self, state: &mut RaceState) {
         let is_rushed = self.is_rushed();
@@ -984,7 +996,8 @@ impl Runner {
         self.reset_positioning(state.elapsed_time);
     }
 
-    /// End rush once it reaches its maximum duration or the runner snaps out of it.
+    /// Ends the rush once it reaches its maximum duration or the runner snaps out
+    /// of it.
     pub(crate) fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
@@ -998,17 +1011,17 @@ impl Runner {
         }
     }
 
-    /// Check if the runner is currently in a rushed state.
+    /// Checks whether the runner is currently in a rushed state.
     pub fn is_rushed(&self) -> bool {
         self.rush_state.as_ref().is_some_and(|s| s.is_rushed)
     }
 
-    /// Check if the runner has rushed at some point.
+    /// Checks whether the runner has rushed at some point.
     pub fn has_rushed(&self) -> bool {
         self.rush_state.as_ref().is_some_and(RushState::has_rushed)
     }
 
-    /// Start a spot struggle (位置取り争い), unless the runner already struggled.
+    /// Starts a spot struggle (位置取り争い), unless the runner already struggled.
     pub(crate) fn start_spot_struggle(&mut self, elapsed_time: f64) {
         if self.spot_struggle.has_struggled() {
             return;
@@ -1020,13 +1033,13 @@ impl Runner {
         }
     }
 
-    /// Check if the runner should check whether to secure the lead on this frame.
+    /// Checks whether the runner should try to secure the lead on this frame.
     pub(crate) fn is_secure_lead_check_due(&self, state: &RaceState) -> bool {
         self.style != EffectiveStyle::End
             && self.is_boost_check_due(&self.secure_lead, &secure_lead::SECTIONS, state)
     }
 
-    /// Attempt to secure the lead (リード確保).
+    /// Attempts to secure the lead (リード確保).
     ///
     /// If the lead over another runner with a later strategy is less than
     /// desirable, there is a chance for the runner to speed up for a short time at
@@ -1064,8 +1077,8 @@ impl Runner {
             .consume(secure_lead::hp_cost(style, state.course.distance));
     }
 
-    /// Returns true if `self` should check whether to compete before spurt (位置取り調整)
-    /// on this frame.
+    /// Checks whether the runner should try to compete before spurt (位置取り調整) on
+    /// this frame.
     pub(crate) fn is_compete_check_due(&self, state: &RaceState) -> bool {
         self.is_boost_check_due(
             &self.compete_before_spurt,
@@ -1074,8 +1087,8 @@ impl Runner {
         )
     }
 
-    /// Check if a check for `boost`, which can only happen in `sections`, is due
-    /// on this frame (2.5 Anniv. onward).
+    /// Checks whether a check for `boost`, which can only happen in `sections`, is
+    /// due on this frame (2.5 Anniv. onward).
     fn is_boost_check_due(
         &self,
         boost: &TimedBoost,
@@ -1089,7 +1102,7 @@ impl Runner {
             && boost.is_check_due(state.elapsed_time)
     }
 
-    /// Attempt to compete before spurt (位置取り調整).
+    /// Attempts to compete before spurt (位置取り調整).
     ///
     /// First, if the runner lacks the HP she wants to keep to finish the race, she
     /// may notice and enter Stamina Keep (持久力温存). Then, unless in Stamina Keep, she
@@ -1142,7 +1155,7 @@ impl Runner {
         ));
     }
 
-    /// Start dueling (追い比べ), unless the runner already is.
+    /// Starts dueling (追い比べ), unless the runner already is.
     pub(crate) fn start_duel(&mut self) {
         if self.duel.is_dueling() {
             return;
@@ -1150,7 +1163,7 @@ impl Runner {
         self.duel = Duel::start(self.adjusted.guts);
     }
 
-    /// Apply slope effects after a segment update with `transition` (see
+    /// Applies slope effects after a segment update with `transition` (see
     /// [`SegmentState::update`]).
     ///
     /// Uphills reduce the runner's target speed while on them. On downhills, the
@@ -1214,7 +1227,7 @@ impl Runner {
         self.slope_speed_modifier = in_downhill_mode.then(|| downhill_speed_modifier(slope.grade));
     }
 
-    /// Update order (rank) and overtakes based on current order.
+    /// Updates order (rank) and overtakes based on current order.
     ///
     /// The order change is negative when overtaking, and positive when being
     /// overtaken.
@@ -1245,7 +1258,7 @@ impl Runner {
         }
     }
 
-    /// Update order rate (percentage rank) based on total runners.
+    /// Updates order rate (percentage rank) based on total runners.
     ///
     /// After the first [`ORDER_RANGE_START_TIME`] seconds (`elapsed_time`),
     /// also update the best/worst orders.
@@ -1261,7 +1274,7 @@ impl Runner {
         self.order.worst_rates = rates_at_order(self.order.worst, total_runners);
     }
 
-    /// Update position differences from other runners ahead.
+    /// Updates position differences from other runners ahead.
     ///
     /// `position_first`: position of the first-place runner.
     /// `position_next`: position of the next runner ahead, or infinity if
@@ -1284,11 +1297,11 @@ impl Runner {
         };
     }
 
-    /// Update position difference from the runner behind (`position_prev`, or
-    /// negative infinity if there's nobody behind), and the largest lead taken
-    /// before the Late race.
+    /// Updates position difference from the runner behind, and the largest lead
+    /// taken before the Late race.
     ///
-    /// The order must be updated first.
+    /// `position_prev` must be negative infinity if there's nobody behind. The
+    /// order must be updated first.
     pub(crate) fn update_diff_from_behind(&mut self, position_prev: f64) {
         self.position_diff.from_prev = self.position - position_prev;
         if self.order.order == 1

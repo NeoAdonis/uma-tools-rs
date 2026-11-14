@@ -1,10 +1,10 @@
-//! # Trigger Builder
+//! Construction of the [`TriggerScheduler`] of a runner.
 //!
-//! This module builds the [`TriggerScheduler`] of a runner: it compiles skill
-//! conditions into triggers and guards (see `skill_activation.rs`), and indexes
-//! the triggers so they can be checked efficiently.
+//! This scheduler compiles skill conditions into triggers and guards (see
+//! `skill_activation.rs`), and indexes the triggers so they can be checked
+//! efficiently.
 //!
-//! ## Architecture
+//! # Architecture
 //!
 //! For each skill alternative:
 //!
@@ -31,7 +31,7 @@
 //! Each skill rolls from its own random stream (see [`Stream::TriggerRolls`]),
 //! so adding or removing a skill doesn't change the rolls of the others.
 //!
-//! ## Example
+//! # Example
 //!
 //! **Input skill**:
 //!
@@ -80,7 +80,7 @@ use crate::trigger::skill_activation::*;
 use crate::trigger::system::*;
 
 impl TriggerScheduler {
-    /// Build a complete scheduler from a list of skills.
+    /// Builds a complete scheduler from a list of skills.
     ///
     /// For each skill alternative:
     ///
@@ -182,7 +182,7 @@ impl TriggerScheduler {
         scheduler
     }
 
-    /// Add the logic activating an out-of-gate skill alternative on the first
+    /// Adds the logic activating an out-of-gate skill alternative on the first
     /// frame the runner moves.
     ///
     /// Its condition was already satisfied before the race, so it has no
@@ -208,7 +208,7 @@ impl TriggerScheduler {
     }
 }
 
-/// The 10m segments starting at the points rolled for each branch (see
+/// Returns the 10m segments starting at the points rolled for each branch (see
 /// [`RandomRolls::roll`]).
 fn rolled_segments(rolled: Vec<Option<Vec<f64>>>) -> Vec<Option<Vec<(f64, f64)>>> {
     let segment = |start| (start, start + SEGMENT_LENGTH);
@@ -218,7 +218,7 @@ fn rolled_segments(rolled: Vec<Option<Vec<f64>>>) -> Vec<Option<Vec<(f64, f64)>>
         .collect()
 }
 
-/// Add the logics unlocking a precondition, and return the precondition ID.
+/// Adds the logics unlocking a precondition, and returns the precondition ID.
 ///
 /// N.B. These logics are added before the logics they unlock, so that an event
 /// firing both (e.g. entering the last straight) unlocks the skill first.
@@ -278,14 +278,14 @@ fn add_precondition(
     precondition_id
 }
 
-/// Store a logic in the scheduler and index its trigger.
+/// Stores a logic in the scheduler and index its trigger.
 fn add_logic(logic: SkillActivationLogic, scheduler: &mut TriggerScheduler) {
     let logic_idx = scheduler.skill_logics.len();
     index_trigger(&logic.trigger, logic_idx, scheduler);
     scheduler.skill_logics.push(logic);
 }
 
-/// Index a trigger into the appropriate scheduler structure.
+/// Indexes a trigger into the appropriate scheduler structure.
 ///
 /// The `logic_idx` is the index into `scheduler.skill_logics`.
 fn index_trigger(trigger: &TriggerCondition, logic_idx: usize, scheduler: &mut TriggerScheduler) {

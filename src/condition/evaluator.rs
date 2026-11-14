@@ -1,12 +1,10 @@
-//! # Condition Evaluator
-//!
-//! This module evaluates guard conditions, i.e., conditions that determine
-//! whether a triggered skill can activate or not.
+//! Evaluation of guard conditions, i.e., conditions that determine whether a
+//! triggered skill can activate or not.
 //!
 //! Trigger conditions (random gates, monotonic thresholds, windows) are handled
 //! by the trigger system and should NEVER reach this evaluator.
 //!
-//! ## Architecture
+//! # Architecture
 //!
 //! Conditions are parsed into OR branches ([`Condition::branches`]), each one
 //! being a flat list of comparisons that must all be true. This module
@@ -26,7 +24,7 @@
 //! not known at evaluation time; case in point: single runner simulations where
 //! opponent data is not available.
 //!
-//! ## Variable Access
+//! # Variable Access
 //!
 //! It's up to the evaluator implementation to fetch/provide variable values.
 //! However, common variable retrieval logic is provided via the
@@ -49,7 +47,7 @@
 //! out-of-gate evaluations, which only uses data available before a race
 //! starts.
 //!
-//! ## Value Kinds
+//! # Value Kinds
 //!
 //! Most variables have a single number as their value ([`Value::Scalar`]),
 //! but some of them don't:
@@ -65,13 +63,13 @@
 //!   to 5th place, so that's the value of `order_rate` for that order, and
 //!   `<=50` holds since some rate in the range is at most 50.
 //!
-//! ## Float Handling
+//! # Float Handling
 //!
 //! Most float variables (HP, position, percentages) are converted using
 //! [`f64::floor()`] for consistent rounding behavior. Horse lengths aren't:
 //! e.g. `bashin_diff_behind<=1` holds up to exactly 1 bashin (2.5 m) behind.
 //!
-//! ## Unimplemented Variables
+//! # Unimplemented Variables
 //!
 //! There are variables that are not implemented at all as they are only used in
 //! non-PvP contexts, which is out of scope for this simulator. The parser
@@ -97,8 +95,8 @@ use crate::units::*;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 
-/// Returns `true` if ALL comparisons from a list evaluate to `true`, or list
-/// is empty.
+/// Returns `true` if all comparisons from a list evaluate to `true`, or the
+/// list is empty.
 ///
 /// This is the primary function for evaluating guards after trigger-guard
 /// separation. Guards are guaranteed to be a flat list of comparisons that need
@@ -179,7 +177,7 @@ pub enum ValueSet<'a> {
 }
 
 impl ValueSet<'_> {
-    /// Check if `value` is in the set.
+    /// Checks if `value` is in the set.
     pub fn contains(&self, value: i32) -> bool {
         // Effect types are only valid if implemented.
         let buff = |flags: &SkillActivationFlags| {
@@ -201,7 +199,7 @@ impl ValueSet<'_> {
 }
 
 impl Comparison {
-    /// Check if the comparison holds for `value`, the value of its variable.
+    /// Checks if the comparison holds for `value`, the value of its variable.
     ///
     /// Sets only support the operators that the parser allows for them (see
     /// `Comparison::is_supported`).
@@ -240,7 +238,7 @@ impl Comparison {
     }
 }
 
-/// Trait for evaluating a single comparison.
+/// An evaluator of single comparisons.
 ///
 /// Implement this trait for different evaluation contexts.
 /// `State` and `Context` associated types define the data sources used.
@@ -266,7 +264,7 @@ pub trait CompEvaluator {
     type State;
     type Context;
 
-    /// Evaluate a single comparison.
+    /// Evaluates a single comparison.
     fn evaluate(
         &self,
         comp: &Comparison,
@@ -283,7 +281,7 @@ impl CompEvaluator for EvaluatorFull {
     type State = RaceState;
     type Context = Runner;
 
-    /// Evaluate a single comparison using actual race state and runner data.
+    /// Evaluates a single comparison using actual race state and runner data.
     fn evaluate(
         &self,
         comp: &Comparison,
@@ -308,7 +306,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
     type Context = UnreadyRunner;
 
-    /// Evaluate a single comparison in out-of-gate context, using only data
+    /// Evaluates a single comparison in out-of-gate context, using only data
     /// available before a race starts.
     fn evaluate(
         &self,
@@ -326,7 +324,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
     }
 }
 
-/// Get current value for any variable type.
+/// Gets the current value for any variable type.
 ///
 /// # Panics
 ///
@@ -382,7 +380,7 @@ pub fn variable_value<'a>(
     }
 }
 
-/// Get current value for any variable type in out-of-gate context.
+/// Gets the current value for any variable type in out-of-gate context.
 pub fn variable_value_out_of_gate<'a>(
     var: &VarType,
     state: &'a RaceState,
@@ -408,18 +406,18 @@ pub fn variable_value_out_of_gate<'a>(
     }
 }
 
-/// Chances (in %) that hit a lottery draw from 0 to 100, i.e. that are above
-/// it: e.g. a draw of 37.4 is hit by `random_lot==38` and above.
+/// Returns the chances (in %) that a lottery draw from 0 to 100 hits, i.e.
+/// those above the draw: e.g. a draw of 37.4 hits `random_lot==38` and above.
 fn lot_hits(draw: f64) -> Value<'static> {
     Value::Range(draw.floor() as i32 + 1..=i32::MAX)
 }
 
-/// A whole number (or flag) as a single value.
+/// Wraps a whole number (or flag) as a single value.
 fn scalar(value: impl Into<f64>) -> Value<'static> {
     Value::Scalar(value.into())
 }
 
-/// Get base stat value, truncated to compare it with whole numbers.
+/// Gets base stat value, truncated to compare it with whole numbers.
 fn base_stat(stat: &BaseStatVar, base: &Stats) -> i32 {
     use BaseStatVar::*;
     match stat {
@@ -431,7 +429,7 @@ fn base_stat(stat: &BaseStatVar, base: &Stats) -> i32 {
     }
 }
 
-/// Get values related to distance between runners.
+/// Gets values related to distance between runners.
 fn distance_value(var: &DistanceVar, runner: &Runner) -> Value<'static> {
     use DistanceVar::*;
     let diff = &runner.position_diff;
@@ -445,7 +443,7 @@ fn distance_value(var: &DistanceVar, runner: &Runner) -> Value<'static> {
     })
 }
 
-/// Get phase-related values.
+/// Gets phase-related values.
 fn phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     use PhaseVar::*;
 
@@ -482,7 +480,7 @@ fn phase_value(var: &PhaseVar, course: &Course, runner: &Runner) -> i32 {
     }
 }
 
-/// Get course-related values.
+/// Gets course-related values.
 fn course_value(var: &CourseVar, course: &Course) -> i32 {
     use CourseVar::*;
 
@@ -519,7 +517,7 @@ fn course_value(var: &CourseVar, course: &Course) -> i32 {
     }
 }
 
-/// Get location-related values.
+/// Gets location-related values.
 fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
     use SpatialVar::*;
 
@@ -624,7 +622,7 @@ fn location_value(var: &SpatialVar, course: &Course, runner: &Runner) -> i32 {
     }
 }
 
-/// Get race parameter values.
+/// Gets race parameter values.
 fn race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     use RaceParamVar::*;
 
@@ -648,7 +646,7 @@ fn race_param_value(var: &RaceParamVar, params: &RaceParameters) -> i32 {
     }
 }
 
-/// Get lineup values (from every runner entered in the race).
+/// Gets lineup values (from every runner entered in the race).
 ///
 /// `skill_id` is the ID of the skill whose condition is being evaluated.
 fn lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Value<'a> {
@@ -666,7 +664,7 @@ fn lineup_value<'a>(var: &LineupVar, state: &'a RaceState, skill_id: i32) -> Val
     }
 }
 
-/// Get sets of skill activations, by skill ID or type.
+/// Gets sets of skill activations, by skill ID or type.
 fn activation_query_value<'a>(
     var: &ActivationQueryVar,
     state: &'a RaceState,
@@ -692,7 +690,7 @@ fn activation_query_value<'a>(
     })
 }
 
-/// Get activation counter values.
+/// Gets activation counter values.
 fn activation_value(
     var: &ActivationVar,
     state: &RaceState,
@@ -728,7 +726,7 @@ fn activation_value(
     }
 }
 
-/// Get running style values.
+/// Gets running style values.
 fn running_style_value(var: &RunningStyleVar, state: &RaceState, my_style: BaseStyle) -> i32 {
     use RunningStyleVar::*;
 
@@ -765,7 +763,7 @@ fn style_temptation_opponent_count(state: &RaceState, style: BaseStyle, runner: 
     style_temptation_count(state, style) - team[style as usize] as i32
 }
 
-/// Get runner entry values.
+/// Gets runner entry values.
 fn entry_value(var: &EntryVar, state: &InitialState) -> i32 {
     use EntryVar::*;
 
@@ -785,7 +783,7 @@ fn entry_value(var: &EntryVar, state: &InitialState) -> i32 {
     }
 }
 
-/// Get status values (HP, last spurt, continuous checks).
+/// Gets status values (HP, last spurt, continuous checks).
 fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
     use StatusVar::*;
 
@@ -843,7 +841,7 @@ fn status_value(var: &StatusVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get rank-related values.
+/// Gets rank-related values.
 fn rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     use OrderVar::*;
     let order = &runner.order;
@@ -860,7 +858,7 @@ fn rank_value(var: &OrderVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get order rate values.
+/// Gets order rate values.
 fn order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
     use OrderRateVar::*;
 
@@ -886,7 +884,7 @@ fn order_rate_value(var: &OrderRateVar, order: &OrderState) -> Value<'static> {
     }
 }
 
-/// Get blocking values.
+/// Gets blocking values.
 fn blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     use BlockingVar::*;
 
@@ -915,7 +913,7 @@ fn blocking_value(var: &BlockingVar, runner: &Runner) -> i32 {
     }
 }
 
-/// Get temptation/rush values of other umas.
+/// Gets temptation/rush values of other umas.
 fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> i32 {
     use TemptationVar::*;
 
@@ -946,7 +944,7 @@ fn temptation_value(var: &TemptationVar, state: &RaceState, runner: &Runner) -> 
     }
 }
 
-/// Check popularity guards in a condition.
+/// Checks popularity guards in a condition.
 ///
 /// Returns true if all popularity guards pass in at least one OR branch (see
 /// [`VarType::is_popularity_guard`]). Comparisons on any other variable are

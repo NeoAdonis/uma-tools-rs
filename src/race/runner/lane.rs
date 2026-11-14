@@ -91,7 +91,7 @@ impl<'a> Deref for VisibleAhead<'a> {
 }
 
 impl Runner {
-    /// Update lane position towards target lane, and the time spent moving
+    /// Updates lane position towards target lane, and the time spent moving
     /// laterally in the same direction.
     pub(crate) fn update_lane(&mut self, course: &Course, delta_time: f64) {
         let previous_speed = self.lane.speed;
@@ -105,8 +105,7 @@ impl Runner {
         };
     }
 
-    /// Move the lane position towards the target lane, setting the lateral
-    /// speed.
+    /// Moves the lane position towards the target lane, setting the lateral speed.
     fn move_towards_target_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.02 * 1.5;
         const MAX_SPEED: f64 = 0.6;
@@ -171,7 +170,7 @@ impl Runner {
         }
     }
 
-    /// Uncheck all overtake targets at the start of an update cycle.
+    /// Unchecks all overtake targets at the start of an update cycle.
     pub(crate) fn reset_overtake_checks(&mut self) {
         if let Some(state) = &mut self.overtake_state {
             state.entered = false;
@@ -181,7 +180,7 @@ impl Runner {
         }
     }
 
-    /// Overtake state, entering overtake mode if not in it.
+    /// Returns the overtake state, entering overtake mode if not in it.
     fn enter_overtake_mode(&mut self) -> &mut OvertakeState {
         self.overtake_state.get_or_insert_with(|| OvertakeState {
             entered: true,
@@ -189,7 +188,8 @@ impl Runner {
         })
     }
 
-    /// Check if another runner qualifies as an overtake target and update tracking.
+    /// Checks whether another runner qualifies as an overtake target, updating
+    /// tracking.
     ///
     /// Returns true if the target was added or updated.
     pub(crate) fn check_overtake_target(&mut self, target: &Runner, delta_time: f64) -> bool {
@@ -219,7 +219,7 @@ impl Runner {
         true
     }
 
-    /// Track the closest runner blocking from the front, if any, as an overtake
+    /// Tracks the closest runner blocking from the front, if any, as an overtake
     /// target, regardless of the usual criteria.
     ///
     /// Must be called once every runner ahead has been checked. Returns her gate
@@ -237,7 +237,7 @@ impl Runner {
         Some(gate_roll)
     }
 
-    /// Finalize overtake state after all targets have been checked.
+    /// Finalizes overtake state after all targets have been checked.
     ///
     /// Handles cleanup of unchecked targets and persistence timer.
     pub(crate) fn finalize_overtake_state(&mut self, delta_time: f64, elapsed_time: f64) {
@@ -264,15 +264,16 @@ impl Runner {
         }
     }
 
-    /// Check if the runner is in overtake mode (has targets or in persistence
+    /// Checks whether the runner is in overtake mode (has targets or in persistence
     /// period).
     pub(crate) fn is_in_overtake_mode(&self) -> bool {
         self.overtake_state.is_some()
     }
 
-    /// Calculate the target lane for this frame, or `None` if it shouldn't be
-    /// updated (see [`Self::should_update_target_lane`]), unless she just
-    /// entered overtake mode and uses it.
+    /// Calculates the target lane for this frame, or `None` if it shouldn't be
+    /// updated (see [`Self::should_update_target_lane`]).
+    ///
+    /// It is calculated anyway if she just entered overtake mode and uses it.
     ///
     /// The first mode that applies is used:
     /// 1. Fixed mode, while a skill sets the target lane (see
@@ -309,24 +310,30 @@ impl Runner {
         }
     }
 
-    /// Check if the target lane should be updated: when the runner is less than
-    /// 0.5 horse lanes from it, or blocked on the side she's moving towards.
+    /// Checks whether the target lane should be updated.
+    ///
+    /// It is updated when the runner is less than 0.5 horse lanes from it, or
+    /// blocked on the side she's moving towards.
     pub(crate) fn should_update_target_lane(&self) -> bool {
         (self.lane.target - self.lane.current).abs() < CourseWidths::from_horse_lanes(0.5)
             || !self.has_lane_space_to(self.lane.target)
     }
 
-    /// Target lane in fixed mode, used while a skill effect sets the target
-    /// lane, unless the runner is blocked from moving towards it.
+    /// Returns the target lane in fixed mode (when a skill effect sets the target
+    /// lane).
+    ///
+    /// `None` if the runner is blocked from moving towards the target lane.
     pub(crate) fn fixed_mode_lane_target(&self) -> Option<CourseWidths> {
         self.skill_modifiers
             .target_lane
             .filter(|&lane| self.has_lane_space_to(lane))
     }
 
-    /// Set the extra move lane upon entering the final corner, based on the
-    /// current lane. Before the 1st Anniv., it was set upon entering the final
-    /// straight instead.
+    /// Sets the extra move lane upon entering the final corner, based on the
+    /// current lane.
+    ///
+    /// Before the 1st Anniversary, it was set upon entering the final straight
+    /// instead.
     pub(crate) fn update_final_extra_move_lane(
         &mut self,
         transitions: &Transitions,
@@ -353,7 +360,7 @@ impl Runner {
         }
     }
 
-    /// Target lane in normal mode (not overtaking).
+    /// Returns the target lane in normal mode (not overtaking).
     ///
     /// Rules are checked in priority order; first match wins.
     pub(crate) fn normal_mode_lane_target(
@@ -408,7 +415,8 @@ impl Runner {
         self.lane.current
     }
 
-    /// Target lane in overtake mode, or the current target if not in it.
+    /// Returns the target lane in overtake mode, or the current target if not in
+    /// it.
     ///
     /// This should be called after overtake state is finalized.
     pub(crate) fn overtake_lane_target(
@@ -449,7 +457,7 @@ impl Runner {
         target_lane.clamp(CourseWidths(0.0), course.width)
     }
 
-    /// Runners in `all_runners` other than this one.
+    /// Returns the runners in `all_runners` other than this one.
     ///
     /// She's recognized as the same reference (address) rather than by reading
     /// her fields (e.g. her gate), which saves loading another cache line of
@@ -458,8 +466,8 @@ impl Runner {
         all_runners.iter().filter(move |r| !std::ptr::eq(*r, self))
     }
 
-    /// Runners in `all_runners` that this one can see, ahead of her or level
-    /// with her.
+    /// Returns the runners in `all_runners` that this one can see, ahead of her or
+    /// level with her.
     fn visible_ahead<'a>(&'a self, all_runners: &'a [Runner]) -> VisibleAhead<'a> {
         let mut visible = VisibleAhead {
             runners: [self; MAX_GATES as usize],
@@ -475,9 +483,11 @@ impl Runner {
         visible
     }
 
-    /// Find the innermost and outermost umas in a target's crowd (the target
-    /// herself if alone). Crowd members are up to 3m ahead of the target and
-    /// less than 2 horse lanes away.
+    /// Finds the innermost and outermost umas in a target's crowd (the target
+    /// herself if alone).
+    ///
+    /// Crowd members are up to 3m ahead of the target and less than 2 horse lanes
+    /// away.
     fn find_crowd_boundaries<'a>(
         &self,
         target: &'a Runner,
@@ -508,9 +518,10 @@ impl Runner {
             })
     }
 
-    /// Candidate lanes to overtake `target`: 1 horse lane inside and outside
-    /// each boundary uma of her crowd, unless a visible uma is in the spot up to
-    /// 0.5m past that boundary uma.
+    /// Returns the candidate lanes to overtake `target`.
+    ///
+    /// They are 1 horse lane inside and outside each boundary uma of her crowd,
+    /// unless a visible uma is in the spot up to 0.5m past that boundary uma.
     ///
     /// `visible_ahead` must hold the runners this one can see ahead (see
     /// [`Self::visible_ahead`]).
@@ -537,9 +548,11 @@ impl Runner {
         })
     }
 
-    /// Candidate lane unrelated to the overtake `targets`: 1 horse lane inward
-    /// during the Early and Mid race (if possible), or straight otherwise,
-    /// unless a visible uma is in the spot up to 3m past the furthest target.
+    /// Returns the candidate lane unrelated to the overtake `targets`.
+    ///
+    /// It is 1 horse lane inward during the Early and Mid race (if possible), or
+    /// straight otherwise, unless a visible uma is in the spot up to 3m past the
+    /// furthest target.
     ///
     /// `visible_ahead` must hold the runners this one can see ahead (see
     /// [`Self::visible_ahead`]).
@@ -568,9 +581,10 @@ impl Runner {
             .then_some(lane)
     }
 
-    /// Check if a candidate lane is valid: no runner in `visible_ahead` (see
-    /// [`Self::visible_ahead`]) within `max_distance` meters and 0.8 horse lanes
-    /// of the candidate.
+    /// Checks whether a candidate lane is valid.
+    ///
+    /// "Valid" means that no `visible_ahead` runner (see [`Self::visible_ahead`])
+    /// is within `max_distance` meters and 0.8 horse lanes of the candidate.
     fn is_lane_candidate_valid(
         &self,
         candidate_lane: CourseWidths,
@@ -587,8 +601,9 @@ impl Runner {
         })
     }
 
-    /// Score of an overtake candidate `lane` (lower is better): the lane change,
-    /// with moving outward penalized, heavily in the Early race.
+    /// Returns the score of an overtake candidate `lane`. Lower is better.
+    ///
+    /// A lane is penalized if it goes outward, and more so in the early race.
     fn overtake_lane_score(&self, lane: CourseWidths) -> f64 {
         let outward_coef = match self.phase {
             Phase::RunUp | Phase::Early => 100.0,
@@ -603,7 +618,7 @@ impl Runner {
         (lane - self.lane.current).abs().0 * coef
     }
 
-    /// Check if the runner has lane space to reach `target_lane`, i.e. she
+    /// Checks whether the runner has lane space to reach `target_lane`, i.e. she
     /// isn't side-blocked towards it (see [`proximity::check_side_blocked`]).
     ///
     /// Target lanes may be inside the rail, but the rail blocks runners on it
@@ -618,8 +633,10 @@ impl Runner {
         }
     }
 
-    /// Find the closest uma on the inside (lower lane value), within 5m and 3
-    /// horse lanes. Returns (inside_uma_lane, distance_in_horse_lanes) if found.
+    /// Finds the closest uma on the inside (lower lane value), within a set
+    /// distance and lane difference.
+    ///
+    /// Returns (inside_uma_lane, distance_in_horse_lanes) if found.
     fn find_inside_runner(&self, all_runners: &[Runner]) -> Option<(CourseWidths, f64)> {
         self.others(all_runners)
             .filter(|other| {

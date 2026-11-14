@@ -1,9 +1,6 @@
-//! # Condition Parser
+//! Parsing of skill condition strings.
 //!
-//! This module parses skill condition strings, such as
-//! `distance_type==1&ground_type==1@distance_type==2&ground_type==1`.
-//!
-//! ## Syntax
+//! # Syntax
 //!
 //! A condition is made of comparisons, each one consisting of a variable, an
 //! operator ([`CompOp`]) and an integer value. For example, `accumulatetime>=5`
@@ -14,8 +11,11 @@
 //!
 //! Comparisons are linked by `&` (AND) and `@` (OR), with no parentheses. A
 //! condition is therefore an OR of AND chains, and it's stored as such in
-//! [`Condition::branches`]. The condition above is read as follows (spaces and
-//! line breaks added for readability):
+//! [`Condition::branches`].
+//!
+//! Take for example the condition string
+//! `distance_type==1&ground_type==1@distance_type==2&ground_type==1`. It's read
+//! as follows (spaces and line breaks added for readability):
 //!
 //! ```text
 //! distance_type==1 & ground_type==1   // Sprint race on turf...
@@ -29,7 +29,7 @@
 //! any other comparison is rejected with [`ParseError::UnsupportedComparison`],
 //! as is any comparison on a variable that isn't implemented.
 //!
-//! ## Examples
+//! # Examples
 //!
 //! Check a hand-written condition, e.g. for a custom skill, before running
 //! races with it:
@@ -55,6 +55,7 @@ use crate::skill::SkillType;
 use std::fmt;
 use std::str::FromStr;
 
+/// A comparison operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompOp {
     Equal,        // "=="
@@ -77,7 +78,7 @@ impl CompOp {
         CompOp::Less,
     ];
 
-    /// Symbol of the operator in condition strings.
+    /// Returns the symbol of the operator in condition strings.
     pub fn symbol(self) -> &'static str {
         match self {
             CompOp::Equal => "==",
@@ -106,6 +107,7 @@ pub struct Condition {
     pub branches: Vec<ComparisonList>,
 }
 
+/// A comparison of a variable with an integer value, e.g. `order<=3`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Comparison {
     pub var: VarType,
@@ -139,7 +141,7 @@ impl fmt::Display for Comparison {
     }
 }
 
-/// Error parsing a condition, holding the offending comparison or variable.
+/// An error parsing a condition, holding the offending comparison or variable.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ParseError {
     /// A comparison lacks a valid operator after the variable name.
@@ -170,7 +172,7 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// Parse a single comparison, such as `order<=3`.
+/// Parses a single comparison, such as `order<=3`.
 fn parse_comparison(input: &str) -> Result<Comparison, ParseError> {
     let expected_operator = || ParseError::ExpectedOperator(input.into());
 
@@ -198,17 +200,19 @@ fn parse_comparison(input: &str) -> Result<Comparison, ParseError> {
 }
 
 impl Comparison {
-    /// Whether the comparison is on a random variable, rolled when building the
-    /// trigger scheduler (see [`crate::trigger::random`]).
+    /// Returns whether the comparison is on a random variable, rolled when building
+    /// the trigger scheduler (see [`crate::trigger::random`]).
     pub(crate) fn is_random(&self) -> bool {
         use VarType::*;
 
         matches!(self.var, Random(_) | RandomSpatial(_) | RandomPhase(_))
     }
 
-    /// Whether the comparison is an event: only true at specific points (random
-    /// segments, entering the last straight, skill activations), so it's the
-    /// trigger of its branch (see [`crate::trigger::skill_activation`]).
+    /// Returns whether the comparison is an event: only true at specific points.
+    ///
+    /// For example, random segments, entering the last straight, and skill
+    /// activations are considered events, and should be used as the trigger of
+    /// their branch (see [`crate::trigger::skill_activation`]).
     pub(crate) fn is_event(&self) -> bool {
         use VarType::*;
 
@@ -233,7 +237,7 @@ impl Comparison {
         }
     }
 
-    /// Whether the evaluator can evaluate this comparison.
+    /// Returns whether the evaluator can evaluate this comparison.
     ///
     /// Variables that use the comparison value as parameter (e.g. a skill ID),
     /// and flags such as `always`, only support some operators or values.
@@ -273,7 +277,7 @@ impl Comparison {
 impl FromStr for Condition {
     type Err = ParseError;
 
-    /// Parse a condition string, such as `phase>=2&order<=3@is_overtake==1`.
+    /// Parses a condition string, such as `phase>=2&order<=3@is_overtake==1`.
     ///
     /// Whitespace is allowed around variables and values.
     ///

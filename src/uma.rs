@@ -99,7 +99,8 @@ impl BaseStyle {
 /// should be done to handle their distinct behaviors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum EffectiveStyle {
-    /// 大逃げ, ōnige - A front runner that tries to outpace others from the start.
+    /// 大逃げ, ōnige - Front runner that tries to outpace others from the start.
+    ///
     /// In many contexts, it is treated similarly to [`EffectiveStyle::Front`].
     Runaway = 0,
     /// See [`BaseStyle::Front`].
@@ -127,7 +128,7 @@ impl EffectiveStyle {
     /// Returns `true` if `self` is a front-running style
     /// ([`EffectiveStyle::Front`] or [`EffectiveStyle::Runaway`]).
     ///
-    /// Used when treating both Front and Runaway the same way is desired, (e.g., in
+    /// Used when treating both Front and Runaway the same way is desired (e.g., in
     /// positioning strategy or rush detection).
     ///
     /// ```rust
@@ -216,8 +217,8 @@ pub struct Uma {
     /// the Guts, the better the performance on the final stretch.
     #[serde(deserialize_with = "deserialize_stat")]
     pub guts: u16,
-    /// Wit, also known as wisdom or wiz. Stat that affects skill activation rate
-    /// and decision-making.
+    /// Stat that affects skill activation rates and decision-making, also known as
+    /// wisdom or wiz.
     ///
     /// Specifically, it affects skill activation rate, chance of avoiding getting
     /// rushed, position keeping, last spurt planning, and more.
@@ -247,10 +248,10 @@ pub struct Uma {
     /// [`Configuration::default_fan_count`]:
     ///     crate::configuration::Configuration::default_fan_count
     pub fan_count: Option<u32>,
-    /// Six-digits ID of the character card identifying the character the Uma
-    /// represents and its outfit. The character ID is its first 4 digits.
+    /// Six-digit ID of the character card identifying the character the Uma
+    /// represents and its variant.
     ///
-    /// `None` if unknown.
+    /// The character itself is identified by the first 4 digits. `None` if unknown.
     pub character_id: Option<u32>,
 }
 
@@ -271,7 +272,7 @@ pub struct Stats {
 }
 
 impl Stats {
-    /// Get the stat of `self` corresponding to a [`ThresholdStat`].
+    /// Returns the stat of `self` corresponding to a [`ThresholdStat`].
     pub fn stat(&self, stat: ThresholdStat) -> f64 {
         match stat {
             ThresholdStat::Speed => self.speed,
@@ -283,7 +284,7 @@ impl Stats {
     }
 }
 
-/// Deserialize a stat, rejecting zero.
+/// Deserializes a stat, rejecting zero.
 ///
 /// Stats are at least 1 in the game. There's no upper bound, as the cap keeps
 /// rising with game updates.
@@ -298,7 +299,7 @@ pub(crate) fn deserialize_stat<'de, D: Deserializer<'de>>(
     }
 }
 
-/// Helper struct for deserializing [`Uma`] with mood and skills from JSON.
+/// An [`Uma`] with its mood and skills, as deserialized from JSON.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UmaData {
@@ -323,7 +324,7 @@ pub struct UmaSkill {
     pub level: u8,
 }
 
-/// Deserialize a list of skill IDs into [`UmaSkill`]s with
+/// Deserializes a list of skill IDs into [`UmaSkill`]s with
 /// [`DEFAULT_SKILL_LEVEL`].
 fn deserialize_skill_ids<'de, D: Deserializer<'de>>(
     deserializer: D,
@@ -339,7 +340,7 @@ fn deserialize_skill_ids<'de, D: Deserializer<'de>>(
 }
 
 impl UmaData {
-    /// Parse `UmaData` from a JSON string.
+    /// Parses `UmaData` from a JSON string.
     ///
     /// # Errors
     ///
@@ -371,7 +372,7 @@ impl UmaData {
         serde_json::from_str(json)
     }
 
-    /// Parse `UmaData` from a JSON file.
+    /// Parses `UmaData` from a JSON file.
     ///
     /// # Errors
     ///
@@ -386,7 +387,7 @@ impl UmaData {
         Ok(Self::from_json(&content)?)
     }
 
-    /// Look up the skills of `self` in `all_skills` by ID, keeping their order.
+    /// Looks up the skills of `self` in `all_skills` by ID, keeping their order.
     ///
     /// Skills are shared with `all_skills`, except those whose level differs,
     /// which are copied with their level set.
@@ -461,7 +462,7 @@ impl UmaData {
         Ok(skills)
     }
 
-    /// Convert `self` to an [`Entrant`], to add it to a race, with its mood and
+    /// Converts `self` to an [`Entrant`], to add it to a race, with its mood and
     /// its skills resolved from `all_skills` (see [`Self::resolve_skills`]).
     ///
     /// # Errors
@@ -490,7 +491,7 @@ impl UmaData {
     }
 }
 
-/// Error resolving the skills of an Uma.
+/// Error from resolving the skills of an Uma.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolveSkillsError {
     /// A skill ID isn't in the skill data.
@@ -525,7 +526,7 @@ impl std::error::Error for ResolveSkillsError {
     }
 }
 
-/// Halve the excess of a raw `stat` above 1200, keeping the fraction.
+/// Halves the excess of a raw `stat` above 1200, keeping the fraction.
 fn halve_above_1200(stat: f64) -> f64 {
     if stat > 1200.0 {
         1200.0 + (stat - 1200.0) / 2.0
@@ -535,13 +536,13 @@ fn halve_above_1200(stat: f64) -> f64 {
 }
 
 impl Mood {
-    /// Convert a motivation, the game's mood value in careers and other tools,
+    /// Converts a motivation, the game's mood value in careers and other tools,
     /// from 1 (Awful) to 5 (Great), or `None` if out of range.
     pub(crate) fn from_motivation(motivation: i8) -> Option<Self> {
         Self::try_from(motivation.checked_sub(3)?).ok()
     }
 
-    /// Calculate base stats multiplier from `self`.
+    /// Calculates the base stats multiplier from `self`.
     ///
     /// Returns `mood_value × 0.02 + 1.0`, where mood values range from -2
     /// (awful) to +2 (great).
@@ -551,14 +552,13 @@ impl Mood {
 }
 
 impl Uma {
-    /// Get the name of the character card (outfit and Uma) in the specified
+    /// Returns the name of the character card (outfit and Uma) in the specified
     /// language, or `None` if the card or its name in that language is unknown.
     pub fn name(&self, language: Language) -> Option<&'static str> {
         crate::names::character_name(self.character_id?, language)
     }
 
-    /// Convert the raw stats of `self` to base stats using the mood
-    /// multiplier.
+    /// Converts the raw stats of `self` to base stats using the mood multiplier.
     ///
     /// Base stats are the ones that race formulas and course set status checks
     /// use. Stats above 1200 only count half of their excess, and base stats

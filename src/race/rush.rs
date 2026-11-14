@@ -44,7 +44,7 @@ pub struct RushState {
 }
 
 impl RushState {
-    /// Roll when and how a runner with `style` will rush.
+    /// Rolls when and how a runner with `style` will rush.
     pub(crate) fn roll(style: EffectiveStyle, rng: &mut impl Rng) -> Self {
         let style = roll_style(style, rng);
         let section = rng.random_range(SECTIONS);
@@ -59,27 +59,28 @@ impl RushState {
         }
     }
 
-    /// Check if the runner has rushed at some point.
+    /// Checks if the runner has rushed at some point.
     pub fn has_rushed(&self) -> bool {
         self.start_time > 0.0
     }
 
-    /// Start rushing at `elapsed_time`.
+    /// Starts rushing at `elapsed_time`.
     pub(crate) fn start(&mut self, elapsed_time: f64) {
         self.is_rushed = true;
         self.start_time = elapsed_time;
         self.end_time = elapsed_time + CHECK_INTERVAL;
     }
 
-    /// Stop rushing at `elapsed_time`.
+    /// Stops rushing at `elapsed_time`.
     pub(crate) fn end(&mut self, elapsed_time: f64) {
         self.is_rushed = false;
         self.end_time = elapsed_time;
     }
 
-    /// Check if the rush should end at `elapsed_time`, either because it reached
-    /// its maximum duration or because the runner snapped out of it. A failed snap
-    /// out check extends the rush until the next one.
+    /// Checks if the rush should end at `elapsed_time`, either because it reached
+    /// its maximum duration or because the runner snapped out of it.
+    ///
+    /// A failed snap out check extends the rush until the next one.
     ///
     /// If `pinned_failed_checks` is set, the checks fail until that many did,
     /// whatever their roll.
@@ -105,8 +106,8 @@ impl RushState {
     }
 }
 
-/// Chance of rushing as a percentage, given the runner's base wit and the rush
-/// chance modifier from skills (in percentage points).
+/// Returns the chance of rushing as a percentage, given the runner's base wit
+/// and the rush chance modifier from skills (in percentage points).
 ///
 /// The game rolls integer percentages, so it's rounded up. Very low wit and
 /// rush chance effects can push it out of range, so it's clamped.
@@ -116,7 +117,7 @@ pub(crate) fn chance(wit: f64, modifier: f64) -> f64 {
         .clamp(0.0, 100.0)
 }
 
-/// Roll the style a runner with `style` positions as while rushed.
+/// Rolls the style a runner with `style` positions as while rushed.
 fn roll_style(style: EffectiveStyle, rng: &mut impl Rng) -> EffectiveStyle {
     match style {
         // Front-like styles keep their style.
