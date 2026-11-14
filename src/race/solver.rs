@@ -1,9 +1,9 @@
 //! Race setup and frame-by-frame simulation.
 //!
-//! A [`RaceSolver`] holds the shared [`RaceState`] and every runner of the
-//! race. Runners are added while unready, then made ready all at once, after
-//! which [`RaceSolver::run`] advances the race by [`DELTA_TIME`] per frame
-//! until every runner finishes.
+//! A [`RaceSolver`] holds the shared race state and every runner of the race.
+//! Runners are added while unready, then made ready all at once, after which
+//! [`RaceSolver::run`] advances the race by [`DELTA_TIME`] per frame until
+//! every runner finishes.
 //!
 //! Besides updating each runner, the solver handles everything that involves
 //! several runners: order, blocking and overlaps, positioning strategy, skill
@@ -57,23 +57,24 @@ const MARGIN_SPEED: f64 = 15.0;
 /// Maximum number of runners in a single team.
 pub const MAX_TEAM_SIZE: usize = 3;
 
+/// State shared by all runners of a race.
 #[derive(Debug, PartialEq)]
-pub struct RaceState {
+pub(crate) struct RaceState {
     /// Course where the race takes place.
-    pub course: Course,
+    pub(crate) course: Course,
     /// Race conditions such as track condition, weather, season, time, etc.
-    pub params: RaceParameters,
+    pub(crate) params: RaceParameters,
     /// Runtime configuration. Shared by all runners so that they all follow the
     /// same game behavior.
-    pub config: Configuration,
+    pub(crate) config: Configuration,
     /// Seed from which every random number stream of the race derives (see
     /// [`crate::race::rng`]).
     pub(crate) seed: RngSeed,
     /// Elapsed time in seconds. This value is shared by all runners.
-    pub elapsed_time: f64,
+    pub(crate) elapsed_time: f64,
     /// Time when the first runner finished, in seconds. This might be different
     /// from displayed finish time due to scoreboard conversion.
-    pub finish_time: Option<f64>,
+    pub(crate) finish_time: Option<f64>,
     /// Number of teams in the race. Team indices go from 0 to `team_count - 1`.
     pub(crate) team_count: u8,
     /// Count of runners by base style (Runaways count as Front runners).
@@ -271,7 +272,8 @@ pub struct RaceSolver<T> {
     /// Gate of each runner, indexed by [`RunnerId`]. Empty until runners are
     /// ready.
     gates_by_id: Vec<u8>,
-    pub state: RaceState,
+    /// State shared by all runners of the race.
+    pub(crate) state: RaceState,
     /// Time (s) each pair of runners has been close in a row, indexed by their
     /// gates (see [`Self::duel_pair_index`]). Only pairs that may still start a
     /// duel are tracked.
@@ -289,6 +291,16 @@ impl<T> RaceSolver<T> {
     /// frame of the race.
     pub fn runners(&self) -> &[T] {
         &self.runners
+    }
+
+    /// Returns the course where the race takes place.
+    pub fn course(&self) -> &Course {
+        &self.state.course
+    }
+
+    /// Returns the elapsed time of the race in seconds.
+    pub fn elapsed_time(&self) -> f64 {
+        self.state.elapsed_time
     }
 
     /// Takes the runners out of the solver, in the order of [`Self::runners`].
@@ -769,6 +781,14 @@ impl RaceSolver<Runner> {
             .expect("every ID has a runner")
     }
 
+    /// Returns the raw time in seconds when the first runner finished, if any has.
+    ///
+    /// It might differ from the displayed finish time due to scoreboard conversion
+    /// (see [`Self::scoreboard_time`]).
+    pub fn finish_time(&self) -> Option<f64> {
+        self.state.finish_time
+    }
+
     /// Returns the time displayed on the scoreboard after a race finishes.
     ///
     /// Simulated times are scaled to match displayed ones, and clamped to the
@@ -807,7 +827,7 @@ impl RaceSolver<Runner> {
     /// solver.run();
     ///
     /// if let (Some(simulated), Some(displayed)) =
-    ///     (solver.state.finish_time, solver.scoreboard_time())
+    ///     (solver.finish_time(), solver.scoreboard_time())
     /// {
     ///     println!("Simulated {simulated:.2}s, displayed {displayed:.2}s");
     ///     assert!(displayed > simulated);

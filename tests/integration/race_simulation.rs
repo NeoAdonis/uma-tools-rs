@@ -50,7 +50,7 @@ fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
         .map(|runner| (runner.gate_roll(), runner.position()))
         .collect();
     runners.sort_by_key(|(gate, _)| *gate);
-    (solver.state.finish_time, runners)
+    (solver.finish_time(), runners)
 }
 
 #[test]

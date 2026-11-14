@@ -31,7 +31,7 @@
 //! so they aren't compiled into triggers. Instead,
 //! `UnreadyRunner::apply_out_of_gate_skills` chooses the first of them whose
 //! precondition (if any) and condition both hold, evaluated with
-//! [`EvaluatorOutOfGate`]; if none holds, the skill doesn't activate before the
+//! `EvaluatorOutOfGate`; if none holds, the skill doesn't activate before the
 //! race. Before the race, a precondition is just another requirement (e.g.
 //! `distance_type==3 @ distance_type==4` for a skill whose condition is
 //! `base_stamina>=1200`). Skills that ignore popularity requirements

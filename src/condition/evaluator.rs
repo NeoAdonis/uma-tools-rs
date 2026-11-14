@@ -8,16 +8,16 @@
 //!
 //! Conditions are parsed into OR branches ([`Condition::branches`]), each one
 //! being a flat list of comparisons that must all be true. This module
-//! evaluates those lists with [`evaluate_comparison_list`], one comparison
-//! (e.g., `hp_per <= 50`) at a time.
+//! evaluates those lists with `evaluate_comparison_list`, one comparison (e.g.,
+//! `hp_per <= 50`) at a time.
 //!
-//! The [`CompEvaluator`] trait is sealed and implemented only by
-//! [`EvaluatorFull`], which evaluates conditions during a race with actual race
-//! state and runner data, and [`EvaluatorOutOfGate`], which evaluates
-//! out-of-gate conditions using only data available before the race starts.
+//! The `CompEvaluator` trait is implemented by `EvaluatorFull`, which evaluates
+//! conditions during a race with actual race state and runner data, and
+//! `EvaluatorOutOfGate`, which evaluates out-of-gate conditions using only data
+//! available before the race starts.
 //!
 //! Each [`Comparison`] is evaluated separately: the evaluator maps its variable
-//! to the current runtime value from [`RaceState`] and [`Runner`] (or
+//! to the current runtime value from the race state and the [`Runner`] (or
 //! [`UnreadyRunner`] out of gate), then compares it against the comparison
 //! value.
 //!
@@ -115,7 +115,7 @@ use std::ops::RangeInclusive;
 ///
 /// Panics if any comparison contains trigger variables that should have been
 /// separated during the splitting phase.
-pub fn evaluate_comparison_list<E>(
+pub(crate) fn evaluate_comparison_list<E>(
     comparisons: &ComparisonList,
     evaluator: &E,
     logic_ctx: Option<&SkillActivationLogic>,
@@ -224,16 +224,16 @@ impl Comparison {
     }
 }
 
-/// Evaluator of single comparisons, sealed.
+/// Evaluator of single comparisons.
 ///
-/// `State` is the overall race state and `Context` the runner data to use. Its
-/// only implementations are:
+/// `State` is the overall race state and `Context` the runner data to use. It's
+/// implemented by:
 ///
 /// - [`EvaluatorFull`]: uses actual race state ([`RaceState`]) and runner data
 ///   ([`Runner`]) to evaluate conditions during a race.
 /// - [`EvaluatorOutOfGate`]: uses only data available before a race starts as
 ///   defined by [`RaceState`] and [`UnreadyRunner`].
-pub trait CompEvaluator: private::Sealed {
+pub(crate) trait CompEvaluator {
     type State;
     type Context;
 
@@ -247,18 +247,9 @@ pub trait CompEvaluator: private::Sealed {
     ) -> bool;
 }
 
-mod private {
-    /// Supertrait that keeps [`CompEvaluator`](super::CompEvaluator) from being
-    /// implemented outside this crate.
-    pub trait Sealed {}
-
-    impl Sealed for super::EvaluatorFull {}
-    impl Sealed for super::EvaluatorOutOfGate {}
-}
-
 /// Reference evaluator using actual race state and runner data.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct EvaluatorFull;
+pub(crate) struct EvaluatorFull;
 impl CompEvaluator for EvaluatorFull {
     type State = RaceState;
     type Context = Runner;
@@ -283,7 +274,7 @@ impl CompEvaluator for EvaluatorFull {
 
 /// Evaluator for out-of-gate context (before a race starts).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct EvaluatorOutOfGate;
+pub(crate) struct EvaluatorOutOfGate;
 impl CompEvaluator for EvaluatorOutOfGate {
     type State = RaceState;
     type Context = UnreadyRunner;
