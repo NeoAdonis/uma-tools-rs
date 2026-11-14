@@ -1,4 +1,4 @@
-//! Charge Up (足を貯める) and Fully Charged (脚色十分) formulas (2nd Anniv. onward).
+//! Charge up (足を貯める) and Fully Charged (脚色十分) formulas (2nd Anniv. onward).
 //!
 //! A runner with more than 1200 charge power conserves power during the first
 //! 10 sections while keeping her position calmly. Upon entering her last spurt,
@@ -24,7 +24,7 @@ pub(crate) const STRUGGLE_ACTIVITY: f64 = 0.98;
 /// Activity coefficient factor if the runner rushed.
 pub(crate) const RUSH_ACTIVITY: f64 = 0.8;
 
-/// Charge Up state. It is kept after the race as a record of the mechanic.
+/// Charge up state. It is kept after the race as a record of the mechanic.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChargeUp {
     /// Power stat used by this mechanic. Fixed at the start of the race.
@@ -37,7 +37,7 @@ pub struct ChargeUp {
     pub outcome: ChargeUpOutcome,
 }
 
-/// Outcome of the Charge Up upon entering the last spurt.
+/// Outcome of the Charge up upon entering the last spurt.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ChargeUpOutcome {
     /// The last spurt has not been entered yet.
@@ -48,7 +48,7 @@ pub enum ChargeUpOutcome {
     Insufficient,
 }
 
-/// Record of a Charge Up release.
+/// Record of a charge up release.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChargeUpRelease {
     /// Power conserved at the time of release.
@@ -66,7 +66,7 @@ pub struct ChargeUpRelease {
 }
 
 impl ChargeUp {
-    /// Creates the Charge Up state, or `None` if the runner is not eligible.
+    /// Creates the charge up state, or `None` if the runner is not eligible.
     pub(crate) fn new(power: f64, game_version: GameVersion) -> Option<Self> {
         if game_version < GameVersion::SecondAnniversary || power <= POWER_THRESHOLD {
             return None;

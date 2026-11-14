@@ -1,4 +1,4 @@
-//! Compete before spurt (位置取り調整) and Stamina Keep (持久力温存) formulas (2.5
+//! Compete before spurt (位置取り調整) and Stamina keep (持久力温存) formulas (2.5
 //! Anniversary onward).
 //!
 //! Between sections 11 and 15, a runner that is too far from the lead or has
@@ -31,7 +31,7 @@ pub(crate) const ALONE_DISTANCE: f64 = 10.0;
 /// to keep. Rolled once per race.
 pub(crate) const STAMINA_KEEP_RATIO: RangeInclusive<f64> = 1.035..=1.04;
 
-/// Stamina Keep (持久力温存) state (2.5 Anniv. onward).
+/// Stamina keep (持久力温存) state (2.5 Anniv. onward).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StaminaKeep {
     /// Ratio of the HP required to finish the race that the runner tries to
@@ -109,7 +109,7 @@ pub(crate) fn hp_cost(style: EffectiveStyle, course_distance: i32, far_from_lead
     20.0 * (style_coef * secure_lead::distance_coefficient(course_distance) + near_factor)
 }
 
-/// Chance of noticing the lack of HP and entering Stamina Keep on each check.
+/// Chance of noticing the lack of HP and entering stamina keep on each check.
 // ? Highly speculative.
 pub(crate) fn stamina_keep_chance(wit: f64) -> f64 {
     (0.3 * (wit / 1000.0 + wit.powf(0.03))).min(1.0)

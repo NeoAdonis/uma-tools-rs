@@ -44,7 +44,7 @@ pub(crate) enum Stream {
     Rush,
     /// Force-in modifier.
     ForceIn,
-    /// Stamina Keep ratio and checks.
+    /// Stamina keep ratio and checks.
     StaminaKeep,
     /// Section speed modifier, by section.
     SectionSpeed(u8),

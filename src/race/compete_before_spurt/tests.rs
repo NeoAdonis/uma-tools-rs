@@ -101,7 +101,7 @@ fn test_compete_check_window() {
 fn test_compete_activation_and_expiry() {
     let (mut runner, mut state) = ready_runner(EffectiveStyle::Front, seeded_config(42));
     runner.section = 12;
-    // Never enter Stamina Keep.
+    // Never enter stamina keep.
     runner.stamina_keep.ratio = 0.0;
     // ? Competing has no chance for now (its formula is unknown), so it starts
     // on the first check.
@@ -155,7 +155,7 @@ fn test_compete_activation_and_expiry() {
 #[test]
 fn test_stamina_keep_starts_below_the_hp_to_keep() {
     // ? The HP required to finish is assumed (see `hp_required_to_finish`).
-    // (HP over the HP to keep, whether she enters Stamina Keep).
+    // (HP over the HP to keep, whether she enters stamina keep).
     for (offset, enters) in [(-1.0, true), (1.0, false)] {
         let (mut runner, mut state) = ready_runner(EffectiveStyle::Late, seeded_config(42));
         runner.section = 12;
@@ -204,7 +204,7 @@ fn test_stamina_keep_blocks_compete_until_recovery() {
         TimedBoost::Idle { .. }
     ));
 
-    // Recovering enough HP resets Stamina Keep and allows competing again.
+    // Recovering enough HP resets stamina keep and allows competing again.
     let recovery = effect(SkillType::Recovery, 1.0);
     runner.apply_skill_effect(
         &recovery,

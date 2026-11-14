@@ -902,7 +902,7 @@ impl Runner {
                     // Increment heal skill count.
                     self.trigger_scheduler.activation_counts.increment_heal();
 
-                    // Recovering HP resets Stamina Keep (2.5 Anniv. onward).
+                    // Recovering HP resets stamina keep (2.5 Anniv. onward).
                     self.stamina_keep.is_active = false;
                     self.log_end(EventKind::StaminaKeep, state.elapsed_time);
 

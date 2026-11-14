@@ -96,7 +96,7 @@ impl Runner {
     /// It is the HP needed to run the rest of the Mid phase at its base target
     /// speed, plus the HP needed for a last spurt at max speed (as estimated by
     /// [`Self::calculate_last_spurt`]).
-    // ? Assumed to be "required amount to finish the race" as used by Stamina Keep.
+    // ? Assumed to be "required amount to finish the race" as used by stamina keep.
     pub(crate) fn hp_required_to_finish(&self, state: &RaceState) -> f64 {
         let course = &state.course;
         let mid_distance = (Phase::Late.boundaries(course).0 - self.position).max(0.0);

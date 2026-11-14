@@ -1354,7 +1354,7 @@ fn test_compete_before_spurt_when_far_from_first() {
             GameVersion::LATEST,
         );
         for runner in &mut solver.runners {
-            // Never enter Stamina Keep, the only random roll.
+            // Never enter stamina keep, the only random roll.
             // ? Competing has no chance for now (its formula is unknown).
             runner.stamina_keep.ratio = 0.0;
             // Nobody nearby, which would also make her compete.
@@ -5663,7 +5663,7 @@ fn test_timed_boost_events_repeat_after_each_cooldown() {
         GameVersion::LATEST,
     );
     for runner in &mut solver.runners {
-        // Never enter Stamina Keep, the only random roll of competing.
+        // Never enter stamina keep, the only random roll of competing.
         runner.stamina_keep.ratio = 0.0;
         runner.reset_blocking_status();
     }

@@ -4,7 +4,7 @@
 //! which knows nothing about [`Runner`]. The methods here apply them to a
 //! runner: they read and update her state, log her events and tell the race
 //! state about changes. They cover rushing, spot struggle, secure lead, compete
-//! before spurt (with Stamina Keep), dueling and Charge Up.
+//! before spurt (with stamina keep), dueling and charge up.
 
 use std::ops::RangeInclusive;
 
@@ -240,7 +240,7 @@ impl Runner {
     /// Attempts to compete before spurt (位置取り調整).
     ///
     /// First, if the runner lacks the HP she wants to keep to finish the race, she
-    /// may notice and enter Stamina Keep (持久力温存). Then, unless in Stamina Keep, she
+    /// may notice and enter stamina keep (持久力温存). Then, unless in stamina keep, she
     /// competes if she is too far from the lead or has other runners nearby,
     /// speeding up for a short time at the cost of HP, followed by a cooldown.
     ///

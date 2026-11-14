@@ -228,7 +228,7 @@ pub struct UnreadyRunner {
     /// skills.
     pub base: Stats,
     /// Raw stats before halving and adjustments, with the style and aptitudes.
-    /// Used for popularity and Charge Up.
+    /// Used for popularity and charge up.
     pub raw: Uma,
     /// Gate number (1-indexed), which determines her starting lane position.
     /// `None` until assigned (see `Self::assign_gate`).
@@ -246,7 +246,7 @@ pub struct UnreadyRunner {
     start_delay: f64,
     /// Rush chance modifier from out-of-gate skills.
     rush_chance_modifier: f64,
-    /// Power gained from out-of-gate skills. Used for Charge Up.
+    /// Power gained from out-of-gate skills. Used for charge up.
     power_skill_bonus: i32,
 
     // === Skills ===

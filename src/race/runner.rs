@@ -13,7 +13,7 @@
 //! - `surroundings`: field of view and blocking, surrounding and nearby state.
 //! - `skills`: skill trigger checks, activation and active effects.
 //! - `mechanics`: glue to the mechanics implemented in their own modules, such
-//!   as rushing, spot struggle, Charge Up or dueling.
+//!   as rushing, spot struggle, charge up or dueling.
 //!
 //! Submodules are private; their public items are re-exported from here.
 //!
@@ -359,10 +359,10 @@ pub struct Runner {
     pub(crate) duel: Duel,
     /// State related to securing the lead (リード確保).
     pub(crate) secure_lead: TimedBoost,
-    /// State related to competing before spurt (位置取り調整). Stamina Keep is
+    /// State related to competing before spurt (位置取り調整). Stamina keep is
     /// also checked on the same schedule.
     pub(crate) compete_before_spurt: TimedBoost,
-    /// State related to Stamina Keep (持久力温存).
+    /// State related to stamina keep (持久力温存).
     pub(crate) stamina_keep: StaminaKeep,
     /// Overtake targets being tracked. If `None`, no overtake mode active.
     pub(crate) overtake_state: Option<OvertakeState>,
@@ -435,7 +435,7 @@ pub struct Runner {
     /// It is activated once the runner reaches its last spurt speed, and keeps
     /// increasing target speed until the end of the race.
     pub(crate) all_out_spurt: AllOutSpurt,
-    /// Charge Up (足を貯める) state.
+    /// Charge up (足を貯める) state.
     ///
     /// It records the power conserved during the first 10 sections and its release
     /// upon entering the last spurt. `None` if the runner is not eligible.

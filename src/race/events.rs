@@ -59,7 +59,7 @@ pub enum EventKind {
     ///
     /// It happens at most once per race.
     Duel,
-    /// Release of the power conserved by Charge Up (脚色十分), until its acceleration
+    /// Release of the power conserved by charge up (脚色十分), until its acceleration
     /// bonus expires.
     ///
     /// It happens at most once per race, and only if enough power was conserved.

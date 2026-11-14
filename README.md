@@ -19,7 +19,7 @@ published on crates.io yet.
 - **Frame-by-frame simulation of whole races**: with the game's formulas for
   speed, acceleration, HP, lane changes, blocking and overtaking.
 - **Most race mechanics**: rushing, positioning, spot struggle, secure lead,
-  compete before spurt and Stamina Keep, Charge Up, last spurt, all-out spurt
+  compete before spurt and stamina keep, charge up, last spurt, all-out spurt
   (aka zenkai spurt), dueling, slopes, stamina and wit limit breaks, and
   popularity.
 - **Real course geometry**: movement follows each course's inner rail, so
