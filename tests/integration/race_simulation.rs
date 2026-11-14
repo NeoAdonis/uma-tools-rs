@@ -47,7 +47,7 @@ fn race(game_version: GameVersion, seed: u64) -> (Option<f64>, Vec<(u8, f64)>) {
     let mut runners: Vec<_> = solver
         .runners()
         .iter()
-        .map(|runner| (runner.gate_roll, runner.position))
+        .map(|runner| (runner.gate_roll(), runner.position()))
         .collect();
     runners.sort_by_key(|(gate, _)| *gate);
     (solver.state.finish_time, runners)
@@ -61,7 +61,7 @@ fn test_front_runner_with_runaway_skill_races_as_runaway() {
         vec![runaway_skill()],
         seeded_config(0),
     );
-    assert_eq!(solver.runners()[0].style, EffectiveStyle::Runaway);
+    assert_eq!(solver.runners()[0].style(), EffectiveStyle::Runaway);
 }
 
 #[test]

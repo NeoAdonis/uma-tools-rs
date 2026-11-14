@@ -101,7 +101,7 @@
 //!     solver.add_runner(entrant.clone());
 //!     let mut solver = solver.ready_runners();
 //!     solver.run();
-//!     let activations = &solver.runners()[0].activated_skills;
+//!     let activations = &solver.runners()[0].activated_skills();
 //!     positions.extend(
 //!         activations
 //!             .iter()

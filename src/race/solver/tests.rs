@@ -2032,9 +2032,9 @@ fn test_closest_front_blocker_is_overtake_target() {
     }
 
     solver.update_blocking_status(DELTA_TIME);
-    let gate_roll = solver.runners[1].gate_roll;
+    let blocker = solver.runners[1].id();
     let behind = &solver.runners[2];
-    assert_eq!(behind.blocked.front_blocker, Some(gate_roll));
+    assert_eq!(behind.front_blocker(), Some(blocker));
     assert!(behind.is_in_overtake_mode());
     assert_close!(solver.runners[1].being_overtake_target_time, DELTA_TIME);
     // The runner furthest ahead also blocks both runners behind, but she's only
@@ -4343,10 +4343,7 @@ fn test_front_blocker_limits_speed() {
     solver.update_blocking_status(DELTA_TIME);
     let behind = &solver.runners[2];
     assert_close!(behind.blocked.speed_ratio.unwrap(), 0.994);
-    assert_eq!(
-        behind.blocked.front_blocker,
-        Some(solver.runners[1].gate_roll)
-    );
+    assert_eq!(behind.front_blocker(), Some(solver.runners[1].id()));
 }
 
 #[test]
@@ -4371,6 +4368,9 @@ fn test_front_blocker_speed_is_read_in_gate_order() {
             runner.gate_roll = gate;
             runner.speed = speed;
             runner.is_start_dash = false;
+        }
+        for runner in &solver.runners {
+            solver.gates_by_id[runner.id().index()] = runner.gate_roll;
         }
         solver.update_blocking_status(DELTA_TIME);
         solver.step(DELTA_TIME);

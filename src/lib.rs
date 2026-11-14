@@ -65,8 +65,8 @@
 //! solver.run();
 //!
 //! let runner = &solver.runners()[0];
-//! assert!(runner.finish_time.is_some());
-//! println!("Activated skills: {:?}", runner.activated_skills);
+//! assert!(runner.finish_time().is_some());
+//! println!("Activated skills: {:?}", runner.activated_skills());
 //! # Ok(())
 //! # }
 //! ```

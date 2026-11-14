@@ -17,7 +17,7 @@ use super::Runner;
 
 /// Lane state including current and target lane positions.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LaneState {
+pub(crate) struct LaneState {
     /// Current lane position.
     pub current: CourseWidths,
     /// Target lane position.
@@ -222,19 +222,19 @@ impl Runner {
     /// Tracks the closest runner blocking from the front, if any, as an overtake
     /// target, regardless of the usual criteria.
     ///
-    /// Must be called once every runner ahead has been checked. Returns her gate
-    /// roll if she wasn't already a target in this update cycle.
-    pub(crate) fn track_front_blocker_target(&mut self, delta_time: f64) -> Option<u8> {
-        let gate_roll = self.blocked.front_blocker?;
+    /// Must be called once every runner ahead has been checked, with the gate roll
+    /// of her front blocker. Returns whether she wasn't already a target in this
+    /// update cycle.
+    pub(crate) fn track_front_blocker_target(&mut self, gate_roll: u8, delta_time: f64) -> bool {
         let state = self.enter_overtake_mode();
         let entry = state.targets.entry(gate_roll).or_default();
         entry.is_closest_blocker = true;
         if entry.is_checked {
-            return None;
+            return false;
         }
         entry.is_checked = true;
         entry.engagement_time += delta_time;
-        Some(gate_roll)
+        true
     }
 
     /// Finalizes overtake state after all targets have been checked.

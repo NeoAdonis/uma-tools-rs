@@ -106,7 +106,10 @@ pub struct RunnerId(u8);
 
 impl RunnerId {
     /// Returns the index of the runner among those added to the race, in order.
-    pub(crate) fn index(self) -> usize {
+    ///
+    /// It maps the IDs in results, such as the runners affected by a skill
+    /// activation, back to the entries added with [`RaceSolver::add_runner`].
+    pub fn index(self) -> usize {
         self.0 as usize
     }
 
@@ -243,7 +246,7 @@ impl Entrant {
 ///     solver.add_runner(entrant);
 ///     let mut solver = solver.ready_runners();
 ///     solver.run();
-///     solver.runners()[0].finish_time
+///     solver.runners()[0].finish_time()
 /// };
 ///
 /// let seeds = 20;
@@ -396,7 +399,7 @@ impl RaceSolver<Entrant> {
     /// let solver = solver.ready_runners();
     ///
     /// // Runners are ordered by gate once ready, but IDs still find them.
-    /// let gate = |id| solver.runner(id).gate_roll;
+    /// let gate = |id| solver.runner(id).gate_roll();
     /// assert_eq!(ids.map(gate), [2, 3, 1]);
     /// # Ok(())
     /// # }
@@ -463,8 +466,8 @@ impl RaceSolver<Entrant> {
     ///
     /// let runners = solver.runners();
     /// for runner in runners {
-    ///     let opponents = runners.iter().filter(|o| runner.is_opponent(o));
-    ///     let expected = if runner.initial_state.team == 0 { 1 } else { 3 };
+    ///     let opponents = runners.iter().filter(|o| o.team() != runner.team());
+    ///     let expected = if runner.team() == 0 { 1 } else { 3 };
     ///     assert_eq!(opponents.count(), expected);
     /// }
     /// # Ok(())
@@ -576,7 +579,7 @@ impl RaceSolver<Entrant> {
     /// let solver = solver.ready_runners();
     ///
     /// let runner = &solver.runners()[0];
-    /// assert_eq!(runner.initial_state.popularity_rank, 1);
+    /// assert_eq!(runner.popularity_rank(), 1);
     /// for skill in runner.failed_skills() {
     ///     println!("Skill {} failed its wit check", skill.id);
     /// }
@@ -888,10 +891,10 @@ impl RaceSolver<Runner> {
     /// let mut solver = solver.ready_runners();
     ///
     /// // Runners are ordered by position after every frame, leader first.
-    /// while solver.runners()[0].position < halfway {
+    /// while solver.runners()[0].position() < halfway {
     ///     solver.step_frame();
     /// }
-    /// assert!(solver.runner(front).position > solver.runner(closer).position);
+    /// assert!(solver.runner(front).position() > solver.runner(closer).position());
     ///
     /// // The rest of the race can still be run at once.
     /// solver.run();
@@ -1076,7 +1079,8 @@ impl RaceSolver<Runner> {
     fn front_blocking_limit(&self, index: usize, index_by_gate: &[Option<usize>]) -> Option<f64> {
         let blocked = &self.runners[index].blocked;
         let ratio = blocked.speed_ratio?;
-        let blocker = index_by_gate[blocked.front_blocker? as usize]?;
+        let blocker_gate = self.gates_by_id[blocked.front_blocker?.index()];
+        let blocker = index_by_gate[blocker_gate as usize]?;
         Some(ratio * self.runners[blocker].speed)
     }
 
@@ -1362,10 +1366,13 @@ impl RaceSolver<Runner> {
             // near statuses can be updated now.
             runner_i.update_blocked_time(delta_time);
             runner_i.update_near_time(delta_time);
-            if let Some(gate_roll) = runner_i.track_front_blocker_target(delta_time)
-                && let Some(blocker) = ahead.iter_mut().find(|r| r.gate_roll == gate_roll)
-            {
-                blocker.being_overtake_target_time += delta_time;
+            if let Some(blocker_id) = runner_i.blocked.front_blocker {
+                let gate_roll = self.gates_by_id[blocker_id.index()];
+                if runner_i.track_front_blocker_target(gate_roll, delta_time)
+                    && let Some(blocker) = ahead.iter_mut().find(|r| r.gate_roll == gate_roll)
+                {
+                    blocker.being_overtake_target_time += delta_time;
+                }
             }
             runner_i.finalize_overtake_state(delta_time, self.state.elapsed_time);
         }

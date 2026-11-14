@@ -1035,7 +1035,7 @@ impl Runner {
     /// ID (see [`Self::activated_alternatives`]).
     ///
     /// It defaults to 0 if the runner doesn't have a skill with that ID.
-    pub fn activated_mask(&self, skill_id: i32) -> u8 {
+    pub(crate) fn activated_mask(&self, skill_id: i32) -> u8 {
         self.skills
             .iter()
             .position(|skill| skill.id == skill_id)

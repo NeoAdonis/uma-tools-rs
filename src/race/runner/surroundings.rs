@@ -3,6 +3,8 @@
 use crate::course::*;
 use crate::units::*;
 
+use crate::race::solver::RunnerId;
+
 use super::Runner;
 
 /// Surrounding state information.
@@ -19,8 +21,8 @@ pub(crate) struct BlockedState {
     /// Share of the closest front blocker's speed the runner is limited to, if
     /// she's front-blocked.
     pub(crate) speed_ratio: Option<f64>,
-    /// Gate roll of the closest runner blocking from the front, if any.
-    pub(crate) front_blocker: Option<u8>,
+    /// ID of the closest runner blocking from the front, if any.
+    pub(crate) front_blocker: Option<RunnerId>,
     /// Whether the runner is currently side-blocked towards the inside.
     pub(crate) side_in: bool,
     /// Whether the runner is currently side-blocked towards the outside.
@@ -99,7 +101,7 @@ impl Runner {
     pub(crate) fn update_front_blocked_by(&mut self, ahead: &Self) {
         let distance = (ahead.position - self.position).abs();
         self.blocked.speed_ratio = Some(0.988 + 0.012 * distance / 2.0);
-        self.blocked.front_blocker = Some(ahead.gate_roll);
+        self.blocked.front_blocker = Some(ahead.id);
     }
 
     /// Updates side-blocked state for this runner and another.

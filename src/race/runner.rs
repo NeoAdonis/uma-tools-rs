@@ -56,15 +56,15 @@
 //! solver.run();
 //!
 //! let finish_time =
-//!     |runner: &Runner| runner.finish_time.unwrap_or(f64::INFINITY);
+//!     |runner: &Runner| runner.finish_time().unwrap_or(f64::INFINITY);
 //! let mut runners = solver.into_runners();
 //! runners.sort_by(|a, b| finish_time(a).total_cmp(&finish_time(b)));
 //! for runner in &runners {
-//!     let margin = runner.finish_margin.map(Margin::from_meters);
-//!     println!("Speed {}: {:?}", runner.raw.speed, margin);
+//!     let margin = runner.finish_margin().map(Margin::from_meters);
+//!     println!("Speed {}: {:?}", runner.raw().speed, margin);
 //! }
 //! // The winner has no runner ahead.
-//! assert_eq!(runners[0].finish_margin, None);
+//! assert_eq!(runners[0].finish_margin(), None);
 //! # Ok(())
 //! # }
 //! ```
@@ -108,7 +108,7 @@ mod positioning;
 mod skills;
 mod surroundings;
 
-pub use lane::LaneState;
+pub(crate) use lane::LaneState;
 pub(crate) use lane::OvertakeState;
 pub(crate) use positioning::{POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy};
 pub use skills::SkillActivationFlags;
@@ -155,7 +155,7 @@ pub struct InitialState {
 
 /// State related to order (rank) in the race.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OrderState {
+pub(crate) struct OrderState {
     /// Current order (rank), 1-based.
     pub order: u8,
     /// Number of runners in the race, i.e. its gates, finished ones included.
@@ -219,7 +219,7 @@ pub(crate) fn rates_at_order(order: u8, runner_count: u8) -> RangeInclusive<i32>
 
 /// Distance differences from other runners.
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct PositionDiff {
+pub(crate) struct PositionDiff {
     /// Distance difference from the first-place runner in meters.
     pub from_first: f64,
     /// Distance difference from the next runner ahead in meters, or infinity
@@ -262,42 +262,32 @@ pub struct Runner {
     ///
     /// [`RaceSolver::add_runner`]: crate::race::solver::RaceSolver::add_runner
     pub(crate) id: RunnerId,
-    /// Gate number (1-indexed). It determines starting lane position.
-    ///
-    /// Each runner has a different gate, so the solver also uses it to tell
-    /// runners apart during the race. To find the runner added from some
-    /// input, use [`RaceSolver::runner`] instead.
-    ///
-    /// [`RaceSolver::runner`]: crate::race::solver::RaceSolver::runner
-    pub gate_roll: u8,
-    /// Raw stats before halving and mood multiplier, with the aptitudes and the
-    /// style before out-of-gate skills. Used for skill value scaling.
-    pub raw: Uma,
-    /// Base stats before adjustments. After calculating the adjusted stats,
-    /// the base stats are only used to evaluate some skill conditions.
-    pub base: Stats,
-    /// Adjusted stats after applying modifiers and out-of-gate skills.
-    /// With a few exceptions, these are the stats used for race calculations.
-    pub adjusted: Stats,
-    /// Running style, after out-of-gate skills that change it.
-    pub style: EffectiveStyle,
-    /// Set of static values related to the runner at the start of the race.
-    pub initial_state: InitialState,
-    /// Start delay (i.e. time taken to leave the gate) in seconds.
-    pub start_delay: f64,
-    /// Current speed in m/s. Besides position updates, it also affects HP
-    /// consumption.
-    pub speed: f64,
-    /// Current acceleration in m/s².
-    pub acceleration: f64,
-    /// Current position in the course in meters.
-    pub position: f64,
-    /// Current HP state.
-    pub hp: HpState,
+    /// Gate number (1-indexed), unique in the race (see [`Self::gate_roll`]).
+    pub(crate) gate_roll: u8,
+    /// Raw stats and aptitudes (see [`Self::raw`]).
+    pub(crate) raw: Uma,
+    /// Base stats before adjustments (see [`Self::base`]).
+    pub(crate) base: Stats,
+    /// Adjusted stats (see [`Self::adjusted`]).
+    pub(crate) adjusted: Stats,
+    /// Running style after out-of-gate skills (see [`Self::style`]).
+    pub(crate) style: EffectiveStyle,
+    /// Static values related to the runner at the start of the race.
+    pub(crate) initial_state: InitialState,
+    /// Time taken to leave the gate in seconds.
+    pub(crate) start_delay: f64,
+    /// Current speed in m/s (see [`Self::speed`]).
+    pub(crate) speed: f64,
+    /// Current acceleration in m/s² (see [`Self::acceleration`]).
+    pub(crate) acceleration: f64,
+    /// Current position in the course in meters (see [`Self::position`]).
+    pub(crate) position: f64,
+    /// Current HP state (see [`Self::hp`]).
+    pub(crate) hp: HpState,
     /// Minimum speed in m/s. It is based on course base speed and guts stat.
     pub(crate) min_speed: f64,
-    /// Target speed in m/s.
-    pub target_speed: f64,
+    /// Target speed in m/s (see [`Self::target_speed`]).
+    pub(crate) target_speed: f64,
     /// Speed modifier applied when affected by a skill that modifies lane move
     /// speed and if lane movement was performed in the previous frame.
     pub(crate) move_lane_modifier: f64,
@@ -306,42 +296,25 @@ pub struct Runner {
     ///
     /// Its value is rolled before the race begins based on running style.
     pub(crate) force_in_modifier: f64,
-    /// Lane state including current and target lane positions in course widths.
-    pub lane: LaneState,
+    /// Lane state, with the current and target lane positions.
+    pub(crate) lane: LaneState,
     /// Speed modifier for the current section in m/s.
     pub(crate) section_speed_modifier: f64,
-    /// List of skills of the runner: those that passed the wit check first, then
-    /// those that failed it (see [`Self::available_skills`] and
-    /// [`Self::failed_skills`]).
-    pub skills: Vec<Arc<Skill>>,
+    /// Skills of the runner: those that passed the wit check first, then those
+    /// that failed it (see [`Self::skills`]).
+    pub(crate) skills: Vec<Arc<Skill>>,
     /// Number of skills that passed the wit check, at the start of `skills`.
     pub(crate) available_skill_count: usize,
-    /// Elapsed time when the runner finished the race, in seconds.
-    pub finish_time: Option<f64>,
-    /// Distance in meters behind the runner that placed immediately ahead.
-    /// `None` for first place or until the race is over.
-    pub finish_margin: Option<f64>,
-    /// List of skills that have been activated during the race.
-    pub activated_skills: Vec<SkillActivationRecord>,
-    /// Activations missing from the pins.
-    ///
-    /// Each one is a frame where the conditions of a skill whose activations are
-    /// pinned (see [`SkillPin::Activations`]) say it should have activated, but no
-    /// activation is pinned on that frame. Out-of-gate ones are at 0 seconds and
-    /// meters.
-    ///
-    /// Only those activations a roll couldn't have prevented are recorded: a
-    /// failed wit check is ruled out (the skill has a pinned activation, or no
-    /// wit check), and the condition (the OR branch, or the whole alternative
-    /// out of gate) has no random variable. Their checks then wait for the
-    /// cooldown, as if they activated (see
-    /// [`SkillActivationRecord::conditions_met`]).
-    ///
-    /// N.B. A skill activates through a single alternative, but only real
-    /// activations count for that: two alternatives can be recorded here.
-    ///
-    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
-    pub missing_activations: Vec<SkillActivationRecord>,
+    /// Elapsed time when the runner finished the race, in seconds (see
+    /// [`Self::finish_time`]).
+    pub(crate) finish_time: Option<f64>,
+    /// Distance behind the runner that placed immediately ahead, in meters.
+    pub(crate) finish_margin: Option<f64>,
+    /// Skills that have been activated during the race (see
+    /// [`Self::activated_skills`]).
+    pub(crate) activated_skills: Vec<SkillActivationRecord>,
+    /// Activations missing from the pins (see [`Self::missing_activations`]).
+    pub(crate) missing_activations: Vec<SkillActivationRecord>,
     /// Indices in `activated_skills` of this frame's pinned activations, until
     /// their skills' conditions confirm them.
     pub(crate) pinned_this_frame: Vec<usize>,
@@ -353,7 +326,7 @@ pub struct Runner {
     pub(crate) unmet_out_of_gate: Vec<i32>,
     /// Activated alternatives of each skill in `skills`, as a mask (bit `i` set
     /// when alternative `i` activated).
-    pub activated_alternatives: Vec<u8>,
+    pub(crate) activated_alternatives: Vec<u8>,
     /// Race time (in seconds) until which each alternative of each skill in
     /// `skills` can't activate again, shared by all its OR branches.
     pub(crate) cooldown_until: Vec<Vec<f64>>,
@@ -371,14 +344,14 @@ pub struct Runner {
     ///
     /// This is determined at the start of the race along with deciding whether the
     /// runner will rush or not.
-    pub rush_chance: f64,
+    pub(crate) rush_chance: f64,
     /// State related to rushing.
     ///
     /// `None` means that the runner won't rush at all. Otherwise it tells when and
     /// how the rush will happen.
     pub rush_state: Option<RushState>,
-    /// Flag indicating if the runner is currently in start dash mode.
-    pub is_start_dash: bool,
+    /// Whether the runner is in the start dash (see [`Self::is_start_dash`]).
+    pub(crate) is_start_dash: bool,
     /// State related to spot struggle (位置取り争い).
     pub spot_struggle: SpotStruggle,
     /// State related to dueling (追い比べ).
@@ -402,10 +375,10 @@ pub struct Runner {
     /// From then on, both normal and overtake mode move out to it when it's outside
     /// and reachable.
     pub(crate) extra_move_lane: Option<CourseWidths>,
-    /// State related to order (rank) in the race.
-    pub order: OrderState,
+    /// State related to order (rank) in the race (see [`Self::order`]).
+    pub(crate) order: OrderState,
     /// Distance differences between this runner and others.
-    pub position_diff: PositionDiff,
+    pub(crate) position_diff: PositionDiff,
     /// Number of visible runners in this runner's field of view.
     pub(crate) visible_count: u8,
     /// Information about nearby runners.
@@ -436,15 +409,13 @@ pub struct Runner {
     pub(crate) downhill_checks: usize,
     /// Number of uphills climbed to the end.
     pub(crate) uphills_climbed: u8,
-    /// Current section index (0-23).
-    pub section: u8,
-    /// Current race phase.
-    pub phase: Phase,
-    /// Information about the last spurt phase.
-    ///
-    /// It indicates when the last spurt can start and its max speed, and it's
-    /// calculated when entering the Mid phase.
-    pub last_spurt: Option<LastSpurt>,
+    /// Current section index (see [`Self::section`]).
+    pub(crate) section: u8,
+    /// Current race phase (see [`Self::phase`]).
+    pub(crate) phase: Phase,
+    /// Last spurt, calculated when entering the Mid phase (see
+    /// [`Self::last_spurt`]).
+    pub(crate) last_spurt: Option<LastSpurt>,
     /// Stamina Limit Break (スタミナ勝負) buff before its random factor, in m/s.
     ///
     /// Calculated before race begins; zero if the runner is not eligible.
@@ -453,7 +424,7 @@ pub struct Runner {
     ///
     /// It's set once the runner reaches its last spurt speed and lasts until the
     /// end of the race.
-    pub stamina_limit_break: f64,
+    pub(crate) stamina_limit_break: f64,
     /// All-out spurt (全開スパート) acceleration in m/s² before skill modifiers.
     ///
     /// Calculated before race begins; zero if the runner is not eligible.
@@ -484,7 +455,7 @@ pub struct Runner {
     /// types, each with their own criteria (distance, time, etc).
     pub(crate) trigger_scheduler: TriggerScheduler,
     /// Skill activation flags for the current update cycle.
-    pub activation_flags: SkillActivationFlags,
+    pub(crate) activation_flags: SkillActivationFlags,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -506,6 +477,224 @@ impl StartType {
             d if d > 0.08 => StartType::Late,
             _ => StartType::Normal,
         }
+    }
+}
+
+/// Getters of the runner's identity and inputs.
+impl Runner {
+    /// Returns the ID of the runner in the race (see
+    /// [`RaceSolver::add_runner`]).
+    ///
+    /// [`RaceSolver::add_runner`]: crate::race::solver::RaceSolver::add_runner
+    pub fn id(&self) -> RunnerId {
+        self.id
+    }
+
+    /// Returns the gate number (1-indexed), which determines the starting lane
+    /// position.
+    ///
+    /// Each runner has a different gate, so the solver also uses it to tell
+    /// runners apart during the race. To find the runner added from some
+    /// input, use [`RaceSolver::runner`] with her [`Self::id`] instead.
+    ///
+    /// [`RaceSolver::runner`]: crate::race::solver::RaceSolver::runner
+    pub fn gate_roll(&self) -> u8 {
+        self.gate_roll
+    }
+
+    /// Returns the raw stats before halving and the mood multiplier, with the
+    /// aptitudes and the style before out-of-gate skills.
+    ///
+    /// Skill values scale with them.
+    pub fn raw(&self) -> &Uma {
+        &self.raw
+    }
+
+    /// Returns the base stats before adjustments.
+    ///
+    /// After calculating the adjusted stats, the base stats are only used to
+    /// evaluate some skill conditions.
+    pub fn base(&self) -> &Stats {
+        &self.base
+    }
+
+    /// Returns the adjusted stats after applying modifiers and out-of-gate
+    /// skills.
+    ///
+    /// With a few exceptions, these are the stats used for race calculations.
+    pub fn adjusted(&self) -> &Stats {
+        &self.adjusted
+    }
+
+    /// Returns the running style, after out-of-gate skills that change it.
+    pub fn style(&self) -> EffectiveStyle {
+        self.style
+    }
+
+    /// Returns the skills of the runner: those that passed the wit check first,
+    /// then those that failed it (see [`Self::available_skills`] and
+    /// [`Self::failed_skills`]).
+    pub fn skills(&self) -> &[Arc<Skill>] {
+        &self.skills
+    }
+
+    /// Returns the mood level.
+    ///
+    /// It affects initial stat adjustments and is also used to evaluate some
+    /// skill conditions.
+    pub fn mood(&self) -> Mood {
+        self.initial_state.mood
+    }
+
+    /// Returns the popularity rank (favorite rank) in the race, 1-indexed.
+    pub fn popularity_rank(&self) -> u8 {
+        self.initial_state.popularity_rank
+    }
+
+    /// Returns the team index, 0-based.
+    ///
+    /// In individual races, each runner has her own team. Runners on the same
+    /// team are allies; everyone else is an opponent.
+    pub fn team(&self) -> u8 {
+        self.initial_state.team
+    }
+
+    /// Returns the number of fans.
+    pub fn fan_count(&self) -> u32 {
+        self.initial_state.fan_count
+    }
+}
+
+/// Getters of the runner's state, updated on every frame.
+impl Runner {
+    /// Returns the current position in the course in meters.
+    pub fn position(&self) -> f64 {
+        self.position
+    }
+
+    /// Returns the current speed in m/s.
+    ///
+    /// Besides position updates, it also affects HP consumption.
+    pub fn speed(&self) -> f64 {
+        self.speed
+    }
+
+    /// Returns the target speed in m/s.
+    pub fn target_speed(&self) -> f64 {
+        self.target_speed
+    }
+
+    /// Returns the current acceleration in m/s².
+    pub fn acceleration(&self) -> f64 {
+        self.acceleration
+    }
+
+    /// Returns the current HP state.
+    pub fn hp(&self) -> &HpState {
+        &self.hp
+    }
+
+    /// Returns the current race phase.
+    pub fn phase(&self) -> Phase {
+        self.phase
+    }
+
+    /// Returns the current section index (0-23).
+    pub fn section(&self) -> u8 {
+        self.section
+    }
+
+    /// Returns the current order (rank), 1-based.
+    pub fn order(&self) -> u8 {
+        self.order.order
+    }
+
+    /// Checks whether the runner is in the start dash.
+    pub fn is_start_dash(&self) -> bool {
+        self.is_start_dash
+    }
+
+    /// Returns the current lane position.
+    pub fn lane(&self) -> CourseWidths {
+        self.lane.current
+    }
+
+    /// Returns the target lane position.
+    pub fn target_lane(&self) -> CourseWidths {
+        self.lane.target
+    }
+
+    /// Returns the lateral speed applied on the last lane update, in course
+    /// widths per second.
+    ///
+    /// Positive values move outward, negative values move inward and zero means
+    /// the runner didn't change lanes on the last frame.
+    pub fn lane_speed(&self) -> f64 {
+        self.lane.speed
+    }
+
+    /// Returns the runner blocking her from the front, if any.
+    ///
+    /// It's the closest one if several block her.
+    pub fn front_blocker(&self) -> Option<RunnerId> {
+        self.blocked.front_blocker
+    }
+}
+
+/// Getters of the runner's results.
+impl Runner {
+    /// Returns the time taken to leave the gate in seconds.
+    pub fn start_delay(&self) -> f64 {
+        self.start_delay
+    }
+
+    /// Returns the elapsed time when the runner finished the race, in seconds,
+    /// or `None` if she hasn't.
+    pub fn finish_time(&self) -> Option<f64> {
+        self.finish_time
+    }
+
+    /// Returns the distance behind the runner that placed immediately ahead,
+    /// in meters.
+    ///
+    /// `None` for first place or until the race is over.
+    pub fn finish_margin(&self) -> Option<f64> {
+        self.finish_margin
+    }
+
+    /// Returns the last spurt, calculated when entering the Mid phase.
+    ///
+    /// It indicates when the last spurt can start and its max speed. Unlike
+    /// [`Self::active_last_spurt`], it's returned even if it hasn't started.
+    pub fn last_spurt(&self) -> Option<&LastSpurt> {
+        self.last_spurt.as_ref()
+    }
+
+    /// Returns the skills that have been activated during the race.
+    pub fn activated_skills(&self) -> &[SkillActivationRecord] {
+        &self.activated_skills
+    }
+
+    /// Returns the activations missing from the pins.
+    ///
+    /// Each one is a frame where the conditions of a skill whose activations are
+    /// pinned (see [`SkillPin::Activations`]) say it should have activated, but no
+    /// activation is pinned on that frame. Out-of-gate ones are at 0 seconds and
+    /// meters.
+    ///
+    /// Only those activations a roll couldn't have prevented are recorded: a
+    /// failed wit check is ruled out (the skill has a pinned activation, or no
+    /// wit check), and the condition (the OR branch, or the whole alternative
+    /// out of gate) has no random variable. Their checks then wait for the
+    /// cooldown, as if they activated (see
+    /// [`SkillActivationRecord::conditions_met`]).
+    ///
+    /// N.B. A skill activates through a single alternative, but only real
+    /// activations count for that: two alternatives can be recorded here.
+    ///
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+    pub fn missing_activations(&self) -> &[SkillActivationRecord] {
+        &self.missing_activations
     }
 }
 
@@ -619,7 +808,7 @@ impl Runner {
 
     /// Checks whether the runner is going uphill, thus experiencing a speed
     /// reduction.
-    pub fn is_going_uphill(&self) -> bool {
+    pub(crate) fn is_going_uphill(&self) -> bool {
         self.slope_speed_modifier.is_some_and(|s| s < 0.0)
     }
 
@@ -798,7 +987,7 @@ impl Runner {
     }
 
     /// Checks whether `other` is an opponent (i.e. on a different team).
-    pub fn is_opponent(&self, other: &Runner) -> bool {
+    pub(crate) fn is_opponent(&self, other: &Runner) -> bool {
         self.initial_state.team != other.initial_state.team
     }
 

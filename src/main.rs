@@ -239,12 +239,12 @@ fn main() {
                     if stats.place > 0 {
                         continue;
                     }
-                    match runner.phase {
+                    match runner.phase() {
                         Phase::Mid if stats.mid_order.is_none() => {
-                            stats.mid_order = Some(runner.order.order);
+                            stats.mid_order = Some(runner.order());
                         }
                         Phase::Late if stats.late_order.is_none() => {
-                            stats.late_order = Some(runner.order.order);
+                            stats.late_order = Some(runner.order());
                         }
                         _ => {}
                     }
@@ -259,16 +259,16 @@ fn main() {
                     if runner.is_in_downhill_mode() {
                         stats.downhill_time += DELTA_TIME;
                     }
-                    if runner.hp.has_emptied() && stats.hp_out_to_go.is_none() {
-                        let to_go = course.length() - runner.position;
+                    if runner.hp().has_emptied() && stats.hp_out_to_go.is_none() {
+                        let to_go = course.length() - runner.position();
                         stats.hp_out_to_go = Some(to_go.max(0.0));
                     }
-                    if let Some(finish_time) = runner.finish_time {
+                    if let Some(finish_time) = runner.finish_time() {
                         // Ranked below, once everyone has finished.
                         stats.place = usize::MAX;
                         stats.finish_time = finish_time;
-                        stats.max_hp = runner.hp.maximum();
-                        stats.hp_left = runner.hp.current().max(0.0);
+                        stats.max_hp = runner.hp().maximum();
+                        stats.hp_left = runner.hp().current().max(0.0);
                     }
                 }
             }
@@ -280,7 +280,7 @@ fn main() {
             }
             for (stats, &id) in stats.iter_mut().zip(&ids) {
                 let runner = solver.runner(id);
-                stats.start_delay = runner.start_delay;
+                stats.start_delay = runner.start_delay();
                 stats.rushed_time = runner
                     .rush_state
                     .as_ref()
@@ -288,11 +288,15 @@ fn main() {
                     .map(|rush| rush.end_time - rush.start_time);
                 stats.struggled = runner.spot_struggle.has_struggled();
                 stats.dueled = runner.duel.has_dueled();
-                if let Some(last_spurt) = runner.last_spurt {
+                if let Some(last_spurt) = runner.last_spurt() {
                     stats.full_spurt = last_spurt.category == LastSpurtCategory::Full;
                     stats.spurt_speed = last_spurt.max_speed;
                 }
-                stats.activated = runner.activated_skills.iter().map(|r| r.skill_id).collect();
+                stats.activated = runner
+                    .activated_skills()
+                    .iter()
+                    .map(|r| r.skill_id)
+                    .collect();
                 stats.activated.sort_unstable();
                 stats.activated.dedup();
             }

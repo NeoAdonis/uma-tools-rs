@@ -43,10 +43,10 @@ fn test_short_cooldown_reactivates() {
     // Scaled by the course distance.
     let distance = load_course(COURSE_ID).distance as f64;
     let cooldown = base_cooldown * distance / 1000.0;
-    let finish_time = runner.finish_time.expect("runner should finish");
+    let finish_time = runner.finish_time().expect("runner should finish");
     let expected = (finish_time / cooldown).floor() as usize;
 
-    let count = runner.activated_skills.len();
+    let count = runner.activated_skills().len();
     assert!(
         (expected.saturating_sub(1)..=expected + 1).contains(&count),
         "expected about {expected} activations ({cooldown} s cooldown over {finish_time} s), got {count}"
@@ -54,7 +54,7 @@ fn test_short_cooldown_reactivates() {
 
     // Activations are spread along the race, never in the same frame.
     let positions: Vec<f64> = runner
-        .activated_skills
+        .activated_skills()
         .iter()
         .map(|record| record.distance)
         .collect();
@@ -69,5 +69,5 @@ fn test_or_branches_share_cooldown() {
     // Both branches are true for the whole race, and the default cooldown
     // outlasts it.
     let runner = run("hp_per<=100@distance_rate>=0", DEFAULT_COOLDOWN);
-    assert_eq!(runner.activated_skills.len(), 1);
+    assert_eq!(runner.activated_skills().len(), 1);
 }

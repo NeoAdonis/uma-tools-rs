@@ -162,8 +162,8 @@ pub enum Value<'a> {
 pub enum ValueSet<'a> {
     /// Keys of a map, e.g. skill IDs counted by how many runners have them.
     Keys(&'a HashMap<i32, u8>),
-    /// IDs of the runner's skills activated through any alternative in `mask`
-    /// (see [`Runner::activated_mask`]).
+    /// IDs of the runner's skills activated through any alternative in `mask` (bit
+    /// `i` set for alternative `i`).
     UsedSkills { runner: &'a Runner, mask: u8 },
     /// Effect types of the buff skills activated by a runner, plus -1 if she
     /// activated any skill.

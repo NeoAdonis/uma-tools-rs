@@ -383,8 +383,7 @@ fn test_entering_overtake_mode_decides_the_target_lane() {
         runner.lane.target = CourseWidths(0.5);
         runner.blocked.side_in = false;
         runner.blocked.side_out = false;
-        runner.blocked.front_blocker = Some(blocker);
-        runner.track_front_blocker_target(DELTA_TIME);
+        runner.track_front_blocker_target(blocker, DELTA_TIME);
     };
 
     enter(&mut solver, move_lane_point + 100.0);

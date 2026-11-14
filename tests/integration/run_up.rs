@@ -34,7 +34,11 @@ fn run_race(condition: &str, rng_seed: u64) -> Runner {
 fn assert_activates_within(condition: &str, min: f64, max: f64) {
     for seed in 0..5 {
         let runner = run_race(condition, seed);
-        let positions: Vec<f64> = runner.activated_skills.iter().map(|r| r.distance).collect();
+        let positions: Vec<f64> = runner
+            .activated_skills()
+            .iter()
+            .map(|r| r.distance)
+            .collect();
         assert_eq!(
             positions.len(),
             1,
@@ -53,9 +57,9 @@ fn test_runner_finishes_after_run_up() {
     let runner = run_race("distance_rate>=50", 0);
     assert!(runner.has_finished());
     assert!(
-        (LENGTH..LENGTH + FRAME_DISTANCE).contains(&runner.position),
+        (LENGTH..LENGTH + FRAME_DISTANCE).contains(&runner.position()),
         "finished at {}",
-        runner.position
+        runner.position()
     );
 }
 
