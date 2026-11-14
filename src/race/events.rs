@@ -15,9 +15,7 @@
 
 use std::mem::discriminant;
 
-use crate::race::charge_up::ChargeUpOutcome;
 use crate::race::runner::Runner;
-use crate::race::spot_struggle::SpotStruggle;
 use crate::uma::EffectiveStyle;
 
 /// A race mechanic that a runner went through, such as a rush or a duel.
@@ -130,31 +128,6 @@ impl Runner {
             .find(|event| discriminant(&event.kind) == kind && event.end.is_none())
         {
             event.end = Some(EventEnd { time, distance });
-        }
-    }
-
-    /// Ends the events whose effects have expired at `elapsed_time` but whose state
-    /// doesn't change by itself: spot struggles and charge up releases.
-    pub(crate) fn end_expired_events(&mut self, elapsed_time: f64) {
-        let spot_struggle_expired = matches!(
-            self.spot_struggle,
-            SpotStruggle::Active { expires_at, .. } if elapsed_time >= expires_at
-        );
-        if spot_struggle_expired {
-            self.log_end(EventKind::SpotStruggle, elapsed_time);
-        }
-        let release_expired = matches!(
-            self.charge_up.as_ref().map(|charge_up| &charge_up.outcome),
-            Some(ChargeUpOutcome::Released(release)) if elapsed_time >= release.expires_at
-        );
-        if release_expired {
-            self.log_end(
-                EventKind::ChargeUpRelease {
-                    conserved: 0.0,
-                    acceleration: 0.0,
-                },
-                elapsed_time,
-            );
         }
     }
 }

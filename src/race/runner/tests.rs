@@ -1,4 +1,6 @@
 use super::*;
+use crate::configuration::GameVersion;
+use crate::race::charge_up::ChargeUpOutcome;
 
 #[test]
 fn test_start_type_from_delay() {
