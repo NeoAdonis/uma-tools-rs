@@ -118,7 +118,7 @@ pub enum VarType {
     /// Variables related to skill activation counts and status.
     Activation(ActivationVar),
     /// Variables related to skill activation tracking of sets of skill IDs or types
-    /// (see [`Value::Set`](crate::condition::evaluator::Value)).
+    /// (see [Value Kinds](crate::condition::evaluator#value-kinds)).
     ActivationQuery(ActivationQueryVar),
     /// Variables related to race parameters.
     RaceParam(RaceParamVar),

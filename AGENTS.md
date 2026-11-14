@@ -51,9 +51,6 @@ The following deviations from the Rust API Guidelines are known and currently
 accepted. They aren't final and may be revisited, but don't change them as part
 of unrelated work:
 
-- `CompEvaluator` isn't sealed
-  ([C-SEALED](https://rust-lang.github.io/api-guidelines/future-proofing.html#c-sealed)),
-  since its docs invite other crates to implement it.
 - Some types are built from a number with named constructors (`from_meters`,
   `from_delay`) rather than `From` impls
   ([C-CONV-TRAITS](https://rust-lang.github.io/api-guidelines/interoperability.html#c-conv-traits)),

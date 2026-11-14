@@ -11,31 +11,21 @@
 //! evaluates those lists with [`evaluate_comparison_list`], one comparison
 //! (e.g., `hp_per <= 50`) at a time.
 //!
-//! The [`CompEvaluator`] trait abstracts the evaluation context, allowing
-//! different implementations for various scenarios. For instance,
-//! [`EvaluatorFull`] uses actual race state and runner data, while
-//! [`EvaluatorOutOfGate`] uses only data available before the race starts to
-//! evaluate out-of-gate conditions.
+//! The [`CompEvaluator`] trait is sealed and implemented only by
+//! [`EvaluatorFull`], which evaluates conditions during a race with actual race
+//! state and runner data, and [`EvaluatorOutOfGate`], which evaluates
+//! out-of-gate conditions using only data available before the race starts.
 //!
-//! Each [`Comparison`] is evaluated separately, allowing an evaluator to
-//! either fetch real-time values, simulate expected values, or even override
-//! certain comparison results for hypothetical scenarios. The latter two might
-//! be required if, for some reason, all variables needed for a condition are
-//! not known at evaluation time; case in point: single runner simulations where
-//! opponent data is not available.
+//! Each [`Comparison`] is evaluated separately: the evaluator maps its variable
+//! to the current runtime value from [`RaceState`] and [`Runner`] (or
+//! [`UnreadyRunner`] out of gate), then compares it against the comparison
+//! value.
 //!
 //! # Variable Access
 //!
-//! It's up to the evaluator implementation to fetch/provide variable values.
-//! However, common variable retrieval logic is provided via the
-//! [`variable_value()`] function.
-//!
-//! [`variable_value()`] maps ~150+ condition variables (see the
-//! [variable reference](crate::condition::variable_reference)) to their current
-//! runtime values from [`RaceState`] or [`Runner`], which
-//! [`Comparison::holds`] then compares against the comparison value. Variables
-//! are grouped by categories, each with their own set of parameters required
-//! for evaluation. To mention a few:
+//! Evaluators map ~150 condition variables (see the [variable reference]) to
+//! their value. Variables are grouped by categories, each with their own set of
+//! parameters required for evaluation. To mention a few:
 //!
 //! - **Race-level**: elapsed time, course properties, race parameters.
 //! - **Runner-level**: position, HP, phase, speed, skill activation state.
@@ -43,25 +33,19 @@
 //!   precomputed during race updates, then stored either as race-level or
 //!   runner-level values depending on their nature.
 //!
-//! A similar function, [`variable_value_out_of_gate()`], is provided for
-//! out-of-gate evaluations, which only uses data available before a race
-//! starts.
-//!
 //! # Value Kinds
 //!
-//! Most variables have a single number as their value ([`Value::Scalar`]),
-//! but some of them don't:
+//! Most variables have a single number as their value, but some of them don't:
 //!
-//! - Sets ([`Value::Set`]), whose comparisons test membership: e.g.
-//!   `is_used_skill_id==202051` is true if 202051 is among the IDs of the
-//!   skills the runner used, and `!=` if it isn't. The parser rejects other
-//!   operators. Sets are views of the race state, so reading them doesn't
-//!   allocate.
-//! - Ranges ([`Value::Range`]), for values only known up to rounding: e.g.
-//!   `order_rate<=50` holds if the runner's order is at most 9 * 50% = 4.5,
-//!   rounded to 5, in a 9-runner race. Any order rate from 50% to 61% rounds
-//!   to 5th place, so that's the value of `order_rate` for that order, and
-//!   `<=50` holds since some rate in the range is at most 50.
+//! - Sets, whose comparisons test membership: e.g. `is_used_skill_id==202051`
+//!   is true if 202051 is among the IDs of the skills the runner used, and `!=`
+//!   if it isn't. The parser rejects other operators. Sets are views of the
+//!   race state, so reading them doesn't allocate.
+//! - Ranges, for values only known up to rounding: e.g. `order_rate<=50` holds
+//!   if the runner's order is at most 9 * 50% = 4.5, rounded to 5, in a
+//!   9-runner race. Any order rate from 50% to 61% rounds to 5th place, so
+//!   that's the value of `order_rate` for that order, and `<=50` holds since
+//!   some rate in the range is at most 50.
 //!
 //! # Float Handling
 //!
@@ -78,6 +62,8 @@
 //!
 //! - `is_exist_chara_id`
 //! - `remain_distance_viewer_id`
+//!
+//! [variable reference]: crate::condition::variable_reference
 
 use crate::condition::parser::*;
 use crate::condition::variables::*;
@@ -147,7 +133,7 @@ where
 
 /// Value of a variable (see [Value Kinds](self#value-kinds)).
 #[derive(Debug, Clone)]
-pub enum Value<'a> {
+pub(crate) enum Value<'a> {
     /// Single number, compared with any operator.
     Scalar(f64),
     /// Set of values, whose membership `==` and `!=` test.
@@ -159,7 +145,7 @@ pub enum Value<'a> {
 
 /// Set of values, as a view of the race state.
 #[derive(Debug, Clone, Copy)]
-pub enum ValueSet<'a> {
+pub(crate) enum ValueSet<'a> {
     /// Keys of a map, e.g. skill IDs counted by how many runners have them.
     Keys(&'a HashMap<i32, u8>),
     /// IDs of the runner's skills activated through any alternative in `mask` (bit
@@ -178,7 +164,7 @@ pub enum ValueSet<'a> {
 
 impl ValueSet<'_> {
     /// Checks if `value` is in the set.
-    pub fn contains(&self, value: i32) -> bool {
+    pub(crate) fn contains(&self, value: i32) -> bool {
         // Effect types are only valid if implemented.
         let buff = |flags: &SkillActivationFlags| {
             SkillType::from_id(value).is_some_and(|value| flags.buff_activated.contains(value))
@@ -207,7 +193,7 @@ impl Comparison {
     /// # Panics
     ///
     /// Panics if `value` is a set and the operator is neither `==` nor `!=`.
-    pub fn holds(&self, value: Value) -> bool {
+    pub(crate) fn holds(&self, value: Value) -> bool {
         match value {
             Value::Scalar(value) => {
                 let target = f64::from(self.value);
@@ -238,29 +224,16 @@ impl Comparison {
     }
 }
 
-/// An evaluator of single comparisons.
+/// Evaluator of single comparisons, sealed.
 ///
-/// Implement this trait for different evaluation contexts.
-/// `State` and `Context` associated types define the data sources used.
-/// `State` should represent the overall race state, while `Context` represents
-/// the runner data to use.
-///
-/// The main use case is to get values from a provided race state and runner,
-/// then perform the comparison directly.
-/// You could also create your own race state with some of the values replaced
-/// by estimations or other expectations as needed. For instance, you could
-/// simulate best-case or worst-case scenarios by overriding certain variable
-/// values rather than having to craft a specific set of runner data to match
-/// those scenarios.
-///
-/// The current implementation provides the following evaluators for different
-/// contexts:
+/// `State` is the overall race state and `Context` the runner data to use. Its
+/// only implementations are:
 ///
 /// - [`EvaluatorFull`]: uses actual race state ([`RaceState`]) and runner data
 ///   ([`Runner`]) to evaluate conditions during a race.
 /// - [`EvaluatorOutOfGate`]: uses only data available before a race starts as
 ///   defined by [`RaceState`] and [`UnreadyRunner`].
-pub trait CompEvaluator {
+pub trait CompEvaluator: private::Sealed {
     type State;
     type Context;
 
@@ -272,6 +245,15 @@ pub trait CompEvaluator {
         state: &Self::State,
         context: &Self::Context,
     ) -> bool;
+}
+
+mod private {
+    /// Supertrait that keeps [`CompEvaluator`](super::CompEvaluator) from being
+    /// implemented outside this crate.
+    pub trait Sealed {}
+
+    impl Sealed for super::EvaluatorFull {}
+    impl Sealed for super::EvaluatorOutOfGate {}
 }
 
 /// Reference evaluator using actual race state and runner data.
@@ -332,7 +314,7 @@ impl CompEvaluator for EvaluatorOutOfGate {
 /// phase variables, except `run_at_full_speed_random`, and
 /// `is_last_straight_onetime`), or a variable that isn't implemented yet
 /// (`remain_distance_viewer_id` and `is_exist_chara_id`).
-pub fn variable_value<'a>(
+pub(crate) fn variable_value<'a>(
     var: &VarType,
     state: &'a RaceState,
     runner: &'a Runner,
@@ -381,7 +363,7 @@ pub fn variable_value<'a>(
 }
 
 /// Gets the current value for any variable type in out-of-gate context.
-pub fn variable_value_out_of_gate<'a>(
+pub(crate) fn variable_value_out_of_gate<'a>(
     var: &VarType,
     state: &'a RaceState,
     builder: &UnreadyRunner,
