@@ -1069,7 +1069,28 @@ impl Runner {
 
         self.phase = Phase::from_position(position, &state.course);
 
+        self.try_start_last_spurt(position, state);
         self.try_release_charge_up(position, state);
+    }
+
+    /// Records the start of the last spurt once `position` reaches it.
+    ///
+    /// The last spurt can be recalculated later, but it only starts once.
+    fn try_start_last_spurt(&mut self, position: f64, state: &RaceState) {
+        if self
+            .last_spurt
+            .is_some_and(|last_spurt| last_spurt.has_started(position))
+            && !self
+                .events
+                .iter()
+                .any(|event| event.kind == EventKind::LastSpurt)
+        {
+            self.events.push(Event::start(
+                EventKind::LastSpurt,
+                state.elapsed_time,
+                position,
+            ));
+        }
     }
 
     /// Releases conserved power (脚色十分) once `position` reaches the start of the
@@ -1083,18 +1104,6 @@ impl Runner {
             .is_some_and(|last_spurt| last_spurt.has_started(position))
         {
             return;
-        }
-        // The last spurt can be recalculated later, but it only starts once.
-        if !self
-            .events
-            .iter()
-            .any(|event| event.kind == EventKind::LastSpurt)
-        {
-            self.events.push(Event::start(
-                EventKind::LastSpurt,
-                state.elapsed_time,
-                position,
-            ));
         }
 
         let activity =
