@@ -236,7 +236,7 @@ pub struct UnreadyRunner {
 
     // === Mutable state being constructed ===
     /// Set of static values related to the runner at the start of the race.
-    pub initial_state: InitialState,
+    pub(crate) initial_state: InitialState,
     /// Adjusted stats after applying modifiers and out-of-gate skills.
     /// For the most part, these are the stats used for race calculations.
     adjusted: Stats,

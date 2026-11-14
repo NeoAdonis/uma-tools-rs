@@ -132,26 +132,27 @@ pub(crate) const ORDER_RANGE_START_TIME: f64 = 5.0;
 /// Tolerance for floating-point comparisons in skill triggers.
 const EPSILON: f64 = 0.0001;
 
+/// Values of a runner set before the race starts.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InitialState {
+pub(crate) struct InitialState {
     /// Runner mood level. It affects initial stat adjustments and is also used to
     /// evaluate some skill conditions.
-    pub mood: Mood,
+    pub(crate) mood: Mood,
     /// Popularity rank (favorite rank) in the race (1-indexed).
-    pub popularity_rank: u8,
+    pub(crate) popularity_rank: u8,
     /// Scores and marks from the three judges used for popularity calculation.
-    pub judge_scores: JudgeScores,
+    pub(crate) judge_scores: JudgeScores,
     /// Gate bracket (1-8, from innermost to outermost).
-    pub gate_block: u8,
+    pub(crate) gate_block: u8,
     /// Number of fans.
-    pub fan_count: u32,
+    pub(crate) fan_count: u32,
     /// Whether every popularity requirement is satisfied (see
     /// [`SkillType::IgnorePopularity`]).
-    pub ignores_popularity: bool,
+    pub(crate) ignores_popularity: bool,
     /// Team index (0-based). In individual races, each runner has its own team.
     ///
     /// Runners on the same team are allies; everyone else is an opponent.
-    pub team: u8,
+    pub(crate) team: u8,
 }
 
 /// State related to order (rank) in the race.
@@ -505,6 +506,11 @@ impl Runner {
         self.gate_roll
     }
 
+    /// Returns the gate bracket (1-8, from innermost to outermost).
+    pub fn gate_block(&self) -> u8 {
+        self.initial_state.gate_block
+    }
+
     /// Returns the raw stats before halving and the mood multiplier, with the
     /// aptitudes and the style before out-of-gate skills.
     ///
@@ -574,6 +580,12 @@ impl Runner {
     /// Returns the popularity rank (favorite rank) in the race, 1-indexed.
     pub fn popularity_rank(&self) -> u8 {
         self.initial_state.popularity_rank
+    }
+
+    /// Returns the scores and marks from the three judges used for popularity
+    /// calculation.
+    pub fn judge_scores(&self) -> &JudgeScores {
+        &self.initial_state.judge_scores
     }
 
     /// Returns the team index, 0-based.
