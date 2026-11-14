@@ -533,11 +533,34 @@ impl Runner {
         self.style
     }
 
+    /// Returns the base style, treating Runaway as a variant of Front.
+    pub fn base_style(&self) -> BaseStyle {
+        self.style.base_style()
+    }
+
     /// Returns the skills of the runner: those that passed the wit check first,
     /// then those that failed it (see [`Self::available_skills`] and
     /// [`Self::failed_skills`]).
     pub fn skills(&self) -> &[Arc<Skill>] {
         &self.skills
+    }
+
+    /// Returns the number of skills the runner has, including those that failed the
+    /// wit check.
+    pub fn skill_count(&self) -> usize {
+        self.skills.len()
+    }
+
+    /// Returns the skills that passed the wit check, so they can activate on their
+    /// own.
+    pub fn available_skills(&self) -> &[Arc<Skill>] {
+        &self.skills[..self.available_skill_count]
+    }
+
+    /// Returns the skills that failed the wit check, so they can only be activated
+    /// by other skills (see [`SkillType::ActivateRandomGold`]).
+    pub fn failed_skills(&self) -> &[Arc<Skill>] {
+        &self.skills[self.available_skill_count..]
     }
 
     /// Returns the mood level.
@@ -616,9 +639,37 @@ impl Runner {
         self.is_start_dash
     }
 
+    /// Checks whether the runner is in downhill mode (i.e. not only going downhill
+    /// but also experiencing a speed boost from the slope).
+    pub fn is_in_downhill_mode(&self) -> bool {
+        self.slope_speed_modifier.is_some_and(|s| s > 0.0)
+    }
+
+    /// Checks whether the runner is currently in a rushed state.
+    pub fn is_rushed(&self) -> bool {
+        self.rush_state.as_ref().is_some_and(|s| s.is_rushed)
+    }
+
+    /// Returns the last spurt of the runner, if she has started it.
+    pub fn active_last_spurt(&self) -> Option<&LastSpurt> {
+        self.last_spurt
+            .as_ref()
+            .filter(|last_spurt| last_spurt.has_started(self.position))
+    }
+
+    /// Checks whether the runner has finished the race.
+    pub fn has_finished(&self) -> bool {
+        self.finish_time.is_some()
+    }
+
     /// Returns the current lane position.
     pub fn lane(&self) -> CourseWidths {
         self.lane.current
+    }
+
+    /// Determines the lane type based on the current lane position.
+    pub fn lane_type(&self) -> LaneType {
+        LaneType::from(self.lane.current)
     }
 
     /// Returns the target lane position.
@@ -648,6 +699,11 @@ impl Runner {
     /// Returns the time taken to leave the gate in seconds.
     pub fn start_delay(&self) -> f64 {
         self.start_delay
+    }
+
+    /// Determines the type of start (see [`StartType::from_delay`]).
+    pub fn start_type(&self) -> StartType {
+        StartType::from_delay(self.start_delay)
     }
 
     /// Returns the elapsed time when the runner finished the race, in seconds, or
@@ -714,39 +770,6 @@ impl Runner {
         runner
     }
 
-    /// Returns the base style, treating Runaway as a variant of Front.
-    pub fn base_style(&self) -> BaseStyle {
-        self.style.base_style()
-    }
-
-    /// Returns the number of skills the runner has, including those that failed the
-    /// wit check.
-    pub fn skill_count(&self) -> usize {
-        self.skills.len()
-    }
-
-    /// Returns the skills that passed the wit check, so they can activate on their
-    /// own.
-    pub fn available_skills(&self) -> &[Arc<Skill>] {
-        &self.skills[..self.available_skill_count]
-    }
-
-    /// Returns the skills that failed the wit check, so they can only be activated
-    /// by other skills (see [`SkillType::ActivateRandomGold`]).
-    pub fn failed_skills(&self) -> &[Arc<Skill>] {
-        &self.skills[self.available_skill_count..]
-    }
-
-    /// Determines the lane type based on the current lane position.
-    pub fn lane_type(&self) -> LaneType {
-        LaneType::from(self.lane.current)
-    }
-
-    /// Determines the type of start (see [`StartType::from_delay`]).
-    pub fn start_type(&self) -> StartType {
-        StartType::from_delay(self.start_delay)
-    }
-
     /// Updates acceleration based on current speed and target speed.
     pub(crate) fn update_acceleration(&mut self, elapsed_time: f64) {
         if self.speed < self.target_speed {
@@ -807,12 +830,6 @@ impl Runner {
         };
     }
 
-    /// Checks whether the runner is in downhill mode (i.e. not only going downhill
-    /// but also experiencing a speed boost from the slope).
-    pub fn is_in_downhill_mode(&self) -> bool {
-        self.slope_speed_modifier.is_some_and(|s| s > 0.0)
-    }
-
     /// Checks whether the runner is going uphill, thus experiencing a speed
     /// reduction.
     pub(crate) fn is_going_uphill(&self) -> bool {
@@ -869,13 +886,6 @@ impl Runner {
                 + all_out_spurt::SKILL_SCALE * self.skill_modifiers.all_out_spurt_acceleration;
             *speed_bonus += acceleration * delta_time;
         }
-    }
-
-    /// Returns the last spurt of the runner, if she has started it.
-    pub fn active_last_spurt(&self) -> Option<&LastSpurt> {
-        self.last_spurt
-            .as_ref()
-            .filter(|last_spurt| last_spurt.has_started(self.position))
     }
 
     /// Checks whether the runner is in her last spurt and has reached its speed.
@@ -1003,11 +1013,6 @@ impl Runner {
     /// Checks whether `other` is an opponent (i.e. on a different team).
     pub(crate) fn is_opponent(&self, other: &Runner) -> bool {
         self.initial_state.team != other.initial_state.team
-    }
-
-    /// Checks whether the runner has finished the race.
-    pub fn has_finished(&self) -> bool {
-        self.finish_time.is_some()
     }
 
     /// Updates the current section from the current position, before the target
@@ -1241,11 +1246,6 @@ impl Runner {
         {
             self.end_rush(state);
         }
-    }
-
-    /// Checks whether the runner is currently in a rushed state.
-    pub fn is_rushed(&self) -> bool {
-        self.rush_state.as_ref().is_some_and(|s| s.is_rushed)
     }
 
     /// Checks whether the runner has rushed at some point.
