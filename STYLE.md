@@ -27,8 +27,8 @@ Comments should also follow the guide recommendations. Many formatters,
 including non-nightly versions of `rustfmt`, skip formatting comments, so take
 special care when writing them. In short:
 
-- Prefer line comments (`//`, `///`, `//!`) to block comments (`/* ... */`,
-  `/** ... */`, `/*! ... */`).
+- Prefer line comments (`//`, `///`, `//!`) to block comments (`/* … */`,
+  `/** … */`, `/*! … */`).
 - A single space must be placed after the opening and before the closing sigils.
 - Prefer to put a comment on its own line. If put after code, it must be
   separated by a single space.
@@ -40,11 +40,20 @@ special care when writing them. In short:
 Additionally, the following conventions should be followed for doc comments:
 
 - Doc comments (`///`) must be placed before attributes.
-- First line should consist of a brief description as its own paragraph. One
-  line if possible; two lines at most.
-- Separate each paragraph by a single blank line.
+- Each item has a short summary at the start: a single one-line paragraph, two
+  lines at most. Details go into separate paragraphs.
+- Summaries of functions and methods are in the third person singular present
+  indicative ("Returns", not "Return").
+- Summaries of structs, traits, enums, type aliases, constants, modules, fields
+  and variants start with a noun phrase ("A builder for …", "A modifier of …"),
+  not with a verb.
+- No introductory filler: go straight to the point, without phrases such as
+  "This function returns" or "Use this method to".
+- Separate each paragraph by a single blank line, and wrap the text of each
+  paragraph at the comment width limit rather than leaving short lines.
 - Only use inner doc comments (`//!`) for module-level or crate-level
-  documentation.
+  documentation. They don't have a title heading, since the module's name is
+  the title; the headings of their sections are first-level (`# Examples`).
 
 Refer to the official [Rust Style Guide](https://doc.rust-lang.org/style-guide/)
 for more details.
