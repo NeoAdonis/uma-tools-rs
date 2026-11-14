@@ -39,14 +39,14 @@
 //!   and guards.
 //! - `builder`: build the `TriggerScheduler` of a runner's skills.
 //! - `system`: scheduler data structures (window queues, event lists).
-//! - [`unready_runner`]: wit checks and out-of-gate skills, before the race.
+//! - `unready_runner`: wit checks and out-of-gate skills, before the race.
 //! - [`runner`]: check triggers each frame, evaluate guards, activate skills.
 //! - [`solver`]: frame loop, i.e. the order in which everything above is
 //!   called.
 //!
 //! # Lifecycle
 //!
-//! 1. **Runner setup** ([`UnreadyRunner`]): skills that pass the wit check are
+//! 1. **Runner setup** (`UnreadyRunner`): skills that pass the wit check are
 //!    kept, and the `TriggerScheduler` is built for them. Out-of-gate
 //!    alternatives are skipped: their condition is evaluated before the race
 //!    instead. Skills whose activations are pinned only get their conditions
@@ -125,10 +125,8 @@
 //! [`condition::parser`]: crate::condition::parser
 //! [`condition::variables`]: crate::condition::variables
 //! [`condition::evaluator`]: crate::condition::evaluator
-//! [`unready_runner`]: crate::race::unready_runner
 //! [`runner`]: crate::race::runner
 //! [`solver`]: crate::race::solver
-//! [`UnreadyRunner`]: crate::race::unready_runner::UnreadyRunner
 //! [`Runner`]: crate::race::runner::Runner
 //! [`RaceSolver`]: crate::race::solver::RaceSolver
 

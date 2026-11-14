@@ -1,6 +1,6 @@
 //! Runners during the race: their state and how it's updated on each frame.
 //!
-//! A [`Runner`] is created from an [`UnreadyRunner`] once the race is ready to
+//! A [`Runner`] is created from an `UnreadyRunner` once the race is ready to
 //! start, and is updated by the solver on every frame. Her methods are split
 //! across several `impl Runner` blocks by mechanic:
 //!
@@ -253,11 +253,10 @@ pub(crate) struct RushCounter {
 
 /// An [`Uma`] with additional data related to racing; an Uma who is running.
 ///
-/// N.B. This structure should be created from an [`UnreadyRunner`] via
-/// [`RaceSolver`].
+/// Created by [`RaceSolver::ready_runners`] from the entrants added to the
+/// race.
 ///
-/// [`UnreadyRunner`]: crate::race::unready_runner::UnreadyRunner
-/// [`RaceSolver`]: crate::race::solver::RaceSolver
+/// [`RaceSolver::ready_runners`]: crate::RaceSolver::ready_runners
 #[derive(Debug, PartialEq)]
 pub struct Runner {
     /// ID of the runner in the race (see [`RaceSolver::add_runner`]).

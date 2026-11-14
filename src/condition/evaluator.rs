@@ -18,8 +18,7 @@
 //!
 //! Each [`Comparison`] is evaluated separately: the evaluator maps its variable
 //! to the current runtime value from the race state and the [`Runner`] (or
-//! [`UnreadyRunner`] out of gate), then compares it against the comparison
-//! value.
+//! `UnreadyRunner` out of gate), then compares it against the comparison value.
 //!
 //! # Variable Access
 //!

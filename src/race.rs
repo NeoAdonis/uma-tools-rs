@@ -35,5 +35,5 @@ pub mod solver;
 pub(crate) mod spot_struggle;
 pub(crate) mod timed_boost;
 pub(crate) mod transitions;
-pub mod unready_runner;
+pub(crate) mod unready_runner;
 pub(crate) mod world_distance;

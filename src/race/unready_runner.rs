@@ -219,20 +219,20 @@ fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedAct
 /// account the runner's base stats, race parameters and, most importantly, data
 /// about other runners.
 #[derive(Debug)]
-pub struct UnreadyRunner {
+pub(crate) struct UnreadyRunner {
     // === Immutable context ===
     /// ID of the runner in the race, assigned by the solver when she gets
     /// ready.
     pub(crate) id: RunnerId,
     /// Base stats before adjustments. Also used for skill conditions in out-of-gate
     /// skills.
-    pub base: Stats,
+    pub(crate) base: Stats,
     /// Raw stats before halving and adjustments, with the style and aptitudes.
     /// Used for popularity and charge up.
-    pub raw: Uma,
+    pub(crate) raw: Uma,
     /// Gate number (1-indexed), which determines her starting lane position.
     /// `None` until assigned (see `Self::assign_gate`).
-    pub gate: Option<u8>,
+    pub(crate) gate: Option<u8>,
 
     // === Mutable state being constructed ===
     /// Set of static values related to the runner at the start of the race.
@@ -258,19 +258,19 @@ pub struct UnreadyRunner {
     ///
     /// A pinned wit check (see [`SkillPin::WitCheck`]) replaces the rolled one,
     /// even for skills without a wit check.
-    pub skills: Vec<Arc<Skill>>,
+    skills: Vec<Arc<Skill>>,
     /// Skills that failed the wit check. They can't activate on their own, but
     /// they still count towards the runner's skills (e.g. for popularity or skill
     /// count scaling), and gold skills among them can be activated by other
     /// skills (see [`SkillType::ActivateRandomGold`]).
-    pub failed_skills: Vec<Arc<Skill>>,
+    failed_skills: Vec<Arc<Skill>>,
     /// Popularity points added to stats by all skills, including those that
     /// failed the wit check.
     pub(crate) popularity_bonus: SkillPopularity,
     /// Temporary: ID of the out-of-gate skill currently being evaluated. Used for
     /// conditions like `same_skill_horse_count` that need to know which skill
     /// they're checking.
-    pub evaluated_skill_id: i32,
+    pub(crate) evaluated_skill_id: i32,
     /// Temporary: lottery draw (from 0 to 100) of the out-of-gate skill currently
     /// being evaluated, used for `random_lot` and `random_lot_shared` conditions.
     pub(crate) evaluated_skill_lot: f64,
@@ -279,18 +279,18 @@ pub struct UnreadyRunner {
     pub(crate) casts_sympathy: bool,
     /// Out-of-gate activations missing from the pins (see
     /// [`Runner::missing_activations`]).
-    pub(crate) missing_activations: Vec<SkillActivationRecord>,
+    missing_activations: Vec<SkillActivationRecord>,
     /// IDs of the skills whose conditions didn't allow their pinned
     /// out-of-gate alternative to activate. Passed on to the [`Runner`] (see
     /// [`Runner::unmet_out_of_gate`]).
-    pub(crate) unmet_out_of_gate: Vec<i32>,
+    unmet_out_of_gate: Vec<i32>,
 
     // === Random number generation ===
     /// Random outcomes fixed instead of rolled.
-    pub(crate) pins: Pins,
+    pins: Pins,
     /// Seed from which every random stream of the runner derives (see
     /// [`crate::race::rng`]).
-    pub(crate) rng_seed: RngSeed,
+    rng_seed: RngSeed,
 }
 
 impl UnreadyRunner {
