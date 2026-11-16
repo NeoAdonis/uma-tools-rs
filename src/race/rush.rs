@@ -21,7 +21,7 @@ pub(crate) const SNAP_OUT_CHANCE: f64 = 0.55;
 /// Maximum time in seconds a runner stays rushed, before skill effects.
 pub(crate) const MAX_DURATION: f64 = 12.0;
 /// HP consumption multiplier while rushed.
-pub(crate) const HP_MULTIPLIER: f64 = 1.5;
+pub(crate) const HP_MULTIPLIER: f64 = 1.6;
 
 /// Rush state of a runner bound to rush.
 #[derive(Clone, Debug, PartialEq)]
