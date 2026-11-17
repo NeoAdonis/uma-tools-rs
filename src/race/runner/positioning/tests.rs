@@ -114,3 +114,79 @@ fn test_checks_are_scheduled_from_the_previous_check() {
     // aligned to a 2s grid.
     assert_eq!(checks, [46, 77, 108, 139]);
 }
+
+/// Makes `runner` rushed with `style` and ready for a check at `state`'s time.
+fn rush_ready_for_check(runner: &mut Runner, style: EffectiveStyle) {
+    use crate::race::rush::{self, RushState};
+
+    runner.next_positioning_check = 0.0;
+    runner.rush_state = Some(RushState {
+        section: 0,
+        start_time: 0.0,
+        end_time: f64::MAX,
+        max_duration: rush::MAX_DURATION,
+        is_rushed: true,
+        failed_checks: 0,
+        style,
+    });
+}
+
+#[test]
+fn test_rushed_non_front_runners_pace_up_without_wit() {
+    use crate::test_utils::*;
+
+    for rushed in [false, true] {
+        let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(0));
+        state.elapsed_time = 10.0;
+        runner.adjusted.wit = 5.0;
+        if rushed {
+            rush_ready_for_check(&mut runner, EffectiveStyle::Pace);
+        }
+        // Far behind the pacemaker.
+        runner.update_positioning_non_front(30.0, Default::default(), &state);
+        let paces_up = matches!(runner.positioning_strategy, PositioningStrategy::PaceUp(_));
+        assert_eq!(paces_up, rushed, "{rushed}");
+    }
+}
+
+#[test]
+fn test_rushed_runners_positioning_as_front_enter_modes_without_wit() {
+    use crate::test_utils::*;
+
+    // (lead, strategy lead, expected mode when rushed). The original style
+    // doesn't matter: the usual entry conditions apply to every rushed runner
+    // positioning as a front runner.
+    let cases = [
+        (Some(1.0), None, PositioningStrategy::FrontSpeedUp),
+        (None, None, PositioningStrategy::FrontOvertake),
+        (Some(20.0), Some(1.0), PositioningStrategy::Normal),
+    ];
+    for style in [BaseStyle::Late, BaseStyle::Front] {
+        for (lead, strategy_lead, expected) in cases {
+            for rushed in [false, true] {
+                let (mut runner, mut state) = ready_runner(style, seeded_config(0));
+                state.elapsed_time = 10.0;
+                runner.adjusted.wit = 5.0;
+                if rushed {
+                    rush_ready_for_check(&mut runner, EffectiveStyle::Front);
+                }
+                runner.update_positioning_front(
+                    lead,
+                    strategy_lead,
+                    false,
+                    Default::default(),
+                    &state,
+                );
+                let expected = if rushed {
+                    expected
+                } else {
+                    PositioningStrategy::Normal
+                };
+                assert_eq!(
+                    runner.positioning_strategy, expected,
+                    "{style:?} {lead:?} {strategy_lead:?} {rushed}"
+                );
+            }
+        }
+    }
+}

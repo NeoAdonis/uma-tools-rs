@@ -35,6 +35,9 @@ const EXIT_COOLDOWN: f64 = 1.0;
 /// up. For non-front-runners, it determines the pacing behavior to keep their
 /// distance from the pacemaker.
 ///
+/// Entering `FrontSpeedUp`, `FrontOvertake` or `PaceUp` requires passing a wit
+/// check, which rushed runners always do.
+///
 /// Every strategy other than `Normal` ends once its exit conditions are met or
 /// the runner has run the length of a section in it (three for runaways),
 /// followed by a 1s cooldown before checks resume.
@@ -175,13 +178,6 @@ impl Runner {
                 }
 
                 self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
-
-                // Use original style to determine if runner was originally a front-runner that
-                // should speed up.
-                if self.is_rushed() && self.style.is_front_like() {
-                    self.enter_positioning(PositioningStrategy::FrontSpeedUp, state);
-                    return;
-                }
 
                 if !self.roll_positioning_wit_check(0.2) {
                     return;
@@ -365,8 +361,12 @@ impl Runner {
     /// Rolls a wit check to change positioning strategy, with a chance of
     /// `coef * log10(wit * 0.1)`.
     ///
-    /// Below 10 wit, the check never passes.
+    /// Below 10 wit, the check never passes. Rushed runners always pass it,
+    /// without drawing from the positioning stream.
     fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
+        if self.is_rushed() {
+            return true;
+        }
         let chance = (coef * (self.adjusted.wit * 0.1).log10()).clamp(0.0, 1.0);
         self.rng.positioning.random_bool(chance)
     }
