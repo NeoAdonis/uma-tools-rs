@@ -404,7 +404,10 @@ pub struct Runner {
     pub(crate) slope_speed_modifier: Option<f64>,
     /// Time since the last downhill mode check in seconds.
     ///
-    /// Downhill mode is checked upon entering a downhill and then every second.
+    /// Downhill mode is checked upon entering a downhill, and then on the first
+    /// frame that begins a full second after the previous check (the frame of
+    /// a check doesn't count towards it, so checks are 17 frames apart at the
+    /// simulation's frame time).
     pub(crate) downhill_check_timer: f64,
     /// Downhill mode checks made on the current downhill.
     pub(crate) downhill_checks: usize,
@@ -1155,9 +1158,14 @@ impl Runner {
     ///
     /// Uphills reduce the runner's target speed while on them. On downhills, the
     /// runner may enter downhill mode (Wit * 0.04% chance) or exit it (20% chance)
-    /// upon entering them and then every second. Each slope has its own random
-    /// stream, so that the checks on a slope don't depend on those before it.
-    /// Pinned checks (see [`Pins::downhill`]) replace the outcome they roll.
+    /// upon entering them, and then on the first frame that begins a full second
+    /// after the previous check. The frame of a check doesn't count towards that
+    /// second, so checks are 17 frames apart: 16 frames to complete the second
+    /// and one more to check.
+    ///
+    /// Each slope has its own random stream, so that the checks on a slope don't
+    /// depend on those before it. Pinned checks (see [`Pins::downhill`]) replace
+    /// the outcome they roll.
     pub(crate) fn update_slope(
         &mut self,
         slopes: &[Slope],
@@ -1187,18 +1195,14 @@ impl Runner {
         }
 
         if transition.entered.is_some() {
-            self.downhill_check_timer = 0.0;
             self.downhill_checks = 0;
             let rng = &mut self.rng;
             rng.slope = rng.keyed(Stream::Slope(slope_idx));
-        } else {
+        } else if self.downhill_check_timer < 1.0 {
             self.downhill_check_timer += delta_time;
-            // Absorb rounding errors in accumulated frame times.
-            if self.downhill_check_timer < 1.0 - EPSILON {
-                return;
-            }
-            self.downhill_check_timer -= 1.0;
+            return;
         }
+        self.downhill_check_timer = 0.0;
 
         let was_in_downhill_mode = self.is_in_downhill_mode();
         let chance = (self.adjusted.wit * 0.0004).min(1.0);

@@ -4183,7 +4183,7 @@ fn move_on_slopes(solver: &mut RaceSolver<Runner>, course: &Course, position: f6
 }
 
 #[test]
-fn test_downhill_mode_checked_on_entry_then_every_second() {
+fn test_downhill_mode_checked_on_entry_then_every_17_frames() {
     let mut solver = timed_skill_solver(vec![]);
     // The uphill comes first on the same course, so slopes are only ever
     // entered in order.
@@ -4206,10 +4206,9 @@ fn test_downhill_mode_checked_on_entry_then_every_second() {
     assert!(solver.runners[0].is_in_downhill_mode());
     assert!(!solver.runners[0].is_going_uphill());
 
-    // After exiting downhill mode, the next checks are every second after
-    // entry: 16 frames, since 15 fall short of it, then 15 more thanks to the
-    // time left over.
-    for (check, frames) in [(116, 16), (131, 15)] {
+    // After exiting downhill mode, the next checks are 17 frames apart: 16
+    // frames fall short of a second, and nothing carries over to the next one.
+    for (check, frames) in [(117, 17), (134, 17)] {
         solver.runners[0].slope_speed_modifier = None;
         for position in check - frames + 1..check {
             move_on_slopes(&mut solver, &course, position as f64);
@@ -4284,16 +4283,16 @@ fn test_pinned_downhill_checks_replace_their_outcomes() {
     for position in 0..99 {
         move_on_slopes(&mut solver, &course, position as f64);
     }
-    // Checks at 100m, 116m, 131m and 146m (see
-    // `test_downhill_mode_checked_on_entry_then_every_second`); the last one
-    // is rolled.
-    let expected = (99..=150).map(|position| match position {
-        ..116 => false,
-        116..131 => true,
-        131..146 => false,
+    // Checks at 100m, 117m, 134m and 151m (see
+    // `test_downhill_mode_checked_on_entry_then_every_17_frames`); the last
+    // one is rolled.
+    let expected = (99..=155).map(|position| match position {
+        ..117 => false,
+        117..134 => true,
+        134..151 => false,
         _ => true,
     });
-    let modes = downhill_modes(&mut solver, &course, 150);
+    let modes = downhill_modes(&mut solver, &course, 155);
     assert_eq!(modes, expected.collect::<Vec<_>>());
 }
 

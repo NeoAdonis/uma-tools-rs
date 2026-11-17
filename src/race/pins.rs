@@ -65,8 +65,9 @@ pub struct Pins {
     pub force_in: Option<f64>,
     /// Downhill mode outcomes, by slope index (see [`Course::slopes`]): whether
     /// she's in downhill mode after each check on that downhill, in order (the
-    /// check upon entering it, then one every second). Checks past the end of
-    /// the list are rolled as usual.
+    /// check upon entering it, then one on the first frame that begins a full
+    /// second after the previous check, 17 frames later). Checks past the end
+    /// of the list are rolled as usual.
     ///
     /// [`Course::slopes`]: crate::Course::slopes
     pub downhill: HashMap<usize, Vec<bool>>,
