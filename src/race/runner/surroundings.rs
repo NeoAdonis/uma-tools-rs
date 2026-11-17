@@ -53,18 +53,29 @@ pub(crate) struct NearbyState {
     /// Whether the runner behind is in a lane that's closer to the center.
     pub(crate) behind_in: bool,
     /// Number of nearby runners in the same lane ahead.
+    ///
     /// Maps to variable `near_infront_count`.
     pub(crate) ahead_same_lane_count: u8,
-    /// Time spent near runners in the same lane ahead in seconds.
+    /// Whether the runner one place ahead is nearby in the same lane.
+    pub(crate) adjacent_ahead_same_lane: bool,
+    /// Time (seconds) the runner one place ahead has been nearby in the same lane.
+    ///
+    /// Maps to variable `infront_near_lane_time`. It resets when this runner's
+    /// order changes.
     pub(crate) ahead_same_lane_time: f64,
-    /// Number of nearby runners in the same lane behind.
-    pub(crate) behind_same_lane_count: u8,
-    /// Time spent near runners in the same lane behind in seconds.
+    /// Whether the runner one place behind is nearby in the same lane.
+    pub(crate) adjacent_behind_same_lane: bool,
+    /// Time (seconds) the runner one place behind has been nearby in the same lane.
+    ///
+    /// Maps to variable `behind_near_lane_time`. It resets when this runner's order
+    /// changes.
     pub(crate) behind_same_lane_time: f64,
     /// Number of runners behind within a reasonable distance.
+    ///
     /// Used to calculate variable `behind_near_lane_time_set1`.
     pub(crate) behind_set1_count: u8,
-    /// Time spent near runners behind within a reasonable distance in seconds.
+    /// Time (seconds) spent near runners behind within a reasonable distance.
+    ///
     /// Maps to variable `behind_near_lane_time_set1`.
     pub(crate) behind_set1_time: f64,
 }
@@ -132,11 +143,16 @@ impl Runner {
         other.surrounded.side = true;
     }
 
-    /// Counts `ahead` as a nearby runner in the same lane ahead of this runner, and
-    /// this runner as one behind her.
-    pub(crate) fn update_near_same_lane_by(&mut self, ahead: &mut Self) {
+    /// Counts `ahead` as a nearby runner in the same lane ahead of this runner.
+    ///
+    /// `adjacent` tells whether `ahead` is exactly one place ahead of this
+    /// runner, which also marks this runner as the one right behind `ahead`.
+    pub(crate) fn update_near_same_lane_by(&mut self, ahead: &mut Self, adjacent: bool) {
         self.nearby.ahead_same_lane_count += 1;
-        ahead.nearby.behind_same_lane_count += 1;
+        if adjacent {
+            self.nearby.adjacent_ahead_same_lane = true;
+            ahead.nearby.adjacent_behind_same_lane = true;
+        }
     }
 
     /// Counts this runner and `other` as nearby runners of each other.
@@ -161,7 +177,8 @@ impl Runner {
         self.nearby.count = 0;
         self.nearby.behind_in = false;
         self.nearby.ahead_same_lane_count = 0;
-        self.nearby.behind_same_lane_count = 0;
+        self.nearby.adjacent_ahead_same_lane = false;
+        self.nearby.adjacent_behind_same_lane = false;
         self.nearby.behind_set1_count = 0;
         self.blocked.speed_ratio = None;
         self.blocked.front_blocker = None;
@@ -179,12 +196,12 @@ impl Runner {
         let nearby = &mut self.nearby;
         tick(
             &mut nearby.ahead_same_lane_time,
-            same_order && nearby.ahead_same_lane_count > 0,
+            same_order && nearby.adjacent_ahead_same_lane,
             delta_time,
         );
         tick(
             &mut nearby.behind_same_lane_time,
-            same_order && nearby.behind_same_lane_count > 0,
+            same_order && nearby.adjacent_behind_same_lane,
             delta_time,
         );
         tick(

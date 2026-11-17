@@ -19,7 +19,7 @@ fn update_cycle(ahead: &mut Runner, behind: &mut Runner, is_near: bool) {
     ahead.reset_blocking_status();
     behind.reset_blocking_status();
     if is_near {
-        behind.update_near_same_lane_by(ahead);
+        behind.update_near_same_lane_by(ahead, true);
         ahead.nearby.behind_set1_count += 1;
     }
     ahead.update_near_time(DELTA_TIME);
@@ -36,7 +36,6 @@ fn test_near_counts_do_not_accumulate_across_cycles() {
     for _ in 0..1000 {
         update_cycle(ahead, behind, true);
         assert_eq!(behind.nearby.ahead_same_lane_count, 1);
-        assert_eq!(ahead.nearby.behind_same_lane_count, 1);
         assert_eq!(ahead.nearby.behind_set1_count, 1);
     }
 }

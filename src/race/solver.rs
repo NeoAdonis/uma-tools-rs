@@ -1334,8 +1334,9 @@ impl RaceSolver<Runner> {
             let mut was_runner_behind_checked = false;
 
             for runner_j in right {
-                // Only check runner immediately behind.
-                if !was_runner_behind_checked && runner_j.lane.current < runner_i.lane.current {
+                // The first runner behind is the one right behind (one place).
+                let adjacent = !was_runner_behind_checked;
+                if adjacent && runner_j.lane.current < runner_i.lane.current {
                     runner_i.nearby.behind_in = true;
                 }
                 was_runner_behind_checked = true;
@@ -1372,7 +1373,7 @@ impl RaceSolver<Runner> {
                     runner_j.update_near_by(runner_i);
                 }
                 if proximity::is_near_same_lane(distance, lane_diff) {
-                    runner_j.update_near_same_lane_by(runner_i);
+                    runner_j.update_near_same_lane_by(runner_i, adjacent);
                 }
                 if proximity::is_near_behind_set1(distance, lane_diff) {
                     runner_i.nearby.behind_set1_count += 1;

@@ -2183,6 +2183,56 @@ fn test_runners_close_behind_are_counted() {
 }
 
 #[test]
+fn test_near_lane_times_only_track_the_runner_one_place_away() {
+    let lane = |horse_lanes| CourseWidths::from_horse_lanes(horse_lanes).0;
+    // (position, horse lanes) of the middle runner's neighbors, and whether
+    // the runner ahead and the runner behind count as close.
+    let cases = [
+        ((601.0, 0.0), (599.0, 0.0), [true, true]),
+        // Out of range by distance (2.5m) or lane (1 lane) for exactly one.
+        ((602.5, 0.0), (599.0, 0.9), [false, true]),
+        ((601.0, 1.0), (597.5, 0.0), [false, false]),
+        // The runner right behind is out of range, but not the one beyond.
+        ((601.0, 0.0), (597.0, 0.0), [true, false]),
+    ];
+    for (ahead, behind, expected) in cases {
+        let mut solver = struggle_solver(
+            &[
+                (EffectiveStyle::Pace, ahead.0, lane(ahead.1)),
+                (EffectiveStyle::Pace, 600.0, 0.0),
+                (EffectiveStyle::Pace, behind.0, lane(behind.1)),
+            ],
+            GameVersion::LATEST,
+        );
+        solver.update_blocking_status(DELTA_TIME);
+        let nearby = &solver.runners[1].nearby;
+        assert_eq!(
+            [
+                nearby.adjacent_ahead_same_lane,
+                nearby.adjacent_behind_same_lane
+            ],
+            expected,
+            "{ahead:?} {behind:?}"
+        );
+    }
+
+    // A close runner two places away doesn't count.
+    let mut solver = struggle_solver(
+        &[
+            (EffectiveStyle::Pace, 600.0, 0.0),
+            (EffectiveStyle::Pace, 599.5, lane(5.0)),
+            (EffectiveStyle::Pace, 599.0, 0.0),
+        ],
+        GameVersion::LATEST,
+    );
+    solver.update_blocking_status(DELTA_TIME);
+    assert!(!solver.runners[0].nearby.adjacent_behind_same_lane);
+    assert!(!solver.runners[2].nearby.adjacent_ahead_same_lane);
+    // It still counts for the number of near runners ahead.
+    assert_eq!(solver.runners[2].nearby.ahead_same_lane_count, 1);
+}
+
+#[test]
 fn test_fov_bonus_narrows_field_of_view_at_a_given_distance() {
     // 10m ahead, 3 horse lanes apart: within the 20m field of view, whose half
     // width there is 3.875 horse lanes, but not within a 40m one (2.4375).

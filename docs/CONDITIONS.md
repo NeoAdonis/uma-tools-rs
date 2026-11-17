@@ -172,12 +172,12 @@ Horse lengths between you and the closest uma ahead of you, not rounded.
 
 ## behind_near_lane_time
 
-The number of seconds there's another uma right behind you.
+The number of seconds the uma one place behind you has been right behind you.
 
-*Note:* "Right behind" means no more than 2.5 meters behind, and no more than 1
-lane (1/18 of the track's width) to either side. It doesn't have to be the same
-uma (as long as there's at least one), but if your own placement changes, the
-timer will reset.
+*Note:* "Right behind" means less than 2.5 meters behind, and less than 1 lane
+(1/18 of the track's width) to either side. Only the uma exactly one place
+behind you counts (it can change, as long as the new one is also right behind),
+and if your own placement changes, the timer will reset. It's 0 if you're last.
 
 *Example:* `behind_near_lane_time>=3`
 
@@ -465,12 +465,14 @@ Your remaining HP (stamina) in percentage.
 
 ## infront_near_lane_time
 
-The number of seconds there's another uma right in front of you.
+The number of seconds the uma one place ahead of you has been right in front of
+you.
 
-*Note:* "Right in front" means no more than 2.5 meters ahead, and no more than 1
-lane (1/18 of the track's width) to either side. It doesn't have to be the same
-uma (as long as there's at least one), but if your own placement changes, the
-timer will reset.
+*Note:* "Right in front" means less than 2.5 meters ahead, and less than 1 lane
+(1/18 of the track's width) to either side. Only the uma exactly one place ahead
+of you counts (it can change, as long as the new one is also right in front),
+and if your own placement changes, the timer will reset. It's 0 if you're
+first.
 
 *Example:* `infront_near_lane_time>=3`
 
