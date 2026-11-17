@@ -1754,6 +1754,12 @@ impl RaceSolver<Runner> {
     /// Tracks how long each pair of runners has been close, and starts a duel
     /// between those close for long enough that also meet the other conditions.
     ///
+    /// Only pairs where at least one runner is on the final straight are
+    /// candidates, and the time only counts while they are: frames where the
+    /// pair is close but neither is on it reset the time, as if not close. The
+    /// runner ahead is the last to leave the final straight, so it is the only
+    /// one checked.
+    ///
     /// Runners who already exited a duel can't start another one, nor be dueled.
     ///
     /// Runners must be sorted by position in descending order before calling this.
@@ -1761,10 +1767,11 @@ impl RaceSolver<Runner> {
         // Pairs no longer close aren't written again, which resets their time.
         std::mem::swap(&mut self.duel_close_times, &mut self.prev_duel_close_times);
         self.duel_close_times.fill(None);
+        let course = &self.state.course;
         let mut starting = Vec::new();
         for i in 0..self.runners.len() {
             let ahead = &self.runners[i];
-            if ahead.duel.has_ended() {
+            if ahead.duel.has_ended() || !ahead.segments.is_on_final_straight(course) {
                 continue;
             }
             for (j, behind) in self.runners.iter().enumerate().skip(i + 1) {
@@ -1779,7 +1786,7 @@ impl RaceSolver<Runner> {
                 }
 
                 let pair = self.duel_pair_index(ahead.gate_roll, behind.gate_roll);
-                // Time starts counting from the first frame they're close.
+                // Time starts counting from the first frame they're a candidate.
                 let close_time =
                     self.prev_duel_close_times[pair].map_or(0.0, |time| time + delta_time);
                 self.duel_close_times[pair] = Some(close_time);
@@ -1801,16 +1808,13 @@ impl RaceSolver<Runner> {
         (low - 1) * gates + (high - 1)
     }
 
-    /// Checks whether runners `i` and `j`, already close for long enough, meet the
+    /// Checks whether runners `i` and `j`, candidates for long enough, meet the
     /// remaining conditions to start dueling.
     ///
     /// These only need to hold for a single frame.
     fn can_start_duel(&self, i: usize, j: usize) -> bool {
-        let course = &self.state.course;
         let can_duel = |runner: &Runner| {
-            !runner.has_finished()
-                && runner.segments.is_on_final_straight(course)
-                && runner.hp.percent() >= duel::MIN_START_HP_PERCENT
+            !runner.has_finished() && runner.hp.percent() >= duel::MIN_START_HP_PERCENT
         };
         let (a, b) = (&self.runners[i], &self.runners[j]);
         can_duel(a)

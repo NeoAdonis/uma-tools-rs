@@ -1,9 +1,10 @@
 //! Duel (Compete Fight, 追い比べ) formulas (1st Anniversary onward).
 //!
-//! On the final straight, two runners that stay close for a while may start
-//! dueling, gaining target speed and acceleration based on their guts. A
-//! runner keeps dueling until her HP runs low or she gets far from everyone
-//! who has dueled during the race. Once she leaves, she can't duel again.
+//! Two runners that stay close for a while on the final straight (with at
+//! least one of them on it) may start dueling, gaining target speed and
+//! acceleration based on their guts. A runner keeps dueling until her HP runs
+//! low or she gets far from everyone who has dueled during the race. Once she
+//! leaves, she can't duel again.
 
 use crate::race::runner::OrderState;
 use crate::units::CourseWidths;
@@ -12,8 +13,9 @@ use crate::units::CourseWidths;
 pub(crate) const TRIGGER_DISTANCE: f64 = 3.0;
 /// Maximum lane gap (in course widths) between two runners to count as close.
 pub(crate) const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
-/// Time (s) two runners must stay close in a row before they can start dueling,
-/// counted from the first frame they're close.
+/// Time (s) two runners must stay close in a row, with at least one of them on
+/// the final straight, before they can start dueling. It is counted from the
+/// first frame they're close with one of them on it.
 pub(crate) const TRIGGER_TIME: f64 = 2.0;
 /// Maximum speed difference (m/s) between two runners to start dueling.
 pub(crate) const MAX_SPEED_DIFF: f64 = 0.6;

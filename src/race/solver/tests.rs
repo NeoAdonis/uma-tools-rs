@@ -1515,6 +1515,32 @@ fn test_duel_only_on_final_straight() {
 }
 
 #[test]
+fn test_duel_time_counts_from_the_final_straight() {
+    // Close since before the final straight.
+    let mut solver = duel_solver(&[(930.0, 0.1), (928.0, 0.1)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES * 2);
+    // Both enter it, staying close.
+    place_on_straight(&mut solver, 0, 940.0, 0.1);
+    place_on_straight(&mut solver, 1, 938.0, 0.1);
+    update_duels(&mut solver, DUEL_FRAMES - 1);
+    assert_eq!(duelists(&solver), [false, false]);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
+fn test_duel_starts_with_only_the_front_runner_on_the_final_straight() {
+    let mut solver = duel_solver(&[(935.0, 0.1), (933.0, 0.1)], GameVersion::LATEST);
+    assert!(
+        !solver.runners[1]
+            .segments
+            .is_on_final_straight(&solver.state.course)
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
 fn test_duel_exits_below_five_percent_hp() {
     let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES);
