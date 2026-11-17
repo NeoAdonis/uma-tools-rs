@@ -71,6 +71,25 @@ pub struct Pins {
     ///
     /// [`Course::slopes`]: crate::Course::slopes
     pub downhill: HashMap<usize, Vec<bool>>,
+    /// Outcomes of her position keep wit checks, sorted by time.
+    ///
+    /// They're the checks that roll the chance of entering Speed Up or
+    /// Overtake (front runners) or Pace Up (others). Each pin fixes the first
+    /// such check at or after its time and is used at most once. Rushed
+    /// runners don't roll these checks, so they use no pins. Pace Down, Pace
+    /// Up Ex and thresholds can't be pinned.
+    pub positioning: Vec<PinnedWitCheck>,
+}
+
+/// Outcome of a position keep wit check fixed instead of rolled (see
+/// [`Pins::positioning`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PinnedWitCheck {
+    /// Time since the race started, in seconds: the check it fixes is the
+    /// first that rolls at or after it.
+    pub time: f64,
+    /// Whether the check passes, whatever her wit.
+    pub passes: bool,
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled. Apart from whether she
@@ -155,6 +174,19 @@ impl Pins {
         pinned.copied().unwrap_or(rolled)
     }
 
+    /// Returns whether a position keep wit check at `time` passes: the outcome
+    /// of the first unused pin at or before `time`, if any (marking it as used
+    /// by advancing `used`, the number of pins used so far), or `rolled`.
+    pub(crate) fn positioning_wit_check(&self, used: &mut usize, time: f64, rolled: bool) -> bool {
+        match self.positioning.get(*used) {
+            Some(pin) if pin.time <= time => {
+                *used += 1;
+                pin.passes
+            }
+            _ => rolled,
+        }
+    }
+
     /// Returns the pinned activations of the skill with ID `id`, if any.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
@@ -199,6 +231,21 @@ impl Pins {
             assert!(
                 (1..=last).contains(&section),
                 "Invalid rush section {section}: expected 1 to {last}"
+            );
+        }
+        for pin in &self.positioning {
+            assert!(
+                pin.time.is_finite() && pin.time >= 0.0,
+                "Invalid positioning time {}: expected a finite, non-negative number",
+                pin.time
+            );
+        }
+        for pair in self.positioning.windows(2) {
+            assert!(
+                pair[0].time <= pair[1].time,
+                "Positioning pins out of order: {} before {}",
+                pair[0].time,
+                pair[1].time
             );
         }
         for &slope in self.downhill.keys() {

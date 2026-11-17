@@ -398,6 +398,13 @@ pub struct Runner {
     /// After a check that doesn't start a strategy, it's the time of that
     /// check plus the check interval.
     pub(crate) next_positioning_check: f64,
+    /// Number of positioning checks from `Normal` that didn't enter Pace Up
+    /// Ex, whether or not they drew. It keys the stream of the next one (see
+    /// [`Stream::Positioning`]).
+    pub(crate) positioning_checks: u32,
+    /// Number of pinned positioning wit checks consumed so far (see
+    /// [`Pins::positioning`]).
+    pub(crate) pinned_wit_checks_used: usize,
     /// Position (m) at which the current positioning strategy ends, unless its
     /// exit conditions are met first (see `enter_positioning`).
     pub(crate) positioning_end: f64,

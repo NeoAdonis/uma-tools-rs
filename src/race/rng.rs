@@ -10,8 +10,10 @@
 //! (e.g. by activating), which reduces the variance when comparing them.
 //!
 //! Draws tied to a recurring event with a natural index (e.g. the section speed
-//! modifier, rolled once per section) use a stream keyed by that index, so they
-//! stay aligned even if the event happens at a different time.
+//! modifier, rolled once per section, or all the draws of a positioning check)
+//! use a stream keyed by that index, so they stay aligned even if the event
+//! happens at a different time, and the outcome of one never shifts the draws
+//! of the next.
 //!
 //! Streams are only meant to be reproducible for a given build: a change in the
 //! simulator (or in the standard library's hasher) may change every draw.
@@ -50,8 +52,9 @@ pub(crate) enum Stream {
     SectionSpeed(u8),
     /// Downhill mode checks, by slope index.
     Slope(usize),
-    /// Positioning strategy checks and thresholds.
-    Positioning,
+    /// Positioning strategy wit check and threshold of one check, by the
+    /// runner's check ordinal (see `Runner::positioning_checks`).
+    Positioning(u32),
     /// Last spurt candidate checks.
     LastSpurt,
     /// Secure lead checks.
@@ -109,8 +112,6 @@ pub(crate) struct RunnerRng {
     /// Stream of the last slope the runner entered (see [`Stream::Slope`]),
     /// replaced upon entering each slope.
     pub(crate) slope: RaceRng,
-    /// Stream for positioning strategy checks and thresholds.
-    pub(crate) positioning: RaceRng,
     /// Stream for last spurt candidate checks.
     pub(crate) last_spurt: RaceRng,
     /// Stream for secure lead checks.
@@ -128,7 +129,6 @@ impl RunnerRng {
             rush: seed.rng(Stream::Rush),
             stamina_keep: seed.rng(Stream::StaminaKeep),
             slope: seed.rng(Stream::Slope(0)),
-            positioning: seed.rng(Stream::Positioning),
             last_spurt: seed.rng(Stream::LastSpurt),
             secure_lead: seed.rng(Stream::SecureLead),
             skills: skill_ids

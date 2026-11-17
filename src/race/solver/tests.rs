@@ -3,7 +3,7 @@ use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
 use crate::race::events::EventEnd;
-use crate::race::pins::{PinnedActivation, RushPins, SkillPin};
+use crate::race::pins::{PinnedActivation, PinnedWitCheck, RushPins, SkillPin};
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
@@ -5842,4 +5842,38 @@ fn test_timed_boost_events_repeat_after_each_cooldown() {
             assert!(pair[1].start_time >= pair[0].start_time + duration + cooldown);
         }
     }
+}
+
+#[test]
+#[should_panic(expected = "Invalid positioning time -1: expected a finite, non-negative number")]
+fn test_negative_positioning_pin_panics() {
+    add_with_pins(Pins {
+        positioning: vec![PinnedWitCheck {
+            time: -1.0,
+            passes: true,
+        }],
+        ..Pins::default()
+    });
+}
+
+#[test]
+#[should_panic(expected = "Invalid positioning time NaN")]
+fn test_nan_positioning_pin_panics() {
+    add_with_pins(Pins {
+        positioning: vec![PinnedWitCheck {
+            time: f64::NAN,
+            passes: true,
+        }],
+        ..Pins::default()
+    });
+}
+
+#[test]
+#[should_panic(expected = "Positioning pins out of order: 5 before 2")]
+fn test_unsorted_positioning_pins_panic() {
+    let pin = |time| PinnedWitCheck { time, passes: true };
+    add_with_pins(Pins {
+        positioning: vec![pin(5.0), pin(2.0)],
+        ..Pins::default()
+    });
 }

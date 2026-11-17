@@ -13,6 +13,8 @@ use crate::course::*;
 use crate::race::solver::RaceState;
 use crate::uma::*;
 
+use crate::race::rng::{RaceRng, Stream};
+
 use super::Runner;
 
 /// First section where positioning strategies no longer start (those already
@@ -177,9 +179,9 @@ impl Runner {
                     return;
                 }
 
-                self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
+                let mut rng = self.start_positioning_check(elapsed_time);
 
-                if !self.roll_positioning_wit_check(0.2) {
+                if !self.roll_positioning_wit_check(0.2, &mut rng, elapsed_time) {
                     return;
                 }
 
@@ -249,7 +251,7 @@ impl Runner {
                     return;
                 }
 
-                self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
+                let mut rng = self.start_positioning_check(elapsed_time);
 
                 // Determine target distance range based on style and course length.
                 let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;
@@ -265,11 +267,11 @@ impl Runner {
 
                 if distance_behind > range.end {
                     // Catch up to a certain distance (if wit allows).
-                    if !self.roll_positioning_wit_check(0.15) {
+                    if !self.roll_positioning_wit_check(0.15, &mut rng, elapsed_time) {
                         return;
                     }
 
-                    let threshold = self.rng.positioning.random_range(range);
+                    let threshold = rng.random_range(range);
                     self.enter_positioning(PositioningStrategy::PaceUp(threshold), state);
                 } else if distance_behind < range.start
                     && !self.skill_modifiers.has_speed_increase()
@@ -285,9 +287,9 @@ impl Runner {
                         let max = range.end;
                         let mid = (min + max) / 2.0;
                         let adjusted_range = min..mid;
-                        self.rng.positioning.random_range(adjusted_range)
+                        rng.random_range(adjusted_range)
                     } else {
-                        self.rng.positioning.random_range(range)
+                        rng.random_range(range)
                     };
                     self.enter_positioning(PositioningStrategy::PaceDown(threshold), state);
                 }
@@ -316,6 +318,19 @@ impl Runner {
                 )
             }
         }
+    }
+
+    /// Starts a positioning check from `Normal` at `elapsed_time` that
+    /// doesn't enter Pace Up Ex, scheduling the next one and returning the
+    /// stream of all its draws.
+    ///
+    /// Each check has its own stream, keyed by the number of checks before it,
+    /// so what one draws never shifts the draws of the next.
+    fn start_positioning_check(&mut self, elapsed_time: f64) -> RaceRng {
+        self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
+        let rng = self.rng.keyed(Stream::Positioning(self.positioning_checks));
+        self.positioning_checks += 1;
+        rng
     }
 
     /// Go back to the normal positioning strategy, checking it again at
@@ -362,13 +377,18 @@ impl Runner {
     /// `coef * log10(wit * 0.1)`.
     ///
     /// Below 10 wit, the check never passes. Rushed runners always pass it,
-    /// without drawing from the positioning stream.
-    fn roll_positioning_wit_check(&mut self, coef: f64) -> bool {
+    /// without drawing from `rng` or using pins. Otherwise, the outcome is the
+    /// pinned one, if any (see [`Pins::positioning`]), once the draw is made.
+    ///
+    /// [`Pins::positioning`]: crate::race::pins::Pins::positioning
+    fn roll_positioning_wit_check(&mut self, coef: f64, rng: &mut RaceRng, time: f64) -> bool {
         if self.is_rushed() {
             return true;
         }
         let chance = (coef * (self.adjusted.wit * 0.1).log10()).clamp(0.0, 1.0);
-        self.rng.positioning.random_bool(chance)
+        let rolled = rng.random_bool(chance);
+        self.pins
+            .positioning_wit_check(&mut self.pinned_wit_checks_used, time, rolled)
     }
 }
 

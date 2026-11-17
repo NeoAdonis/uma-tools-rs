@@ -13,7 +13,11 @@ fn test_streams_are_independent() {
     let seed = RngSeed::new(42);
     let draw = |seed: RngSeed, stream| seed.rng(stream).random::<u64>();
     // Different keys, values and seeds give different streams.
-    assert_ne!(draw(seed, Stream::Rush), draw(seed, Stream::Positioning));
+    assert_ne!(draw(seed, Stream::Rush), draw(seed, Stream::Positioning(0)));
+    assert_ne!(
+        draw(seed, Stream::Positioning(0)),
+        draw(seed, Stream::Positioning(1))
+    );
     assert_ne!(
         draw(seed, Stream::Skill(100101)),
         draw(seed, Stream::Skill(100102))

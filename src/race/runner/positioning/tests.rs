@@ -84,7 +84,10 @@ fn test_wit_check_never_passes_below_10_wit() {
         let (mut runner, _) = ready_runner(BaseStyle::Late, seeded_config(0));
         runner.adjusted.wit = wit;
         for _ in 0..20 {
-            assert!(!runner.roll_positioning_wit_check(0.2), "{wit}");
+            assert!(
+                !runner.roll_positioning_wit_check(0.2, &mut RaceRng::seed_from_u64(0), 0.0),
+                "{wit}"
+            );
         }
     }
 }
@@ -189,4 +192,129 @@ fn test_rushed_runners_positioning_as_front_enter_modes_without_wit() {
             }
         }
     }
+}
+
+/// Pins `passes` outcomes at `times` for position keep wit checks.
+fn pin_wit_checks(runner: &mut Runner, pins: &[(f64, bool)]) {
+    use crate::race::pins::PinnedWitCheck;
+
+    let pins = pins
+        .iter()
+        .map(|&(time, passes)| PinnedWitCheck { time, passes });
+    runner.pins.positioning = pins.collect();
+}
+
+/// Runs a position keep check at `state`'s time for a runner that would try to
+/// enter a mode if she passed the wit check, returning the mode she's in.
+fn run_check(runner: &mut Runner, front: bool, state: &RaceState) -> PositioningStrategy {
+    if front {
+        // First and close to the runner behind.
+        runner.update_positioning_front(Some(1.0), None, false, Default::default(), state);
+    } else {
+        // Far behind the pacemaker.
+        runner.update_positioning_non_front(30.0, Default::default(), state);
+    }
+    runner.positioning_strategy
+}
+
+#[test]
+fn test_pinned_wit_check_replaces_the_roll() {
+    use crate::test_utils::*;
+
+    // (front runner, wit, pinned outcome, whether she enters a mode).
+    let cases = [
+        (true, 5.0, true, true),
+        (true, 2000.0, false, false),
+        (false, 5.0, true, true),
+        (false, 2000.0, false, false),
+    ];
+    for (front, wit, passes, enters) in cases {
+        let style = if front {
+            BaseStyle::Front
+        } else {
+            BaseStyle::Pace
+        };
+        for seed in 0..10 {
+            let (mut runner, mut state) = ready_runner(style, seeded_config(seed));
+            state.elapsed_time = 10.0;
+            runner.adjusted.wit = wit;
+            // The pin is due before the check, which it fixes all the same.
+            pin_wit_checks(&mut runner, &[(3.0, passes)]);
+            let mode = run_check(&mut runner, front, &state);
+            let entered = mode != PositioningStrategy::Normal;
+            assert_eq!(entered, enters, "{front} {wit} {passes} {seed}");
+        }
+    }
+}
+
+#[test]
+fn test_pins_are_used_once_and_not_before_their_time() {
+    use crate::test_utils::*;
+
+    let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(0));
+    // She never passes the roll.
+    runner.adjusted.wit = 5.0;
+    pin_wit_checks(&mut runner, &[(11.0, true), (30.0, true)]);
+
+    // A pin of a later time doesn't affect the check.
+    state.elapsed_time = 10.0;
+    assert_eq!(
+        run_check(&mut runner, false, &state),
+        PositioningStrategy::Normal
+    );
+    assert_eq!(runner.pinned_wit_checks_used, 0);
+
+    // The first check at or after its time uses it...
+    state.elapsed_time = 12.0;
+    let mode = run_check(&mut runner, false, &state);
+    assert!(matches!(mode, PositioningStrategy::PaceUp(_)));
+    assert_eq!(runner.pinned_wit_checks_used, 1);
+
+    // ...and only that one: the next check rolls (the last pin is still due
+    // later).
+    runner.reset_positioning(0.0);
+    state.elapsed_time = 14.0;
+    assert_eq!(
+        run_check(&mut runner, false, &state),
+        PositioningStrategy::Normal
+    );
+    assert_eq!(runner.pinned_wit_checks_used, 1);
+}
+
+#[test]
+fn test_rushed_checks_use_no_pins() {
+    use crate::test_utils::*;
+
+    let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(0));
+    state.elapsed_time = 10.0;
+    rush_ready_for_check(&mut runner, EffectiveStyle::Pace);
+    pin_wit_checks(&mut runner, &[(0.0, false)]);
+    let mode = run_check(&mut runner, false, &state);
+    assert!(matches!(mode, PositioningStrategy::PaceUp(_)));
+    assert_eq!(runner.pinned_wit_checks_used, 0);
+}
+
+#[test]
+fn test_pinned_outcome_leaves_later_checks_unchanged() {
+    use crate::test_utils::*;
+
+    let mut checked = 0;
+    for seed in 0..40 {
+        // The first check is pinned to pass or fail (drawing a threshold only
+        // in the former), and the second one rolls.
+        let later_modes = [true, false].map(|passes| {
+            let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(seed));
+            runner.adjusted.wit = 600.0;
+            pin_wit_checks(&mut runner, &[(0.0, passes)]);
+            state.elapsed_time = 10.0;
+            run_check(&mut runner, false, &state);
+            runner.reset_positioning(0.0);
+            state.elapsed_time = 12.0;
+            run_check(&mut runner, false, &state)
+        });
+        assert_eq!(later_modes[0], later_modes[1], "{seed}");
+        checked += (later_modes[0] != PositioningStrategy::Normal) as u32;
+    }
+    // Both outcomes of the later check are covered.
+    assert!(0 < checked && checked < 40, "{checked}");
 }
