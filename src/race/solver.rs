@@ -1720,12 +1720,22 @@ impl RaceSolver<Runner> {
 
     /// Updates duel (追い比べ) state for all runners.
     ///
+    /// Duelists exit first, then the runners whose start was decided in the
+    /// previous frame start dueling (without being checked for exit yet), and
+    /// finally the pairs meeting the start conditions in this frame are decided
+    /// to start in the next one.
+    ///
     /// Runners must be sorted by position in descending order before calling this.
     fn update_duels(&mut self, delta_time: f64) {
         if self.state.config.game_version < GameVersion::FirstAnniversary {
             return;
         }
         self.exit_duels();
+        for runner in &mut self.runners {
+            if runner.duel.is_starting() {
+                runner.start_duel(self.state.elapsed_time);
+            }
+        }
         self.try_start_duels(delta_time);
     }
 
@@ -1753,6 +1763,8 @@ impl RaceSolver<Runner> {
 
     /// Tracks how long each pair of runners has been close, and starts a duel
     /// between those close for long enough that also meet the other conditions.
+    /// The duel doesn't start here: it is decided now and begins in the next
+    /// frame, whether the conditions still hold or not.
     ///
     /// Only pairs where at least one runner is on the final straight are
     /// candidates, and the time only counts while they are: frames where the
@@ -1761,6 +1773,7 @@ impl RaceSolver<Runner> {
     /// one checked.
     ///
     /// Runners who already exited a duel can't start another one, nor be dueled.
+    /// Runners whose start was already decided still count as candidates.
     ///
     /// Runners must be sorted by position in descending order before calling this.
     fn try_start_duels(&mut self, delta_time: f64) {
@@ -1796,7 +1809,7 @@ impl RaceSolver<Runner> {
             }
         }
         for i in starting {
-            self.runners[i].start_duel(self.state.elapsed_time);
+            self.runners[i].duel.schedule();
         }
     }
 

@@ -1370,9 +1370,10 @@ fn test_compete_before_spurt_when_far_from_first() {
     }
 }
 
-/// Frames until a duel starts: the first frame two runners are close (frame
-/// 0), then the 31 frames it takes to add up to 2s.
-const DUEL_FRAMES: usize = 32;
+/// Frames until a duel starts: the first frame two runners are close (frame 0),
+/// the 31 frames it takes to add up to 2s, and the one frame the duel takes to
+/// begin after that.
+const DUEL_FRAMES: usize = 33;
 
 /// Solver with one runner per `(position, lane)` on a 1200m course, whose final
 /// straight starts at 934m. Runners must be given in descending position order.
@@ -1432,9 +1433,71 @@ fn test_duel_starts_after_two_seconds_close() {
 }
 
 #[test]
-fn test_duel_needs_continuous_proximity() {
+fn test_duel_starts_one_frame_after_the_decision() {
     let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES - 1);
+    // Decided, but not dueling nor logged yet, and not counted as dueled.
+    for runner in &solver.runners {
+        assert!(runner.duel.is_starting());
+        assert!(!runner.duel.is_dueling());
+        assert!(!runner.duel.has_dueled());
+        assert!(!runner.duel.has_ended());
+        assert_eq!(runner.duel.speed_bonus(), 0.0);
+        assert_eq!(runner.duel.acceleration_bonus(), 0.0);
+        assert!(runner.events.is_empty());
+    }
+
+    // The start is logged with the time of the frame it begins.
+    solver.state.elapsed_time = 5.0;
+    update_duels(&mut solver, 1);
+    for runner in &solver.runners {
+        assert!(runner.duel.is_dueling());
+        assert!(runner.duel.speed_bonus() > 0.0);
+        assert!(runner.duel.acceleration_bonus() > 0.0);
+        let events: Vec<_> = runner
+            .events
+            .iter()
+            .map(|e| (e.kind, e.start_time))
+            .collect();
+        assert_eq!(events, [(EventKind::Duel, 5.0)]);
+    }
+}
+
+#[test]
+fn test_duel_start_is_not_cancelled() {
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES - 1);
+    assert_eq!(duelists(&solver), [false, false]);
+    assert!(
+        solver
+            .runners
+            .iter()
+            .all(|runner| runner.duel.is_starting())
+    );
+    // Neither the speeds nor the HP matter by the time it begins.
+    solver.runners[1].speed = 10.0;
+    set_hp_percent(&mut solver, 1, 1.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [true, true]);
+}
+
+#[test]
+fn test_duel_starting_runner_does_not_count_for_exit_checks() {
+    // The leader duels, 5.5m ahead of a runner whose duel is about to begin.
+    let mut solver = duel_solver(&[(1005.5, 0.1), (1000.0, 0.1)], GameVersion::LATEST);
+    solver.runners[0].start_duel(0.0);
+    solver.runners[1].duel.schedule();
+    update_duels(&mut solver, 1);
+    // No one else has dueled yet, so the leader leaves. The other runner, who
+    // just began, isn't checked.
+    assert_eq!(duelists(&solver), [false, true]);
+    assert!(solver.runners[0].duel.has_ended());
+}
+
+#[test]
+fn test_duel_needs_continuous_proximity() {
+    let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
+    update_duels(&mut solver, DUEL_FRAMES / 2);
 
     // Being apart for a single frame resets the time.
     place_on_straight(&mut solver, 0, 1001.0, 0.1);
@@ -1470,7 +1533,7 @@ fn test_duel_speed_difference() {
 
     // Only proximity needs to last; speeds just need to match for a frame.
     solver.runners[1].speed = 19.5;
-    update_duels(&mut solver, 1);
+    update_duels(&mut solver, 2);
     assert_eq!(duelists(&solver), [true, true]);
 }
 
@@ -1482,7 +1545,7 @@ fn test_duel_needs_both_runners_with_enough_hp() {
     assert_eq!(duelists(&solver), [false, false]);
 
     set_hp_percent(&mut solver, 1, 15.0);
-    update_duels(&mut solver, 1);
+    update_duels(&mut solver, 2);
     assert_eq!(duelists(&solver), [true, true]);
 }
 
@@ -1662,8 +1725,9 @@ fn test_duel_not_before_first_anniversary() {
 #[test]
 fn test_duel_close_time_is_kept_per_pair() {
     // The first two runners are close from the start, and the last one gets
-    // close to the one ahead of her a frame before they would start dueling.
-    // Gates make the pairs share a slot if the pair index mixes them up.
+    // close to the one ahead of her halfway through the time the first pair
+    // needs to start dueling. Gates make the pairs share a slot if the pair
+    // index mixes them up.
     let cases: [(&[f64], &[u8], &[bool]); 2] = [
         (
             &[1000.0, 998.0, 960.0, 950.0],
@@ -1678,10 +1742,10 @@ fn test_duel_close_time_is_kept_per_pair() {
         for (runner, &gate) in solver.runners.iter_mut().zip(gates) {
             runner.gate_roll = gate;
         }
-        update_duels(&mut solver, DUEL_FRAMES - 1);
+        update_duels(&mut solver, DUEL_FRAMES / 2);
         let last = positions.len() - 1;
         place_on_straight(&mut solver, last, positions[last - 1] - 1.0, 0.1);
-        update_duels(&mut solver, 1);
+        update_duels(&mut solver, DUEL_FRAMES - DUEL_FRAMES / 2);
         assert_eq!(duelists(&solver), expected, "gates {gates:?}");
     }
 }

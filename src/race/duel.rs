@@ -5,6 +5,10 @@
 //! acceleration based on their guts. A runner keeps dueling until her HP runs
 //! low or she gets far from everyone who has dueled during the race. Once she
 //! leaves, she can't duel again.
+//!
+//! A duel starts one frame after its start conditions are met: the runners
+//! first go through a [`Duel::Starting`] frame, during which they don't duel
+//! yet.
 
 use crate::race::runner::OrderState;
 use crate::units::CourseWidths;
@@ -15,7 +19,8 @@ pub(crate) const TRIGGER_DISTANCE: f64 = 3.0;
 pub(crate) const TRIGGER_LANE_GAP: CourseWidths = CourseWidths(0.25);
 /// Time (s) two runners must stay close in a row, with at least one of them on
 /// the final straight, before they can start dueling. It is counted from the
-/// first frame they're close with one of them on it.
+/// first frame they're close with one of them on it. The duel itself starts one
+/// frame after the other start conditions are met.
 pub(crate) const TRIGGER_TIME: f64 = 2.0;
 /// Maximum speed difference (m/s) between two runners to start dueling.
 pub(crate) const MAX_SPEED_DIFF: f64 = 0.6;
@@ -41,6 +46,14 @@ const TOLERANCE: f64 = 1e-6;
 pub(crate) enum Duel {
     /// Not started yet.
     Pending,
+    /// The start conditions were met in the previous frame, so the duel begins
+    /// in the current one.
+    ///
+    /// The runner doesn't count as dueling (no bonuses), nor as having dueled
+    /// or ended: she is neither separated from other duelists nor does she
+    /// separate them, and other runners can still be matched with her. The
+    /// start isn't cancelled if the conditions stop holding.
+    Starting,
     /// Dueling, with the given target speed (m/s) and acceleration (m/s²) bonuses.
     Active {
         speed_bonus: f64,
@@ -60,6 +73,18 @@ impl Duel {
         }
     }
 
+    /// Decides to start dueling on the next frame, if not started yet.
+    pub(crate) fn schedule(&mut self) {
+        if matches!(self, Duel::Pending) {
+            *self = Duel::Starting;
+        }
+    }
+
+    /// Checks if the runner's duel is due to start in the current frame.
+    pub(crate) fn is_starting(&self) -> bool {
+        matches!(self, Duel::Starting)
+    }
+
     /// Checks if the runner is currently dueling.
     pub(crate) fn is_dueling(&self) -> bool {
         matches!(self, Duel::Active { .. })
@@ -67,7 +92,7 @@ impl Duel {
 
     /// Checks if the runner has dueled at some point, even if she already left.
     pub(crate) fn has_dueled(&self) -> bool {
-        !matches!(self, Duel::Pending)
+        matches!(self, Duel::Active { .. } | Duel::Ended)
     }
 
     /// Checks if the runner has left a duel, and thus can't duel again.

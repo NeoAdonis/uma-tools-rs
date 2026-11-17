@@ -899,6 +899,7 @@ fn test_compete_fight_count_by_duel_state() {
     // Still counts after leaving the duel.
     for (duel, expected) in [
         (Duel::Pending, 0),
+        (Duel::Starting, 0),
         (Duel::start(800.0), 1),
         (Duel::Ended, 1),
     ] {
