@@ -275,9 +275,10 @@ impl Runner {
 
                     let threshold = self.rng.positioning.random_range(range);
                     self.enter_positioning(PositioningStrategy::PaceUp(threshold), state);
-                } else if distance_behind < range.start && !self.skill_modifiers.has_speed_effects()
+                } else if distance_behind < range.start
+                    && !self.skill_modifiers.has_speed_increase()
                 {
-                    // Pace down to a certain distance (unless affected by speed-increasing skills).
+                    // Pace down to a certain distance (unless skills increase speed).
                     // 1.5 anniv. patch: if in mid-race, the maximum distance is replaced with the
                     // midpoint between min and max before rolling.
                     let threshold = if state.config.game_version
@@ -302,8 +303,8 @@ impl Runner {
                 }
             }
             PositioningStrategy::PaceDown(threshold) => {
-                // Exit when fallen back beyond threshold or if speed is increased by skills.
-                if distance_behind > threshold || self.skill_modifiers.has_speed_effects() {
+                // Exit when fallen back beyond threshold or if skills increase speed.
+                if distance_behind > threshold || self.skill_modifiers.has_speed_increase() {
                     self.exit_positioning(elapsed_time);
                 }
             }

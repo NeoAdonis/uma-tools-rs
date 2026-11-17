@@ -1,14 +1,16 @@
 use super::*;
 
 #[test]
-fn test_speed_effects_stop_pacing_down() {
+fn test_speed_increases_stop_pacing_down() {
     use crate::test_utils::*;
     // (current speed modifier, target speed modifier, whether she stops).
     let cases = [
         (0.0, 0.0, false),
         (0.00009, -0.00009, false),
-        (-0.0001, 0.0, true),
+        (-0.0001, 0.0, false),
+        (0.0, -0.5, false),
         (0.0, 0.0001, true),
+        (0.0001, 0.0, true),
     ];
     for (current, target, stops) in cases {
         let (mut runner, mut state) = ready_runner(BaseStyle::Late, seeded_config(0));
@@ -25,9 +27,9 @@ fn test_speed_effects_stop_pacing_down() {
         assert_eq!(pacing_down, !stops, "{current} {target}");
     }
 
-    // Nor do they start while skills change the speed (the pacemaker is 0m
+    // Nor do they start while skills increase the speed (the pacemaker is 0m
     // ahead, too close for a Late runner).
-    for (target, starts) in [(0.0, true), (0.1, false)] {
+    for (target, starts) in [(0.0, true), (-0.1, true), (0.1, false)] {
         let (mut runner, mut state) = ready_runner(BaseStyle::Late, seeded_config(0));
         state.elapsed_time = 10.0;
         runner.next_positioning_check = 0.0;

@@ -137,10 +137,9 @@ impl Default for SkillModifiers {
 }
 
 impl SkillModifiers {
-    /// Checks whether skills are modifying target or current speed, in either
-    /// direction.
-    pub(crate) fn has_speed_effects(&self) -> bool {
-        self.current_speed.abs() >= 0.0001 || self.target_speed.abs() >= 0.0001
+    /// Checks whether skills increase target or current speed on net.
+    pub(crate) fn has_speed_increase(&self) -> bool {
+        self.current_speed >= 0.0001 || self.target_speed >= 0.0001
     }
 
     /// Sum up the modifiers of the active timed `effects`.
