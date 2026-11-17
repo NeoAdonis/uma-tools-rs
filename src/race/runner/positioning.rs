@@ -1,5 +1,10 @@
 //! Positioning strategies, which start during the first 10 sections of the
 //! race.
+//!
+//! The runner checks whether to enter one every [`CHECK_INTERVAL`] seconds
+//! from the previous check, and after the cooldown and one interval from the
+//! exit of the previous one. Starting or stopping a rush ends the current
+//! strategy, if any, and makes her check right away instead.
 
 use rand::prelude::*;
 
@@ -13,7 +18,11 @@ use super::Runner;
 /// First section where positioning strategies no longer start (those already
 /// underway go on until they end).
 pub(crate) const POSITIONING_END_SECTION: u8 = 10;
-/// Interval (s) between checks to enter a positioning strategy.
+/// Interval (s) between checks to enter a positioning strategy, counted from
+/// the time of the previous check.
+///
+/// Checks happen on frames, so each one is the first frame at least this long
+/// after the previous one: 31 frames later, since 30 frames last just under it.
 const CHECK_INTERVAL: f64 = 2.0;
 /// Cooldown (s) after exiting a positioning strategy, before the next check
 /// interval starts.
@@ -165,7 +174,7 @@ impl Runner {
                     return;
                 }
 
-                self.next_positioning_check += CHECK_INTERVAL;
+                self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
 
                 // Use original style to determine if runner was originally a front-runner that
                 // should speed up.
@@ -244,7 +253,7 @@ impl Runner {
                     return;
                 }
 
-                self.next_positioning_check += CHECK_INTERVAL;
+                self.next_positioning_check = elapsed_time + CHECK_INTERVAL;
 
                 // Determine target distance range based on style and course length.
                 let course_multiplier = 0.0008 * (course_length - 1000.0) + 1.0;

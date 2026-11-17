@@ -394,6 +394,9 @@ pub struct Runner {
     /// of the race.
     pub(crate) positioning_strategy: PositioningStrategy,
     /// Next time to check positioning strategy conditions, in seconds.
+    ///
+    /// After a check that doesn't start a strategy, it's the time of that
+    /// check plus the check interval.
     pub(crate) next_positioning_check: f64,
     /// Position (m) at which the current positioning strategy ends, unless its
     /// exit conditions are met first (see `enter_positioning`).

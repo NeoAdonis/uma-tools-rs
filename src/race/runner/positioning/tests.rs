@@ -86,3 +86,29 @@ fn test_wit_check_never_passes_below_10_wit() {
         }
     }
 }
+
+#[test]
+fn test_checks_are_scheduled_from_the_previous_check() {
+    use crate::race::solver::DELTA_TIME;
+    use crate::test_utils::*;
+
+    let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(0));
+    // Exits a mode on frame 0, so the first check is 46 frames later.
+    state.elapsed_time = 10.0;
+    runner.enter_positioning(PositioningStrategy::PaceUp(1.0), &state);
+    runner.exit_positioning(state.elapsed_time);
+
+    // Within the target range of a Pace runner: no mode starts.
+    let mut checks = vec![];
+    for frame in 0..=150 {
+        let before = runner.next_positioning_check;
+        runner.update_positioning_non_front(4.0, Default::default(), &state);
+        if runner.next_positioning_check != before {
+            checks.push(frame);
+        }
+        state.elapsed_time += DELTA_TIME;
+    }
+    // Each check is the first frame at least 2s after the previous one, not
+    // aligned to a 2s grid.
+    assert_eq!(checks, [46, 77, 108, 139]);
+}
