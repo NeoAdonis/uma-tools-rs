@@ -405,6 +405,9 @@ pub struct Runner {
     /// Number of pinned positioning wit checks consumed so far (see
     /// [`Pins::positioning`]).
     pub(crate) pinned_wit_checks_used: usize,
+    /// Number of pinned positioning thresholds consumed so far (see
+    /// [`Pins::positioning_thresholds`]).
+    pub(crate) pinned_thresholds_used: usize,
     /// Position (m) at which the current positioning strategy ends, unless its
     /// exit conditions are met first (see `enter_positioning`).
     pub(crate) positioning_end: f64,

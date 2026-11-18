@@ -272,6 +272,7 @@ impl Runner {
                     }
 
                     let threshold = rng.random_range(range);
+                    let threshold = self.pin_threshold(threshold, elapsed_time);
                     self.enter_positioning(PositioningStrategy::PaceUp(threshold), state);
                 } else if distance_behind < range.start
                     && !self.skill_modifiers.has_speed_increase()
@@ -291,6 +292,7 @@ impl Runner {
                     } else {
                         rng.random_range(range)
                     };
+                    let threshold = self.pin_threshold(threshold, elapsed_time);
                     self.enter_positioning(PositioningStrategy::PaceDown(threshold), state);
                 }
             }
@@ -331,6 +333,16 @@ impl Runner {
         let rng = self.rng.keyed(Stream::Positioning(self.positioning_checks));
         self.positioning_checks += 1;
         rng
+    }
+
+    /// Returns the exit threshold of a strategy entered at `time`: the pinned
+    /// one, if any (see [`Pins::positioning_thresholds`]), or `rolled`.
+    ///
+    /// [`Pins::positioning_thresholds`]:
+    ///     crate::race::pins::Pins::positioning_thresholds
+    fn pin_threshold(&mut self, rolled: f64, time: f64) -> f64 {
+        self.pins
+            .positioning_threshold(&mut self.pinned_thresholds_used, time, rolled)
     }
 
     /// Go back to the normal positioning strategy, checking it again at

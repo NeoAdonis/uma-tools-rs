@@ -76,9 +76,15 @@ pub struct Pins {
     /// They're the checks that roll the chance of entering Speed Up or
     /// Overtake (front runners) or Pace Up (others). Each pin fixes the first
     /// such check at or after its time and is used at most once. Rushed
-    /// runners don't roll these checks, so they use no pins. Pace Down, Pace
-    /// Up Ex and thresholds can't be pinned.
+    /// runners don't roll these checks, so they use no pins. Pace Down and
+    /// Pace Up Ex have no check to pin. [`Pins::positioning_thresholds`] pins
+    /// the exit thresholds of Pace Up and Pace Down.
     pub positioning: Vec<PinnedWitCheck>,
+    /// Exit thresholds of her Pace Up and Pace Down, sorted by time.
+    ///
+    /// Each pin fixes the first threshold rolled at or after its time and is
+    /// used at most once. Rushed runners still use them.
+    pub positioning_thresholds: Vec<PinnedThreshold>,
 }
 
 /// Outcome of a position keep wit check fixed instead of rolled (see
@@ -90,6 +96,18 @@ pub struct PinnedWitCheck {
     pub time: f64,
     /// Whether the check passes, whatever her wit.
     pub passes: bool,
+}
+
+/// Exit threshold of a Pace Up or Pace Down fixed instead of rolled (see
+/// [`Pins::positioning_thresholds`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PinnedThreshold {
+    /// Time since the race started, in seconds: the threshold it fixes is the
+    /// first that rolls at or after it.
+    pub time: f64,
+    /// Distance behind the pacemaker, in metres, at which the strategy ends:
+    /// Pace Up once she's closer than it, Pace Down once she's farther.
+    pub distance: f64,
 }
 
 /// Rushing outcomes of a runner fixed instead of rolled. Apart from whether she
@@ -187,6 +205,20 @@ impl Pins {
         }
     }
 
+    /// Returns the exit threshold of a Pace Up or Pace Down rolled at `time`:
+    /// the distance of the first unused pin at or before `time`, if any
+    /// (marking it as used by advancing `used`, the number of pins used so
+    /// far), or `rolled`.
+    pub(crate) fn positioning_threshold(&self, used: &mut usize, time: f64, rolled: f64) -> f64 {
+        match self.positioning_thresholds.get(*used) {
+            Some(pin) if pin.time <= time => {
+                *used += 1;
+                pin.distance
+            }
+            _ => rolled,
+        }
+    }
+
     /// Returns the pinned activations of the skill with ID `id`, if any.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
@@ -244,6 +276,26 @@ impl Pins {
             assert!(
                 pair[0].time <= pair[1].time,
                 "Positioning pins out of order: {} before {}",
+                pair[0].time,
+                pair[1].time
+            );
+        }
+        for pin in &self.positioning_thresholds {
+            assert!(
+                pin.time.is_finite() && pin.time >= 0.0,
+                "Invalid threshold time {}: expected a finite, non-negative number",
+                pin.time
+            );
+            assert!(
+                pin.distance.is_finite(),
+                "Invalid threshold distance {}: expected a finite number",
+                pin.distance
+            );
+        }
+        for pair in self.positioning_thresholds.windows(2) {
+            assert!(
+                pair[0].time <= pair[1].time,
+                "Threshold pins out of order: {} before {}",
                 pair[0].time,
                 pair[1].time
             );

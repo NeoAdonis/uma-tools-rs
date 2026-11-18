@@ -716,6 +716,7 @@ impl UnreadyRunner {
             next_positioning_check: 0.0,
             positioning_checks: 0,
             pinned_wit_checks_used: 0,
+            pinned_thresholds_used: 0,
             positioning_strategy: PositioningStrategy::Normal,
             positioning_end: f64::INFINITY,
             slope_speed_modifier: None,

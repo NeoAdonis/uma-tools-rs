@@ -318,3 +318,96 @@ fn test_pinned_outcome_leaves_later_checks_unchanged() {
     // Both outcomes of the later check are covered.
     assert!(0 < checked && checked < 40, "{checked}");
 }
+
+/// Pins `distance` thresholds at `times` for position keep exits.
+fn pin_thresholds(runner: &mut Runner, pins: &[(f64, f64)]) {
+    use crate::race::pins::PinnedThreshold;
+
+    let pins = pins
+        .iter()
+        .map(|&(time, distance)| PinnedThreshold { time, distance });
+    runner.pins.positioning_thresholds = pins.collect();
+}
+
+#[test]
+fn test_pinned_threshold_replaces_the_roll() {
+    use crate::test_utils::*;
+
+    // (style, distance behind the pacemaker, whether it's a Pace Up).
+    let cases = [(BaseStyle::Pace, 30.0, true), (BaseStyle::Late, 0.0, false)];
+    for (style, behind, up) in cases {
+        let (mut runner, mut state) = ready_runner(style, seeded_config(0));
+        state.elapsed_time = 10.0;
+        runner.adjusted.wit = 2000.0;
+        // The wit check is pinned too, so it passes.
+        pin_wit_checks(&mut runner, &[(0.0, true)]);
+        // The pin is due before the check, which it fixes all the same.
+        pin_thresholds(&mut runner, &[(3.0, 123.0)]);
+        runner.update_positioning_non_front(behind, Default::default(), &state);
+        let expected = if up {
+            PositioningStrategy::PaceUp(123.0)
+        } else {
+            PositioningStrategy::PaceDown(123.0)
+        };
+        assert_eq!(runner.positioning_strategy, expected, "{up}");
+    }
+}
+
+#[test]
+fn test_pinned_thresholds_are_used_once_and_not_before_their_time() {
+    use crate::test_utils::*;
+
+    let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(0));
+    // Rushed runners pass the wit check, and still use pins for thresholds.
+    rush_ready_for_check(&mut runner, EffectiveStyle::Pace);
+    pin_thresholds(&mut runner, &[(11.0, 123.0), (30.0, 456.0)]);
+    let mut enter = |runner: &mut Runner, time| {
+        runner.reset_positioning(0.0);
+        state.elapsed_time = time;
+        runner.update_positioning_non_front(30.0, Default::default(), &state);
+        runner.positioning_strategy
+    };
+
+    // A pin of a later time doesn't affect the threshold.
+    let first = enter(&mut runner, 10.0);
+    assert!(matches!(first, PositioningStrategy::PaceUp(t) if t < 100.0));
+    assert_eq!(runner.pinned_thresholds_used, 0);
+
+    // The first threshold at or after its time uses it...
+    let second = enter(&mut runner, 12.0);
+    assert_eq!(second, PositioningStrategy::PaceUp(123.0));
+    assert_eq!(runner.pinned_thresholds_used, 1);
+
+    // ...and only that one: the next one rolls (the last pin is still due
+    // later).
+    let third = enter(&mut runner, 14.0);
+    assert!(matches!(third, PositioningStrategy::PaceUp(t) if t < 100.0));
+    assert_eq!(runner.pinned_thresholds_used, 1);
+}
+
+#[test]
+fn test_pinned_threshold_leaves_later_rolls_unchanged() {
+    use crate::test_utils::*;
+
+    for seed in 0..10 {
+        // The first threshold is pinned or rolled, and the second one rolls.
+        let thresholds = [true, false].map(|pinned| {
+            let (mut runner, mut state) = ready_runner(BaseStyle::Pace, seeded_config(seed));
+            rush_ready_for_check(&mut runner, EffectiveStyle::Pace);
+            if pinned {
+                pin_thresholds(&mut runner, &[(0.0, 123.0)]);
+            }
+            state.elapsed_time = 10.0;
+            runner.update_positioning_non_front(30.0, Default::default(), &state);
+            runner.reset_positioning(0.0);
+            state.elapsed_time = 12.0;
+            runner.update_positioning_non_front(30.0, Default::default(), &state);
+            runner.positioning_strategy
+        });
+        assert!(
+            matches!(thresholds[0], PositioningStrategy::PaceUp(t) if t < 100.0),
+            "{seed}"
+        );
+        assert_eq!(thresholds[0], thresholds[1], "{seed}");
+    }
+}

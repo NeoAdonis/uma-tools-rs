@@ -3,7 +3,7 @@ use crate::configuration::Roll;
 use crate::course::Phase;
 use crate::course::geometry::{Segment, Slope};
 use crate::race::events::EventEnd;
-use crate::race::pins::{PinnedActivation, PinnedWitCheck, RushPins, SkillPin};
+use crate::race::pins::{PinnedActivation, PinnedThreshold, PinnedWitCheck, RushPins, SkillPin};
 use crate::race::rush::{self, RushState};
 use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
@@ -5876,4 +5876,40 @@ fn test_unsorted_positioning_pins_panic() {
         positioning: vec![pin(5.0), pin(2.0)],
         ..Pins::default()
     });
+}
+
+#[test]
+fn test_invalid_positioning_threshold_pins_panic() {
+    let pin = |time, distance| PinnedThreshold { time, distance };
+    // (pins, expected message).
+    let cases = [
+        (
+            vec![pin(-1.0, 5.0)],
+            "Invalid threshold time -1: expected a finite, non-negative number",
+        ),
+        (vec![pin(f64::NAN, 5.0)], "Invalid threshold time NaN"),
+        (
+            vec![pin(1.0, f64::INFINITY)],
+            "Invalid threshold distance inf: expected a finite number",
+        ),
+        (
+            vec![pin(1.0, f64::NAN)],
+            "Invalid threshold distance NaN: expected a finite number",
+        ),
+        (
+            vec![pin(5.0, 5.0), pin(2.0, 5.0)],
+            "Threshold pins out of order: 5 before 2",
+        ),
+    ];
+    for (pins, message) in cases {
+        let result = std::panic::catch_unwind(|| {
+            add_with_pins(Pins {
+                positioning_thresholds: pins.clone(),
+                ..Pins::default()
+            })
+        });
+        let payload = result.expect_err(message);
+        let text = payload.downcast_ref::<String>().unwrap();
+        assert!(text.contains(message), "{text}");
+    }
 }
