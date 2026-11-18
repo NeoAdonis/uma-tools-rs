@@ -704,6 +704,8 @@ impl UnreadyRunner {
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),
+            pending_heal: 0.0,
+            pending_hp_loss: 0.0,
             pinned_activations,
             section: 0,
             phase: Phase::from_position(0.0, course),

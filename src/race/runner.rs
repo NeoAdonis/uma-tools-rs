@@ -338,6 +338,11 @@ pub struct Runner {
     /// Effects from this runner's skills that target other runners, applied by the
     /// solver once every runner has checked its skills.
     pub(crate) pending_effects: Vec<PendingEffect>,
+    /// HP recovered by this runner's skills this frame, applied once she has
+    /// checked all her skills (see `Runner::apply_pending_hp`).
+    pub(crate) pending_heal: f64,
+    /// HP lost to this runner's skills this frame, applied after the recovery.
+    pub(crate) pending_hp_loss: f64,
     /// Pinned activations still to happen during the race, by descending time
     /// (the next one last).
     pub(crate) pinned_activations: Vec<QueuedActivation>,

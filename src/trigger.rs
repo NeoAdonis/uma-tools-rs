@@ -57,7 +57,9 @@
 //! 3. **Runner creation** ([`Runner`]): guards that can't change during a race
 //!    are resolved, once every value they read is final.
 //! 4. **Every frame** ([`RaceSolver`]): every runner checks her skills
-//!    (`Runner::check_skills`), then the race state is updated.
+//!    (`Runner::check_skills`), then the race state is updated. The HP her
+//!    skills recover or lose is applied after all her checks, so they all see
+//!    the HP from before the frame's heals.
 //!
 //! # Examples
 //!

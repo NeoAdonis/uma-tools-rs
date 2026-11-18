@@ -5913,3 +5913,104 @@ fn test_invalid_positioning_threshold_pins_panic() {
         assert!(text.contains(message), "{text}");
     }
 }
+
+/// Ready runner at 5 seconds with the given skills, at `hp_percent` HP.
+///
+/// Its stamina gives a full HP of 2480.
+fn at_five_seconds(skills: Vec<Arc<Skill>>, hp_percent: f64) -> RaceSolver<Runner> {
+    let uma = Uma {
+        stamina: 2000,
+        ..uma(BaseStyle::Late)
+    };
+    let mut solver = ready_solver(10101, uma, skills, seeded_config(0));
+    solver.state.elapsed_time = 5.0;
+    set_hp_percent(&mut solver, 0, hp_percent);
+    solver
+}
+
+#[test]
+fn test_own_heal_applies_after_the_frames_skill_checks() {
+    // Heals enough HP to change the duration band of the other skill.
+    let heal = skill(22, "accumulatetime>=5", SkillType::Recovery, 0.3);
+    let scaled = Arc::new(Skill {
+        id: 33,
+        ..synthetic_skill(vec![SkillAlternative {
+            duration_scaling: DurationScaling::MultiplyRemainHp1,
+            ..alternative("accumulatetime>=5", SkillType::TargetSpeed, 0.25)
+        }])
+    });
+    // Checked after the heal, but at 1500 HP (a ×1.0 duration, instead of ×1.5
+    // at 2244).
+    let mut solver = at_five_seconds(vec![heal, scaled], 1500.0 / 2480.0 * 100.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_eq!(solver.runners[0].activated_skills.len(), 2);
+    assert_close!(remaining_durations(&solver)[0], 3.0 * 1.2);
+    // The heal lands before the frame ends.
+    assert_close!(solver.runners[0].hp.current(), 1500.0 + 0.3 * 2480.0);
+    assert_eq!(solver.runners[0].pending_heal, 0.0);
+}
+
+#[test]
+fn test_hp_guard_sees_the_hp_from_before_the_frames_heals() {
+    let heal = skill(22, "accumulatetime>=5", SkillType::Recovery, 0.5);
+    let guarded = skill(
+        33,
+        "accumulatetime>=5&hp_per<=30",
+        SkillType::TargetSpeed,
+        0.25,
+    );
+    // 20% before the heal, 70% after it.
+    let mut solver = at_five_seconds(vec![heal, guarded], 20.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_eq!(solver.runners[0].activated_skills.len(), 2);
+    assert_close!(solver.runners[0].hp.current(), 0.7 * 2480.0);
+}
+
+#[test]
+fn test_heal_dependent_skills_activate_in_the_heals_frame() {
+    let heal = skill(22, "accumulatetime>=5", SkillType::Recovery, 0.1);
+    let on_heal = skill(
+        33,
+        "is_activate_heal_skill==1",
+        SkillType::TargetSpeed,
+        0.25,
+    );
+    let on_count = skill(44, "activate_count_heal>=1", SkillType::TargetSpeed, 0.25);
+    let mut solver = at_five_seconds(vec![heal, on_heal, on_count], 50.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    let ids: Vec<_> = solver.runners[0]
+        .activated_skills
+        .iter()
+        .map(|record| record.skill_id)
+        .collect();
+    // Both activate in the frame, whichever of their triggers is checked first.
+    assert_eq!(ids.len(), 3);
+    assert!(ids.contains(&33) && ids.contains(&44));
+    assert_close!(solver.runners[0].hp.current(), 0.6 * 2480.0);
+}
+
+#[test]
+fn test_own_heals_sum_before_the_maximum_clamp() {
+    // 1.2 of the maximum HP in total, from 50%.
+    let heals = vec![
+        skill(1, "accumulatetime>=5", SkillType::Recovery, 0.6),
+        skill(2, "accumulatetime>=5", SkillType::Recovery, 0.6),
+    ];
+    let mut solver = at_five_seconds(heals, 50.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    let hp = &solver.runners[0].hp;
+    assert_close!(hp.current(), hp.maximum());
+}
+
+#[test]
+fn test_own_hp_loss_applies_after_the_heals_of_the_frame() {
+    let skills = vec![
+        skill(1, "accumulatetime>=5", SkillType::Recovery, -0.1),
+        skill(2, "accumulatetime>=5", SkillType::Recovery, 0.3),
+    ];
+    // The heal clamps at the maximum, and the loss comes after it.
+    let mut solver = at_five_seconds(skills, 90.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_close!(solver.runners[0].hp.current(), 0.9 * 2480.0);
+    assert_eq!(solver.runners[0].pending_hp_loss, 0.0);
+}

@@ -31,7 +31,8 @@
 //!   scaled by the runner's situation, the course distance and active
 //!   duration-modifying effects; or the end of the race for effects lasting
 //!   until then) and folded into her skill modifiers; **instant effects**
-//!   (recovery...) apply immediately.
+//!   (recovery...) apply immediately, except HP changes, which wait until she
+//!   has checked all her skills (see [`Runner::check_skills`]).
 //!   **Pre-race effects** (stats, start delay...) are skipped, as they were
 //!   applied before the race.
 //! - Queues each effect targeting other runners in `pending_effects`, with the
@@ -238,6 +239,11 @@ impl Runner {
     /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
     /// the activations of every runner, so they're checked afterward (see
     /// [`Self::check_advantage_triggers`]).
+    ///
+    /// The HP her skills recover or lose is applied at the end, so every skill
+    /// checked in the frame sees the HP from before them (for HP windows and
+    /// guards, and HP-scaled durations and values). Heal counts and activation
+    /// flags don't wait, so skills that depend on a heal activate in its frame.
     pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
         self.pinned_this_frame.clear();
@@ -273,6 +279,38 @@ impl Runner {
             self.try_activate_all(state, |scheduler, indices| {
                 indices.extend_from_slice(&scheduler.heal_activation_triggers);
             });
+        }
+        self.apply_pending_hp(state);
+    }
+
+    /// Applies the HP changes queued by her skills' effects (see
+    /// [`Self::apply_skill_effect`]).
+    ///
+    /// Recoveries sum up before the maximum HP clamp, which gives the same HP as
+    /// applying them one by one; HP losses apply after them. A recovery also
+    /// resets stamina keep and recalculates the last spurt.
+    fn apply_pending_hp(&mut self, state: &RaceState) {
+        if self.pending_heal > 0.0 {
+            let amount = std::mem::take(&mut self.pending_heal);
+            self.recover_hp(amount, state);
+        }
+        if self.pending_hp_loss > 0.0 {
+            let amount = std::mem::take(&mut self.pending_hp_loss);
+            self.hp.recover(-amount);
+        }
+    }
+
+    /// Recovers HP, then resets stamina keep and recalculates the last spurt.
+    fn recover_hp(&mut self, amount: f64, state: &RaceState) {
+        self.hp.recover(amount);
+
+        // Recovering HP resets stamina keep (2.5 Anniv. onward).
+        self.stamina_keep.is_active = false;
+        self.log_end(EventKind::StaminaKeep, state.elapsed_time);
+
+        // Recalculate last spurt if in Late phase or later (1st Anniv. onward).
+        if state.config.game_version >= GameVersion::FirstAnniversary && self.phase >= Phase::Late {
+            self.last_spurt = Some(self.calculate_last_spurt(self.position, state));
         }
     }
 
@@ -452,11 +490,14 @@ impl Runner {
     /// `is_popularity_top_character_activate_advantage_skill` variables.
     ///
     /// Other runners' activations are only known once every runner has checked
-    /// her skills, so this is called by the solver afterward.
+    /// her skills, so this is called by the solver afterward. The HP her skills
+    /// here recover or lose is applied at the end, like in
+    /// [`Self::check_skills`].
     pub(crate) fn check_advantage_triggers(&mut self, state: &RaceState) {
         self.try_activate_all(state, |scheduler, indices| {
             indices.extend_from_slice(&scheduler.buff_activation_triggers);
         });
+        self.apply_pending_hp(state);
     }
 
     /// Attempts to activate the skills associated with each trigger index, in
@@ -857,7 +898,9 @@ impl Runner {
     /// Effects can be categorized as follows:
     /// - Timed effects (speed, acceleration...): modify a stat for a certain
     ///   duration that is constantly tracked.
-    /// - Recovery: instant effect that recovers HP.
+    /// - Recovery: instant effect that recovers HP. For the runner's own skills
+    ///   (`source`), it's queued until she has checked all her skills (see
+    ///   [`Self::check_skills`]).
     ///
     /// `source` is the index of the runner's own skill that applies the effect, or
     /// `None` if it was cast by another runner.
@@ -892,26 +935,23 @@ impl Runner {
                 });
             }
             // Recovery (HP restoration, or HP loss if negative), as a fraction of max
-            // HP.
+            // HP. The runner's own skills queue it, so that skills checked in the same
+            // frame see the HP from before it; heals count right away, though.
             SkillType::Recovery => {
-                self.hp.recover(self.hp.maximum() * effect.modifier);
-
+                let amount = self.hp.maximum() * effect.modifier;
                 // HP loss (e.g., a skill's drawback) is not a heal.
                 if effect.modifier > 0.0 {
                     // Increment heal skill count.
                     self.trigger_scheduler.activation_counts.increment_heal();
-
-                    // Recovering HP resets stamina keep (2.5 Anniv. onward).
-                    self.stamina_keep.is_active = false;
-                    self.log_end(EventKind::StaminaKeep, state.elapsed_time);
-
-                    // Recalculate last spurt if in Late phase or later (1st Anniv.
-                    // onward).
-                    if state.config.game_version >= GameVersion::FirstAnniversary
-                        && self.phase >= Phase::Late
-                    {
-                        self.last_spurt = Some(self.calculate_last_spurt(self.position, state));
+                    if source.is_some() {
+                        self.pending_heal += amount;
+                    } else {
+                        self.recover_hp(amount, state);
                     }
+                } else if source.is_some() {
+                    self.pending_hp_loss -= amount;
+                } else {
+                    self.hp.recover(amount);
                 }
             }
             // Activate random gold skills (one per unit of modifier).
