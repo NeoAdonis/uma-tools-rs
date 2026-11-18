@@ -121,6 +121,37 @@ pub struct UmaDumpData {
     dirt_aptitude: Aptitude,
     #[serde(rename = "skill_array", deserialize_with = "deserialize_skills")]
     skills: Vec<UmaSkill>,
+    /// Number of first places in the race results. Not the `wins` field, which
+    /// is 0 in records that don't know it.
+    #[serde(
+        rename = "race_result_list",
+        default,
+        deserialize_with = "deserialize_race_wins"
+    )]
+    race_wins: Option<u8>,
+}
+
+/// A race result, as exported by umadump.
+#[derive(Deserialize)]
+struct RaceResult {
+    result_rank: u8,
+}
+
+/// Returns the number of first places among `results`.
+fn count_wins(results: &[RaceResult]) -> u8 {
+    let wins = results.iter().filter(|result| result.result_rank == 1);
+    wins.count().try_into().unwrap_or(u8::MAX)
+}
+
+/// Deserializes the number of wins from a veteran's race results, or `None` if
+/// there are none.
+fn deserialize_race_wins<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u8>, D::Error> {
+    let results = Option::<Vec<RaceResult>>::deserialize(deserializer)?;
+    Ok(results
+        .filter(|results| !results.is_empty())
+        .map(|results| count_wins(&results)))
 }
 
 /// Deserializes a running style from its game value, from 1 (Front) to 4 (End).
@@ -186,6 +217,8 @@ struct Career {
 #[derive(Deserialize)]
 struct CareerCommon {
     chara_info: UmaDumpData,
+    /// Races run so far, absent in some turns.
+    race_history: Option<Vec<RaceResult>>,
 }
 
 impl UmaDumpData {
@@ -317,7 +350,11 @@ impl UmaDumpData {
     /// ```
     pub fn from_career_json(json: &str) -> Result<Self, serde_json::Error> {
         let career: Career = serde_json::from_str(json)?;
-        Ok(career.single_mode_load_common.chara_info)
+        let common = career.single_mode_load_common;
+        let mut data = common.chara_info;
+        let history_wins = common.race_history.map(|history| count_wins(&history));
+        data.race_wins = history_wins.or(data.race_wins);
+        Ok(data)
     }
 
     /// Parses `UmaDumpData` from the Uma in training in a career turn, from a JSON
@@ -368,6 +405,7 @@ impl UmaDumpData {
                 track_aptitude,
                 style_aptitude,
                 fan_count: Some(self.fans),
+                race_wins: self.race_wins,
                 character_id: Some(self.card_id),
             },
             mood: self.mood,
@@ -421,6 +459,7 @@ mod tests {
                 track_aptitude: Aptitude::S,
                 style_aptitude: Aptitude::S,
                 fan_count: Some(98765),
+                race_wins: None,
                 character_id: Some(100101),
             },
             mood: None,
@@ -535,6 +574,7 @@ mod tests {
             (Aptitude::G, Aptitude::A, Aptitude::A)
         );
         assert_eq!(uma.fan_count, Some(172229));
+        assert_eq!(uma.race_wins, Some(9));
         assert_eq!(uma.character_id, Some(101901));
         assert_eq!(uma_data.skills.len(), 18);
         assert_eq!(
@@ -578,6 +618,53 @@ mod tests {
             let reason = format!("invalid motivation {motivation}: expected 1 to 5");
             assert!(error.to_string().contains(&reason), "{error}");
         }
+    }
+
+    #[test]
+    fn test_race_wins_count_first_places_in_results() {
+        // `wins` is 0 in records that don't know it, so it's ignored.
+        let with_results = |results: &str| {
+            let json = UMA_JSON.replace(
+                r#""fans": 98765,"#,
+                &format!(r#""fans": 98765, "wins": 0, {results}"#),
+            );
+            UmaDumpData::from_json(&json).unwrap().race_wins
+        };
+        let results = r#""race_result_list": [
+            { "result_rank": 1 }, { "result_rank": 2 }, { "result_rank": 1 }
+        ],"#;
+        assert_eq!(with_results(results), Some(2));
+        assert_eq!(
+            with_results(r#""race_result_list": [{ "result_rank": 3 }],"#),
+            Some(0)
+        );
+        assert_eq!(with_results(r#""race_result_list": [],"#), None);
+        assert_eq!(with_results(""), None);
+    }
+
+    #[test]
+    fn test_race_wins_count_first_places_in_career_history() {
+        let with_history = |history: &str| {
+            let json = career_json(UMA_JSON, 3)
+                .replace(r#""chara_info""#, &format!(r#"{history} "chara_info""#));
+            UmaDumpData::from_career_json(&json).unwrap().race_wins
+        };
+        let history = r#""race_history": [
+            { "result_rank": 1 }, { "result_rank": 5 }, { "result_rank": 1 }
+        ],"#;
+        assert_eq!(with_history(history), Some(2));
+        assert_eq!(with_history(""), None);
+
+        // Results in the Uma itself are kept without a history.
+        let own = UMA_JSON.replace(
+            r#""fans": 98765,"#,
+            r#""fans": 98765, "race_result_list": [{ "result_rank": 1 }],"#,
+        );
+        let json = career_json(&own, 3);
+        assert_eq!(
+            UmaDumpData::from_career_json(&json).unwrap().race_wins,
+            Some(1)
+        );
     }
 
     #[test]

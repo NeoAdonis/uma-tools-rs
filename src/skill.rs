@@ -332,15 +332,15 @@ pub enum ValueScaling {
     Direct = 1,
     /// Scales with the number of skills the runner has.
     MultiplySkillNum = 2,
-    /// Unity Cup skills; scales with the team's total speed in the scenario.
+    /// Unity Cup skills; scales with the race team's total speed.
     UnityCupSpeed = 3,
-    /// Unity Cup skills; scales with the team's total stamina in the scenario.
+    /// Unity Cup skills; scales with the race team's total stamina.
     UnityCupStamina = 4,
-    /// Unity Cup skills; scales with the team's total power in the scenario.
+    /// Unity Cup skills; scales with the race team's total power.
     UnityCupPower = 5,
-    /// Unity Cup skills; scales with the team's total guts in the scenario.
+    /// Unity Cup skills; scales with the race team's total guts.
     UnityCupGuts = 6,
-    /// Unity Cup skills; scales with the team's total wit in the scenario.
+    /// Unity Cup skills; scales with the race team's total wit.
     UnityCupWit = 7,
     /// Random multiplier, first variant.
     ///
@@ -350,7 +350,7 @@ pub enum ValueScaling {
     MultiplyRandom1 = 8,
     /// Random multiplier, second variant. See [`ValueScaling::MultiplyRandom1`].
     MultiplyRandom2 = 9,
-    /// Climax skills; scales with the number of races won during training.
+    /// Climax skills; scales with the number of races won during the career.
     Climax = 10,
     /// Scales with the number of overtakes in corners during the late race or
     /// later.

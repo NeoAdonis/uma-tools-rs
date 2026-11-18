@@ -5,6 +5,8 @@
     "witChecks": "Random",
     "rushing": "Random",
     "defaultFanCount": 500000,
+    "defaultRaceWins": 25,
+    "defaultUnityCupMultiplier": 1.2,
     "gateAssignment": "Unset",
     "defaultGate": "Random",
     "moodAssignment": "All",

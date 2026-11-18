@@ -126,6 +126,44 @@ fn test_late_corner_overtake_multiplier() {
 }
 
 #[test]
+fn test_unity_cup_multiplier() {
+    let cases = [
+        (0.0, 0.8),
+        (1199.9, 0.8),
+        (1200.0, 0.9),
+        (1799.9, 0.9),
+        (1800.0, 1.0),
+        (2599.9, 1.0),
+        (2600.0, 1.1),
+        (3599.9, 1.1),
+        (3600.0, 1.2),
+        (5000.0, 1.2),
+    ];
+    for (total, expected) in cases {
+        assert_eq!(unity_cup_multiplier(total), expected, "total {total}");
+    }
+}
+
+#[test]
+fn test_climax_multiplier() {
+    let cases = [
+        (0, 0.8),
+        (5, 0.8),
+        (6, 0.9),
+        (13, 0.9),
+        (14, 1.0),
+        (17, 1.0),
+        (18, 1.1),
+        (24, 1.1),
+        (25, 1.2),
+        (255, 1.2),
+    ];
+    for (wins, expected) in cases {
+        assert_eq!(climax_multiplier(wins), expected, "wins {wins}");
+    }
+}
+
+#[test]
 fn test_fan_count_multiplier() {
     let cases = [
         (19999, 0.8),

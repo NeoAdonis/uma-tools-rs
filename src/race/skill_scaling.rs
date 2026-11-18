@@ -33,22 +33,41 @@ pub(crate) fn level_scaled_modifier(effect: &SkillEffect, level: u8) -> f64 {
     effect.modifier * level_multiplier(effect.skill_type, level)
 }
 
-/// Multiplier for Unity Cup (アオハル杯) skills.
+/// Returns the multiplier for Unity Cup (アオハル杯) skills from the team's
+/// total of the stat the skill is tied to.
 ///
-/// It depends on the team's total of the stat the skill is tied to (e.g. Speed
-/// for [`ValueScaling::UnityCupSpeed`][speed]): 0.8x below 1200, 0.9x below
-/// 1800, 1.0x below 2600, 1.1x below 3600, and 1.2x from 3600. The maximum is
-/// assumed for now.
+/// The total is of base stats (see [`Uma::to_base`]). It's 0.8x below 1200,
+/// 0.9x below 1800, 1.0x below 2600, 1.1x below 3600, and 1.2x from 3600.
 ///
-/// [speed]: crate::skill::ValueScaling::UnityCupSpeed
-pub(crate) const UNITY_CUP_MULTIPLIER: f64 = 1.2;
+/// [`Uma::to_base`]: crate::uma::Uma::to_base
+pub(crate) fn unity_cup_multiplier(total: f64) -> f64 {
+    if total < 1200.0 {
+        0.8
+    } else if total < 1800.0 {
+        0.9
+    } else if total < 2600.0 {
+        1.0
+    } else if total < 3600.0 {
+        1.1
+    } else {
+        1.2
+    }
+}
 
-/// Multiplier for Climax skills.
+/// Returns the multiplier for Climax skills from the number of races won
+/// during the career.
 ///
-/// It depends on the number of races won during training: 0.8x below 6,
-/// 0.9x below 14, 1.0x below 18, 1.1x below 25, and 1.2x from 25. The maximum
-/// is assumed for now.
-pub(crate) const CLIMAX_MULTIPLIER: f64 = 1.2;
+/// It's 0.8x below 6 wins, 0.9x below 14, 1.0x below 18, 1.1x below 25, and
+/// 1.2x from 25.
+pub(crate) fn climax_multiplier(wins: u8) -> f64 {
+    match wins {
+        ..6 => 0.8,
+        6..14 => 0.9,
+        14..18 => 1.0,
+        18..25 => 1.1,
+        25.. => 1.2,
+    }
+}
 
 /// Multiplier for skills scaling with the total level of global potential in
 /// the L'Arc scenario.

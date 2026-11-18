@@ -59,6 +59,7 @@ pub(crate) fn uma(style: BaseStyle) -> Uma {
         track_aptitude: Aptitude::A,
         style_aptitude: Aptitude::A,
         fan_count: None,
+        race_wins: None,
         character_id: None,
     }
 }

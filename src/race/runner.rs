@@ -146,6 +146,13 @@ pub(crate) struct InitialState {
     pub(crate) gate_block: u8,
     /// Number of fans.
     pub(crate) fan_count: u32,
+    /// Number of races won during the career.
+    pub(crate) race_wins: u8,
+    /// Multiplier of the Unity Cup skills tied to each stat. It comes from the
+    /// total of the runner's team (see [`skill_scaling::unity_cup_multiplier`])
+    /// if the race has a runner in every gate, and is the configured default
+    /// otherwise.
+    pub(crate) unity_cup_multipliers: Stats,
     /// Whether every popularity requirement is satisfied (see
     /// [`SkillType::IgnorePopularity`]).
     pub(crate) ignores_popularity: bool,

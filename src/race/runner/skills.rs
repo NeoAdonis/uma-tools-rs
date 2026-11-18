@@ -949,15 +949,17 @@ impl Runner {
             MultiplySkillNum => {
                 modifier * skill_scaling::skill_count_multiplier(self.skill_count())
             }
-            UnityCupSpeed | UnityCupStamina | UnityCupPower | UnityCupGuts | UnityCupWit => {
-                modifier * skill_scaling::UNITY_CUP_MULTIPLIER
-            }
+            UnityCupSpeed => modifier * self.initial_state.unity_cup_multipliers.speed,
+            UnityCupStamina => modifier * self.initial_state.unity_cup_multipliers.stamina,
+            UnityCupPower => modifier * self.initial_state.unity_cup_multipliers.power,
+            UnityCupGuts => modifier * self.initial_state.unity_cup_multipliers.guts,
+            UnityCupWit => modifier * self.initial_state.unity_cup_multipliers.wit,
             // Both variants share the same multipliers for now.
             MultiplyRandom1 | MultiplyRandom2 => {
                 let roll = self.rng.skills[skill_index].random();
                 modifier * skill_scaling::random_multiplier(roll)
             }
-            Climax => modifier * skill_scaling::CLIMAX_MULTIPLIER,
+            Climax => modifier * skill_scaling::climax_multiplier(self.initial_state.race_wins),
             MultiplyMaximumRawStatus => {
                 let raw = &self.raw;
                 let max_stat = [raw.speed, raw.stamina, raw.power, raw.guts, raw.wit]

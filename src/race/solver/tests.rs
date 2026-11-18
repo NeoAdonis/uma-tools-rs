@@ -3737,9 +3737,6 @@ fn test_skill_count_includes_failed_wit_checks() {
 #[test]
 fn test_scenario_values_assume_the_maximum() {
     let cases = [
-        (ValueScaling::UnityCupSpeed, 1.2),
-        (ValueScaling::UnityCupWit, 1.2),
-        (ValueScaling::Climax, 1.2),
         (ValueScaling::MultiplyArcGlobalPotentialLevel, 1.2),
         (ValueScaling::UafWinCount, 1.2),
         (ValueScaling::CookingPoints, 1.2),
@@ -3763,6 +3760,188 @@ fn test_scenario_values_assume_the_maximum() {
             activate_last_skill(&mut solver),
             0.25 * multiplier,
             "{value_scaling:?}"
+        );
+    }
+}
+
+/// The Unity Cup scalings, one per stat in [`Stats`] order.
+const UNITY_CUP_SCALINGS: [ValueScaling; 5] = [
+    ValueScaling::UnityCupSpeed,
+    ValueScaling::UnityCupStamina,
+    ValueScaling::UnityCupPower,
+    ValueScaling::UnityCupGuts,
+    ValueScaling::UnityCupWit,
+];
+
+/// Skills with the Unity Cup scalings, with IDs 30 to 34.
+fn unity_cup_skills() -> Vec<Arc<Skill>> {
+    let scalings = UNITY_CUP_SCALINGS.into_iter();
+    scalings
+        .zip(30..)
+        .map(|(scaling, id)| scaled_skill(id, scaling, 0.25))
+        .collect()
+}
+
+/// Uma with the given raw stats, in [`Stats`] order.
+fn uma_with_stats(stats: [u16; 5]) -> Uma {
+    let [speed, stamina, power, guts, wit] = stats;
+    Uma {
+        speed,
+        stamina,
+        power,
+        guts,
+        wit,
+        ..uma(BaseStyle::Late)
+    }
+}
+
+/// Multiplier of each Unity Cup scaling for the runner with `id`, in [`Stats`]
+/// order, from the target speed her skills gain when they activate.
+fn unity_cup_multipliers(solver: &mut RaceSolver<Runner>, id: RunnerId) -> [f64; 5] {
+    let runner = solver.runners.iter_mut().find(|r| r.id() == id).unwrap();
+    let mut multipliers = [0.0; 5];
+    for (multiplier, skill_id) in multipliers.iter_mut().zip(30..) {
+        let skills = runner.available_skills();
+        let index = skills
+            .iter()
+            .position(|skill| skill.id == skill_id)
+            .unwrap();
+        let before = runner.skill_modifiers.target_speed;
+        runner.activate_skill(index, 0, &solver.state);
+        *multiplier = (runner.skill_modifiers.target_speed - before) / 0.25;
+    }
+    multipliers
+}
+
+/// Asserts that every multiplier is close to the expected one.
+fn assert_multipliers_close(actual: [f64; 5], expected: [f64; 5]) {
+    for (actual, expected) in actual.into_iter().zip(expected) {
+        assert_close!(actual, expected, "{actual:?}");
+    }
+}
+
+/// Solver of a race on `gates` gates where each of `teams` is added with
+/// `add_team`, with the IDs of the first member of each.
+fn unity_cup_solver(
+    config: Configuration,
+    gates: u8,
+    teams: Vec<Vec<Entrant>>,
+) -> (RaceSolver<Runner>, Vec<RunnerId>) {
+    let params = RaceParameters {
+        gates,
+        ..race_params()
+    };
+    let mut solver = RaceSolver::new(load_course(10101), params, config);
+    let ids = teams
+        .into_iter()
+        .map(|team| solver.add_team(team)[0])
+        .collect();
+    (solver.ready_runners(), ids)
+}
+
+#[test]
+fn test_unity_cup_multipliers_come_from_the_team_totals_per_stat() {
+    let skills = unity_cup_skills();
+    let team = |stats: [u16; 5], members: usize| {
+        vec![Entrant::new(uma_with_stats(stats), skills.clone()); members]
+    };
+    // Totals in a different tier per stat. Raw stats above 1200 count half, so
+    // the first team's speed total is 3 x 1350.
+    let teams = vec![
+        team([1500, 1000, 800, 500, 300], 3),
+        // Another team in the same race has its own totals.
+        team([700, 500, 1000, 300, 1500], 3),
+        // A team of one sums her own stats.
+        team([1100, 1250, 2400, 1000, 1300], 1),
+    ];
+    let (mut solver, ids) = unity_cup_solver(seeded_config(0), 7, teams);
+    let expected = [
+        [1.2, 1.1, 1.0, 0.9, 0.8],
+        [1.0, 0.9, 1.1, 0.8, 1.2],
+        [0.8, 0.9, 1.0, 0.8, 0.9],
+    ];
+    for (id, expected) in ids.into_iter().zip(expected) {
+        assert_multipliers_close(unity_cup_multipliers(&mut solver, id), expected);
+    }
+}
+
+#[test]
+fn test_unity_cup_totals_have_halving_and_mood_but_no_skill_bonuses() {
+    // Speed-up out-of-gate skill that would tip the last case over a tier.
+    let speed_up = skill(1, "always==1", SkillType::SpeedUp, 300.0);
+    // (speeds, mood, extra skills, expected multiplier of speed).
+    let cases = [
+        // Halved total 3450, but 3600 without halving.
+        ([1500, 1100, 1000], Mood::Normal, vec![], 1.1),
+        ([1200, 1200, 1200], Mood::Normal, vec![], 1.2),
+        // 2% below with a Bad mood.
+        ([1200, 1200, 1200], Mood::Bad, vec![], 1.1),
+        ([1100, 1100, 1200], Mood::Normal, vec![speed_up], 1.1),
+    ];
+    for (speeds, mood, mut skills, expected) in cases {
+        skills.extend(unity_cup_skills());
+        let config = Configuration {
+            mood_assignment: Assignment::All,
+            default_mood: DefaultMood::Fixed(mood),
+            ..seeded_config(0)
+        };
+        let members: Vec<_> = speeds
+            .iter()
+            .map(|&speed| {
+                let uma = Uma {
+                    speed,
+                    ..uma(BaseStyle::Late)
+                };
+                Entrant::new(uma, skills.clone())
+            })
+            .collect();
+        let first = members[0].uma.to_base(mood).speed;
+        let (mut solver, ids) = unity_cup_solver(config, 3, vec![members]);
+        // The out-of-gate skill did apply to her speed.
+        let boosted = solver.runner(ids[0]).adjusted().speed > first + 200.0;
+        assert_eq!(boosted, skills.len() > 5, "{speeds:?} {mood:?}");
+        let multipliers = unity_cup_multipliers(&mut solver, ids[0]);
+        assert_close!(multipliers[0], expected, "{speeds:?} {mood:?}");
+    }
+}
+
+#[test]
+fn test_incomplete_races_use_the_default_unity_cup_multiplier() {
+    let config = Configuration {
+        default_unity_cup_multiplier: 0.85,
+        ..seeded_config(0)
+    };
+    // Stats that give 1.2 as a team of three (3 x 1600).
+    let entrant = Entrant::new(uma_with_stats([2000; 5]), unity_cup_skills());
+    // (gates, expected multiplier): the same team, in a full race and with
+    // runners missing.
+    let cases = [(3, 1.2), (4, 0.85)];
+    for (gates, expected) in cases {
+        let team = vec![entrant.clone(); 3];
+        let (mut solver, ids) = unity_cup_solver(config, gates, vec![team]);
+        let multipliers = unity_cup_multipliers(&mut solver, ids[0]);
+        assert_multipliers_close(multipliers, [expected; 5]);
+    }
+}
+
+#[test]
+fn test_climax_multiplier_comes_from_race_wins_or_the_default() {
+    let config = Configuration {
+        default_race_wins: 14,
+        ..seeded_config(0)
+    };
+    // (race wins, expected multiplier). Unknown wins use the default.
+    let cases = [(Some(5), 0.8), (Some(6), 0.9), (Some(25), 1.2), (None, 1.0)];
+    for (race_wins, expected) in cases {
+        let uma = Uma {
+            race_wins,
+            ..uma(BaseStyle::Late)
+        };
+        let mut solver = scaled_skill_solver(uma, vec![], ValueScaling::Climax, config);
+        assert_close!(
+            activate_last_skill(&mut solver),
+            0.25 * expected,
+            "{race_wins:?}"
         );
     }
 }

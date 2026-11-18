@@ -32,6 +32,7 @@ use crate::race::runner::{
     POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy, Runner, SkillActivationFlags,
 };
 use crate::race::secure_lead;
+use crate::race::skill_scaling;
 use crate::race::spot_struggle;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::skill::*;
@@ -143,6 +144,7 @@ impl RunnerId {
 ///     track_aptitude: Aptitude::A,
 ///     style_aptitude: Aptitude::A,
 ///     fan_count: None,
+///     race_wins: None,
 ///     character_id: None,
 /// };
 /// let entrant = Entrant {
@@ -635,6 +637,7 @@ impl RaceSolver<Entrant> {
                 builder
             })
             .collect();
+        assign_unity_cup_multipliers(&mut builders, state.params.gates);
         // Ready runners by gate, which settles ties (e.g. between popularity marks).
         builders.sort_by_key(|builder| builder.gate);
 
@@ -679,6 +682,27 @@ impl RaceSolver<Entrant> {
         // ? So do the first skill checks.
         solver.update_blocking_status(0.0);
         solver
+    }
+}
+
+/// Sets the Unity Cup multipliers of every runner from the total base stats of
+/// her team, before out-of-gate skills, if the race has a runner in every
+/// gate.
+///
+/// Otherwise the multipliers keep the configured default (see
+/// [`Configuration::default_unity_cup_multiplier`]).
+fn assign_unity_cup_multipliers(builders: &mut [UnreadyRunner], gates: u8) {
+    if builders.len() != gates as usize {
+        return;
+    }
+    let mut totals = [Stats::default(); MAX_GATES as usize];
+    for builder in builders.iter() {
+        totals[builder.initial_state.team as usize].add(&builder.base);
+    }
+    for builder in builders.iter_mut() {
+        let total = &totals[builder.initial_state.team as usize];
+        builder.initial_state.unity_cup_multipliers =
+            total.map(skill_scaling::unity_cup_multiplier);
     }
 }
 

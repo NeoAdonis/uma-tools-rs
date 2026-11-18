@@ -347,6 +347,9 @@ impl UnreadyRunner {
                 popularity_rank: 0,
                 judge_scores: JudgeScores::default(),
                 fan_count: uma.fan_count.unwrap_or(state.config.default_fan_count),
+                race_wins: uma.race_wins.unwrap_or(state.config.default_race_wins),
+                // Replaced by the solver in a full field.
+                unity_cup_multipliers: Stats::splat(state.config.default_unity_cup_multiplier),
                 ignores_popularity: false,
                 // Assigned by the solver when the runner joins the race.
                 team: 0,

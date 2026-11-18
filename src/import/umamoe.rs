@@ -18,7 +18,7 @@
 //! Runners have aptitudes for every distance and track surface, so racing with
 //! them takes the ones to use (see [`UmaMoeRunner::to_uma_data`], or
 //! [`UmaMoeBuild::entrants`] for the course of the race). Their fan count is
-//! optional.
+//! optional, and there's no win count.
 //!
 //! uma.moe allows the Runaway style, which the game doesn't have: it's the
 //! effect of the Runaway skill on a Front runner. So runners with that style
@@ -657,6 +657,7 @@ impl UmaMoeRunner {
                 track_aptitude: self.track_aptitudes[track_index],
                 style_aptitude: self.style_aptitudes[style_index],
                 fan_count: self.fan_count,
+                race_wins: None,
                 character_id: self.character_id,
             },
             mood: Some(self.mood),
@@ -831,6 +832,7 @@ mod tests {
                 track_aptitude: Aptitude::A,
                 style_aptitude: Aptitude::D,
                 fan_count: Some(123456),
+                race_wins: None,
                 character_id: Some(100101),
             },
             mood: Some(Mood::Bad),

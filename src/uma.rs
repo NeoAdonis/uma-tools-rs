@@ -23,6 +23,7 @@
 //!     track_aptitude: Aptitude::A,
 //!     style_aptitude: Aptitude::A,
 //!     fan_count: None,
+//!     race_wins: None,
 //!     character_id: None,
 //! };
 //! let base_speeds: Vec<f64> = (1000..=1500)
@@ -248,6 +249,15 @@ pub struct Uma {
     /// [`Configuration::default_fan_count`]:
     ///     crate::configuration::Configuration::default_fan_count
     pub fan_count: Option<u32>,
+    /// Number of races won during the career. Used by skills that scale with
+    /// it.
+    ///
+    /// If `None`, the configured default is used (see
+    /// [`Configuration::default_race_wins`]).
+    ///
+    /// [`Configuration::default_race_wins`]:
+    ///     crate::configuration::Configuration::default_race_wins
+    pub race_wins: Option<u8>,
     /// Six-digit ID of the character card identifying the character the Uma
     /// represents and its variant.
     ///
@@ -272,6 +282,37 @@ pub struct Stats {
 }
 
 impl Stats {
+    /// Returns stats with every stat set to `value`.
+    pub(crate) fn splat(value: f64) -> Self {
+        Stats {
+            speed: value,
+            stamina: value,
+            power: value,
+            guts: value,
+            wit: value,
+        }
+    }
+
+    /// Adds every stat of `other` to the one of `self`.
+    pub(crate) fn add(&mut self, other: &Stats) {
+        self.speed += other.speed;
+        self.stamina += other.stamina;
+        self.power += other.power;
+        self.guts += other.guts;
+        self.wit += other.wit;
+    }
+
+    /// Returns the stats with `f` applied to each of them.
+    pub(crate) fn map(&self, f: impl Fn(f64) -> f64) -> Stats {
+        Stats {
+            speed: f(self.speed),
+            stamina: f(self.stamina),
+            power: f(self.power),
+            guts: f(self.guts),
+            wit: f(self.wit),
+        }
+    }
+
     /// Returns the stat of `self` corresponding to a [`ThresholdStat`].
     pub fn stat(&self, stat: ThresholdStat) -> f64 {
         match stat {
@@ -584,6 +625,7 @@ impl Uma {
     ///     track_aptitude: Aptitude::A,
     ///     style_aptitude: Aptitude::A,
     ///     fan_count: None,
+    ///     race_wins: None,
     ///     character_id: None,
     /// };
     /// assert_eq!(raw.to_base(Mood::Normal).speed, 1400.5);
@@ -658,6 +700,7 @@ mod tests {
                 "surfaceAptitude": "B",
                 "strategyAptitude": "C",
                 "fanCount": 98765,
+                "raceWins": 17,
                 "motivation": "Bad",
                 "skills": [200642, 201161]
             }}"#
@@ -678,6 +721,7 @@ mod tests {
                 track_aptitude: Aptitude::B,
                 style_aptitude: Aptitude::C,
                 fan_count: Some(98765),
+                race_wins: Some(17),
                 character_id: None,
             },
             mood: Some(Mood::Bad),

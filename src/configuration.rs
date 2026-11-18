@@ -176,7 +176,7 @@ impl<'de> Deserialize<'de> for DefaultMood {
 ///
 /// Every field is optional when deserialized; missing fields take their
 /// default value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Configuration {
     /// Version of the game whose mechanics are simulated.
@@ -201,6 +201,16 @@ pub struct Configuration {
     pub rushing: Roll,
     /// Fan count for runners that don't define their own.
     pub default_fan_count: u32,
+    /// Career race wins for runners that don't define their own (see
+    /// [`Uma::race_wins`]).
+    ///
+    /// [`Uma::race_wins`]: crate::uma::Uma::race_wins
+    pub default_race_wins: u8,
+    /// Multiplier of Unity Cup skills in races with fewer runners than gates.
+    ///
+    /// A partial field can't represent teams, so it replaces the multiplier
+    /// that the stats of each runner's team would give in a full race.
+    pub default_unity_cup_multiplier: f64,
     /// Which runners get [`Self::default_gate`] (unset gates by default).
     pub gate_assignment: Assignment,
     /// Gate of the runners that get a default one (random by default).
@@ -220,6 +230,8 @@ impl Default for Configuration {
             wit_checks: Roll::Random,
             rushing: Roll::Random,
             default_fan_count: 0,
+            default_race_wins: 25,
+            default_unity_cup_multiplier: 1.2,
             gate_assignment: Assignment::Unset,
             default_gate: DefaultGate::Random,
             mood_assignment: Assignment::All,
