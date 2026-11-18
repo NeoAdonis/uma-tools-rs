@@ -10,10 +10,12 @@
 //!
 //! When the runner is created:
 //!
-//! 1. **Wit check**: each skill is kept with a probability based on the
+//! 1. **Order**: skills are sorted by ID, the order they're checked in (see
+//!    `Runner::check_skills`), whatever order the runner was given them in.
+//! 2. **Wit check**: each skill is kept with a probability based on the
 //!    runner's wit (skills without a wit check are always kept). Skills that
 //!    fail it can't activate, but still count toward the runner's skills.
-//! 2. **Scheduler**: the `TriggerScheduler` is built for the kept skills (see
+//! 3. **Scheduler**: the `TriggerScheduler` is built for the kept skills (see
 //!    `TriggerScheduler::from_skills`). Logics refer to skills by their
 //!    index in this list. Out-of-gate alternatives are skipped.
 //!
@@ -315,6 +317,9 @@ impl UnreadyRunner {
         // Calculate skill activation chance and determine whether skills can activate.
         // N.B. As observed, skill activation update happens before out-of-gate skills
         // activate. Thus, out-of-gate skills don't affect skill activation chance.
+        // Skills are checked in ascending ID order, whatever order they were given in.
+        let mut skills = skills;
+        skills.sort_by_key(|skill| skill.id);
         let (skills, failed_skills): (Vec<_>, Vec<_>) = skills
             .into_iter()
             .partition(|skill| passes_wit_check(skill, base.wit, &pins, state, rng_seed));
@@ -707,6 +712,7 @@ impl UnreadyRunner {
             pending_heal: 0.0,
             pending_hp_loss: 0.0,
             pinned_activations,
+            due_pins: Vec::new(),
             section: 0,
             phase: Phase::from_position(0.0, course),
             section_speed_modifier,
@@ -764,6 +770,7 @@ impl UnreadyRunner {
             position_diff: PositionDiff::default(),
             rush_counter: RushCounter::default(),
             activation_flags: SkillActivationFlags::default(),
+            previous_activation_flags: SkillActivationFlags::default(),
         }
     }
 }

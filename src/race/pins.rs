@@ -184,8 +184,9 @@ pub struct PinnedActivation {
     ///
     /// Skills are checked at the end of each frame, and the skill activates on
     /// the first check at or after that time, once she has left the gate and
-    /// before she finishes. Out-of-gate alternatives activate before the race,
-    /// so their time is 0.
+    /// before she finishes. Within that check, it goes in skill ID order among
+    /// the other skills' activations, like the skill would by its conditions.
+    /// Out-of-gate alternatives activate before the race, so their time is 0.
     pub time: f64,
     /// Index of the alternative that activates.
     pub alternative: usize,

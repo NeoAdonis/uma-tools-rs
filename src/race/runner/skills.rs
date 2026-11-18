@@ -166,7 +166,7 @@ impl SkillModifiers {
     }
 }
 
-/// Skill activation flags for the current update cycle.
+/// Skill activation flags for an update cycle.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SkillActivationFlags {
     /// Indicates if a skill was activated in the current update cycle.
@@ -179,6 +179,18 @@ pub struct SkillActivationFlags {
 }
 
 impl Runner {
+    /// Whether one of the runner's skills activated earlier in this frame or in
+    /// the previous one, which is what `is_activate_any_skill` checks.
+    pub(crate) fn recently_activated_any(&self) -> bool {
+        self.activation_flags.any_activated || self.previous_activation_flags.any_activated
+    }
+
+    /// Whether one of the runner's heal skills activated earlier in this frame or
+    /// in the previous one, which is what `is_activate_heal_skill` checks.
+    pub(crate) fn recently_activated_heal(&self) -> bool {
+        self.activation_flags.heal_activated || self.previous_activation_flags.heal_activated
+    }
+
     /// Resolves the guards that can't change during the race so that they aren't
     /// checked every frame.
     ///
@@ -223,15 +235,24 @@ impl Runner {
     ///    logics never wait for a precondition: they belong to out-of-gate skills,
     ///    whose preconditions were evaluated before the race, along with their
     ///    conditions.
-    /// 2. Pinned activations due by now (see [`SkillPin::Activations`]). Their
-    ///    skills' conditions are checked by the triggers below, which confirm
-    ///    them (see [`SkillActivationRecord::conditions_met`]).
-    /// 3. Precondition windows, so that a skill can activate in the same frame its
+    /// 2. Precondition windows, so that a skill can activate in the same frame its
     ///    precondition is satisfied.
-    /// 4. Triggers that don't depend on this frame's activations: windows and
-    ///    last straight entry, in the order the logics were built.
-    /// 5. Any-skill and heal activation triggers, which depend on the activations
-    ///    above.
+    /// 3. State triggers (windows and last straight entry) and any-skill and
+    ///    heal activation triggers, in the order the logics were built (by skill
+    ///    ID, then by alternative). A skill can thus activate in the same frame
+    ///    as a skill with a lower ID, and see its activation (e.g. in
+    ///    `activate_count_all`), but not the other way around. Skills reacting
+    ///    to activations also see those of the previous frame, so they react in
+    ///    the next frame to skills with a higher ID.
+    /// 4. Pinned activations due by now and not activated yet (see
+    ///    [`SkillPin::Activations`]).
+    ///
+    /// Pinned activations due by now are interleaved with step 3 in skill ID
+    /// order: one activates right before the first logic of a skill with the same
+    /// or a higher ID is tried, so lower IDs don't see it in this frame. The
+    /// logics of the pinned skill confirm it (see
+    /// [`SkillActivationRecord::conditions_met`]). The precondition windows only
+    /// hold logics that unlock preconditions, which activate no pins.
     ///
     /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
     ///
@@ -245,6 +266,9 @@ impl Runner {
     /// guards, and HP-scaled durations and values). Heal counts and activation
     /// flags don't wait, so skills that depend on a heal activate in its frame.
     pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
+        // Taken now, so that it includes the activations after the last check of
+        // the previous frame (e.g. by advantage triggers).
+        self.previous_activation_flags = self.activation_flags;
         self.activation_flags = SkillActivationFlags::default();
         self.pinned_this_frame.clear();
         // Out-of-gate skills activate on the first frame the runner moves; their
@@ -263,23 +287,13 @@ impl Runner {
                 record.conditions_met = false;
             }
         }
-        self.activate_pinned_skills(state);
+        self.collect_due_pins(state);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
-        self.check_state_triggers(state);
-        // Depend on the activations above. Heal-dependent triggers go last, as
-        // any-skill-dependent ones may activate heals.
-        if self.activation_flags.any_activated {
-            self.try_activate_all(state, |scheduler, indices| {
-                indices.extend_from_slice(&scheduler.any_activation_triggers);
-            });
-        }
-        if self.activation_flags.heal_activated {
-            self.try_activate_all(state, |scheduler, indices| {
-                indices.extend_from_slice(&scheduler.heal_activation_triggers);
-            });
-        }
+        self.check_triggers(state);
+        // Pins no logic was reached for yet; they stay unconfirmed.
+        self.activate_due_pins(usize::MAX, state);
         self.apply_pending_hp(state);
     }
 
@@ -314,17 +328,34 @@ impl Runner {
         }
     }
 
-    /// Activates the pinned skill alternatives due by now, in order.
-    ///
-    /// They wait for their conditions to confirm them on this frame (see
-    /// [`Self::check_pinned_skill`]), which also start their cooldowns.
-    fn activate_pinned_skills(&mut self, state: &RaceState) {
+    /// Moves the pinned activations due by now to the frame's queue, ordered by
+    /// skill (then time, as queued), the next one last.
+    fn collect_due_pins(&mut self, state: &RaceState) {
         while self
             .pinned_activations
             .last()
             .is_some_and(|next| next.time <= state.elapsed_time)
         {
             let next = self.pinned_activations.pop().expect("checked above");
+            self.due_pins.push(next);
+        }
+        // Stable, so that the order of the same skill is kept.
+        self.due_pins.sort_by_key(|pin| pin.skill_index);
+        self.due_pins.reverse();
+    }
+
+    /// Activates the due pinned activations of skills up to `skill_index`, in
+    /// order.
+    ///
+    /// They wait for their conditions to confirm them on this frame (see
+    /// [`Self::check_pinned_skill`]), which also start their cooldowns.
+    fn activate_due_pins(&mut self, skill_index: usize, state: &RaceState) {
+        while self
+            .due_pins
+            .last()
+            .is_some_and(|next| next.skill_index <= skill_index)
+        {
+            let next = self.due_pins.pop().expect("checked above");
             self.pinned_this_frame.push(self.activated_skills.len());
             self.activate_skill_as(next.skill_index, next.alternative_index, Some(&next), state);
         }
@@ -442,15 +473,21 @@ impl Runner {
         }
     }
 
-    /// Checks the triggers that don't depend on this frame's activations.
+    /// Checks the state triggers and the any-skill and heal activation triggers.
     ///
-    /// Windows (position, phase, time, HP) containing the current values are
-    /// checked, as well as entering the last straight since the last check.
+    /// State triggers are windows (position, phase, time, HP) containing the
+    /// current values and entering the last straight since the last check.
     ///
-    /// These triggers are checked together in the order the logics were built (by
-    /// skill, then by alternative), so that when several alternatives of a skill
-    /// are satisfied on the same frame, the first one wins.
-    fn check_state_triggers(&mut self, state: &RaceState) {
+    /// All of them are checked together in the order the logics were built (by
+    /// skill ID, then by alternative), so that when several alternatives of a
+    /// skill are satisfied on the same frame, the first one wins. An any-skill
+    /// (or heal) activation trigger is only checked if, when its turn comes, a
+    /// skill (or heal) has activated in the previous frame or earlier in this
+    /// one (see [`Self::recently_activated_any`]).
+    ///
+    /// Due pinned activations activate before the first logic of a skill with
+    /// the same or a higher ID, so they count as earlier activations for it.
+    fn check_triggers(&mut self, state: &RaceState) {
         let entered_last_straight = self
             .segments
             .take_entered_straight()
@@ -459,29 +496,86 @@ impl Runner {
         let position = self.position;
         let phase = self.phase as i8 as f64;
         let hp = self.hp.percent();
-        self.try_activate_all(state, |scheduler, inside| {
-            inside.extend(scheduler.position_windows.advance(position, EPSILON));
-            // The guards evaluate the same phase, so no epsilon is needed.
-            inside.extend(scheduler.phase_windows.advance(phase, 0.0));
-            inside.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
+        // Taken, since activating skills needs the whole runner.
+        let mut indices = std::mem::take(&mut self.trigger_scheduler.check_buffer);
+        let scheduler = &mut self.trigger_scheduler;
+        indices.extend(scheduler.position_windows.advance(position, EPSILON));
+        // The guards evaluate the same phase, so no epsilon is needed.
+        indices.extend(scheduler.phase_windows.advance(phase, 0.0));
+        indices.extend(scheduler.time_windows.advance(state.elapsed_time, EPSILON));
 
-            // HP can recover, so HP windows are never dropped. Unlike positions and
-            // times, the guards evaluate the same HP percentage as the window, so no
-            // epsilon is needed.
-            inside.extend(
-                scheduler
-                    .hp_windows
-                    .iter()
-                    .filter(|window| (window.min_threshold..=window.max_threshold).contains(&hp))
-                    .map(|window| window.logic_idx),
-            );
-            if entered_last_straight {
-                inside.extend(&scheduler.last_straight_triggers);
+        // HP can recover, so HP windows are never dropped. Unlike positions and
+        // times, the guards evaluate the same HP percentage as the window, so no
+        // epsilon is needed.
+        indices.extend(
+            scheduler
+                .hp_windows
+                .iter()
+                .filter(|window| (window.min_threshold..=window.max_threshold).contains(&hp))
+                .map(|window| window.logic_idx),
+        );
+        if entered_last_straight {
+            indices.extend(&scheduler.last_straight_triggers);
+        }
+        // Try activations in the order the logics were built.
+        indices.sort_unstable();
+
+        // The activation lists are sorted too, so they're merged in. Absent
+        // entries are `usize::MAX`, which sorts last.
+        let any_flag = self.recently_activated_any();
+        let heal_flag = self.recently_activated_heal();
+        let deferred = &self.trigger_scheduler;
+        if deferred.any_activation_triggers.is_empty()
+            && deferred.heal_activation_triggers.is_empty()
+        {
+            // Common case: nothing to merge.
+            for &index in &indices {
+                self.activate_pins_before(index, state);
+                self.try_activate_skill(index, state);
             }
+        } else if indices.is_empty() && !any_flag && !heal_flag && self.due_pins.is_empty() {
+            // Nothing can set a flag.
+        } else {
+            let (mut next_state, mut next_any, mut next_heal) = (0, 0, 0);
+            loop {
+                let scheduler = &self.trigger_scheduler;
+                let at = |list: &[usize], i: usize| list.get(i).copied().unwrap_or(usize::MAX);
+                let state_index = at(&indices, next_state);
+                let any_index = at(&scheduler.any_activation_triggers, next_any);
+                let heal_index = at(&scheduler.heal_activation_triggers, next_heal);
+                let index = state_index.min(any_index).min(heal_index);
+                if index == usize::MAX {
+                    break;
+                }
+                // Flags are read as the pass reaches the logic, so only earlier
+                // activations count.
+                self.activate_pins_before(index, state);
+                let ready = if index == state_index {
+                    next_state += 1;
+                    true
+                } else if index == any_index {
+                    next_any += 1;
+                    self.recently_activated_any()
+                } else {
+                    next_heal += 1;
+                    self.recently_activated_heal()
+                };
+                if ready {
+                    self.try_activate_skill(index, state);
+                }
+            }
+        }
+        indices.clear();
+        self.trigger_scheduler.check_buffer = indices;
+    }
 
-            // Try activations in the order the logics were built.
-            inside.sort_unstable();
-        });
+    /// Activates the due pinned activations that go before the logic with index
+    /// `logic_index`.
+    fn activate_pins_before(&mut self, logic_index: usize, state: &RaceState) {
+        if !self.due_pins.is_empty() {
+            let skill_index = self.trigger_scheduler.skill_logics[logic_index].skill_index;
+            self.activate_due_pins(skill_index, state);
+        }
     }
 
     /// Checks activation-dependent triggers.
@@ -557,7 +651,7 @@ impl Runner {
         //
         // When several alternatives are satisfied on the same frame, the first one
         // checked wins. Triggers that don't depend on this frame's activations are
-        // checked by alternative (see [`Self::check_state_triggers`]), but
+        // checked by alternative (see [`Self::check_triggers`]), but
         // activation-dependent ones (any skill, heal, other runners' buffs) are
         // checked after them, as they depend on their activations.
         //

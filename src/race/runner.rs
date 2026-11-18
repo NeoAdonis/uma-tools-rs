@@ -346,6 +346,10 @@ pub struct Runner {
     /// Pinned activations still to happen during the race, by descending time
     /// (the next one last).
     pub(crate) pinned_activations: Vec<QueuedActivation>,
+    /// Pinned activations due in the current frame that haven't activated yet,
+    /// by descending skill (the next one last), so that they activate in skill ID
+    /// order along with the checks.
+    pub(crate) due_pins: Vec<QueuedActivation>,
     /// Chance of rushing as a percentage (see `rush::chance`).
     ///
     /// This is determined at the start of the race along with deciding whether the
@@ -481,6 +485,8 @@ pub struct Runner {
     pub(crate) trigger_scheduler: TriggerScheduler,
     /// Skill activation flags for the current update cycle.
     pub(crate) activation_flags: SkillActivationFlags,
+    /// Skill activation flags of the previous update cycle.
+    pub(crate) previous_activation_flags: SkillActivationFlags,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

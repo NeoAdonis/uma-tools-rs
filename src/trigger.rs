@@ -46,20 +46,31 @@
 //!
 //! # Lifecycle
 //!
-//! 1. **Runner setup** (`UnreadyRunner`): skills that pass the wit check are
-//!    kept, and the `TriggerScheduler` is built for them. Out-of-gate
-//!    alternatives are skipped: their condition is evaluated before the race
-//!    instead. Skills whose activations are pinned only get their conditions
-//!    checked, to report whether they agree with the pins.
+//! 1. **Runner setup** (`UnreadyRunner`): skills are sorted by ID, so that
+//!    they're checked in ascending ID order (a skill can then see the
+//!    activations of the skills with a lower ID in the same frame). Skills that
+//!    pass the wit check are kept, and the `TriggerScheduler` is built for
+//!    them. Out-of-gate alternatives are skipped: their condition is evaluated
+//!    before the race instead.
 //! 2. **Out-of-gate skills**: before the race, their pre-race effects are
 //!    applied, and they're scheduled to activate on the first frame the runner
 //!    moves.
 //! 3. **Runner creation** ([`Runner`]): guards that can't change during a race
 //!    are resolved, once every value they read is final.
 //! 4. **Every frame** ([`RaceSolver`]): every runner checks her skills
-//!    (`Runner::check_skills`), then the race state is updated. The HP her
-//!    skills recover or lose is applied after all her checks, so they all see
-//!    the HP from before the frame's heals.
+//!    (`Runner::check_skills`). Window triggers and any-skill or heal
+//!    activation triggers are checked together in ascending skill ID order, the
+//!    latter reacting to the activations before them in the frame and to those
+//!    of the previous frame. Then the race state is updated. The HP her skills
+//!    recover or lose is applied after all her checks, so they all see the HP
+//!    from before the frame's heals.
+//!
+//! ## Pinned Activations
+//!
+//! A skill whose activations are pinned (e.g. to replay a race) activates at
+//! the pinned times instead, and its conditions are only checked to report
+//! whether they agree with the pins. In a frame, a pinned activation takes its
+//! skill's place in the ID order, so only higher IDs see it in that frame.
 //!
 //! # Examples
 //!

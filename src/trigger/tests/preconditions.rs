@@ -115,8 +115,8 @@ fn test_static_preconditions_resolved_at_race_start() {
     // Course 10104 is a medium distance (distance_type==3) turf course
     let solver = ready_runner(vec![
         speed_skill(5, "distance_rate>=10&order<=18", "distance_type==3"),
-        speed_skill(7, "distance_rate>=10&order<=18", "distance_type==1"),
         speed_skill(6, "distance_rate>=10&order<=18", "ground_type==1&order<=18"),
+        speed_skill(7, "distance_rate>=10&order<=18", "distance_type==1"),
     ]);
     let scheduler = &solver.runners[0].trigger_scheduler;
 
@@ -129,7 +129,7 @@ fn test_static_preconditions_resolved_at_race_start() {
     assert_eq!(windows.len(), 2);
     assert_eq!(windows[0].skill_index, 0);
     assert!(windows[0].guards.is_empty());
-    assert_eq!(windows[1].skill_index, 2);
+    assert_eq!(windows[1].skill_index, 1);
     assert_eq!(windows[1].guards.len(), 1, "Only order<=18 should remain");
 
     let activations = activation_distances(vec![

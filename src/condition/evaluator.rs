@@ -681,8 +681,8 @@ fn activation_value(
         ActivateCountStart => runner.trigger_scheduler.activation_counts.start as i32,
 
         // Skill activations in the current frame.
-        IsActivateAnySkill => runner.activation_flags.any_activated as i32,
-        IsActivateHealSkill => runner.activation_flags.heal_activated as i32,
+        IsActivateAnySkill => runner.recently_activated_any() as i32,
+        IsActivateHealSkill => runner.recently_activated_heal() as i32,
         IsActivateOtherSkillDetail => {
             // Check if another alternative of the same skill has activated.
             logic_ctx.is_some_and(|logic| {

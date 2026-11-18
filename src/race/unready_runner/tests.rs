@@ -231,8 +231,8 @@ fn test_first_satisfied_alternative_is_applied() {
 
 #[test]
 fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
-    // Out-of-gate skills listed first must not shift the skills the trigger
-    // scheduler refers to.
+    // Out-of-gate skills sorted before the others must not shift the skills the
+    // trigger scheduler refers to.
     let skills = vec![
         skill(8, "always==1", SkillType::SpeedUp, 40.0),
         skill(2, "always==1", SkillType::AddStartDelay, 0.1),
@@ -247,7 +247,7 @@ fn test_runtime_skills_activate_alongside_out_of_gate_skills() {
         .map(|record| (record.skill_id, record.distance))
         .collect();
     assert_eq!(activations.len(), 3, "{activations:?}");
-    assert_eq!(&activations[..2], &[(8, 0.0), (2, 0.0)]);
+    assert_eq!(&activations[..2], &[(2, 0.0), (8, 0.0)]);
     assert_eq!(activations[2].0, 5);
     assert!(activations[2].1 >= 1000.0, "{activations:?}");
 }

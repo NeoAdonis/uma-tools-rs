@@ -2871,7 +2871,12 @@ fn activates_with_most_popular(
     let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
     let ids: Vec<Vec<i32>> = skills
         .iter()
-        .map(|skills| skills.iter().map(|skill| skill.id).collect())
+        .map(|skills| {
+            // Runners keep their skills sorted by ID.
+            let mut ids: Vec<_> = skills.iter().map(|skill| skill.id).collect();
+            ids.sort_unstable();
+            ids
+        })
         .collect();
     for skills in skills {
         solver.add_runner(Entrant::new(uma(BaseStyle::Late), skills));
@@ -4162,7 +4167,7 @@ fn test_overtakes_extend_effects() {
         id: 12,
         ..synthetic_skill(vec![alternative])
     });
-    let direct = timed_skill(9, DurationScaling::Direct);
+    let direct = timed_skill(19, DurationScaling::Direct);
     let mut solver = timed_skill_solver(vec![extended, direct]);
     let course = solver.state.course.clone();
     solver.runners[0].activate_skill(0, 0, &solver.state);
@@ -4432,8 +4437,10 @@ fn test_additional_effects_apply_on_other_skill_activations() {
     ];
     skills.extend([1, 5, 6, 36].map(other));
     let mut solver = timed_skill_solver(skills);
-    let activate = |solver: &mut RaceSolver<Runner>, skill_index| {
+    let activate = |solver: &mut RaceSolver<Runner>, skill_id| {
         let runner = &mut solver.runners[0];
+        let skill_index = runner.skills().iter().position(|s| s.id == skill_id);
+        let skill_index = skill_index.unwrap();
         runner.activate_skill(skill_index, 0, &solver.state);
         let additional_triggers = |additional| {
             runner
@@ -4449,14 +4456,14 @@ fn test_additional_effects_apply_on_other_skill_activations() {
     };
 
     // A skill's own activation doesn't count.
-    assert_eq!(activate(&mut solver, 0), (Some(0), None));
+    assert_eq!(activate(&mut solver, 13), (Some(0), None));
     assert_close!(solver.runners[0].skill_modifiers.target_speed, 0.25);
     // Activating a skill with additional effects counts for the others.
-    assert_eq!(activate(&mut solver, 1), (Some(1), Some(0)));
-    assert_eq!(activate(&mut solver, 2), (Some(2), Some(1)));
+    assert_eq!(activate(&mut solver, 31), (Some(1), Some(0)));
+    assert_eq!(activate(&mut solver, 1), (Some(2), Some(1)));
     // Up to three and two times respectively.
-    assert_eq!(activate(&mut solver, 3), (Some(3), Some(2)));
-    assert_eq!(activate(&mut solver, 4), (Some(3), Some(2)));
+    assert_eq!(activate(&mut solver, 5), (Some(3), Some(2)));
+    assert_eq!(activate(&mut solver, 6), (Some(3), Some(2)));
     assert_close!(
         solver.runners[0].skill_modifiers.target_speed,
         0.25 + 0.05 * 3.0 + 0.25 + 0.05 * 2.0
@@ -5987,6 +5994,143 @@ fn test_heal_dependent_skills_activate_in_the_heals_frame() {
     assert_eq!(ids.len(), 3);
     assert!(ids.contains(&33) && ids.contains(&44));
     assert_close!(solver.runners[0].hp.current(), 0.6 * 2480.0);
+}
+
+#[test]
+fn test_skills_are_checked_in_ascending_id_order() {
+    let ids = |solver: &RaceSolver<Runner>| -> Vec<i32> {
+        let records = solver.runners[0].activated_skills.iter();
+        records.map(|record| record.skill_id).collect()
+    };
+    // The higher ID is listed first, but it's checked after the lower one, so it
+    // sees its activation in the same frame.
+    let first = skill(1, "accumulatetime>=5", SkillType::TargetSpeed, 0.25);
+    let follower = skill(2, "activate_count_all>=1", SkillType::TargetSpeed, 0.25);
+    let mut solver = at_five_seconds(vec![follower, first], 50.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_eq!(ids(&solver), [1, 2]);
+
+    // The lower ID is listed last, but it's checked first, so it only sees the
+    // higher one's activation in the next frame.
+    let first = skill(2, "accumulatetime>=5", SkillType::TargetSpeed, 0.25);
+    let follower = skill(1, "activate_count_all>=1", SkillType::TargetSpeed, 0.25);
+    let mut solver = at_five_seconds(vec![first, follower], 50.0);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_eq!(ids(&solver), [2]);
+    solver.runners[0].check_skills(&mut solver.state);
+    assert_eq!(ids(&solver), [2, 1]);
+}
+
+#[test]
+fn test_reactive_skills_see_activations_of_the_frame_and_the_previous_one() {
+    let ids = |solver: &RaceSolver<Runner>| -> Vec<i32> {
+        let records = solver.runners[0].activated_skills.iter();
+        records.map(|record| record.skill_id).collect()
+    };
+    for (condition, source_type, amount) in [
+        ("is_activate_any_skill==1", SkillType::TargetSpeed, 0.25),
+        ("is_activate_heal_skill==1", SkillType::Recovery, 0.1),
+    ] {
+        // The source skill activates by its conditions, or from a pin (which goes
+        // in ID order too).
+        for pinned in [false, true] {
+            let case = (condition, pinned);
+            let source = |id| skill(id, "accumulatetime>=5", source_type, amount);
+            let reactive = |id, condition: &str| skill(id, condition, SkillType::TargetSpeed, 0.25);
+            let solver_at_five_seconds = |skills: Vec<Arc<Skill>>, source_id| {
+                if !pinned {
+                    return at_five_seconds(skills, 50.0);
+                }
+                let pins = activation_pins(source_id, vec![pinned_at(5.0)]);
+                let mut solver = ready_alone(EffectiveStyle::Pace, skills, pins);
+                solver.state.elapsed_time = 5.0;
+                solver
+            };
+
+            // The reactive skill has the higher ID, so it sees the activation in
+            // the same frame.
+            let skills = vec![reactive(2, condition), source(1)];
+            let mut solver = solver_at_five_seconds(skills, 1);
+            solver.runners[0].check_skills(&mut solver.state);
+            assert_eq!(ids(&solver), [1, 2], "{case:?}");
+
+            // The reactive skill has the lower ID, so it sees the activation in the
+            // next frame.
+            let skills = vec![source(2), reactive(1, condition)];
+            let mut solver = solver_at_five_seconds(skills, 2);
+            solver.runners[0].check_skills(&mut solver.state);
+            assert_eq!(ids(&solver), [2], "{case:?}");
+            solver.runners[0].check_skills(&mut solver.state);
+            assert_eq!(ids(&solver), [2, 1], "{case:?}");
+
+            // The activation is only seen by the following frame: when the
+            // reactive skill can only activate a frame later, it's too late.
+            let late = reactive(1, &format!("{condition}&accumulatetime>=6"));
+            let mut solver = solver_at_five_seconds(vec![source(2), late], 2);
+            solver.runners[0].check_skills(&mut solver.state);
+            solver.runners[0].check_skills(&mut solver.state);
+            solver.state.elapsed_time = 6.0;
+            solver.runners[0].check_skills(&mut solver.state);
+            assert_eq!(ids(&solver), [2], "{case:?}");
+        }
+    }
+}
+
+#[test]
+fn test_pins_due_together_activate_in_skill_order() {
+    // Pinned in the opposite order, the later one of the lower ID.
+    let skills = vec![
+        skill(1, "accumulatetime>=5", SkillType::TargetSpeed, 0.25),
+        skill(2, "accumulatetime>=5", SkillType::TargetSpeed, 0.25),
+    ];
+    let mut pins = activation_pins(2, vec![pinned_at(4.9)]);
+    pins.skills
+        .insert(1, SkillPin::Activations(vec![pinned_at(4.95)]));
+    let mut solver = ready_alone(EffectiveStyle::Pace, skills, pins);
+    solver.state.elapsed_time = 5.0;
+    solver.runners[0].check_skills(&mut solver.state);
+    let records = &solver.runners[0].activated_skills;
+    let ids: Vec<_> = records.iter().map(|record| record.skill_id).collect();
+    assert_eq!(ids, [1, 2]);
+    assert!(records.iter().all(|record| record.conditions_met));
+}
+
+#[test]
+fn test_pins_without_a_reached_logic_still_activate_unconfirmed() {
+    // Its conditions don't hold yet.
+    let skills = vec![skill(1, "accumulatetime>=9", SkillType::TargetSpeed, 0.25)];
+    let pins = activation_pins(1, vec![pinned_at(5.0)]);
+    let mut solver = ready_alone(EffectiveStyle::Pace, skills, pins);
+    solver.state.elapsed_time = 5.0;
+    solver.runners[0].check_skills(&mut solver.state);
+    let [record] = &solver.runners[0].activated_skills[..] else {
+        panic!("expected a single activation");
+    };
+    assert!(!record.conditions_met);
+}
+
+#[test]
+fn test_pinned_skills_with_preconditions_confirm_in_the_frame_they_unlock() {
+    let alternative = alternative_with_precondition(
+        "accumulatetime>=5",
+        "accumulatetime>=5",
+        SkillType::TargetSpeed,
+        0.25,
+    );
+    let skill = Arc::new(Skill {
+        id: 1,
+        ..synthetic_skill(vec![alternative])
+    });
+    let pins = activation_pins(1, vec![pinned_at(5.0)]);
+    let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], pins);
+    solver.state.elapsed_time = 5.0;
+    solver.runners[0].check_skills(&mut solver.state);
+    let runner = &solver.runners[0];
+    let [record] = &runner.activated_skills[..] else {
+        panic!("expected a single activation");
+    };
+    assert!(record.conditions_met);
+    assert!(runner.missing_activations.is_empty());
 }
 
 #[test]
