@@ -5443,12 +5443,16 @@ fn test_pinned_skills_report_what_their_conditions_allow() {
         // A wit check can explain a missing activation, unless she has one.
         (with_wit_check(window()), vec![], vec![], vec![]),
         (window(), vec![open - DELTA_TIME / 2.0], vec![true], vec![]),
-        (window(), vec![open - 2.0], vec![false], vec![open]),
-        // Unconfirmed, the activation she would have had starts the cooldown.
+        // Unconfirmed, a pinned activation starts the cooldown, which keeps the
+        // activation she would have had at `open` from being reported.
+        (window(), vec![open - 2.0], vec![false], vec![]),
+        // An activation she would have had before the pin is reported once, and
+        // doesn't keep the conditions from confirming the pin.
+        (window(), vec![open + 1.0], vec![true], vec![open]),
         (
             with_wit_check(window()),
             vec![open + 1.0],
-            vec![false],
+            vec![true],
             vec![open],
         ),
         // Random variables can be anywhere in their area, and explain a missing
@@ -5465,6 +5469,68 @@ fn test_pinned_skills_report_what_their_conditions_allow() {
             "{case:?}"
         );
     }
+}
+
+#[test]
+fn test_missing_activation_reports_one_alternative_before_the_pin() {
+    let alternatives = ["accumulatetime>=10", "accumulatetime>=10"]
+        .map(|condition| alternative(condition, SkillType::TargetSpeed, 0.1));
+    let skill = Arc::new(Skill {
+        id: 1,
+        ..synthetic_skill(alternatives.to_vec())
+    });
+    // The alternative of the pin doesn't change what is reported.
+    for alternative in [0, 1] {
+        let pins = activation_pins(1, vec![pinned_alternative_at(12.0, alternative)]);
+        let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill.clone()], pins);
+        solver.run();
+        let runner = &solver.runners[0];
+        let pinned: Vec<_> = runner
+            .activated_skills
+            .iter()
+            .map(|r| r.alternative)
+            .collect();
+        let met: Vec<_> = runner
+            .activated_skills
+            .iter()
+            .map(|r| r.conditions_met)
+            .collect();
+        let missing: Vec<_> = runner
+            .missing_activations
+            .iter()
+            .map(|r| r.alternative)
+            .collect();
+        assert_eq!(
+            (pinned, met, missing),
+            (vec![alternative], vec![true], vec![0])
+        );
+    }
+}
+
+#[test]
+fn test_unconfirmed_pins_start_the_cooldown() {
+    // 5 s, which is 6 s on the 1200 m course.
+    let alternative = SkillAlternative {
+        base_cooldown: 5.0,
+        ..alternative("accumulatetime>=10", SkillType::TargetSpeed, 0.1)
+    };
+    let skill = Arc::new(Skill {
+        id: 1,
+        ..synthetic_skill(vec![alternative])
+    });
+    let pins = activation_pins(1, vec![pinned_at(8.0)]);
+    let mut solver = ready_alone(EffectiveStyle::Pace, vec![skill], pins);
+    solver.run();
+    let runner = &solver.runners[0];
+    let pinned = &runner.activated_skills[0];
+    assert!(!pinned.conditions_met);
+    // Not reported until the cooldown ends.
+    let missing = runner.missing_activations.first().expect("a report");
+    let end = pinned.time + 6.0;
+    assert!(
+        (end..end + DELTA_TIME).contains(&missing.time),
+        "{missing:?}"
+    );
 }
 
 #[test]

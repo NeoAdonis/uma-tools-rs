@@ -372,9 +372,8 @@ pub struct SkillActivationRecord {
     /// A pinned activation is allowed if the skill's conditions held for its
     /// alternative on its frame, ignoring the rolls: the wit check, random
     /// lots, and the segment of random variables, which can be anywhere in
-    /// their area (e.g. the whole phase for `phase_random`). Cooldowns still
-    /// apply, started by the activations the conditions allowed or would have
-    /// had.
+    /// their area (e.g. the whole phase for `phase_random`). Every pinned
+    /// activation starts the cooldown of its alternative, allowed or not.
     ///
     /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
     /// [`SkillType::ActivateRandomGold`]:

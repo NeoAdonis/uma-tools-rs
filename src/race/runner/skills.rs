@@ -270,7 +270,12 @@ impl Runner {
         // the previous frame (e.g. by advantage triggers).
         self.previous_activation_flags = self.activation_flags;
         self.activation_flags = SkillActivationFlags::default();
-        self.pinned_this_frame.clear();
+        // Pinned activations start their cooldowns once every check that could
+        // confirm them is over.
+        for (skill_index, record_index) in std::mem::take(&mut self.pinned_this_frame) {
+            let record = &self.activated_skills[record_index];
+            self.start_cooldown(skill_index, record.alternative, record.time, state);
+        }
         // Out-of-gate skills activate on the first frame the runner moves; their
         // pre-race effects were already applied before the race. Taken, so that
         // they're only checked once.
@@ -348,7 +353,8 @@ impl Runner {
     /// order.
     ///
     /// They wait for their conditions to confirm them on this frame (see
-    /// [`Self::check_pinned_skill`]), which also start their cooldowns.
+    /// [`Self::check_pinned_skill`]). They start their cooldowns afterward, and
+    /// allow their skills to report a missing activation again.
     fn activate_due_pins(&mut self, skill_index: usize, state: &RaceState) {
         while self
             .due_pins
@@ -356,7 +362,9 @@ impl Runner {
             .is_some_and(|next| next.skill_index <= skill_index)
         {
             let next = self.due_pins.pop().expect("checked above");
-            self.pinned_this_frame.push(self.activated_skills.len());
+            self.missing_reported[next.skill_index] = false;
+            self.pinned_this_frame
+                .push((next.skill_index, self.activated_skills.len()));
             self.activate_skill_as(next.skill_index, next.alternative_index, Some(&next), state);
         }
     }
@@ -365,8 +373,13 @@ impl Runner {
     ///
     /// It confirms this frame's pinned activation of the alternative, or records it
     /// as a missing activation if `reports_missing` (see
-    /// [`Runner::missing_activations`]). Either way, its cooldown starts, as if it
+    /// [`Runner::missing_activations`]), which starts its cooldown, as if it
     /// activated.
+    ///
+    /// The exception is a missing activation while the skill has a pinned
+    /// activation still to come: it starts no cooldown, so that the conditions
+    /// can still confirm that one, and no more are reported (for any alternative)
+    /// until one is due.
     fn check_pinned_skill(
         &mut self,
         skill_index: usize,
@@ -375,21 +388,31 @@ impl Runner {
         state: &RaceState,
     ) {
         let skill_id = self.skills[skill_index].id;
-        let pinned = self.pinned_this_frame.iter().find(|&&record_index| {
-            let record = &self.activated_skills[record_index];
-            record.skill_id == skill_id
-                && record.alternative == alternative_index
-                && !record.conditions_met
-        });
-        if let Some(&record_index) = pinned {
+        let pinned = self
+            .pinned_this_frame
+            .iter()
+            .map(|&(_, record_index)| record_index)
+            .find(|&record_index| {
+                let record = &self.activated_skills[record_index];
+                record.skill_id == skill_id
+                    && record.alternative == alternative_index
+                    && !record.conditions_met
+            });
+        if let Some(record_index) = pinned {
             self.activated_skills[record_index].conditions_met = true;
-        } else if reports_missing {
+        } else if reports_missing && !self.missing_reported[skill_index] {
             let record = self.activation_record(skill_index, alternative_index, true, state);
             self.missing_activations.push(record);
-        } else {
-            return;
+            if self
+                .pinned_activations
+                .iter()
+                .any(|pin| pin.skill_index == skill_index)
+            {
+                self.missing_reported[skill_index] = true;
+            } else {
+                self.start_cooldown(skill_index, alternative_index, state.elapsed_time, state);
+            }
         }
-        self.start_cooldown(skill_index, alternative_index, state);
     }
 
     /// Returns the record of an activation of a skill alternative at this point, or
@@ -696,7 +719,8 @@ impl Runner {
     ///
     /// The effects of a pinned activation on others reach its targets, if set,
     /// instead of the usual ones. Its conditions aren't met until confirmed, and
-    /// it starts no cooldown (see [`Self::check_pinned_skill`]).
+    /// it starts its cooldown after the frame's checks (see
+    /// [`Self::check_skills`]).
     fn activate_skill_as(
         &mut self,
         skill_index: usize,
@@ -796,7 +820,7 @@ impl Runner {
         self.recalculate_skill_modifiers();
 
         if pinned.is_none() {
-            self.start_cooldown(skill_index, alternative_index, state);
+            self.start_cooldown(skill_index, alternative_index, state.elapsed_time, state);
         }
 
         // Track skill activation.
@@ -821,16 +845,22 @@ impl Runner {
 
     /// Starts the cooldown of a skill alternative, shared by all its OR branches.
     ///
-    /// The base cooldown scales with the course distance by a factor of *course
-    /// distance / 1000*.
+    /// It starts at `from`, in seconds. The base cooldown scales with the course
+    /// distance by a factor of *course distance / 1000*.
     ///
     /// A base cooldown of [`DEFAULT_COOLDOWN`] or more is meant to outlast any
     /// race, so the logics that can no longer activate the skill stop being checked
     /// (see [`TriggerScheduler::remove_activated_skill_triggers`]).
-    fn start_cooldown(&mut self, skill_index: usize, alternative_index: usize, state: &RaceState) {
+    fn start_cooldown(
+        &mut self,
+        skill_index: usize,
+        alternative_index: usize,
+        from: f64,
+        state: &RaceState,
+    ) {
         let base_cooldown = self.skills[skill_index].alternatives[alternative_index].base_cooldown;
         let cooldown = base_cooldown * state.course.distance as f64 / 1000.0;
-        self.cooldown_until[skill_index][alternative_index] = state.elapsed_time + cooldown;
+        self.cooldown_until[skill_index][alternative_index] = from + cooldown;
         if base_cooldown >= DEFAULT_COOLDOWN {
             self.trigger_scheduler
                 .remove_activated_skill_triggers(skill_index, alternative_index);

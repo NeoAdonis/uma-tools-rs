@@ -316,9 +316,12 @@ pub struct Runner {
     pub(crate) activated_skills: Vec<SkillActivationRecord>,
     /// Activations missing from the pins (see [`Self::missing_activations`]).
     pub(crate) missing_activations: Vec<SkillActivationRecord>,
-    /// Indices in `activated_skills` of this frame's pinned activations, until
-    /// their skills' conditions confirm them.
-    pub(crate) pinned_this_frame: Vec<usize>,
+    /// Whether each skill in `skills` has had a missing activation reported
+    /// while a pinned activation of it was still to come, until one is due.
+    pub(crate) missing_reported: Vec<bool>,
+    /// Skill index and index in `activated_skills` of this frame's pinned
+    /// activations, until the next frame's checks start their cooldowns.
+    pub(crate) pinned_this_frame: Vec<(usize, usize)>,
     /// IDs of the skills whose conditions didn't allow their pinned out-of-gate
     /// alternative to activate.
     ///
@@ -788,7 +791,7 @@ impl Runner {
     /// wit check is ruled out (the skill has a pinned activation, or no wit check),
     /// and the condition (the OR branch, or the whole alternative out of gate) has
     /// no random variable. Their checks then wait for the cooldown, as if they
-    /// activated (see [`SkillActivationRecord::conditions_met`]).
+    /// activated, unless a pinned activation of the skill is still to come.
     ///
     /// N.B. A skill activates through a single alternative, but only real
     /// activations count for that: two alternatives can be recorded here.

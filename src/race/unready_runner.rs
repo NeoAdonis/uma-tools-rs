@@ -699,6 +699,7 @@ impl UnreadyRunner {
             // Pinned after every out-of-gate skill changed it.
             start_delay: self.pins.start_delay.unwrap_or(self.start_delay),
             activated_alternatives: vec![0; skills.len()],
+            missing_reported: vec![false; skills.len()],
             cooldown_until,
             skills,
             available_skill_count,
