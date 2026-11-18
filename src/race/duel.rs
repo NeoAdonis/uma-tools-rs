@@ -52,7 +52,7 @@ pub(crate) enum Duel {
     /// The runner doesn't count as dueling (no bonuses), nor as having dueled
     /// or ended: she is neither separated from other duelists nor does she
     /// separate them, and other runners can still be matched with her. The
-    /// start isn't cancelled if the conditions stop holding.
+    /// start isn't canceled if the conditions stop holding.
     Starting,
     /// Dueling, with the given target speed (m/s) and acceleration (m/s²) bonuses.
     Active {
@@ -127,7 +127,7 @@ impl Duel {
 }
 
 /// Checks if two runners `distance` meters and `lane_diff` course widths apart
-/// are close enough to start counting towards a duel.
+/// are close enough to start counting toward a duel.
 pub(crate) fn is_close(distance: f64, lane_diff: CourseWidths) -> bool {
     distance.abs() < TRIGGER_DISTANCE && lane_diff.abs() < TRIGGER_LANE_GAP
 }

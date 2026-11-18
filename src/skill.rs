@@ -222,8 +222,8 @@ pub enum SkillRarity {
 /// Target of a skill effect, including a parameter to narrow it down if needed.
 ///
 /// As far as targeting is concerned, skills don't distinguish allies from
-/// opponents: allies can be selected and count towards the maximum number of
-/// targets. However, allies are excluded from debuffs afterwards (see
+/// opponents: allies can be selected and count toward the maximum number of
+/// targets. However, allies are excluded from debuffs afterward (see
 /// [`SkillTarget::is_opponent_only`]).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(try_from = "RawSkillTarget")]

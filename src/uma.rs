@@ -52,7 +52,7 @@ use std::sync::Arc;
 ///   (if any).
 /// - Late surger (差し, sashi): Stays in the middle, behind front runners and
 ///   pace chasers, and makes a late surge.
-/// - End closer (追込, oikomi): Stays at the back and sprints towards the end.
+/// - End closer (追込, oikomi): Stays at the back and sprints toward the end.
 ///
 /// Runaway (大逃げ, ōnige) isn't a style, but the effect of the Runaway skill on
 /// a Front runner. So it's only represented by [`EffectiveStyle`], which is
@@ -75,7 +75,7 @@ pub enum BaseStyle {
     /// makes a late surge.
     #[serde(rename = "Sasi", alias = "Sashi")]
     Late = 3,
-    /// End closer (追込, oikomi) - Stays at the back and sprints towards the end.
+    /// End closer (追込, oikomi) - Stays at the back and sprints toward the end.
     #[serde(rename = "Oikomi")]
     End = 4,
 }

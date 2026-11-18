@@ -166,19 +166,19 @@ fn test_move_time_counts_lateral_movement_in_one_direction() {
     // Turning back restarts it.
     assert_close!(step(runner, 0.3), DELTA_TIME);
 
-    // Blocked towards the target: not moving.
+    // Blocked toward the target: not moving.
     runner.blocked.side_in = true;
     assert_eq!(step(runner, 0.3), 0.0);
 }
 
 #[test]
-fn test_target_lane_updates_when_close_or_blocked_towards_it() {
+fn test_target_lane_updates_when_close_or_blocked_toward_it() {
     let mut solver = lane_solver(&[(100.0, 0.4)]);
     let runner = &mut solver.runners[0];
     runner.lane.target = CourseWidths(0.4 + 0.4 * LANE);
     assert!(runner.should_update_target_lane());
 
-    // Far from the target lane: only updated if blocked towards it.
+    // Far from the target lane: only updated if blocked toward it.
     runner.lane.target = CourseWidths(0.5);
     assert!(!runner.should_update_target_lane());
     runner.blocked.side_in = true;
@@ -226,7 +226,7 @@ fn test_normal_mode_moves_inward_up_to_the_rail() {
     assert_eq!(runner.lane.current, CourseWidths(0.0));
     assert_eq!(runner.lane.speed, 0.0);
 
-    // Once at the rail, the target is updated as if blocked towards it, and
+    // Once at the rail, the target is updated as if blocked toward it, and
     // she keeps straight.
     assert!(runner.should_update_target_lane());
     let target = runner.normal_mode_lane_target(&course, &[]);
@@ -245,7 +245,7 @@ fn test_normal_mode_moves_away_from_inside_uma_even_if_blocked() {
 
 #[test]
 fn test_overtake_lane_ignores_blocking_on_the_other_side() {
-    // Blocked towards the outside, but free to move 1 horse lane inward.
+    // Blocked toward the outside, but free to move 1 horse lane inward.
     let mut solver = lane_solver(&[(100.0, 0.3), (50.0, 0.5)]);
     let runner = &mut solver.runners[0];
     runner.overtake_state = Some(OvertakeState::default());
@@ -255,7 +255,7 @@ fn test_overtake_lane_ignores_blocking_on_the_other_side() {
 }
 
 #[test]
-fn test_fixed_mode_unless_blocked_towards_skill_lane() {
+fn test_fixed_mode_unless_blocked_toward_skill_lane() {
     let mut solver = lane_solver(&[(100.0, 0.4)]);
     let runner = &mut solver.runners[0];
     assert_eq!(runner.fixed_mode_lane_target(), None);

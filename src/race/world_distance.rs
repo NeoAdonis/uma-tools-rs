@@ -6,19 +6,19 @@
 //! base ratio of the course (see [`Rail`]), and shortens the next move by the
 //! quotient when it is below 1.
 //!
-//! The world distance of a move is the distance on the horizontal plane
-//! between the runner's world positions at its start and end, each moved
-//! outwards from the course's inner rail (lane 0) by the lane offset in
-//! meters. Off the rail, a runner covers more world distance where the course
-//! turns towards the inner rail, and less where it turns away from it. The
-//! rail itself also covers slightly more or less world distance than the base
-//! ratio in places, which changes the ratio even on the rail.
+//! The world distance of a move is the distance on the horizontal plane between
+//! the runner's world positions at its start and end, each moved outward from
+//! the course's inner rail (lane 0) by the lane offset in meters. Off the rail,
+//! a runner covers more world distance where the course turns toward the inner
+//! rail, and less where it turns away from it. The rail itself also covers
+//! slightly more or less world distance than the base ratio in places, which
+//! changes the ratio even on the rail.
 //!
 //! A slowed down move covers the base world distance, so the move after it
-//! isn't slowed down again, and at a steady speed the slowdown alternates
-//! frame by frame. A runner losing speed is slowed down further, since the
-//! next move is shorter than the previous one, while a runner gaining speed
-//! (e.g. in the start dash) isn't sped up, because the quotient is capped at 1.
+//! isn't slowed down again, and at a steady speed the slowdown alternates frame
+//! by frame. A runner losing speed is slowed down further, since the next move
+//! is shorter than the previous one, while a runner gaining speed (e.g. in the
+//! start dash) isn't sped up, because the quotient is capped at 1.
 
 use crate::course::rail::Rail;
 
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_ratio_with_lane_change_on_skewed_lanes() {
-        // Lanes tilted backwards by `skew` (sine of the angle) on a straight.
+        // Lanes tilted backward by `skew` (sine of the angle) on a straight.
         let skew: f64 = -0.05;
         let outward = [skew, -(1.0 - skew * skew).sqrt()];
         let keyframe = |x| Keyframe {
@@ -217,11 +217,11 @@ mod tests {
                 2.0,
             )
         };
-        // Moving outwards goes backwards, and inwards forwards.
+        // Moving outward goes backward, and inward forward.
         let sideways = lateral * outward[1];
-        let outwards = (2.0 + lateral * skew).hypot(sideways);
-        assert_close!(ratio(0.4, 0.6), outwards / 2.0);
-        let inwards = (2.0 - lateral * skew).hypot(sideways);
-        assert_close!(ratio(0.6, 0.4), inwards / 2.0);
+        let outward = (2.0 + lateral * skew).hypot(sideways);
+        assert_close!(ratio(0.4, 0.6), outward / 2.0);
+        let inward = (2.0 - lateral * skew).hypot(sideways);
+        assert_close!(ratio(0.6, 0.4), inward / 2.0);
     }
 }

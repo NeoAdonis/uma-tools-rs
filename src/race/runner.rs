@@ -419,7 +419,7 @@ pub struct Runner {
     ///
     /// Downhill mode is checked upon entering a downhill, and then on the first
     /// frame that begins a full second after the previous check (the frame of
-    /// a check doesn't count towards it, so checks are 17 frames apart at the
+    /// a check doesn't count toward it, so checks are 17 frames apart at the
     /// simulation's frame time).
     pub(crate) downhill_check_timer: f64,
     /// Downhill mode checks made on the current downhill.
@@ -1172,7 +1172,7 @@ impl Runner {
     /// Uphills reduce the runner's target speed while on them. On downhills, the
     /// runner may enter downhill mode (Wit * 0.04% chance) or exit it (20% chance)
     /// upon entering them, and then on the first frame that begins a full second
-    /// after the previous check. The frame of a check doesn't count towards that
+    /// after the previous check. The frame of a check doesn't count toward that
     /// second, so checks are 17 frames apart: 16 frames to complete the second
     /// and one more to check.
     ///

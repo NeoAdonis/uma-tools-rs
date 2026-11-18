@@ -1464,7 +1464,7 @@ fn test_duel_starts_one_frame_after_the_decision() {
 }
 
 #[test]
-fn test_duel_start_is_not_cancelled() {
+fn test_duel_start_is_not_canceled() {
     let mut solver = duel_solver(&[(1000.0, 0.1), (998.0, 0.1)], GameVersion::LATEST);
     update_duels(&mut solver, DUEL_FRAMES - 1);
     assert_eq!(duelists(&solver), [false, false]);
@@ -1821,7 +1821,7 @@ fn test_force_in_applies_only_when_inside_is_blocked() {
 #[test]
 fn test_target_lane_decided_before_moving() {
     // Alone in the Early race, she targets a lane further in and starts moving
-    // towards it on the same step.
+    // toward it on the same step.
     let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let lane = CourseWidths(0.4);
     solver.runners[0].lane = crate::race::runner::LaneState::new(lane);
@@ -1962,7 +1962,7 @@ fn test_side_blocked_runner_keeps_accelerating_without_moving() {
     assert_eq!(runner.lane.speed, 0.0);
     assert_close!(runner.lane.current_speed, 0.03 * 2.0 * DELTA_TIME);
 
-    // Blocked only towards the outside, so moving in is still possible.
+    // Blocked only toward the outside, so moving in is still possible.
     runner.lane.target = CourseWidths(0.0);
     runner.update_lane(&state.course, DELTA_TIME);
     assert!(runner.lane.current < CourseWidths(0.4));
@@ -2588,7 +2588,7 @@ fn test_targets_nearest_runners_ahead_and_behind() {
 }
 
 #[test]
-fn test_allies_count_towards_max_targets_but_are_not_debuffed() {
+fn test_allies_count_toward_max_targets_but_are_not_debuffed() {
     // Runner 2 is an ally of runner 3.
     let solver = targeting_solver(&[
         (EffectiveStyle::Late, 0),
@@ -4329,7 +4329,7 @@ fn test_pinned_downhill_checks_replace_their_outcomes() {
     solver.runners[0].adjusted.wit = 2500.0;
     let pins = &mut solver.runners[0].pins;
     pins.downhill.insert(1, vec![false, true, false]);
-    // Checks on the first downhill don't count towards the second one's.
+    // Checks on the first downhill don't count toward the second one's.
     for position in 0..99 {
         move_on_slopes(&mut solver, &course, position as f64);
     }
@@ -5732,7 +5732,7 @@ fn test_spot_struggle_event_ends_once_by_expiry_or_exit() {
     solver.runners[0].end_expired_events(end_time + 1.0);
     assert_eq!(ends(&solver), [Some(end_time)]);
 
-    // Neither does exiting afterwards, as an expired struggler can.
+    // Neither does exiting afterward, as an expired struggler can.
     place(&mut solver, 1, 190.0, 0.0);
     solver.state.elapsed_time = end_time + 2.0;
     update_struggle(&mut solver);

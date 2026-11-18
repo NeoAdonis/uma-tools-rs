@@ -23,9 +23,9 @@ pub(crate) struct BlockedState {
     pub(crate) speed_ratio: Option<f64>,
     /// ID of the closest runner blocking from the front, if any.
     pub(crate) front_blocker: Option<RunnerId>,
-    /// Whether the runner is currently side-blocked towards the inside.
+    /// Whether the runner is currently side-blocked toward the inside.
     pub(crate) side_in: bool,
-    /// Whether the runner is currently side-blocked towards the outside.
+    /// Whether the runner is currently side-blocked toward the outside.
     pub(crate) side_out: bool,
     /// Time spent being front-blocked in seconds.
     pub(crate) front_time: f64,

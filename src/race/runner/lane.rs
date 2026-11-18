@@ -29,7 +29,7 @@ pub(crate) struct LaneState {
     pub(crate) speed: f64,
     /// Non-directional lane change speed in course widths per second.
     ///
-    /// It changes towards the lane change target speed, before skills and direction
+    /// It changes toward the lane change target speed, before skills and direction
     /// are accounted for, and resets when the target lane is reached.
     pub(crate) current_speed: f64,
     /// Time spent moving laterally in the same direction until the last lane
@@ -91,11 +91,11 @@ impl<'a> Deref for VisibleAhead<'a> {
 }
 
 impl Runner {
-    /// Updates lane position towards target lane, and the time spent moving
+    /// Updates lane position toward target lane, and the time spent moving
     /// laterally in the same direction.
     pub(crate) fn update_lane(&mut self, course: &Course, delta_time: f64) {
         let previous_speed = self.lane.speed;
-        self.move_towards_target_lane(course, delta_time);
+        self.move_toward_target_lane(course, delta_time);
         self.lane.move_time = if self.lane.speed == 0.0 {
             0.0
         } else if self.lane.speed * previous_speed > 0.0 {
@@ -105,8 +105,8 @@ impl Runner {
         };
     }
 
-    /// Moves the lane position towards the target lane, setting the lateral speed.
-    fn move_towards_target_lane(&mut self, course: &Course, delta_time: f64) {
+    /// Moves the lane position toward the target lane, setting the lateral speed.
+    fn move_toward_target_lane(&mut self, course: &Course, delta_time: f64) {
         const LANE_ACCELERATION: f64 = 0.02 * 1.5;
         const MAX_SPEED: f64 = 0.6;
 
@@ -136,7 +136,7 @@ impl Runner {
         let target_speed =
             0.02 * (0.3 + 0.001 * self.adjusted.power) * first_move_modifier * order_modifier;
 
-        // Current speed keeps changing towards the target speed even when blocked.
+        // Current speed keeps changing toward the target speed even when blocked.
         let speed_step = LANE_ACCELERATION * delta_time;
         self.lane.current_speed = if self.lane.current_speed < target_speed {
             (self.lane.current_speed + speed_step).min(target_speed)
@@ -313,7 +313,7 @@ impl Runner {
     /// Checks whether the target lane should be updated.
     ///
     /// It is updated when the runner is less than 0.5 horse lanes from it, or
-    /// blocked on the side she's moving towards.
+    /// blocked on the side she's moving toward.
     pub(crate) fn should_update_target_lane(&self) -> bool {
         (self.lane.target - self.lane.current).abs() < CourseWidths::from_horse_lanes(0.5)
             || !self.has_lane_space_to(self.lane.target)
@@ -322,7 +322,7 @@ impl Runner {
     /// Returns the target lane in fixed mode (when a skill effect sets the target
     /// lane).
     ///
-    /// `None` if the runner is blocked from moving towards the target lane.
+    /// `None` if the runner is blocked from moving toward the target lane.
     pub(crate) fn fixed_mode_lane_target(&self) -> Option<CourseWidths> {
         self.skill_modifiers
             .target_lane
@@ -619,7 +619,7 @@ impl Runner {
     }
 
     /// Checks whether the runner has lane space to reach `target_lane`, i.e. she
-    /// isn't side-blocked towards it (see [`proximity::check_side_blocked`]).
+    /// isn't side-blocked toward it (see [`proximity::check_side_blocked`]).
     ///
     /// Target lanes may be inside the rail, but the rail blocks runners on it
     /// from moving further inward.

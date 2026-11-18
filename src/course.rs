@@ -457,7 +457,7 @@ impl Course {
     /// Returns the corner number (1-4) of the corner at `idx` in the list of course
     /// corners.
     ///
-    /// Corners are numbered backwards from the final corner, which is always the
+    /// Corners are numbered backward from the final corner, which is always the
     /// fourth. If the race goes through the same corner multiple times (i.e. more
     /// than one lap), its number is repeated.
     ///
@@ -971,7 +971,7 @@ mod tests {
             ..synthetic_course()
         };
 
-        // Numbered backwards from the final corner, which is always the fourth.
+        // Numbered backward from the final corner, which is always the fourth.
         for (count, expected) in [(2, vec![3, 4]), (5, vec![4, 1, 2, 3, 4])] {
             let course = course_with_corners(count);
             let numbers: Vec<u8> = (0..count).map(|idx| course.corner_number(idx)).collect();

@@ -12,7 +12,7 @@
 //!
 //! 1. **Wit check**: each skill is kept with a probability based on the
 //!    runner's wit (skills without a wit check are always kept). Skills that
-//!    fail it can't activate, but still count towards the runner's skills.
+//!    fail it can't activate, but still count toward the runner's skills.
 //! 2. **Scheduler**: the `TriggerScheduler` is built for the kept skills (see
 //!    `TriggerScheduler::from_skills`). Logics refer to skills by their
 //!    index in this list. Out-of-gate alternatives are skipped.
@@ -260,7 +260,7 @@ pub(crate) struct UnreadyRunner {
     /// even for skills without a wit check.
     skills: Vec<Arc<Skill>>,
     /// Skills that failed the wit check. They can't activate on their own, but
-    /// they still count towards the runner's skills (e.g. for popularity or skill
+    /// they still count toward the runner's skills (e.g. for popularity or skill
     /// count scaling), and gold skills among them can be activated by other
     /// skills (see [`SkillType::ActivateRandomGold`]).
     failed_skills: Vec<Arc<Skill>>,
@@ -417,7 +417,7 @@ impl UnreadyRunner {
                 self.casts_sympathy = true;
             }
             // Popularity requirements are satisfied for the out-of-gate skills
-            // evaluated afterwards and every skill during the race.
+            // evaluated afterward and every skill during the race.
             else if matches!(effect_type, SkillType::IgnorePopularity) {
                 self.initial_state.ignores_popularity = true;
             }

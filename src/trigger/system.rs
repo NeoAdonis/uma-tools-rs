@@ -33,13 +33,13 @@
 //! happen once per race, so their logics are checked once: if the guards fail
 //! at that moment, the skill doesn't activate. Windows (random segments
 //! included) and skill-activation events retry every time they fire, until the
-//! logic succeeds; afterwards, an activated logic waits for the cooldown of
-//! its skill alternative (kept by the runner) to end, and an unlocking logic
-//! is never checked again. Activated logics whose cooldown outlasts the race
-//! are never checked again either, nor those of the other alternatives of
-//! their skill, unless they're continuations. A segment that is crossed in a
-//! single frame is still checked, as long as the runner lands inside it; one
-//! that is jumped over entirely is missed.
+//! logic succeeds; afterward, an activated logic waits for the cooldown of its
+//! skill alternative (kept by the runner) to end, and an unlocking logic is
+//! never checked again. Activated logics whose cooldown outlasts the race are
+//! never checked again either, nor those of the other alternatives of their
+//! skill, unless they're continuations. A segment that is crossed in a single
+//! frame is still checked, as long as the runner lands inside it; one that is
+//! jumped over entirely is missed.
 //!
 //! [`TriggerCondition`]: crate::trigger::skill_activation::TriggerCondition
 //! [`Segments`]:

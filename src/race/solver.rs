@@ -1164,8 +1164,8 @@ impl RaceSolver<Runner> {
     /// Selects the indices of the runners targeted by a skill effect cast by the
     /// runner at index `caster`.
     ///
-    /// Allies count towards the maximum number of targets, but they are excluded
-    /// from debuffs afterwards. Runners that have finished are never targeted.
+    /// Allies count toward the maximum number of targets, but they are excluded
+    /// from debuffs afterward. Runners that have finished are never targeted.
     ///
     /// `target_roll` (from 0 to 1) picks random targets, like the one drawn for
     /// each pending effect.

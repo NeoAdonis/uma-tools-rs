@@ -127,7 +127,7 @@ impl Runner {
 
     /// Calculates the last spurt parameters of this runner, from `position`.
     ///
-    /// The last spurt is a burst of speed towards the end of the race. It is
+    /// The last spurt is a burst of speed toward the end of the race. It is
     /// determined based on the runner's stats, remaining HP, and course conditions.
     ///
     /// First, the maximum possible last spurt speed is calculated. If the runner

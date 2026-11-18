@@ -5,8 +5,8 @@
 //!
 //! The game places runners in the world from 1001 keyframes per course, at
 //! equal course distances from the gate to the goal, each with the position
-//! of the rail and a rotation that points the lanes outwards. Both are
-//! interpolated linearly between keyframes, and a runner is moved outwards
+//! of the rail and a rotation that points the lanes outward. Both are
+//! interpolated linearly between keyframes, and a runner is moved outward
 //! from the rail by her lane offset in meters. A rail keeps what world
 //! distances depend on:
 //!
@@ -14,7 +14,7 @@
 //!   meter of the course, which every other ratio is compared against.
 //! - The position of each keyframe on the horizontal (xz) plane.
 //! - The outward direction of the lanes at each keyframe on that plane (the
-//!   x and z components of the rotation's unit vector pointing outwards).
+//!   x and z components of the rotation's unit vector pointing outward).
 //!
 //! The rail data (one file per course named after its ID, in `data/jp/rails/`
 //! and `data/en/rails/` for the Japanese and English versions of the game)
@@ -144,8 +144,8 @@ impl Rail {
 }
 
 /// Rail of a course `length` meters long, from the excess world length (over
-/// the base ratio) and the turn (positive towards the inner rail) of each of
-/// its equally long segments, with lanes pointing straight outwards.
+/// the base ratio) and the turn (positive toward the inner rail) of each of
+/// its equally long segments, with lanes pointing straight outward.
 #[cfg(test)]
 pub(crate) fn rail_from_turns(base_ratio: f64, length: f64, excess: &[f64], turn: &[f64]) -> Rail {
     let segment = length / turn.len() as f64;
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn test_world_position_moves_outwards_by_lane() {
+    fn test_world_position_moves_outward_by_lane() {
         let lane = CourseWidths(1.0);
         let offset = lane.meters();
         assert_eq!(rail().world_position(1.0, lane), [1.0, -offset]);

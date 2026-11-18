@@ -156,7 +156,7 @@ impl Slope {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FrontType {
-    /// Towards the audience.
+    /// Toward the audience.
     Audience = 1,
     /// Away from the audience.
     Opposite = 2,

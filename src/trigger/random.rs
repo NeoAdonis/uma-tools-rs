@@ -294,7 +294,7 @@ fn random_area(comp: &Comparison, course: &Course) -> Option<Area> {
         }
         RandomSpatial(RandomSpatialVar::UpSlopeRandom) => Area::OneOf(non_empty(slopes(true))?),
         RandomSpatial(RandomSpatialVar::UpSlopeRandomLaterHalf) => {
-            // Uphills crossing the halfway point only count from there onwards.
+            // Uphills crossing the halfway point only count from there onward.
             Area::OneOf(within(slopes(true), (course.halfway(), course.length()))?)
         }
         RandomSpatial(RandomSpatialVar::DownSlopeRandom) => Area::OneOf(non_empty(slopes(false))?),

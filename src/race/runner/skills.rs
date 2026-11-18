@@ -236,7 +236,7 @@ impl Runner {
     ///
     /// `is_other_character_activate_advantage_skill` (and
     /// `is_popularity_top_character_activate_advantage_skill`) triggers depend on
-    /// the activations of every runner, so they're checked afterwards (see
+    /// the activations of every runner, so they're checked afterward (see
     /// [`Self::check_advantage_triggers`]).
     pub(crate) fn check_skills(&mut self, state: &mut RaceState) {
         self.activation_flags = SkillActivationFlags::default();
@@ -452,7 +452,7 @@ impl Runner {
     /// `is_popularity_top_character_activate_advantage_skill` variables.
     ///
     /// Other runners' activations are only known once every runner has checked
-    /// her skills, so this is called by the solver afterwards.
+    /// her skills, so this is called by the solver afterward.
     pub(crate) fn check_advantage_triggers(&mut self, state: &RaceState) {
         self.try_activate_all(state, |scheduler, indices| {
             indices.extend_from_slice(&scheduler.buff_activation_triggers);
