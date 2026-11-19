@@ -152,9 +152,10 @@ pub(crate) struct InitialState {
     /// Number of races won during the career.
     pub(crate) race_wins: u8,
     /// Multiplier of the Unity Cup skills tied to each stat. It comes from the
-    /// total of the runner's team (see [`skill_scaling::unity_cup_multiplier`])
-    /// if the race has a runner in every gate, and is the configured default
-    /// otherwise.
+    /// total of the runner's team (see [`unity_cup_multiplier`]) if the race
+    /// has a runner in every gate, and is the configured default otherwise.
+    ///
+    /// [`unity_cup_multiplier`]: crate::race::skill_scaling::unity_cup_multiplier
     pub(crate) unity_cup_multipliers: Stats,
     /// Whether every popularity requirement is satisfied (see
     /// [`SkillType::IgnorePopularity`]).
