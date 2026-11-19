@@ -309,8 +309,10 @@ pub struct Runner {
     pub(crate) force_in_modifier: f64,
     /// Lane state, with the current and target lane positions.
     pub(crate) lane: LaneState,
-    /// Speed modifier for the current section in m/s.
-    pub(crate) section_speed_modifier: f64,
+    /// Speed modifiers in m/s by section, rolled before the race.
+    ///
+    /// Pinned ones (see [`Pins::section_speed`]) replace their rolls.
+    pub(crate) section_speed_modifiers: [f64; SECTION_COUNT as usize],
     /// Skills of the runner: those that passed the wit check first, then those that
     /// failed it (see [`Self::skills`]).
     pub(crate) skills: Vec<Arc<Skill>>,
@@ -488,9 +490,6 @@ pub struct Runner {
     pub(crate) events: Vec<Event>,
     /// Random number streams of the runner (see [`crate::race::rng`]).
     pub(crate) rng: RunnerRng,
-    /// Pinned section speed modifiers in m/s, by section (see
-    /// [`Pins::section_speed`]).
-    pub(crate) pinned_section_speeds: [Option<f64>; SECTION_COUNT as usize],
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
     /// World position on the horizontal plane at the start of the last move, if it
@@ -975,7 +974,8 @@ impl Runner {
                 self.adjusted.speed,
                 self.raw.distance_aptitude,
             );
-            base_target_speed * positioning_multiplier + self.section_speed_modifier
+            let section_speed_modifier = self.section_speed_modifiers[self.section as usize];
+            base_target_speed * positioning_multiplier + section_speed_modifier
         };
 
         if self.has_reached_last_spurt_speed() {
@@ -1075,24 +1075,19 @@ impl Runner {
     /// Updates the current section from the current position, before the target
     /// speed update and the move.
     ///
-    /// It also updates what depends on the section: the section speed modifier,
-    /// which applies from this step's move, the start of a rush and the end of a
-    /// spot struggle.
+    /// It also updates what depends on the section: the start of a rush and the
+    /// end of a spot struggle. The section speed modifier is read by the target
+    /// speed update, which applies it from this step's move.
+    ///
+    /// Past the goal, where she runs until everyone finishes, she stays in the
+    /// last section.
     pub(crate) fn update_section(&mut self, state: &mut RaceState) {
         let prev_section = self.section;
-        self.section = state.course.section_from_position(self.position);
+        let section = state.course.section_from_position(self.position);
+        self.section = section.min(SECTION_COUNT - 1);
         if self.section == prev_section {
             return;
         }
-
-        let rolled = roll_section_speed_modifier(
-            &mut self.rng.keyed(Stream::SectionSpeed(self.section)),
-            self.adjusted.wit,
-            state.course.base_speed(),
-        );
-        let pinned = self.pinned_section_speeds.get(self.section as usize);
-        // Sections past the goal can't be pinned.
-        self.section_speed_modifier = pinned.copied().flatten().unwrap_or(rolled);
 
         // Since sections only go forward, a rush can only start once.
         if self

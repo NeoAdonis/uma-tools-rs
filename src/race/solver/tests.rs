@@ -1255,7 +1255,7 @@ fn test_section_speed_modifier_applies_from_the_move_after_entering() {
     runner.phase = Phase::Mid;
     runner.section = 11;
     // Far from any real roll, so that the stale one would show.
-    runner.section_speed_modifier = 1.0;
+    runner.section_speed_modifiers[11] = 1.0;
     // Just past the boundary before moving.
     runner.position = boundary + 0.01;
     runner.speed = 20.0;
@@ -1264,10 +1264,22 @@ fn test_section_speed_modifier_applies_from_the_move_after_entering() {
     let RaceSolver { runners, state, .. } = &mut solver;
     let runner = &mut runners[0];
     assert_eq!(runner.section, 12);
-    assert!(runner.section_speed_modifier.abs() < 0.5);
+    assert!(runner.section_speed_modifiers[12].abs() < 0.5);
     let target_speed = runner.target_speed;
     runner.update_target_speed(state);
     assert_close!(target_speed, runner.target_speed);
+}
+
+#[test]
+fn test_runners_past_the_goal_stay_in_the_last_section() {
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    // A few sections past the goal, without a last spurt to take over.
+    runner.position = state.course.length() + 3.0 * state.course.section_length();
+    runner.update_section(state);
+    assert_eq!(runner.section, crate::course::SECTION_COUNT - 1);
+    runner.update_target_speed(state);
 }
 
 #[test]
@@ -5134,8 +5146,8 @@ fn test_pins_change_only_their_outcome() {
         // A section speed beyond what her wit rolls.
         (
             section_speed_pins(0, 0.5),
-            |r| r.section_speed_modifier == 0.5,
-            |r, unpinned| r.section_speed_modifier = unpinned.section_speed_modifier,
+            |r| r.section_speed_modifiers[0] == 0.5,
+            |r, unpinned| r.section_speed_modifiers[0] = unpinned.section_speed_modifiers[0],
         ),
         // A force-in modifier beyond what any style rolls.
         (
@@ -5159,7 +5171,6 @@ fn test_pins_change_only_their_outcome() {
             assert!(check(runner), "{pins:?}, seed {seed}");
             // Every other outcome, hers included, is the same.
             restore(runner, unpinned.runner(id));
-            runner.pinned_section_speeds = Default::default();
             runner.pinned_downhill.clear();
             runner.pinned_wit_checks = Default::default();
             runner.pinned_thresholds = Default::default();
@@ -5224,7 +5235,7 @@ fn test_pinned_section_speed_applies_on_entering_its_section() {
     let state = |solver: &RaceSolver<Runner>| -> Vec<(f64, f64)> {
         let runners = solver.runners.iter();
         runners
-            .map(|r| (r.position, r.section_speed_modifier))
+            .map(|r| (r.position, r.section_speed_modifiers[r.section as usize]))
             .collect()
     };
     while pinned.runner(id).section < 3 {
@@ -5233,8 +5244,8 @@ fn test_pinned_section_speed_applies_on_entering_its_section() {
         unpinned.step_frame();
     }
     assert_eq!(unpinned.runner(id).section, 3);
-    assert_eq!(pinned.runner(id).section_speed_modifier, 1.0);
-    assert_ne!(unpinned.runner(id).section_speed_modifier, 1.0);
+    assert_eq!(pinned.runner(id).section_speed_modifiers[3], 1.0);
+    assert_ne!(unpinned.runner(id).section_speed_modifiers[3], 1.0);
 }
 
 #[test]

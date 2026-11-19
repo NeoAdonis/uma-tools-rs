@@ -210,7 +210,7 @@ fn test_target_speed_scales_with_positioning_strategy() {
     let state = &solver.state;
     let runner = &mut solver.runners[0];
     // Added after scaling.
-    runner.section_speed_modifier = 0.0;
+    runner.section_speed_modifiers = Default::default();
     runner.update_target_speed(state);
     let normal = runner.target_speed;
 
@@ -229,14 +229,14 @@ fn test_target_speed_adds_modifiers() {
     let state = &solver.state;
     let runner = &mut solver.runners[0];
     // Rolled when readying runners.
-    runner.section_speed_modifier = 0.0;
+    runner.section_speed_modifiers = Default::default();
     runner.update_target_speed(state);
     let base = runner.target_speed;
 
     // Distinct values, so that no term can make up for another.
     runner.slope_speed_modifier = Some(-0.1);
     runner.skill_modifiers.target_speed = 0.2;
-    runner.section_speed_modifier = 0.03;
+    runner.section_speed_modifiers[runner.section as usize] = 0.03;
     runner.stamina_limit_break = 0.05;
     let time = state.elapsed_time;
     runner.secure_lead = TimedBoost::start(0.07, time, 2.0, 1.0);
@@ -351,10 +351,10 @@ fn test_section_speed_modifier_ignored_during_last_spurt() {
             target_distance: 1950.0,
             category: LastSpurtCategory::Full,
         });
-        runner.section_speed_modifier = 0.0;
+        runner.section_speed_modifiers = Default::default();
         runner.update_target_speed(state);
         let without = runner.target_speed;
-        runner.section_speed_modifier = 0.1;
+        runner.section_speed_modifiers[runner.section as usize] = 0.1;
         runner.update_target_speed(state);
         let expected = if applies { 0.1 } else { 0.0 };
         assert_close!(

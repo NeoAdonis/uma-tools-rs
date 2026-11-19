@@ -651,13 +651,16 @@ impl UnreadyRunner {
         rush_state.checks_to_fail = rush_pins.failed_checks.unwrap_or(rush_state.checks_to_fail);
         let rush_state = rush_pins.rushes.unwrap_or(can_rush).then_some(rush_state);
 
-        // Calculate section modifier for base speed adjustment.
-        let rolled = roll_section_speed_modifier(
-            &mut rng.keyed(Stream::SectionSpeed(0)),
-            self.adjusted.wit,
-            course.base_speed(),
-        );
-        let section_speed_modifier = self.pins.section_speed[0].unwrap_or(rolled);
+        // Calculate section modifiers for base speed adjustment. Each section
+        // has its own stream, so they're rolled all at once.
+        let section_speed_modifiers = std::array::from_fn(|section| {
+            let rolled = roll_section_speed_modifier(
+                &mut rng.keyed(Stream::SectionSpeed(section as u8)),
+                self.adjusted.wit,
+                course.base_speed(),
+            );
+            self.pins.section_speed[section].unwrap_or(rolled)
+        });
 
         // Calculate move lane modifier.
         let move_lane_modifier = if game_version < GameVersion::FirstAnniversary {
@@ -723,7 +726,7 @@ impl UnreadyRunner {
             due_pins: Vec::new(),
             section: 0,
             phase: Phase::from_position(0.0, course),
-            section_speed_modifier,
+            section_speed_modifiers,
             hp: HpState::new(max_hp),
             position: 0.0,
             rush_chance,
@@ -739,7 +742,6 @@ impl UnreadyRunner {
             downhill_check_timer: 0.0,
             pinned_downhill: self.pins.downhill,
             downhill_pins: Vec::new(),
-            pinned_section_speeds: self.pins.section_speed,
             uphills_climbed: 0,
             last_spurt: None,
             stamina_limit_break_base: stamina_limit_break_base_buff(

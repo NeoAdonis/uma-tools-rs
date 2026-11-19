@@ -59,8 +59,8 @@ pub struct Pins {
     pub skills: HashMap<i32, SkillPin>,
     /// Section speed modifiers in m/s, by section (0-indexed).
     ///
-    /// Each is the random target speed modifier she rolls from her wit when
-    /// the race starts (section 0) or upon entering the section (others).
+    /// Each is the random target speed modifier she rolls from her wit for
+    /// the section, which applies while she's in it.
     pub section_speed: [Option<f64>; SECTION_COUNT as usize],
     /// Force-in modifier in m/s.
     ///
