@@ -83,7 +83,7 @@ use crate::race::modifiers::{
     roll_section_speed_modifier, stamina_limit_break_base_buff,
 };
 use crate::race::parameters::{CAREER_STAT_BONUS, RaceParameters};
-use crate::race::pins::{Pins, SkillPin};
+use crate::race::pins::{PinQueue, Pins, SkillPin};
 use crate::race::popularity::{self, JudgeScores, SkillPopularity};
 use crate::race::rng::{RngSeed, RunnerRng, Stream};
 use crate::race::runner::*;
@@ -172,12 +172,11 @@ fn roll_wit_check(skill: &Skill, base_wit: f64, state: &RaceState, rng_seed: Rng
     roll.resolve(&mut rng, skill.activation_chance(base_wit))
 }
 
-/// Returns the activations of `skills` pinned in `pins` during the race, by
-/// descending time.
+/// Returns the activations of `skills` pinned in `pins` during the race.
 ///
-/// Out-of-gate ones already happened. Activations at the same time keep their
-/// order (by skill, then as pinned), so they're popped in that order.
-fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedActivation> {
+/// Out-of-gate ones already happened. Activations at the same time are taken in
+/// order (by skill, then as pinned).
+fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> PinQueue<QueuedActivation> {
     let mut queue = Vec::new();
     for (skill_index, skill) in skills.iter().enumerate() {
         let Some(activations) = pins.activations(skill.id) else {
@@ -187,18 +186,15 @@ fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> Vec<QueuedAct
             if skill.alternatives[activation.alternative].is_out_of_gate() {
                 continue;
             }
-            queue.push(QueuedActivation {
-                time: activation.time,
+            let queued = QueuedActivation {
                 skill_index,
                 alternative_index: activation.alternative,
                 targets: activation.targets.clone(),
-            });
+            };
+            queue.push((activation.time, queued));
         }
     }
-    // Reversed first, so that the stable sort pops ties in order.
-    queue.reverse();
-    queue.sort_by(|a, b| b.time.total_cmp(&a.time));
-    queue
+    PinQueue::new(queue)
 }
 
 /// Everything known about a runner before the race, needed to initialize a
@@ -625,6 +621,18 @@ impl UnreadyRunner {
             .collect();
         let mut rng = RunnerRng::new(self.rng_seed, skills.iter().map(|skill| skill.id));
         let pinned_activations = queue_pinned_activations(&self.pins, &skills);
+        let pinned_skills = skills
+            .iter()
+            .map(|skill| self.pins.activations(skill.id).is_some())
+            .collect();
+        let pinned_wit_checks =
+            PinQueue::new(self.pins.positioning.iter().map(|p| (p.time, p.passes)));
+        let pinned_thresholds = PinQueue::new(
+            self.pins
+                .positioning_thresholds
+                .iter()
+                .map(|p| (p.time, p.distance)),
+        );
 
         // Set starting speed (done in the constructor).
         // Determine whether and how the runner will rush.
@@ -644,14 +652,12 @@ impl UnreadyRunner {
         let rush_state = rush_pins.rushes.unwrap_or(can_rush).then_some(rush_state);
 
         // Calculate section modifier for base speed adjustment.
-        let section_speed_modifier = self.pins.section_speed(
-            0,
-            roll_section_speed_modifier(
-                &mut rng.keyed(Stream::SectionSpeed(0)),
-                self.adjusted.wit,
-                course.base_speed(),
-            ),
+        let rolled = roll_section_speed_modifier(
+            &mut rng.keyed(Stream::SectionSpeed(0)),
+            self.adjusted.wit,
+            course.base_speed(),
         );
+        let section_speed_modifier = self.pins.section_speed[0].unwrap_or(rolled);
 
         // Calculate move lane modifier.
         let move_lane_modifier = if game_version < GameVersion::FirstAnniversary {
@@ -713,6 +719,7 @@ impl UnreadyRunner {
             pending_heal: 0.0,
             pending_hp_loss: 0.0,
             pinned_activations,
+            pinned_skills,
             due_pins: Vec::new(),
             section: 0,
             phase: Phase::from_position(0.0, course),
@@ -724,13 +731,15 @@ impl UnreadyRunner {
             is_start_dash: true,
             next_positioning_check: 0.0,
             positioning_checks: 0,
-            pinned_wit_checks_used: 0,
-            pinned_thresholds_used: 0,
+            pinned_wit_checks,
+            pinned_thresholds,
             positioning_strategy: PositioningStrategy::Normal,
             positioning_end: f64::INFINITY,
             slope_speed_modifier: None,
             downhill_check_timer: 0.0,
-            downhill_checks: 0,
+            pinned_downhill: self.pins.downhill,
+            downhill_pins: Vec::new(),
+            pinned_section_speeds: self.pins.section_speed,
             uphills_climbed: 0,
             last_spurt: None,
             stamina_limit_break_base: stamina_limit_break_base_buff(
@@ -751,7 +760,6 @@ impl UnreadyRunner {
                 game_version,
             ),
             rng,
-            pins: self.pins,
             segments: SegmentState::default(),
             last_move_start: None,
             trigger_scheduler: self.trigger_scheduler,

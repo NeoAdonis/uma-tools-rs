@@ -4491,7 +4491,7 @@ fn test_downhill_mode_saves_hp_from_the_frame_after_its_check() {
         let mut solver = ready_solver(10906, uma(BaseStyle::Pace), vec![], seeded_config(0));
         let runner = &mut solver.runners[0];
         runner.start_delay = 0.0;
-        runner.pins.downhill.insert(0, vec![in_downhill_mode]);
+        runner.pinned_downhill.insert(0, vec![in_downhill_mode]);
         let mut hp = vec![solver.runners[0].hp.current()];
         for _ in 0..2 {
             solver.step_frame();
@@ -4512,8 +4512,8 @@ fn test_pinned_downhill_checks_replace_their_outcomes() {
     let course = course_with_slopes(slopes.to_vec());
     // Rolled checks always enter downhill mode.
     solver.runners[0].adjusted.wit = 2500.0;
-    let pins = &mut solver.runners[0].pins;
-    pins.downhill.insert(1, vec![false, true, false]);
+    let pins = &mut solver.runners[0].pinned_downhill;
+    pins.insert(1, vec![false, true, false]);
     // Checks on the first downhill don't count toward the second one's.
     for position in 0..99 {
         move_on_slopes(&mut solver, &course, position as f64);
@@ -4539,8 +4539,8 @@ fn test_downhill_pin_of_its_rolled_outcome_changes_nothing() {
     for seed in 0..10 {
         let unpinned = downhill_modes(&mut solver(seed), &course, 290);
         let mut pinned = solver(seed);
-        let pins = &mut pinned.runners[0].pins;
-        pins.downhill.insert(0, vec![unpinned[1]]);
+        let pins = &mut pinned.runners[0].pinned_downhill;
+        pins.insert(0, vec![unpinned[1]]);
         let pinned = downhill_modes(&mut pinned, &course, 290);
         assert_eq!(pinned, unpinned, "seed {seed}");
     }
@@ -5159,7 +5159,10 @@ fn test_pins_change_only_their_outcome() {
             assert!(check(runner), "{pins:?}, seed {seed}");
             // Every other outcome, hers included, is the same.
             restore(runner, unpinned.runner(id));
-            runner.pins = Pins::default();
+            runner.pinned_section_speeds = Default::default();
+            runner.pinned_downhill.clear();
+            runner.pinned_wit_checks = Default::default();
+            runner.pinned_thresholds = Default::default();
             assert_eq!(pinned.runners, unpinned.runners, "{pins:?}, seed {seed}");
         }
     }

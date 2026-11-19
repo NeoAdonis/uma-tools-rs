@@ -341,8 +341,7 @@ impl Runner {
     /// [`Pins::positioning_thresholds`]:
     ///     crate::race::pins::Pins::positioning_thresholds
     fn pin_threshold(&mut self, rolled: f64, time: f64) -> f64 {
-        self.pins
-            .positioning_threshold(&mut self.pinned_thresholds_used, time, rolled)
+        self.pinned_thresholds.take_due(time).unwrap_or(rolled)
     }
 
     /// Go back to the normal positioning strategy, checking it again at
@@ -398,8 +397,7 @@ impl Runner {
             return true;
         }
         let rolled = self.roll_positioning_wit_check(coef, rng);
-        self.pins
-            .positioning_wit_check(&mut self.pinned_wit_checks_used, time, rolled)
+        self.pinned_wit_checks.take_due(time).unwrap_or(rolled)
     }
 
     /// Rolls a wit check to change positioning strategy, with a chance of

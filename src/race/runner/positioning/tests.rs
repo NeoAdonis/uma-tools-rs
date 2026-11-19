@@ -1,4 +1,5 @@
 use super::*;
+use crate::race::pins::PinQueue;
 
 #[test]
 fn test_speed_increases_stop_pacing_down() {
@@ -197,12 +198,7 @@ fn test_rushed_runners_positioning_as_front_enter_modes_without_wit() {
 
 /// Pins `passes` outcomes at `times` for position keep wit checks.
 fn pin_wit_checks(runner: &mut Runner, pins: &[(f64, bool)]) {
-    use crate::race::pins::PinnedWitCheck;
-
-    let pins = pins
-        .iter()
-        .map(|&(time, passes)| PinnedWitCheck { time, passes });
-    runner.pins.positioning = pins.collect();
+    runner.pinned_wit_checks = PinQueue::new(pins.iter().copied());
 }
 
 /// Runs a position keep check at `state`'s time for a runner that would try to
@@ -263,13 +259,13 @@ fn test_pins_are_used_once_and_not_before_their_time() {
         run_check(&mut runner, false, &state),
         PositioningStrategy::Normal
     );
-    assert_eq!(runner.pinned_wit_checks_used, 0);
+    assert_eq!(runner.pinned_wit_checks.iter().count(), 2);
 
     // The first check at or after its time uses it...
     state.elapsed_time = 12.0;
     let mode = run_check(&mut runner, false, &state);
     assert!(matches!(mode, PositioningStrategy::PaceUp(_)));
-    assert_eq!(runner.pinned_wit_checks_used, 1);
+    assert_eq!(runner.pinned_wit_checks.iter().count(), 1);
 
     // ...and only that one: the next check rolls (the last pin is still due
     // later).
@@ -279,7 +275,7 @@ fn test_pins_are_used_once_and_not_before_their_time() {
         run_check(&mut runner, false, &state),
         PositioningStrategy::Normal
     );
-    assert_eq!(runner.pinned_wit_checks_used, 1);
+    assert_eq!(runner.pinned_wit_checks.iter().count(), 1);
 }
 
 #[test]
@@ -292,7 +288,7 @@ fn test_rushed_checks_use_no_pins() {
     pin_wit_checks(&mut runner, &[(0.0, false)]);
     let mode = run_check(&mut runner, false, &state);
     assert!(matches!(mode, PositioningStrategy::PaceUp(_)));
-    assert_eq!(runner.pinned_wit_checks_used, 0);
+    assert_eq!(runner.pinned_wit_checks.iter().count(), 1);
 }
 
 #[test]
@@ -322,12 +318,7 @@ fn test_pinned_outcome_leaves_later_checks_unchanged() {
 
 /// Pins `distance` thresholds at `times` for position keep exits.
 fn pin_thresholds(runner: &mut Runner, pins: &[(f64, f64)]) {
-    use crate::race::pins::PinnedThreshold;
-
-    let pins = pins
-        .iter()
-        .map(|&(time, distance)| PinnedThreshold { time, distance });
-    runner.pins.positioning_thresholds = pins.collect();
+    runner.pinned_thresholds = PinQueue::new(pins.iter().copied());
 }
 
 #[test]
@@ -372,18 +363,18 @@ fn test_pinned_thresholds_are_used_once_and_not_before_their_time() {
     // A pin of a later time doesn't affect the threshold.
     let first = enter(&mut runner, 10.0);
     assert!(matches!(first, PositioningStrategy::PaceUp(t) if t < 100.0));
-    assert_eq!(runner.pinned_thresholds_used, 0);
+    assert_eq!(runner.pinned_thresholds.iter().count(), 2);
 
     // The first threshold at or after its time uses it...
     let second = enter(&mut runner, 12.0);
     assert_eq!(second, PositioningStrategy::PaceUp(123.0));
-    assert_eq!(runner.pinned_thresholds_used, 1);
+    assert_eq!(runner.pinned_thresholds.iter().count(), 1);
 
     // ...and only that one: the next one rolls (the last pin is still due
     // later).
     let third = enter(&mut runner, 14.0);
     assert!(matches!(third, PositioningStrategy::PaceUp(t) if t < 100.0));
-    assert_eq!(runner.pinned_thresholds_used, 1);
+    assert_eq!(runner.pinned_thresholds.iter().count(), 1);
 }
 
 #[test]

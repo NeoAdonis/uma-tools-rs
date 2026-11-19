@@ -196,55 +196,48 @@ pub struct PinnedActivation {
     pub targets: Option<Vec<RunnerId>>,
 }
 
+/// Pins taken when due: each is used at most once, by the first roll at or
+/// after its time.
+///
+/// Pins with the same time are taken in the order they were given.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PinQueue<T> {
+    /// Pins by descending time, the next one last.
+    items: Vec<(f64, T)>,
+}
+
+impl<T> Default for PinQueue<T> {
+    fn default() -> Self {
+        Self { items: Vec::new() }
+    }
+}
+
+impl<T> PinQueue<T> {
+    /// Returns a queue of the `(time, pin)` pairs in `items`, in any order.
+    pub(crate) fn new(items: impl IntoIterator<Item = (f64, T)>) -> Self {
+        let mut items: Vec<_> = items.into_iter().collect();
+        // Stable and reversed, so that popping takes ties in order.
+        items.sort_by(|a, b| a.0.total_cmp(&b.0));
+        items.reverse();
+        Self { items }
+    }
+
+    /// Takes the next pin if it's due at `time`.
+    pub(crate) fn take_due(&mut self, time: f64) -> Option<T> {
+        if self.items.last().is_some_and(|&(due, _)| due <= time) {
+            self.items.pop().map(|(_, item)| item)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the pins not taken yet, in no particular order.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+        self.items.iter().map(|(_, item)| item)
+    }
+}
+
 impl Pins {
-    /// Returns the section speed modifier of `section`.
-    ///
-    /// It's the pinned one, if any, or `rolled`. Sections past the goal can't
-    /// be pinned.
-    pub(crate) fn section_speed(&self, section: u8, rolled: f64) -> f64 {
-        let pinned = self.section_speed.get(section as usize).copied();
-        pinned.flatten().unwrap_or(rolled)
-    }
-
-    /// Returns whether she's in downhill mode after a check on a downhill.
-    ///
-    /// It's the pinned outcome of `check` (0-indexed) on the slope with index
-    /// `slope`, if any, or `rolled`.
-    pub(crate) fn downhill_mode(&self, slope: usize, check: usize, rolled: bool) -> bool {
-        let pinned = self.downhill.get(&slope).and_then(|c| c.get(check));
-        pinned.copied().unwrap_or(rolled)
-    }
-
-    /// Returns whether a position keep wit check at `time` passes.
-    ///
-    /// It's the outcome of the first unused pin at or before `time`, if any, or
-    /// `rolled`. `used` is the number of pins used so far, and using a pin
-    /// advances it.
-    pub(crate) fn positioning_wit_check(&self, used: &mut usize, time: f64, rolled: bool) -> bool {
-        match self.positioning.get(*used) {
-            Some(pin) if pin.time <= time => {
-                *used += 1;
-                pin.passes
-            }
-            _ => rolled,
-        }
-    }
-
-    /// Returns the exit threshold of a Pace Up or Pace Down rolled at `time`.
-    ///
-    /// It's the distance of the first unused pin at or before `time`, if any,
-    /// or `rolled`. `used` is the number of pins used so far, and using a pin
-    /// advances it.
-    pub(crate) fn positioning_threshold(&self, used: &mut usize, time: f64, rolled: f64) -> f64 {
-        match self.positioning_thresholds.get(*used) {
-            Some(pin) if pin.time <= time => {
-                *used += 1;
-                pin.distance
-            }
-            _ => rolled,
-        }
-    }
-
     /// Returns the pinned activations of the skill with ID `id`, if any.
     pub(crate) fn activations(&self, id: i32) -> Option<&[PinnedActivation]> {
         match self.skills.get(&id) {
@@ -388,4 +381,22 @@ fn validate_activations(skill: &Skill, activations: &[PinnedActivation]) {
         out_of_gate <= 1,
         "Skill {id} activates out of gate {out_of_gate} times: expected at most once"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pin_queue_takes_each_pin_once_in_time_then_given_order() {
+        let mut queue = PinQueue::new([(2.0, 'c'), (1.0, 'a'), (2.0, 'd'), (1.0, 'b')]);
+        assert_eq!(queue.take_due(0.5), None);
+        // Pins due at the same time, whenever they're taken, come in order.
+        assert_eq!(queue.take_due(2.0), Some('a'));
+        assert_eq!(queue.take_due(2.0), Some('b'));
+        assert_eq!(queue.iter().count(), 2);
+        assert_eq!(queue.take_due(2.0), Some('c'));
+        assert_eq!(queue.take_due(2.0), Some('d'));
+        assert_eq!(queue.take_due(f64::INFINITY), None);
+    }
 }

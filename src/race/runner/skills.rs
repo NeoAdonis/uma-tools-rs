@@ -336,12 +336,7 @@ impl Runner {
     /// Moves the pinned activations due by now to the frame's queue, ordered by
     /// skill (then time, as queued), the next one last.
     fn collect_due_pins(&mut self, state: &RaceState) {
-        while self
-            .pinned_activations
-            .last()
-            .is_some_and(|next| next.time <= state.elapsed_time)
-        {
-            let next = self.pinned_activations.pop().expect("checked above");
+        while let Some(next) = self.pinned_activations.take_due(state.elapsed_time) {
             self.due_pins.push(next);
         }
         // Stable, so that the order of the same skill is kept.
@@ -1123,7 +1118,7 @@ impl Runner {
                 let skill = &self.skills[skill_index];
                 skill.is_gold()
                     && !skill.should_activate_out_of_gate()
-                    && self.pins.activations(skill.id).is_none()
+                    && !self.pinned_skills[skill_index]
                     && self.can_force_gold_skill(skill_index, state)
             })
             .collect();
@@ -1174,7 +1169,7 @@ impl Runner {
             let skill = &self.available_skills()[skill_index];
             if !skill.is_unique()
                 || skill.should_activate_out_of_gate()
-                || self.pins.activations(skill.id).is_some()
+                || self.pinned_skills[skill_index]
             {
                 continue;
             }

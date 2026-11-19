@@ -322,8 +322,6 @@ pub(crate) struct PendingEffect {
 /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct QueuedActivation {
-    /// Time since the race started, in seconds.
-    pub(crate) time: f64,
     /// Index of the skill in the runner's skills.
     pub(crate) skill_index: usize,
     /// Index of the alternative that activates.

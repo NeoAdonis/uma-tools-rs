@@ -70,6 +70,7 @@
 //! # }
 //! ```
 
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -85,6 +86,8 @@ use crate::race::events::{Event, EventKind};
 use crate::race::hp::*;
 use crate::race::last_spurt::*;
 use crate::race::modifiers::*;
+use crate::race::pins::PinQueue;
+#[cfg(doc)]
 use crate::race::pins::Pins;
 use crate::race::popularity::JudgeScores;
 use crate::race::rng::{RunnerRng, Stream};
@@ -353,9 +356,10 @@ pub struct Runner {
     pub(crate) pending_heal: f64,
     /// HP lost to this runner's skills this frame, applied after the recovery.
     pub(crate) pending_hp_loss: f64,
-    /// Pinned activations still to happen during the race, by descending time
-    /// (the next one last).
-    pub(crate) pinned_activations: Vec<QueuedActivation>,
+    /// Pinned activations still to happen during the race.
+    pub(crate) pinned_activations: PinQueue<QueuedActivation>,
+    /// Whether the activations of each skill are pinned, by skill index.
+    pub(crate) pinned_skills: Vec<bool>,
     /// Pinned activations due in the current frame that haven't activated yet,
     /// by descending skill (the next one last), so that they activate in skill ID
     /// order along with the checks.
@@ -421,12 +425,12 @@ pub struct Runner {
     /// Ex, whether or not they drew. It keys the stream of the next one (see
     /// [`Stream::Positioning`]).
     pub(crate) positioning_checks: u32,
-    /// Number of pinned positioning wit checks consumed so far (see
+    /// Pinned outcomes of positioning wit checks still to be used (see
     /// [`Pins::positioning`]).
-    pub(crate) pinned_wit_checks_used: usize,
-    /// Number of pinned positioning thresholds consumed so far (see
+    pub(crate) pinned_wit_checks: PinQueue<bool>,
+    /// Pinned positioning exit thresholds still to be used (see
     /// [`Pins::positioning_thresholds`]).
-    pub(crate) pinned_thresholds_used: usize,
+    pub(crate) pinned_thresholds: PinQueue<f64>,
     /// Position (m) at which the current positioning strategy ends, unless its
     /// exit conditions are met first (see `enter_positioning`).
     pub(crate) positioning_end: f64,
@@ -441,8 +445,12 @@ pub struct Runner {
     /// a check doesn't count toward it, so checks are 17 frames apart at the
     /// simulation's frame time).
     pub(crate) downhill_check_timer: f64,
-    /// Downhill mode checks made on the current downhill.
-    pub(crate) downhill_checks: usize,
+    /// Pinned downhill mode outcomes of the downhills not entered yet, by slope
+    /// index (see [`Pins::downhill`]).
+    pub(crate) pinned_downhill: HashMap<usize, Vec<bool>>,
+    /// Pinned outcomes of the next checks on the current downhill, the next one
+    /// last.
+    pub(crate) downhill_pins: Vec<bool>,
     /// Number of uphills climbed to the end.
     pub(crate) uphills_climbed: u8,
     /// Current section index (see [`Self::section`]).
@@ -480,8 +488,9 @@ pub struct Runner {
     pub(crate) events: Vec<Event>,
     /// Random number streams of the runner (see [`crate::race::rng`]).
     pub(crate) rng: RunnerRng,
-    /// Random outcomes fixed instead of rolled.
-    pub(crate) pins: Pins,
+    /// Pinned section speed modifiers in m/s, by section (see
+    /// [`Pins::section_speed`]).
+    pub(crate) pinned_section_speeds: [Option<f64>; SECTION_COUNT as usize],
     /// Course segments (corners, straights and slopes) the runner is in.
     pub(crate) segments: SegmentState,
     /// World position on the horizontal plane at the start of the last move, if it
@@ -1081,7 +1090,9 @@ impl Runner {
             self.adjusted.wit,
             state.course.base_speed(),
         );
-        self.section_speed_modifier = self.pins.section_speed(self.section, rolled);
+        let pinned = self.pinned_section_speeds.get(self.section as usize);
+        // Sections past the goal can't be pinned.
+        self.section_speed_modifier = pinned.copied().flatten().unwrap_or(rolled);
 
         // Since sections only go forward, a rush can only start once.
         if self
@@ -1229,7 +1240,9 @@ impl Runner {
         }
 
         if transition.entered.is_some() {
-            self.downhill_checks = 0;
+            // Slopes are entered once each, so the pins aren't needed again.
+            self.downhill_pins = self.pinned_downhill.remove(&slope_idx).unwrap_or_default();
+            self.downhill_pins.reverse();
             let rng = &mut self.rng;
             rng.slope = rng.keyed(Stream::Slope(slope_idx));
         } else if self.downhill_check_timer < 1.0 {
@@ -1246,9 +1259,7 @@ impl Runner {
         } else {
             rng.random_bool(chance)
         };
-        let check = self.downhill_checks;
-        self.downhill_checks += 1;
-        let in_downhill_mode = self.pins.downhill_mode(slope_idx, check, rolled);
+        let in_downhill_mode = self.downhill_pins.pop().unwrap_or(rolled);
         self.slope_speed_modifier = in_downhill_mode.then(|| downhill_speed_modifier(slope.grade));
     }
 
