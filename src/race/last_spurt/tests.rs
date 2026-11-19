@@ -230,17 +230,14 @@ fn test_high_wit_always_accepts_best_candidate() {
 
 #[test]
 fn test_best_candidate_uses_up_hp() {
-    // With high wit, the best candidate is always accepted. With more HP, a
-    // longer spurt at a lower speed can finish first.
-    // (HP share from base to max speed, whether the best is the max speed).
-    for (share, is_max) in [(0.5, true), (0.75, false)] {
+    // With high wit, the best candidate is always accepted.
+    // (HP share from base to max speed).
+    for share in [0.5, 0.75] {
         let mut solver = solver(2400, GameVersion::LATEST, 0);
         move_to_section(&mut solver, 16);
         set_hp_above_base(&mut solver, share);
-        let max = last_spurt_speed_max(&solver.runners[0], &solver.state);
         let last_spurt = calculate(&mut solver);
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase);
-        assert_eq!(last_spurt.max_speed == max, is_max, "{share} HP share");
 
         // The spurt uses up the HP, running the rest at late-race base target
         // speed (both until 60m before the goal line).
@@ -262,6 +259,43 @@ fn test_best_candidate_uses_up_hp() {
             "{share} HP share"
         );
     }
+}
+
+#[test]
+fn test_candidates_are_ranked_by_time_up_to_the_hp_estimate_distance() {
+    // Spurt distance and time to finish of each candidate speed, over the
+    // distance the HP estimate covers (up to 60m before the goal line).
+    let mut solver = solver(2400, GameVersion::LATEST, 0);
+    move_to_section(&mut solver, 16);
+    set_hp_above_base(&mut solver, 0.5);
+    let runner = &solver.runners[0];
+    let course = &solver.state.course;
+    let condition = solver.state.params.track_condition;
+    let guts = runner.adjusted.guts;
+    let base = late_base_target_speed(&solver);
+    let max = last_spurt_speed_max(runner, &solver.state);
+    let calculation = remaining_spurt_distance(runner.position, course) - 60.0;
+    let rate = |speed| estimate_hp_per_meter_last_spurt(speed, course, condition, guts);
+    let numerator = runner.hp.current() - calculation * rate(base);
+    let speeds: Vec<_> = (0..)
+        .map(|step| max - 0.1 * step as f64)
+        .take_while(|&speed| speed >= base)
+        .collect();
+    let spurt_distance = |speed| (numerator / (rate(speed) - rate(base))).min(calculation);
+    let best_by = |time: &dyn Fn(f64, f64) -> f64| {
+        *speeds
+            .iter()
+            .min_by(|&&a, &&b| time(a, spurt_distance(a)).total_cmp(&time(b, spurt_distance(b))))
+            .unwrap()
+    };
+    let estimated = best_by(&|speed, d| d / speed + (calculation - d) / base);
+    // Timing the final 60m at the spurt speed instead favors faster, shorter
+    // spurts, so the order of these two candidates flips.
+    let with_final = best_by(&|speed, d| (d + 60.0) / speed + (calculation - d) / base);
+    assert!(with_final > estimated);
+
+    let last_spurt = calculate(&mut solver);
+    assert_close!(last_spurt.max_speed, estimated);
 }
 
 #[test]

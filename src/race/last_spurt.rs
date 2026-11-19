@@ -136,9 +136,9 @@ impl Runner {
     /// decrementing from the maximum speed down to the late-race base target speed.
     /// For each candidate speed, the distance that can be covered with the
     /// remaining HP is estimated, and from there, the total time to finish the
-    /// race. A candidate is picked based on a probability influenced by the
-    /// runner's wit stat. A higher wit increases the chance of picking a
-    /// higher speed.
+    /// race. Going from the best time to the worst, each candidate is accepted
+    /// with a chance that grows with the runner's wit; if none is, the slowest
+    /// is picked.
     pub(crate) fn calculate_last_spurt(&mut self, position: f64, state: &RaceState) -> LastSpurt {
         let course = &state.course;
         let track_condition = state.params.track_condition;
@@ -219,16 +219,14 @@ impl Runner {
             let last_spurt_distance =
                 (numerator / (hp_rate_spurt - hp_rate_base)).min(calculation_distance);
 
-            // Add back the final 60m that we excluded from calculations.
+            // Time to finish the estimated distance: spurt duration at the tested speed
+            // plus the time to run the rest of the calculation distance at late-race base
+            // speed. Acceleration and the 60m not included in the HP estimate are ignored.
+            let time = last_spurt_distance / test_speed
+                + (calculation_distance - last_spurt_distance) / late_base_target_speed;
+
+            // The spurt itself still starts early enough to cover the final 60m.
             let last_spurt_distance_with_final = last_spurt_distance + 60.0;
-
-            // Calculate time to finish (ignoring acceleration):
-            // Last spurt duration at tested speed + time to traverse remaining distance at
-            // late-race base speed.
-            let remaining_at_base = remaining_distance - last_spurt_distance_with_final;
-
-            let time = last_spurt_distance_with_final / test_speed
-                + remaining_at_base / late_base_target_speed;
 
             candidates.push(LastSpurtCandidate {
                 speed: test_speed,
