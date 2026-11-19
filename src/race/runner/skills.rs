@@ -272,7 +272,7 @@ impl Runner {
         self.activation_flags = SkillActivationFlags::default();
         // Pinned activations start their cooldowns once every check that could
         // confirm them is over.
-        for (skill_index, record_index) in std::mem::take(&mut self.pinned_this_frame) {
+        for (skill_index, record_index) in self.pinned.take_this_frame() {
             let record = &self.activated_skills[record_index];
             self.start_cooldown(skill_index, record.alternative, record.time, state);
         }
@@ -283,7 +283,7 @@ impl Runner {
             indices.append(&mut scheduler.race_start_triggers);
         });
         // Their conditions were checked before the race.
-        for skill_id in std::mem::take(&mut self.unmet_out_of_gate) {
+        for skill_id in self.pinned.take_unmet_out_of_gate() {
             let records = &mut self.activated_skills;
             if let Some(record) = records
                 .iter_mut()
@@ -292,7 +292,7 @@ impl Runner {
                 record.conditions_met = false;
             }
         }
-        self.collect_due_pins(state);
+        self.pinned.collect_due(state.elapsed_time);
         // Preconditions go first, so that a skill can activate in the same frame its
         // precondition is satisfied.
         self.check_precondition_windows(state);
@@ -333,17 +333,6 @@ impl Runner {
         }
     }
 
-    /// Moves the pinned activations due by now to the frame's queue, ordered by
-    /// skill (then time, as queued), the next one last.
-    fn collect_due_pins(&mut self, state: &RaceState) {
-        while let Some(next) = self.pinned_activations.take_due(state.elapsed_time) {
-            self.due_pins.push(next);
-        }
-        // Stable, so that the order of the same skill is kept.
-        self.due_pins.sort_by_key(|pin| pin.skill_index);
-        self.due_pins.reverse();
-    }
-
     /// Activates the due pinned activations of skills up to `skill_index`, in
     /// order.
     ///
@@ -351,15 +340,9 @@ impl Runner {
     /// [`Self::check_pinned_skill`]). They start their cooldowns afterward, and
     /// allow their skills to report a missing activation again.
     fn activate_due_pins(&mut self, skill_index: usize, state: &RaceState) {
-        while self
-            .due_pins
-            .last()
-            .is_some_and(|next| next.skill_index <= skill_index)
-        {
-            let next = self.due_pins.pop().expect("checked above");
-            self.missing_reported[next.skill_index] = false;
-            self.pinned_this_frame
-                .push((next.skill_index, self.activated_skills.len()));
+        while let Some(next) = self.pinned.pop_due(skill_index) {
+            self.pinned
+                .activating(next.skill_index, self.activated_skills.len());
             self.activate_skill_as(next.skill_index, next.alternative_index, Some(&next), state);
         }
     }
@@ -384,27 +367,13 @@ impl Runner {
     ) {
         let skill_id = self.skills[skill_index].id;
         let pinned = self
-            .pinned_this_frame
-            .iter()
-            .map(|&(_, record_index)| record_index)
-            .find(|&record_index| {
-                let record = &self.activated_skills[record_index];
-                record.skill_id == skill_id
-                    && record.alternative == alternative_index
-                    && !record.conditions_met
-            });
+            .pinned
+            .confirmable(&self.activated_skills, skill_id, alternative_index);
         if let Some(record_index) = pinned {
             self.activated_skills[record_index].conditions_met = true;
-        } else if reports_missing && !self.missing_reported[skill_index] {
+        } else if reports_missing && self.pinned.can_report_missing(skill_index) {
             let record = self.activation_record(skill_index, alternative_index, true, state);
-            self.missing_activations.push(record);
-            if self
-                .pinned_activations
-                .iter()
-                .any(|pin| pin.skill_index == skill_index)
-            {
-                self.missing_reported[skill_index] = true;
-            } else {
+            if self.pinned.report_missing(skill_index, record) {
                 self.start_cooldown(skill_index, alternative_index, state.elapsed_time, state);
             }
         }
@@ -551,7 +520,7 @@ impl Runner {
                 self.activate_pins_before(index, state);
                 self.try_activate_skill(index, state);
             }
-        } else if indices.is_empty() && !any_flag && !heal_flag && self.due_pins.is_empty() {
+        } else if indices.is_empty() && !any_flag && !heal_flag && !self.pinned.has_due() {
             // Nothing can set a flag.
         } else {
             let (mut next_state, mut next_any, mut next_heal) = (0, 0, 0);
@@ -590,7 +559,7 @@ impl Runner {
     /// Activates the due pinned activations that go before the logic with index
     /// `logic_index`.
     fn activate_pins_before(&mut self, logic_index: usize, state: &RaceState) {
-        if !self.due_pins.is_empty() {
+        if self.pinned.has_due() {
             let skill_index = self.trigger_scheduler.skill_logics[logic_index].skill_index;
             self.activate_due_pins(skill_index, state);
         }
@@ -1118,7 +1087,7 @@ impl Runner {
                 let skill = &self.skills[skill_index];
                 skill.is_gold()
                     && !skill.should_activate_out_of_gate()
-                    && !self.pinned_skills[skill_index]
+                    && !self.pinned.is_pinned(skill_index)
                     && self.can_force_gold_skill(skill_index, state)
             })
             .collect();
@@ -1169,7 +1138,7 @@ impl Runner {
             let skill = &self.available_skills()[skill_index];
             if !skill.is_unique()
                 || skill.should_activate_out_of_gate()
-                || self.pinned_skills[skill_index]
+                || self.pinned.is_pinned(skill_index)
             {
                 continue;
             }

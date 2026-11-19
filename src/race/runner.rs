@@ -99,21 +99,21 @@ use crate::race::transitions::*;
 use crate::race::unready_runner::UnreadyRunner;
 use crate::race::world_distance;
 use crate::skill::*;
-use crate::trigger::skill_activation::{
-    ActiveTimedEffect, PendingEffect, QueuedActivation, SkillActivationRecord,
-};
+use crate::trigger::skill_activation::{ActiveTimedEffect, PendingEffect, SkillActivationRecord};
 use crate::trigger::system::TriggerScheduler;
 use crate::uma::*;
 use crate::units::CourseWidths;
 
 mod lane;
 mod mechanics;
+mod pinned_skills;
 mod positioning;
 mod skills;
 mod surroundings;
 
 pub(crate) use lane::LaneState;
 pub(crate) use lane::OvertakeState;
+pub(crate) use pinned_skills::PinnedSkills;
 pub(crate) use positioning::{POSITIONING_END_SECTION, PaceUpExConditions, PositioningStrategy};
 pub use skills::SkillActivationFlags;
 pub(crate) use skills::SkillModifiers;
@@ -326,20 +326,11 @@ pub struct Runner {
     /// Skills that have been activated during the race (see
     /// [`Self::activated_skills`]).
     pub(crate) activated_skills: Vec<SkillActivationRecord>,
-    /// Activations missing from the pins (see [`Self::missing_activations`]).
-    pub(crate) missing_activations: Vec<SkillActivationRecord>,
-    /// Whether each skill in `skills` has had a missing activation reported
-    /// while a pinned activation of it was still to come, until one is due.
-    pub(crate) missing_reported: Vec<bool>,
-    /// Skill index and index in `activated_skills` of this frame's pinned
-    /// activations, until the next frame's checks start their cooldowns.
-    pub(crate) pinned_this_frame: Vec<(usize, usize)>,
-    /// IDs of the skills whose conditions didn't allow their pinned out-of-gate
-    /// alternative to activate.
+    /// State of the skills whose activations are pinned (see
+    /// [`SkillPin::Activations`]).
     ///
-    /// Emptied on the first frame she moves, when those activations are recorded as
-    /// unmet (see [`SkillActivationRecord::conditions_met`]).
-    pub(crate) unmet_out_of_gate: Vec<i32>,
+    /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
+    pub(crate) pinned: PinnedSkills,
     /// Activated alternatives of each skill in `skills`, as a mask (bit `i` set
     /// when alternative `i` activated).
     pub(crate) activated_alternatives: Vec<u8>,
@@ -358,14 +349,6 @@ pub struct Runner {
     pub(crate) pending_heal: f64,
     /// HP lost to this runner's skills this frame, applied after the recovery.
     pub(crate) pending_hp_loss: f64,
-    /// Pinned activations still to happen during the race.
-    pub(crate) pinned_activations: PinQueue<QueuedActivation>,
-    /// Whether the activations of each skill are pinned, by skill index.
-    pub(crate) pinned_skills: Vec<bool>,
-    /// Pinned activations due in the current frame that haven't activated yet,
-    /// by descending skill (the next one last), so that they activate in skill ID
-    /// order along with the checks.
-    pub(crate) due_pins: Vec<QueuedActivation>,
     /// Chance of rushing as a percentage (see `rush::chance`).
     ///
     /// This is determined at the start of the race along with deciding whether the
@@ -813,7 +796,7 @@ impl Runner {
     ///
     /// [`SkillPin::Activations`]: crate::race::pins::SkillPin::Activations
     pub fn missing_activations(&self) -> &[SkillActivationRecord] {
-        &self.missing_activations
+        self.pinned.missing()
     }
 }
 

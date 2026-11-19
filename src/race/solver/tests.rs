@@ -5615,7 +5615,7 @@ fn condition_report(skill: Arc<Skill>, times: &[f64]) -> (Vec<bool>, Vec<f64>) {
     solver.run();
     let runner = &solver.runners[0];
     let met = runner.activated_skills.iter().map(|r| r.conditions_met);
-    let missing = runner.missing_activations.iter().map(|r| r.time);
+    let missing = runner.missing_activations().iter().map(|r| r.time);
     (met.collect(), missing.collect())
 }
 
@@ -5690,7 +5690,7 @@ fn test_missing_activation_reports_one_alternative_before_the_pin() {
             .map(|r| r.conditions_met)
             .collect();
         let missing: Vec<_> = runner
-            .missing_activations
+            .missing_activations()
             .iter()
             .map(|r| r.alternative)
             .collect();
@@ -5719,7 +5719,7 @@ fn test_unconfirmed_pins_start_the_cooldown() {
     let pinned = &runner.activated_skills[0];
     assert!(!pinned.conditions_met);
     // Not reported until the cooldown ends.
-    let missing = runner.missing_activations.first().expect("a report");
+    let missing = runner.missing_activations().first().expect("a report");
     let end = pinned.time + 6.0;
     assert!(
         (end..end + DELTA_TIME).contains(&missing.time),
@@ -5745,7 +5745,7 @@ fn test_unpinned_skills_meet_their_conditions() {
         "{record:?}"
     );
     assert!(record.conditions_met);
-    assert!(runner.missing_activations.is_empty());
+    assert!(runner.missing_activations().is_empty());
 }
 
 #[test]
@@ -5805,7 +5805,7 @@ fn test_pinned_out_of_gate_skills_report_what_their_conditions_allow() {
         assert_eq!(record.map(|r| r.conditions_met), met, "{case:?}");
         // Base duration of 3 s on a 1200 m course.
         let expected = missing.then_some((1, 0, 0.0, 0.0, 3.6, vec![runner.id]));
-        let record = runner.missing_activations.first();
+        let record = runner.missing_activations().first();
         let record = record.map(|r| {
             let affected = r.affected.clone();
             (
@@ -6390,7 +6390,7 @@ fn test_pinned_skills_with_preconditions_confirm_in_the_frame_they_unlock() {
         panic!("expected a single activation");
     };
     assert!(record.conditions_met);
-    assert!(runner.missing_activations.is_empty());
+    assert!(runner.missing_activations().is_empty());
 }
 
 #[test]

@@ -94,7 +94,7 @@ use crate::race::spot_struggle::SpotStruggle;
 use crate::race::timed_boost::TimedBoost;
 use crate::race::transitions::*;
 use crate::skill::{SYMPATHY_ID, Skill, SkillAlternative, SkillType};
-use crate::trigger::skill_activation::{QueuedActivation, SkillActivationRecord};
+use crate::trigger::skill_activation::SkillActivationRecord;
 use crate::trigger::system::*;
 use crate::uma::{Aptitude, EffectiveStyle, Mood, Stats, Uma};
 
@@ -172,31 +172,6 @@ fn roll_wit_check(skill: &Skill, base_wit: f64, state: &RaceState, rng_seed: Rng
     roll.resolve(&mut rng, skill.activation_chance(base_wit))
 }
 
-/// Returns the activations of `skills` pinned in `pins` during the race.
-///
-/// Out-of-gate ones already happened. Activations at the same time are taken in
-/// order (by skill, then as pinned).
-fn queue_pinned_activations(pins: &Pins, skills: &[Arc<Skill>]) -> PinQueue<QueuedActivation> {
-    let mut queue = Vec::new();
-    for (skill_index, skill) in skills.iter().enumerate() {
-        let Some(activations) = pins.activations(skill.id) else {
-            continue;
-        };
-        for activation in activations {
-            if skill.alternatives[activation.alternative].is_out_of_gate() {
-                continue;
-            }
-            let queued = QueuedActivation {
-                skill_index,
-                alternative_index: activation.alternative,
-                targets: activation.targets.clone(),
-            };
-            queue.push((activation.time, queued));
-        }
-    }
-    PinQueue::new(queue)
-}
-
 /// Everything known about a runner before the race, needed to initialize a
 /// [`Runner`].
 ///
@@ -262,13 +237,10 @@ pub(crate) struct UnreadyRunner {
     /// Whether an out-of-gate skill activated "Sympathy" for every runner (see
     /// [`Self::activate_sympathy`]).
     pub(crate) casts_sympathy: bool,
-    /// Out-of-gate activations missing from the pins (see
-    /// [`Runner::missing_activations`]).
-    missing_activations: Vec<SkillActivationRecord>,
-    /// IDs of the skills whose conditions didn't allow their pinned
-    /// out-of-gate alternative to activate. Passed on to the [`Runner`] (see
-    /// [`Runner::unmet_out_of_gate`]).
-    unmet_out_of_gate: Vec<i32>,
+    /// State of the skills whose activations are pinned, with the out-of-gate
+    /// activations missing from the pins and unmet by their conditions so far.
+    /// Passed on to the [`Runner`].
+    pinned: PinnedSkills,
 
     // === Random number generation ===
     /// Random outcomes fixed instead of rolled.
@@ -315,6 +287,8 @@ impl UnreadyRunner {
             }
         });
 
+        // Failed skills are never pinned, so the indices are the final ones.
+        let pinned = PinnedSkills::new(&pins, &skills);
         let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, &pins, rng_seed);
 
         // Calculate adjusted stats (before out-of-gate skills).
@@ -355,8 +329,7 @@ impl UnreadyRunner {
             evaluated_skill_id: 0,
             evaluated_skill_lot: 0.0,
             casts_sympathy: false,
-            missing_activations: Vec::new(),
-            unmet_out_of_gate: Vec::new(),
+            pinned,
             rush_chance_modifier: 0.0,
             power_skill_bonus: 0,
         }
@@ -507,79 +480,101 @@ impl UnreadyRunner {
                 .random_range(0.0..100.0);
             // Pinned activations replace the conditions, which are still checked,
             // ignoring the rolls: the lot always hits.
-            let pinned = self.pins.activations(skill.id).map(|activations| {
-                // Validated to be at most one.
-                let alt_index = activations
-                    .iter()
-                    .map(|activation| activation.alternative)
-                    .find(|&alt_index| skill.alternatives[alt_index].is_out_of_gate());
-                (alt_index, self.pins.rules_out_failed_wit_check(skill))
-            });
-            if pinned.is_some() {
+            if self.pinned.is_pinned(skill_index) {
                 self.evaluated_skill_lot = 0.0;
+                self.apply_pinned_out_of_gate(skill_index, state);
+            } else {
+                self.apply_unpinned_out_of_gate(skill_index, state);
             }
+        }
+    }
 
-            // Satisfied if all comparisons of any OR branch are true.
-            let holds = |condition: &Condition| {
-                condition.branches.iter().any(|branch| {
-                    branch
-                        .iter()
-                        .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
-                })
-            };
-            // Activate the first out-of-gate alternative whose precondition (if any)
-            // and condition are satisfied, if any. Before the race, a precondition is
-            // just another requirement.
-            let allows = |alternative: &SkillAlternative| {
-                alternative.precondition.as_ref().is_none_or(holds) && holds(&alternative.condition)
-            };
-            let alt_index = skill
-                .alternatives
+    /// Returns whether the condition of an out-of-gate skill holds: all
+    /// comparisons of any OR branch are true.
+    fn out_of_gate_holds(&self, condition: &Condition, state: &RaceState) -> bool {
+        condition.branches.iter().any(|branch| {
+            branch
                 .iter()
-                .position(|alternative| alternative.is_out_of_gate() && allows(alternative));
-            match pinned {
-                None => {
-                    if let Some(alt_index) = alt_index {
-                        self.activate_out_of_gate_skill(skill_index, alt_index);
-                    }
-                }
-                Some((Some(pinned_index), _)) => {
-                    if !allows(&skill.alternatives[pinned_index]) {
-                        self.unmet_out_of_gate.push(skill.id);
-                    }
-                    self.activate_out_of_gate_skill(skill_index, pinned_index);
-                }
-                Some((None, failed_wit_check_ruled_out)) => {
-                    // Recorded unless a roll could explain it.
-                    let is_random = |alt_index: usize| {
-                        let condition = &skill.alternatives[alt_index].condition;
-                        condition
-                            .branches
-                            .iter()
-                            .flatten()
-                            .any(Comparison::is_random)
-                    };
-                    if let Some(alt_index) = alt_index
-                        && failed_wit_check_ruled_out
-                        && !is_random(alt_index)
-                    {
-                        let alternative = &skill.alternatives[alt_index];
-                        self.missing_activations.push(SkillActivationRecord {
-                            skill_id: skill.id,
-                            alternative: alt_index,
-                            time: 0.0,
-                            distance: 0.0,
-                            // Before the race, only the distance scales it.
-                            duration: alternative.base_duration * state.course.distance as f64
-                                / 1000.0,
-                            affected: Vec::from_iter(
-                                alternative.affects_oneself().then_some(self.id),
-                            ),
-                            conditions_met: true,
-                        });
-                    }
-                }
+                .all(|comp| EvaluatorOutOfGate.evaluate(comp, None, state, self))
+        })
+    }
+
+    /// Returns whether the condition and precondition (if any) of an
+    /// out-of-gate alternative hold. Before the race, a precondition is just
+    /// another requirement.
+    fn out_of_gate_allows(&self, alternative: &SkillAlternative, state: &RaceState) -> bool {
+        alternative
+            .precondition
+            .as_ref()
+            .is_none_or(|condition| self.out_of_gate_holds(condition, state))
+            && self.out_of_gate_holds(&alternative.condition, state)
+    }
+
+    /// Returns the index of the first out-of-gate alternative of the skill with
+    /// index `skill_index` that the conditions allow, if any.
+    fn first_allowed_out_of_gate(&self, skill_index: usize, state: &RaceState) -> Option<usize> {
+        self.skills[skill_index]
+            .alternatives
+            .iter()
+            .position(|alt| alt.is_out_of_gate() && self.out_of_gate_allows(alt, state))
+    }
+
+    /// Activates the first out-of-gate alternative of a skill whose
+    /// precondition (if any) and condition are satisfied, if any.
+    fn apply_unpinned_out_of_gate(&mut self, skill_index: usize, state: &RaceState) {
+        if let Some(alt_index) = self.first_allowed_out_of_gate(skill_index, state) {
+            self.activate_out_of_gate_skill(skill_index, alt_index);
+        }
+    }
+
+    /// Activates the pinned out-of-gate alternative of a skill, if it has one,
+    /// whatever its conditions say.
+    ///
+    /// If the conditions don't allow it, the activation is recorded as unmet. If
+    /// she has none pinned but the conditions allow one, it's recorded as
+    /// missing from the pins.
+    fn apply_pinned_out_of_gate(&mut self, skill_index: usize, state: &RaceState) {
+        let skill = Arc::clone(&self.skills[skill_index]);
+        let activations = self
+            .pins
+            .activations(skill.id)
+            .expect("pinned skills have activations");
+        // Validated to be at most one.
+        let pinned_index = activations
+            .iter()
+            .map(|activation| activation.alternative)
+            .find(|&alt_index| skill.alternatives[alt_index].is_out_of_gate());
+        if let Some(pinned_index) = pinned_index {
+            if !self.out_of_gate_allows(&skill.alternatives[pinned_index], state) {
+                self.pinned.push_unmet_out_of_gate(skill.id);
             }
+            self.activate_out_of_gate_skill(skill_index, pinned_index);
+            return;
+        }
+        // Recorded unless a roll could explain it.
+        let is_random = |alt_index: usize| {
+            let condition = &skill.alternatives[alt_index].condition;
+            condition
+                .branches
+                .iter()
+                .flatten()
+                .any(Comparison::is_random)
+        };
+        if let Some(alt_index) = self.first_allowed_out_of_gate(skill_index, state)
+            && self.pins.rules_out_failed_wit_check(&skill)
+            && !is_random(alt_index)
+        {
+            let alternative = &skill.alternatives[alt_index];
+            self.pinned.push_missing(SkillActivationRecord {
+                skill_id: skill.id,
+                alternative: alt_index,
+                time: 0.0,
+                distance: 0.0,
+                // Before the race, only the distance scales it.
+                duration: alternative.base_duration * state.course.distance as f64 / 1000.0,
+                affected: Vec::from_iter(alternative.affects_oneself().then_some(self.id)),
+                conditions_met: true,
+            });
         }
     }
 
@@ -593,7 +588,7 @@ impl UnreadyRunner {
         let Some(skill_index) = self.skills.iter().position(|skill| skill.id == SYMPATHY_ID) else {
             return;
         };
-        if self.pins.activations(SYMPATHY_ID).is_some() {
+        if self.pinned.is_pinned(skill_index) {
             return;
         }
         if !self.activates_on_race_start(skill_index) {
@@ -620,11 +615,6 @@ impl UnreadyRunner {
             .map(|skill| vec![0.0; skill.alternatives.len()])
             .collect();
         let mut rng = RunnerRng::new(self.rng_seed, skills.iter().map(|skill| skill.id));
-        let pinned_activations = queue_pinned_activations(&self.pins, &skills);
-        let pinned_skills = skills
-            .iter()
-            .map(|skill| self.pins.activations(skill.id).is_some())
-            .collect();
         let pinned_wit_checks =
             PinQueue::new(self.pins.positioning.iter().map(|p| (p.time, p.passes)));
         let pinned_thresholds = PinQueue::new(
@@ -708,22 +698,16 @@ impl UnreadyRunner {
             // Pinned after every out-of-gate skill changed it.
             start_delay: self.pins.start_delay.unwrap_or(self.start_delay),
             activated_alternatives: vec![0; skills.len()],
-            missing_reported: vec![false; skills.len()],
             cooldown_until,
             skills,
             available_skill_count,
             activated_skills: Vec::new(),
-            missing_activations: self.missing_activations,
-            pinned_this_frame: Vec::new(),
-            unmet_out_of_gate: self.unmet_out_of_gate,
+            pinned: self.pinned,
             skill_modifiers: SkillModifiers::default(),
             active_timed_effects: Vec::new(),
             pending_effects: Vec::new(),
             pending_heal: 0.0,
             pending_hp_loss: 0.0,
-            pinned_activations,
-            pinned_skills,
-            due_pins: Vec::new(),
             section: 0,
             phase: Phase::from_position(0.0, course),
             section_speed_modifiers,
