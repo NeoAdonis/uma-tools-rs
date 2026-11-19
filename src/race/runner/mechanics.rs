@@ -133,11 +133,7 @@ impl Runner {
     pub(crate) fn update_rush_state(&mut self, state: &mut RaceState) {
         if let Some(rush_state) = &mut self.rush_state
             && rush_state.is_rushed
-            && rush_state.should_end(
-                state.elapsed_time,
-                &mut self.rng.rush,
-                self.pins.rush.failed_checks,
-            )
+            && rush_state.should_end(state.elapsed_time)
         {
             self.end_rush(state);
         }

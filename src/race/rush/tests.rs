@@ -73,59 +73,62 @@ fn test_start_and_end() {
 }
 
 #[test]
+fn test_roll_checks_to_fail() {
+    // Each check fails with probability 0.45, so the count is geometric.
+    const ROLLS: u64 = 4000;
+    let mut counts = [0; 4];
+    for seed in 0..ROLLS {
+        let rush_state = RushState::roll(EffectiveStyle::Pace, &mut rng(seed));
+        assert_eq!(rush_state.failed_checks, 0);
+        counts[(rush_state.checks_to_fail as usize).min(3)] += 1;
+    }
+    let fail = 1.0 - SNAP_OUT_CHANCE;
+    let expected = [
+        1.0 - fail,
+        fail * (1.0 - fail),
+        fail * fail * (1.0 - fail),
+        fail * fail * fail,
+    ];
+    for (count, expected) in counts.into_iter().zip(expected) {
+        let share = count as f64 / ROLLS as f64;
+        assert!((share - expected).abs() < 0.04, "{counts:?}");
+    }
+}
+
+#[test]
 fn test_should_end_waits_for_check() {
     let mut rush_state = rushed();
     let end_time = rush_state.end_time;
-    assert!(!rush_state.should_end(end_time - 0.1, &mut rng(0), None));
+    assert!(!rush_state.should_end(end_time - 0.1));
     assert_eq!(rush_state.end_time, end_time);
 }
 
 #[test]
-fn test_should_end_extends_on_failed_check() {
-    let (mut snapped, mut extended) = (0, 0);
-    for seed in 0..100 {
+fn test_should_end_fails_the_settled_checks() {
+    for checks_to_fail in 0..3 {
         let mut rush_state = rushed();
-        let check_time = rush_state.end_time;
-        if rush_state.should_end(check_time, &mut rng(seed), None) {
-            snapped += 1;
-        } else {
-            extended += 1;
-            assert_eq!(rush_state.end_time, check_time + CHECK_INTERVAL);
+        rush_state.checks_to_fail = checks_to_fail;
+        let mut check_time = rush_state.end_time;
+        while !rush_state.should_end(check_time) {
+            check_time = rush_state.end_time;
         }
+        assert_eq!(rush_state.failed_checks, checks_to_fail);
+        let expected = 5.0 + CHECK_INTERVAL * (checks_to_fail + 1) as f64;
+        assert_eq!(check_time, expected);
     }
-    assert!(
-        snapped > 0 && extended > 0,
-        "{snapped} snapped, {extended} extended"
-    );
-}
-
-#[test]
-fn test_pinned_failed_checks_ignore_rolls() {
-    for seed in 0..10 {
-        for failed_checks in 0..3 {
-            let mut rush_state = rushed();
-            let mut rng = rng(seed);
-            let mut check_time = rush_state.end_time;
-            while !rush_state.should_end(check_time, &mut rng, Some(failed_checks)) {
-                check_time = rush_state.end_time;
-            }
-            assert_eq!(rush_state.failed_checks, failed_checks, "seed {seed}");
-            let expected = 5.0 + CHECK_INTERVAL * (failed_checks + 1) as f64;
-            assert_eq!(check_time, expected, "seed {seed}");
-        }
-    }
-    // The maximum duration still ends it.
-    let mut rush_state = rushed();
-    assert!(rush_state.should_end(5.0 + MAX_DURATION, &mut rng(0), Some(10)));
 }
 
 #[test]
 fn test_should_end_after_max_duration() {
     let mut rush_state = rushed();
+    rush_state.checks_to_fail = 10;
     rush_state.max_duration += 2.0;
     let max_end = rush_state.start_time + rush_state.max_duration;
     // Before the next check, so only the maximum duration can end it.
     rush_state.end_time = f64::MAX;
-    assert!(!rush_state.should_end(max_end - 0.1, &mut rng(0), None));
-    assert!(rush_state.should_end(max_end, &mut rng(0), None));
+    assert!(!rush_state.should_end(max_end - 0.1));
+    assert!(rush_state.should_end(max_end));
+    // At a check, with failures left to go.
+    rush_state.end_time = 0.0;
+    assert!(rush_state.should_end(max_end));
 }

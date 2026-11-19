@@ -530,6 +530,7 @@ fn test_rush_events_record_the_position_at_each_change() {
         end_time: f64::MAX,
         max_duration: rush::MAX_DURATION,
         is_rushed: false,
+        checks_to_fail: 0,
         failed_checks: 0,
         style: EffectiveStyle::Pace,
     });

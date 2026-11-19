@@ -181,7 +181,7 @@ impl Runner {
 
                 let mut rng = self.start_positioning_check(elapsed_time);
 
-                if !self.roll_positioning_wit_check(0.2, &mut rng, elapsed_time) {
+                if !self.positioning_wit_check(0.2, &mut rng, elapsed_time) {
                     return;
                 }
 
@@ -267,7 +267,7 @@ impl Runner {
 
                 if distance_behind > range.end {
                     // Catch up to a certain distance (if wit allows).
-                    if !self.roll_positioning_wit_check(0.15, &mut rng, elapsed_time) {
+                    if !self.positioning_wit_check(0.15, &mut rng, elapsed_time) {
                         return;
                     }
 
@@ -385,22 +385,30 @@ impl Runner {
         ended
     }
 
-    /// Rolls a wit check to change positioning strategy, with a chance of
-    /// `coef * log10(wit * 0.1)`.
+    /// Returns whether a wit check to change positioning strategy at `time`
+    /// passes, with a chance of `coef * log10(wit * 0.1)`.
     ///
-    /// Below 10 wit, the check never passes. Rushed runners always pass it,
-    /// without drawing from `rng` or using pins. Otherwise, the outcome is the
-    /// pinned one, if any (see [`Pins::positioning`]), once the draw is made.
+    /// Rushed runners always pass it, without drawing from `rng` or using pins.
+    /// Otherwise, the outcome is the pinned one, if any (see
+    /// [`Pins::positioning`]), once the draw is made.
     ///
     /// [`Pins::positioning`]: crate::race::pins::Pins::positioning
-    fn roll_positioning_wit_check(&mut self, coef: f64, rng: &mut RaceRng, time: f64) -> bool {
+    fn positioning_wit_check(&mut self, coef: f64, rng: &mut RaceRng, time: f64) -> bool {
         if self.is_rushed() {
             return true;
         }
-        let chance = (coef * (self.adjusted.wit * 0.1).log10()).clamp(0.0, 1.0);
-        let rolled = rng.random_bool(chance);
+        let rolled = self.roll_positioning_wit_check(coef, rng);
         self.pins
             .positioning_wit_check(&mut self.pinned_wit_checks_used, time, rolled)
+    }
+
+    /// Rolls a wit check to change positioning strategy, with a chance of
+    /// `coef * log10(wit * 0.1)`.
+    ///
+    /// Below 10 wit, the check never passes.
+    fn roll_positioning_wit_check(&self, coef: f64, rng: &mut RaceRng) -> bool {
+        let chance = (coef * (self.adjusted.wit * 0.1).log10()).clamp(0.0, 1.0);
+        rng.random_bool(chance)
     }
 }
 

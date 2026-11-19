@@ -105,8 +105,6 @@ impl RngSeed {
 pub(crate) struct RunnerRng {
     /// Seed of the runner, from which every stream derives.
     pub(crate) seed: RngSeed,
-    /// Stream for rush decisions: chance, section, snap-out checks.
-    pub(crate) rush: RaceRng,
     /// Stream for stamina keep ratio and checks.
     pub(crate) stamina_keep: RaceRng,
     /// Stream of the last slope the runner entered (see [`Stream::Slope`]),
@@ -126,7 +124,6 @@ impl RunnerRng {
     pub(crate) fn new(seed: RngSeed, skill_ids: impl IntoIterator<Item = i32>) -> Self {
         Self {
             seed,
-            rush: seed.rng(Stream::Rush),
             stamina_keep: seed.rng(Stream::StaminaKeep),
             slope: seed.rng(Stream::Slope(0)),
             last_spurt: seed.rng(Stream::LastSpurt),

@@ -2397,6 +2397,7 @@ fn set_rushed(solver: &mut RaceSolver<Runner>, i: usize) {
         end_time: 4.0,
         max_duration: 12.0,
         is_rushed: true,
+        checks_to_fail: 0,
         failed_checks: 0,
         style: EffectiveStyle::Pace,
     });

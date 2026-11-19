@@ -30,30 +30,44 @@ pub(crate) struct RushState {
     pub(crate) section: u8,
     /// Time in seconds when the runner started rushing, or zero if she hasn't.
     pub(crate) start_time: f64,
-    /// Time in seconds of the next snap out check while rushed, or when the
+    /// Time in seconds of the next snap-out check while rushed, or when the
     /// rush ended once it's over.
     pub(crate) end_time: f64,
     /// Maximum time in seconds the runner stays rushed.
     pub(crate) max_duration: f64,
     /// Whether the runner is currently rushed.
     pub(crate) is_rushed: bool,
-    /// Snap out checks failed so far.
+    /// Snap-out checks the runner fails before snapping out, if the maximum
+    /// duration doesn't end the rush first.
+    ///
+    /// It's settled when the rush is rolled.
+    pub(crate) checks_to_fail: u8,
+    /// Snap-out checks failed so far.
     pub(crate) failed_checks: u8,
     /// Style used for positioning while rushed.
     pub(crate) style: EffectiveStyle,
 }
 
 impl RushState {
-    /// Rolls when and how a runner with `style` will rush.
+    /// Rolls when and how a runner with `style` will rush, including how many
+    /// snap-out checks she fails.
+    ///
+    /// The checks are rolled up front, until one passes, as the rest of the
+    /// race doesn't draw from `rng` afterwards.
     pub(crate) fn roll(style: EffectiveStyle, rng: &mut impl Rng) -> Self {
         let style = roll_style(style, rng);
         let section = rng.random_range(SECTIONS);
+        let mut checks_to_fail = 0u8;
+        while !rng.random_bool(SNAP_OUT_CHANCE) {
+            checks_to_fail = checks_to_fail.saturating_add(1);
+        }
         RushState {
             section,
             start_time: 0.0,
             end_time: f64::MAX,
             max_duration: MAX_DURATION,
             is_rushed: false,
+            checks_to_fail,
             failed_checks: 0,
             style,
         }
@@ -80,24 +94,16 @@ impl RushState {
     /// Checks if the rush should end at `elapsed_time`, either because it reached
     /// its maximum duration or because the runner snapped out of it.
     ///
-    /// A failed snap out check extends the rush until the next one.
-    ///
-    /// If `pinned_failed_checks` is set, the checks fail until that many did,
-    /// whatever their roll.
-    pub(crate) fn should_end(
-        &mut self,
-        elapsed_time: f64,
-        rng: &mut impl Rng,
-        pinned_failed_checks: Option<u8>,
-    ) -> bool {
+    /// A failed snap-out check extends the rush until the next one. The runner
+    /// snaps out at the check after the last one she fails.
+    pub(crate) fn should_end(&mut self, elapsed_time: f64) -> bool {
         if elapsed_time >= self.start_time + self.max_duration {
             return true;
         }
         if elapsed_time < self.end_time {
             return false;
         }
-        let snaps_out = rng.random_bool(SNAP_OUT_CHANCE);
-        if pinned_failed_checks.map_or(snaps_out, |failed| self.failed_checks >= failed) {
+        if self.failed_checks >= self.checks_to_fail {
             return true;
         }
         self.failed_checks += 1;

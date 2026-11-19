@@ -85,7 +85,7 @@ fn test_wit_check_never_passes_below_10_wit() {
         runner.adjusted.wit = wit;
         for _ in 0..20 {
             assert!(
-                !runner.roll_positioning_wit_check(0.2, &mut RaceRng::seed_from_u64(0), 0.0),
+                !runner.roll_positioning_wit_check(0.2, &mut RaceRng::seed_from_u64(0)),
                 "{wit}"
             );
         }
@@ -129,6 +129,7 @@ fn rush_ready_for_check(runner: &mut Runner, style: EffectiveStyle) {
         end_time: f64::MAX,
         max_duration: rush::MAX_DURATION,
         is_rushed: true,
+        checks_to_fail: 0,
         failed_checks: 0,
         style,
     });

@@ -156,33 +156,20 @@ fn modify_stat(stat: &mut f64, modifier: f64) {
     *stat = (*stat + modifier).max(1.0);
 }
 
-/// Returns whether `skill` passes its wit check for a runner with `base_wit`.
+/// Rolls whether `skill` passes its wit check for a runner with `base_wit`.
 ///
 /// [`Configuration::wit_checks`] only forces the checks of skills that have
-/// one, while pins force any. Every check is rolled, so that pinning or
-/// forcing it doesn't shift the skill's other draws.
+/// one.
 ///
 /// [`Configuration::wit_checks`]: crate::Configuration::wit_checks
-fn passes_wit_check(
-    skill: &Skill,
-    base_wit: f64,
-    pins: &Pins,
-    state: &RaceState,
-    rng_seed: RngSeed,
-) -> bool {
+fn roll_wit_check(skill: &Skill, base_wit: f64, state: &RaceState, rng_seed: RngSeed) -> bool {
     let roll = if skill.wit_check {
         state.config.wit_checks
     } else {
         Roll::Random
     };
     let mut rng = rng_seed.rng(Stream::WitCheck(skill.id));
-    let passes = roll.resolve(&mut rng, skill.activation_chance(base_wit));
-    match pins.skills.get(&skill.id) {
-        Some(&SkillPin::WitCheck(pinned)) => pinned,
-        // Pinned activations happen whatever the check says.
-        Some(SkillPin::Activations(_)) => true,
-        None => passes,
-    }
+    roll.resolve(&mut rng, skill.activation_chance(base_wit))
 }
 
 /// Returns the activations of `skills` pinned in `pins` during the race, by
@@ -320,9 +307,17 @@ impl UnreadyRunner {
         // Skills are checked in ascending ID order, whatever order they were given in.
         let mut skills = skills;
         skills.sort_by_key(|skill| skill.id);
-        let (skills, failed_skills): (Vec<_>, Vec<_>) = skills
-            .into_iter()
-            .partition(|skill| passes_wit_check(skill, base.wit, &pins, state, rng_seed));
+        // Pins replace the rolled outcome of any check, even one forced by
+        // `Configuration::wit_checks` or of a skill without a wit check.
+        let (skills, failed_skills): (Vec<_>, Vec<_>) = skills.into_iter().partition(|skill| {
+            let rolled = roll_wit_check(skill, base.wit, state, rng_seed);
+            match pins.skills.get(&skill.id) {
+                Some(&SkillPin::WitCheck(pinned)) => pinned,
+                // Pinned activations happen whatever the check says.
+                Some(SkillPin::Activations(_)) => true,
+                None => rolled,
+            }
+        });
 
         let trigger_scheduler = TriggerScheduler::from_skills(&skills, course, &pins, rng_seed);
 
@@ -635,15 +630,17 @@ impl UnreadyRunner {
         // Determine whether and how the runner will rush.
         let rush_chance = rush::chance(self.base.wit, self.rush_chance_modifier);
         let rush_pins = self.pins.rush;
+        let mut rush_rng = self.rng_seed.rng(Stream::Rush);
         let can_rush = state
             .config
             .rushing
-            .resolve(&mut rng.rush, rush_chance / 100.0);
+            .resolve(&mut rush_rng, rush_chance / 100.0);
         // Rolled even if she doesn't rush, so that pinning whether she does
-        // doesn't change the stream.
-        let mut rush_state = RushState::roll(self.style, &mut rng.rush);
+        // doesn't change how she would.
+        let mut rush_state = RushState::roll(self.style, &mut rush_rng);
         rush_state.style = rush_pins.style.unwrap_or(rush_state.style);
         rush_state.section = rush_pins.section.unwrap_or(rush_state.section);
+        rush_state.checks_to_fail = rush_pins.failed_checks.unwrap_or(rush_state.checks_to_fail);
         let rush_state = rush_pins.rushes.unwrap_or(can_rush).then_some(rush_state);
 
         // Calculate section modifier for base speed adjustment.

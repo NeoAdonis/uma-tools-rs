@@ -838,6 +838,7 @@ fn test_temptation_status_values() {
         end_time: 15.0,
         max_duration: 12.0,
         is_rushed,
+        checks_to_fail: 0,
         failed_checks: 0,
         style: EffectiveStyle::Late,
     };
