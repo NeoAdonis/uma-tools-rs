@@ -55,6 +55,11 @@ const MAX_RACE_TIME: f64 = 240.0;
 /// Speed used to convert scaled finish time differences into margins, in m/s.
 const MARGIN_SPEED: f64 = 15.0;
 
+/// Largest difference between two stats ranked as tied (see
+/// [`RaceSolver::stat_rank`]), well above rounding errors and below any real
+/// difference (stats come from whole points, multipliers and skill values).
+const STAT_TIE_TOLERANCE: f64 = 1e-6;
+
 /// Maximum number of runners in a single team.
 pub const MAX_TEAM_SIZE: usize = 3;
 
@@ -877,6 +882,110 @@ impl RaceSolver<Runner> {
         }
     }
 
+    /// Returns the rank (1-based, highest first) of the guts of the runner with ID
+    /// `id` among all runners.
+    ///
+    /// Guts are ranked as adjusted, i.e. with mood and passive skills. Ties go
+    /// to the lower gate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` isn't in this race.
+    pub fn guts_rank(&self, id: RunnerId) -> u8 {
+        self.stat_rank(id, |stats| stats.guts)
+    }
+
+    /// Returns the rank (1-based, highest first) of the wit of the runner with ID
+    /// `id` among all runners.
+    ///
+    /// Wit is ranked as adjusted, i.e. with mood, style aptitude and passive
+    /// skills. Ties go to the lower gate.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` isn't in this race.
+    pub fn wit_rank(&self, id: RunnerId) -> u8 {
+        self.stat_rank(id, |stats| stats.wit)
+    }
+
+    /// Returns the rank (1-based, highest first) of the adjusted stat picked by
+    /// `stat` of the runner with ID `id`, ties going to the lower gate.
+    fn stat_rank(&self, id: RunnerId, stat: impl Fn(&Stats) -> f64) -> u8 {
+        let runner = self.runner(id);
+        let value = stat(runner.adjusted());
+        let ahead = self.runners.iter().filter(|other| {
+            let other_value = stat(other.adjusted());
+            // Equal stats can differ by rounding when reached differently.
+            if (other_value - value).abs() < STAT_TIE_TOLERANCE {
+                other.gate_roll < runner.gate_roll
+            } else {
+                other_value > value
+            }
+        });
+        1 + ahead.count() as u8
+    }
+
+    /// Returns the distance in meters between the first and the last runner.
+    ///
+    /// Replays record the maximum over every frame before the winner finishes.
+    ///
+    /// # Examples
+    ///
+    /// Find that maximum, which [`Self::run`] can't tell:
+    ///
+    /// ```
+    /// use uma_tools::{
+    ///     Configuration, Course, RaceParametersData, RaceSolver, SkillData,
+    ///     UmaData,
+    /// };
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// # let parameters = RaceParametersData::from_json(
+    /// #     r#"{
+    /// #         "trackCondition": "Firm", "weather": "Sunny", "season": "Spring",
+    /// #         "time": "Noon", "grade": "G1", "gates": 18, "courseId": "10913"
+    /// #     }"#,
+    /// # )?;
+    /// # let (courses, rails) = ("data/course_data.json", "data/jp/rails");
+    /// # let course_id = &parameters.course_id;
+    /// # let course = Course::from_json_files(courses, rails, course_id)?;
+    /// # let all_skills = SkillData::from_json_file("data/jp/skill_data.json")?;
+    /// # let uma = |strategy| {
+    /// #     let json = format!(
+    /// #         r#"{{
+    /// #             "speed": 1500, "stamina": 800, "power": 1200, "guts": 700,
+    /// #             "wisdom": 1200, "strategy": "{strategy}",
+    /// #             "distanceAptitude": "S", "surfaceAptitude": "A",
+    /// #             "strategyAptitude": "A", "skills": []
+    /// #         }}"#
+    /// #     );
+    /// #     UmaData::from_json(&json)
+    /// # };
+    /// # let config = Configuration::default();
+    /// let mut solver = RaceSolver::new(course, parameters.race, config);
+    /// solver.add_runner(uma("Nige")?.to_entrant(&all_skills)?);
+    /// solver.add_runner(uma("Oikomi")?.to_entrant(&all_skills)?);
+    /// let mut solver = solver.ready_runners();
+    ///
+    /// let mut max_spread = 0.0_f64;
+    /// while !solver.step_frame() {
+    ///     if solver.finish_time().is_none() {
+    ///         max_spread = max_spread.max(solver.field_spread());
+    ///     }
+    /// }
+    /// assert!(max_spread > 0.0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn field_spread(&self) -> f64 {
+        // Runners are sorted by position after every frame.
+        self.assert_runners_sorted();
+        match (self.runners.first(), self.runners.last()) {
+            (Some(first), Some(last)) => first.position - last.position,
+            _ => 0.0,
+        }
+    }
+
     /// Runs the simulation until every runner finishes, then records finish
     /// margins.
     pub fn run(&mut self) {
@@ -1283,8 +1392,7 @@ impl RaceSolver<Runner> {
         // Every gate counts, even if fewer runners are simulated.
         let total_runners = self.state.params.gates;
         let position_first = self.runners.first().unwrap().position;
-        let position_last = self.runners.last().unwrap().position;
-        let position_range = position_first - position_last;
+        let position_range = self.field_spread();
         // Nobody ahead of the leader or behind the last runner counts as an infinite
         // gap, so that skills meant to break away from the pack (`bashin_diff_*<=1`)
         // don't fire for them.
@@ -1895,11 +2003,14 @@ impl RaceSolver<Runner> {
         })
     }
 
+    /// Checks, in debug builds, that runners are sorted by position, leader
+    /// first.
     fn assert_runners_sorted(&self) {
-        #[cfg(debug_assertions)]
-        for i in 1..self.runners.len() {
-            debug_assert!(self.runners[i - 1].position >= self.runners[i].position);
-        }
+        debug_assert!(
+            self.runners
+                .is_sorted_by(|ahead, behind| ahead.position >= behind.position),
+            "runners aren't sorted by position"
+        );
     }
 }
 

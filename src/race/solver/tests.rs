@@ -6418,3 +6418,45 @@ fn test_own_hp_loss_applies_after_the_heals_of_the_frame() {
     assert_close!(solver.runners[0].hp.current(), 0.9 * 2480.0);
     assert_eq!(solver.runners[0].pending_hp_loss, 0.0);
 }
+
+#[test]
+fn test_stat_ranks_break_ties_by_gate() {
+    let mut solver = RaceSolver::new(load_course(10101), race_params(), seeded_config(0));
+    for _ in 0..4 {
+        solver.add_runner(entrant(EffectiveStyle::Front));
+    }
+    let mut solver = solver.ready_runners();
+    // Runners are in gate order once ready. The second and third tie, the
+    // third only up to rounding.
+    solver.runners.sort_by_key(|runner| runner.gate_roll);
+    let stats = [
+        (500.0, 900.0),
+        (600.0, 1000.0),
+        (600.0 + 1e-9, 1000.0 - 1e-9),
+    ];
+    for (runner, (guts, wit)) in solver.runners.iter_mut().zip(stats) {
+        runner.adjusted.guts = guts;
+        runner.adjusted.wit = wit;
+    }
+    solver.runners[3].adjusted.guts = 700.0;
+    solver.runners[3].adjusted.wit = 800.0;
+
+    let ids: Vec<_> = solver.runners.iter().map(Runner::id).collect();
+    let guts: Vec<_> = ids.iter().map(|&id| solver.guts_rank(id)).collect();
+    let wit: Vec<_> = ids.iter().map(|&id| solver.wit_rank(id)).collect();
+    assert_eq!(guts, [4, 2, 3, 1]);
+    assert_eq!(wit, [3, 1, 2, 4]);
+}
+
+#[test]
+fn test_field_spread_is_distance_from_first_to_last() {
+    let solver = positioning_solver(
+        &[
+            (EffectiveStyle::Front, 120.0),
+            (EffectiveStyle::Pace, 100.0),
+            (EffectiveStyle::Late, 87.5),
+        ],
+        GameVersion::LATEST,
+    );
+    assert_eq!(solver.field_spread(), 32.5);
+}
