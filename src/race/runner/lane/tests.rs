@@ -306,6 +306,28 @@ fn test_extra_move_lane_set_upon_entering_final_corner() {
 }
 
 #[test]
+fn test_pinned_final_lane_replaces_the_rolled_offset() {
+    let mut solver = lane_solver(&[(100.0, 0.05)]);
+    let course = solver.state.course.clone();
+    let last_corner = course.corners.len() - 1;
+    let entering = Transitions {
+        corner: Transition {
+            exited: None,
+            entered: Some(last_corner),
+        },
+        ..Default::default()
+    };
+    let runner = &mut solver.runners[0];
+    // Values the roll never gives are kept.
+    for offset in [0.0, 0.07, 0.2, -0.1] {
+        runner.pinned_final_lane = Some(offset);
+        runner.update_final_extra_move_lane(&entering, &course, GameVersion::LATEST);
+        let extra = runner.extra_move_lane.unwrap().0;
+        assert_close!(extra, 0.25 + offset, "{offset}");
+    }
+}
+
+#[test]
 fn test_target_lane_decision_only_when_target_lane_should_update() {
     let mut solver = lane_solver(&[(100.0, 0.3)]);
     let decide = |solver: &RaceSolver<Runner>| {

@@ -42,7 +42,9 @@ fn next_frame(solver: &mut RaceSolver<Runner>) {
 /// Calculate the last spurt of the solver's runner from her position.
 fn calculate(solver: &mut RaceSolver<Runner>) -> LastSpurt {
     let runner = &mut solver.runners[0];
-    runner.calculate_last_spurt(runner.position, &solver.state)
+    runner
+        .calculate_last_spurt(runner.position, &solver.state)
+        .last_spurt
 }
 
 /// Late-race base target speed of the solver's runner.
@@ -389,6 +391,89 @@ fn test_slowest_candidate_when_every_check_fails() {
 }
 
 #[test]
+fn test_pinned_start_picks_the_closest_candidate_and_keeps_the_draws() {
+    let make = || {
+        let mut solver = solver(300, GameVersion::LATEST, 3);
+        move_to_section(&mut solver, 16);
+        set_hp_above_base(&mut solver, 0.5);
+        solver
+    };
+    let max = last_spurt_speed_max(&make().runners[0], &make().state);
+    let position = make().runners[0].position;
+    let mut unpinned = make();
+    let rolled = calculate(&mut unpinned);
+
+    let pinned = |pin| {
+        let mut solver = make();
+        let runner = &mut solver.runners[0];
+        runner.pinned_last_spurt = Some(pin);
+        runner.update_last_spurt(runner.position, &solver.state);
+        let last_spurt = solver.runners[0].last_spurt.unwrap();
+        assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase, "{pin}");
+        // The pin doesn't shift the draws.
+        let next =
+            |solver: &RaceSolver<Runner>| solver.runners[0].rng.last_spurt.clone().random::<u64>();
+        assert_eq!(next(&solver), next(&unpinned), "{pin}");
+        last_spurt
+    };
+
+    // Past the course's end: the latest start, which is the max speed one.
+    let latest = pinned(1e9);
+    assert_close!(latest.max_speed, max);
+    assert!(latest.target_distance >= rolled.target_distance);
+    // Before her position: the earliest start, which spurts from there.
+    let earliest = pinned(0.0);
+    assert_close!(earliest.target_distance, position);
+    assert!(earliest.max_speed < max);
+    // Right on the rolled start: the same candidate.
+    assert_eq!(pinned(rolled.target_distance), rolled);
+}
+
+#[test]
+fn test_pinned_start_ignores_candidates_behind_the_position() {
+    let candidate = |speed, distance| LastSpurtCandidate {
+        speed,
+        distance,
+        time: 0.0,
+    };
+    let calculated = |candidates| CalculatedLastSpurt {
+        last_spurt: LastSpurt {
+            max_speed: 4.0,
+            target_distance: 0.0,
+            category: LastSpurtCategory::Full,
+        },
+        candidates,
+    };
+    // On a 1000m course, starting at 900, 800 and 700m.
+    let with_candidates = calculated(vec![
+        candidate(3.0, 100.0),
+        candidate(2.0, 200.0),
+        candidate(1.0, 300.0),
+    ]);
+    // (pin, position, expected speed).
+    let cases = [
+        (700.0, 0.0, 1.0),
+        (700.0, 750.0, 2.0),
+        (850.0, 0.0, 3.0),
+        (801.0, 0.0, 2.0),
+        // All start behind her: the earliest.
+        (900.0, 950.0, 1.0),
+    ];
+    for (pin, position, speed) in cases {
+        let chosen = with_candidates.starting_near(pin, position, 1000.0);
+        assert_eq!(chosen.max_speed, speed, "{pin} from {position}");
+        assert_eq!(chosen.target_distance, 1000.0 - (4.0 - speed) * 100.0);
+        assert_eq!(chosen.category, LastSpurtCategory::AboveBase);
+    }
+    // Without candidates: the calculated one.
+    let without = calculated(Vec::new());
+    assert_eq!(
+        without.starting_near(700.0, 0.0, 1000.0),
+        without.last_spurt
+    );
+}
+
+#[test]
 fn test_hp_required_to_finish() {
     let mut solver = solver(1000, GameVersion::LATEST, 0);
     move_to_section(&mut solver, 16);
@@ -404,7 +489,7 @@ fn test_hp_required_to_finish() {
         let runner = &mut solver.runners[0];
         runner.hp.set_current(required + offset);
         let last_spurt = runner.calculate_last_spurt(runner.position, &solver.state);
-        assert_eq!(last_spurt.category, category, "{offset} HP over");
+        assert_eq!(last_spurt.last_spurt.category, category, "{offset} HP over");
     }
 
     // Before it, the rest of the Mid phase is run at its base target speed.

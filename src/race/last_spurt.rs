@@ -49,6 +49,51 @@ struct LastSpurtCandidate {
     time: f64,
 }
 
+impl LastSpurtCandidate {
+    /// Returns the last spurt of this candidate, on a course of
+    /// `course_length`.
+    fn last_spurt(&self, course_length: f64) -> LastSpurt {
+        LastSpurt {
+            max_speed: self.speed,
+            target_distance: course_length - self.distance,
+            category: LastSpurtCategory::AboveBase,
+        }
+    }
+}
+
+/// Outcome of a last spurt calculation.
+struct CalculatedLastSpurt {
+    /// The last spurt picked by the calculation.
+    last_spurt: LastSpurt,
+    /// Candidates the last spurt was picked from, from best time to worst;
+    /// empty if it was decided without any.
+    candidates: Vec<LastSpurtCandidate>,
+}
+
+impl CalculatedLastSpurt {
+    /// Returns the last spurt of the candidate that starts closest to `start`,
+    /// among those that don't start before `position`, or the earliest one if
+    /// all do, on a course of `course_length`.
+    ///
+    /// Without candidates, it's the calculated last spurt.
+    fn starting_near(&self, start: f64, position: f64, course_length: f64) -> LastSpurt {
+        let start_of = |c: &&LastSpurtCandidate| course_length - c.distance;
+        let ahead = self.candidates.iter().filter(|c| start_of(c) >= position);
+        ahead
+            .min_by(|a, b| {
+                (start_of(a) - start)
+                    .abs()
+                    .total_cmp(&(start_of(b) - start).abs())
+            })
+            .or_else(|| {
+                self.candidates
+                    .iter()
+                    .min_by(|a, b| start_of(a).total_cmp(&start_of(b)))
+            })
+            .map_or(self.last_spurt, |c| c.last_spurt(course_length))
+    }
+}
+
 /// Calculates the maximum possible last spurt speed for a runner.
 fn last_spurt_speed_max(runner: &Runner, state: &RaceState) -> f64 {
     let base_speed = state.course.base_speed();
@@ -139,7 +184,7 @@ impl Runner {
     /// race. Going from the best time to the worst, each candidate is accepted
     /// with a chance that grows with the runner's wit; if none is, the slowest
     /// is picked.
-    pub(crate) fn calculate_last_spurt(&mut self, position: f64, state: &RaceState) -> LastSpurt {
+    fn calculate_last_spurt(&mut self, position: f64, state: &RaceState) -> CalculatedLastSpurt {
         let course = &state.course;
         let track_condition = state.params.track_condition;
         let max_last_spurt_speed = last_spurt_speed_max(self, state);
@@ -154,10 +199,13 @@ impl Runner {
         let max_hp_required = spurt_hp_required(self, state, max_last_spurt_speed, position);
 
         if self.hp.current() >= max_hp_required {
-            return LastSpurt {
-                max_speed: max_last_spurt_speed,
-                target_distance: course.length() - remaining_distance,
-                category: LastSpurtCategory::Full,
+            return CalculatedLastSpurt {
+                last_spurt: LastSpurt {
+                    max_speed: max_last_spurt_speed,
+                    target_distance: course.length() - remaining_distance,
+                    category: LastSpurtCategory::Full,
+                },
+                candidates: Vec::new(),
             };
         }
 
@@ -182,10 +230,13 @@ impl Runner {
         // so it can also be used to check if the runner can even finish at base speed.
         let numerator = self.hp.current() - calculation_distance * hp_rate_base;
         if numerator <= 0.0 {
-            return LastSpurt {
-                max_speed: late_base_target_speed,
-                target_distance: course.length() - 60.0,
-                category: LastSpurtCategory::CannotFinish,
+            return CalculatedLastSpurt {
+                last_spurt: LastSpurt {
+                    max_speed: late_base_target_speed,
+                    target_distance: course.length() - 60.0,
+                    category: LastSpurtCategory::CannotFinish,
+                },
+                candidates: Vec::new(),
             };
         }
 
@@ -238,25 +289,33 @@ impl Runner {
         let acceptance_chance = (0.15 + 0.0005 * self.adjusted.wit).min(1.0);
         let rng = &mut self.rng;
 
-        // Try each candidate from best to worst.
+        // Try each candidate from best to worst. If all checks fail, use the
+        // slowest (last) one.
         candidates.sort_by(|a, b| a.time.total_cmp(&b.time));
-        for candidate in &candidates {
-            if rng.last_spurt.random_bool(acceptance_chance) {
-                return LastSpurt {
-                    max_speed: candidate.speed,
-                    target_distance: course.length() - candidate.distance,
-                    category: LastSpurtCategory::AboveBase,
-                };
-            }
+        let last_spurt = candidates
+            .iter()
+            .find(|_| rng.last_spurt.random_bool(acceptance_chance))
+            .or(candidates.last())
+            .expect("max speed is always a candidate")
+            .last_spurt(course.length());
+        CalculatedLastSpurt {
+            last_spurt,
+            candidates,
         }
+    }
 
-        // If all checks fail, use the slowest (last) candidate.
-        let last = candidates.last().expect("max speed is always a candidate");
-        LastSpurt {
-            max_speed: last.speed,
-            target_distance: course.length() - last.distance,
-            category: LastSpurtCategory::AboveBase,
-        }
+    /// Calculates her last spurt from `position` (see
+    /// [`Self::calculate_last_spurt`]), replacing it with the candidate that
+    /// starts closest to her pinned start, if any (see [`Pins::last_spurt`]).
+    ///
+    /// [`Pins::last_spurt`]: crate::race::pins::Pins::last_spurt
+    pub(crate) fn update_last_spurt(&mut self, position: f64, state: &RaceState) {
+        let calculated = self.calculate_last_spurt(position, state);
+        let last_spurt = match self.pinned_last_spurt {
+            Some(start) => calculated.starting_near(start, position, state.course.length()),
+            None => calculated.last_spurt,
+        };
+        self.last_spurt = Some(last_spurt);
     }
 }
 

@@ -92,6 +92,20 @@ pub struct Pins {
     /// Each pin fixes the first threshold rolled at or after its time and is
     /// used at most once. Rushed runners still use them.
     pub positioning_thresholds: Vec<PinnedThreshold>,
+    /// Distance from the start at which her last spurt starts, in meters.
+    ///
+    /// Whenever her last spurt is calculated, it takes the candidate (the
+    /// full spurt included) that starts closest to this distance, among those
+    /// that don't start behind her position, or the earliest one if all do.
+    /// The calculation's random draws are still consumed as usual.
+    pub last_spurt: Option<f64>,
+    /// Random offset of her extra move lane upon entering the final corner, in
+    /// course widths.
+    ///
+    /// It's rolled from 0 (inclusive) to 0.1 (exclusive), and added to the
+    /// lane's base: half of how far she is toward 0.1 course widths from the
+    /// inner rail (up to 0.5).
+    pub final_lane: Option<f64>,
 }
 
 /// Outcome of a position keep wit check fixed instead of rolled (see
@@ -279,6 +293,18 @@ impl Pins {
                     "Invalid section speed {speed} for section {section}: expected a finite number"
                 );
             }
+        }
+        if let Some(distance) = self.last_spurt {
+            assert!(
+                distance.is_finite(),
+                "Invalid last spurt distance {distance}: expected a finite number"
+            );
+        }
+        if let Some(offset) = self.final_lane {
+            assert!(
+                offset.is_finite(),
+                "Invalid final lane offset {offset}: expected a finite number"
+            );
         }
         if let Some(section) = self.rush.section {
             let last = SECTION_COUNT - 1;

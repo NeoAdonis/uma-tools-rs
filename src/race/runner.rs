@@ -438,6 +438,11 @@ pub struct Runner {
     /// Pinned downhill mode outcomes of the downhills not entered yet, by slope
     /// index (see [`Pins::downhill`]).
     pub(crate) pinned_downhill: HashMap<usize, Vec<bool>>,
+    /// Pinned start distance of the last spurt (see [`Pins::last_spurt`]).
+    pub(crate) pinned_last_spurt: Option<f64>,
+    /// Pinned offset of the extra move lane upon entering the final corner
+    /// (see [`Pins::final_lane`]).
+    pub(crate) pinned_final_lane: Option<f64>,
     /// Pinned outcomes of the next checks on the current downhill, the next one
     /// last.
     pub(crate) downhill_pins: Vec<bool>,
@@ -1110,7 +1115,7 @@ impl Runner {
         // ? Assume the last spurt is decided after the move, so its speed only
         // applies from the next one.
         if self.phase >= Phase::Late && self.last_spurt.is_none() {
-            self.last_spurt = Some(self.calculate_last_spurt(position, state));
+            self.update_last_spurt(position, state);
         }
 
         self.phase = Phase::from_position(position, &state.course);

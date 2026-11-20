@@ -725,6 +725,8 @@ impl UnreadyRunner {
             slope_speed_modifier: None,
             downhill_check_timer: 0.0,
             pinned_downhill: self.pins.downhill,
+            pinned_last_spurt: self.pins.last_spurt,
+            pinned_final_lane: self.pins.final_lane,
             downhill_pins: Vec::new(),
             uphills_climbed: 0,
             last_spurt: None,

@@ -5320,6 +5320,24 @@ fn test_infinite_force_in_pin_panics() {
 }
 
 #[test]
+#[should_panic(expected = "Invalid last spurt distance NaN: expected a finite number")]
+fn test_nan_last_spurt_pin_panics() {
+    add_with_pins(Pins {
+        last_spurt: Some(f64::NAN),
+        ..Pins::default()
+    });
+}
+
+#[test]
+#[should_panic(expected = "Invalid final lane offset inf: expected a finite number")]
+fn test_infinite_final_lane_pin_panics() {
+    add_with_pins(Pins {
+        final_lane: Some(f64::INFINITY),
+        ..Pins::default()
+    });
+}
+
+#[test]
 #[should_panic(expected = "No downhill 0 to pin")]
 fn test_uphill_downhill_pin_panics() {
     let mut solver = RaceSolver::new(load_course(10201), race_params(), seeded_config(0));
