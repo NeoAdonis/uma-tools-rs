@@ -3,8 +3,13 @@
 //! Two runners that stay close for a while on the final straight (with at
 //! least one of them on it) may start dueling, gaining target speed and
 //! acceleration based on their guts. A runner keeps dueling until her HP runs
-//! low or she gets far from everyone who has dueled during the race. Once she
+//! low or she gets far from everyone who has dueled in her duel group. Once she
 //! leaves, she can't duel again.
+//!
+//! A duel group is formed by the pair that starts a duel together. A runner who
+//! starts dueling with a member of a group, whether dueling or about to start,
+//! joins it, so membership is transitive. When a start links two groups, they
+//! merge. Runners in other groups never matter for the exit check.
 //!
 //! A duel starts one frame after its start conditions are met: the runners
 //! first go through a [`Duel::Starting`] frame, during which they don't duel
@@ -31,8 +36,8 @@ pub(crate) const MAX_ORDER_RATE: u8 = 50;
 pub(crate) const MIN_START_HP_PERCENT: f64 = 15.0;
 /// HP percentage below which a duelist exits.
 pub(crate) const EXIT_HP_PERCENT: f64 = 5.0;
-/// Distance (m) from every other duelist, ahead or behind, at which a duelist
-/// exits.
+/// Distance (m) from every other member of her duel group who has dueled, ahead
+/// or behind, at which a duelist exits.
 pub(crate) const EXIT_DISTANCE: f64 = 5.0;
 
 /// Tolerance for floating-point rounding errors in the trigger checks.
@@ -46,43 +51,74 @@ const TOLERANCE: f64 = 1e-6;
 pub(crate) enum Duel {
     /// Not started yet.
     Pending,
-    /// The start conditions were met in the previous frame, so the duel begins
-    /// in the current one.
+    /// The start conditions were met in the previous frame, so the duel begins in
+    /// the current one.
     ///
-    /// The runner doesn't count as dueling (no bonuses), nor as having dueled
-    /// or ended: she is neither separated from other duelists nor does she
-    /// separate them, and other runners can still be matched with her. The
-    /// start isn't canceled if the conditions stop holding.
-    Starting,
-    /// Dueling, with the given target speed (m/s) and acceleration (m/s²) bonuses.
+    /// The runner doesn't count as dueling (no bonuses), nor as having dueled or
+    /// ended: she is neither separated from other duelists nor does she separate
+    /// them, and other runners can still be matched with her. The start isn't
+    /// canceled if the conditions stop holding.
+    ///
+    /// `group` identifies her duel group.
+    Starting { group: u8 },
+    /// Dueling, with the given target speed (m/s) and acceleration (m/s²) bonuses,
+    /// in duel group `group`.
     Active {
+        group: u8,
         speed_bonus: f64,
         acceleration_bonus: f64,
     },
-    /// Left the duel. It can't start again, but the runner still counts for other
-    /// duelists' exit checks.
-    Ended,
+    /// Left the duel of duel group `group`. It can't start again, but the runner
+    /// still counts for the exit checks of her group's duelists.
+    Ended { group: u8 },
 }
 
 impl Duel {
-    /// Starts dueling.
-    pub(crate) fn start(guts: f64) -> Self {
+    /// Starts dueling in duel group `group`.
+    pub(crate) fn start(guts: f64, group: u8) -> Self {
         Duel::Active {
+            group,
             speed_bonus: target_speed_bonus(guts),
             acceleration_bonus: acceleration_bonus(guts),
         }
     }
 
-    /// Decides to start dueling on the next frame, if not started yet.
-    pub(crate) fn schedule(&mut self) {
-        if matches!(self, Duel::Pending) {
-            *self = Duel::Starting;
+    /// Decides to start dueling on the next frame in duel group `group`, if not
+    /// started yet.
+    pub(crate) fn schedule(&mut self, group: u8) {
+        if self.is_pending() {
+            *self = Duel::Starting { group };
+        }
+    }
+
+    /// Checks if the runner has no duel decided yet.
+    pub(crate) fn is_pending(&self) -> bool {
+        matches!(self, Duel::Pending)
+    }
+
+    /// Returns the runner's duel group, if she has one.
+    pub(crate) fn group(&self) -> Option<u8> {
+        match self {
+            Duel::Pending => None,
+            Duel::Starting { group } | Duel::Active { group, .. } | Duel::Ended { group } => {
+                Some(*group)
+            }
+        }
+    }
+
+    /// Moves the runner to duel group `group`, if she has one.
+    pub(crate) fn set_group(&mut self, new_group: u8) {
+        match self {
+            Duel::Pending => {}
+            Duel::Starting { group } | Duel::Active { group, .. } | Duel::Ended { group } => {
+                *group = new_group;
+            }
         }
     }
 
     /// Checks if the runner's duel is due to start in the current frame.
     pub(crate) fn is_starting(&self) -> bool {
-        matches!(self, Duel::Starting)
+        matches!(self, Duel::Starting { .. })
     }
 
     /// Checks if the runner is currently dueling.
@@ -92,12 +128,12 @@ impl Duel {
 
     /// Checks if the runner has dueled at some point, even if she already left.
     pub(crate) fn has_dueled(&self) -> bool {
-        matches!(self, Duel::Active { .. } | Duel::Ended)
+        matches!(self, Duel::Active { .. } | Duel::Ended { .. })
     }
 
     /// Checks if the runner has left a duel, and thus can't duel again.
     pub(crate) fn has_ended(&self) -> bool {
-        matches!(self, Duel::Ended)
+        matches!(self, Duel::Ended { .. })
     }
 
     /// Returns the target speed increase (m/s), zero if not dueling.
@@ -120,8 +156,8 @@ impl Duel {
 
     /// Leaves the duel, if dueling.
     pub(crate) fn stop(&mut self) {
-        if self.is_dueling() {
-            *self = Duel::Ended;
+        if let Duel::Active { group, .. } = *self {
+            *self = Duel::Ended { group };
         }
     }
 }
@@ -149,8 +185,8 @@ pub(crate) fn is_order_high_enough(order: &OrderState) -> bool {
     100 * u16::from(order.order) <= u16::from(MAX_ORDER_RATE) * u16::from(order.runner_count)
 }
 
-/// Checks if a duelist `distance` meters away from another duelist is separated
-/// from her, either ahead or behind.
+/// Checks if a duelist `distance` meters away from another member of her group
+/// is separated from her, either ahead or behind.
 pub(crate) fn is_separated(distance: f64) -> bool {
     distance.abs() >= EXIT_DISTANCE
 }

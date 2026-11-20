@@ -293,7 +293,9 @@ impl Runner {
         if self.duel.is_dueling() {
             return;
         }
-        self.duel = Duel::start(self.adjusted.guts);
+        // Without a decided group, she starts a group of her own.
+        let group = self.duel.group().unwrap_or(self.gate_roll);
+        self.duel = Duel::start(self.adjusted.guts, group);
         self.log_start(EventKind::Duel, elapsed_time);
     }
 

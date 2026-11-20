@@ -1877,9 +1877,10 @@ impl RaceSolver<Runner> {
     }
 
     /// Makes duelists exit if their HP runs low or they're separated from every
-    /// other runner who has dueled, ahead or behind.
+    /// other member of their duel group who has dueled, ahead or behind.
     ///
-    /// Runners who already exited still count, so exits never cascade.
+    /// Runners who already exited still count, so exits never cascade. Runners
+    /// of other groups never count.
     fn exit_duels(&mut self) {
         let exiting: Vec<usize> = (0..self.runners.len())
             .filter(|&i| {
@@ -1889,6 +1890,7 @@ impl RaceSolver<Runner> {
                         || self.runners.iter().enumerate().all(|(j, other)| {
                             i == j
                                 || !other.duel.has_dueled()
+                                || other.duel.group() != runner.duel.group()
                                 || duel::is_separated(runner.position - other.position)
                         }))
             })
@@ -1912,6 +1914,11 @@ impl RaceSolver<Runner> {
     /// Runners who already exited a duel can't start another one, nor be dueled.
     /// Runners whose start was already decided still count as candidates.
     ///
+    /// Each pair that starts a duel belongs to a duel group: the one of either
+    /// runner if she has it, or a new one. If the runners are in different
+    /// groups, those merge. Only pairs with a runner whose duel wasn't decided
+    /// before this frame start anything or merge groups.
+    ///
     /// Runners must be sorted by position in descending order before calling this.
     fn try_start_duels(&mut self, delta_time: f64) {
         // Pairs no longer close aren't written again, which resets their time.
@@ -1919,6 +1926,7 @@ impl RaceSolver<Runner> {
         self.duel_close_times.fill(None);
         let course = &self.state.course;
         let mut starting = Vec::new();
+        let was_pending: Vec<bool> = self.runners.iter().map(|r| r.duel.is_pending()).collect();
         for i in 0..self.runners.len() {
             let ahead = &self.runners[i];
             if ahead.duel.has_ended() || !ahead.segments.is_on_final_straight(course) {
@@ -1940,13 +1948,31 @@ impl RaceSolver<Runner> {
                 let close_time =
                     self.prev_duel_close_times[pair].map_or(0.0, |time| time + delta_time);
                 self.duel_close_times[pair] = Some(close_time);
-                if duel::is_close_long_enough(close_time) && self.can_start_duel(i, j) {
-                    starting.extend([i, j]);
+                if duel::is_close_long_enough(close_time)
+                    && (was_pending[i] || was_pending[j])
+                    && self.can_start_duel(i, j)
+                {
+                    starting.push((i, j));
                 }
             }
         }
-        for i in starting {
-            self.runners[i].duel.schedule();
+        for (i, j) in starting {
+            let (a, b) = (&self.runners[i], &self.runners[j]);
+            let group = match (a.duel.group(), b.duel.group()) {
+                (Some(group), Some(other)) => {
+                    for runner in &mut self.runners {
+                        if runner.duel.group() == Some(other) {
+                            runner.duel.set_group(group);
+                        }
+                    }
+                    group
+                }
+                (Some(group), None) | (None, Some(group)) => group,
+                // Free: a gate only names a group its founder is in.
+                (None, None) => a.gate_roll,
+            };
+            self.runners[i].duel.schedule(group);
+            self.runners[j].duel.schedule(group);
         }
     }
 

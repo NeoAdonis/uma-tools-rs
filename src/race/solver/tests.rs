@@ -1498,7 +1498,8 @@ fn test_duel_starting_runner_does_not_count_for_exit_checks() {
     // The leader duels, 5.5m ahead of a runner whose duel is about to begin.
     let mut solver = duel_solver(&[(1005.5, 0.1), (1000.0, 0.1)], GameVersion::LATEST);
     solver.runners[0].start_duel(0.0);
-    solver.runners[1].duel.schedule();
+    let group = solver.runners[0].duel.group().unwrap();
+    solver.runners[1].duel.schedule(group);
     update_duels(&mut solver, 1);
     // No one else has dueled yet, so the leader leaves. The other runner, who
     // just began, isn't checked.
@@ -1694,6 +1695,93 @@ fn test_duel_exit_ignores_runners_who_never_dueled() {
     place_on_straight(&mut solver, 2, 994.0, 0.1);
     update_duels(&mut solver, 1);
     assert_eq!(duelists(&solver), [false, false, false]);
+}
+
+#[test]
+fn test_duel_exit_ignores_runners_of_other_groups() {
+    // Two pairs dueling apart from each other, in the top half of 6 runners.
+    let mut solver = duel_solver(
+        &[
+            (1000.0, 0.1),
+            (998.0, 0.1),
+            (960.0, 0.1),
+            (958.0, 0.1),
+            (900.0, 0.1),
+            (890.0, 0.1),
+        ],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, true, true, false, false]);
+    assert_ne!(
+        solver.runners[0].duel.group(),
+        solver.runners[2].duel.group()
+    );
+
+    // The second pair moves next to the second runner of the first one, who is
+    // 5m behind the leader. Close to the other group doesn't keep them dueling.
+    place_on_straight(&mut solver, 0, 1003.0, 0.1);
+    place_on_straight(&mut solver, 2, 997.5, 0.1);
+    place_on_straight(&mut solver, 3, 997.0, 0.1);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false, true, true, false, false]);
+}
+
+#[test]
+fn test_duel_joiner_is_a_member_of_the_group() {
+    // The third runner joins the duel of the first two through the second one.
+    let mut solver = duel_solver(
+        &[(1000.0, 0.1), (998.0, 0.1), (960.0, 0.1), (940.0, 0.1)],
+        GameVersion::LATEST,
+    );
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, false, false]);
+    place_on_straight(&mut solver, 2, 995.5, 0.1);
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, true, false]);
+    let group = solver.runners[0].duel.group();
+    assert_eq!(solver.runners[2].duel.group(), group);
+
+    // The first two exit, but still count for the joiner, who is 4.5m from the
+    // first one.
+    set_hp_percent(&mut solver, 0, 4.0);
+    set_hp_percent(&mut solver, 1, 4.0);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false, true, false]);
+
+    // Only the second one is near her, and the joiner stays...
+    place_on_straight(&mut solver, 0, 1003.0, 0.1);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false, true, false]);
+
+    // ...until she is 5m away from the second one too.
+    place_on_straight(&mut solver, 1, 1001.0, 0.1);
+    update_duels(&mut solver, 1);
+    assert_eq!(duelists(&solver), [false, false, false, false]);
+}
+
+#[test]
+fn test_duel_groups_merge_when_a_start_links_them() {
+    // The third runner is about to start dueling with members of both groups.
+    let mut solver = duel_solver(
+        &[
+            (1000.0, 0.1),
+            (998.0, 0.1),
+            (996.0, 0.1),
+            (994.0, 0.1),
+            (992.0, 0.1),
+            (940.0, 0.1),
+        ],
+        GameVersion::LATEST,
+    );
+    for (i, group) in [(0, 1), (1, 1), (3, 2), (4, 2)] {
+        solver.runners[i].duel = crate::race::duel::Duel::start(800.0, group);
+    }
+    update_duels(&mut solver, DUEL_FRAMES);
+    assert_eq!(duelists(&solver), [true, true, true, true, true, false]);
+    for runner in &solver.runners[..5] {
+        assert_eq!(runner.duel.group(), Some(1));
+    }
 }
 
 #[test]

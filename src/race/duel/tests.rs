@@ -87,7 +87,7 @@ fn test_pending_has_no_effect() {
 
 #[test]
 fn test_active_applies_bonuses() {
-    let duel = Duel::start(1000.0);
+    let duel = Duel::start(1000.0, 3);
     assert!(duel.is_dueling());
     assert!(duel.has_dueled());
     assert!(!duel.has_ended());
@@ -101,11 +101,39 @@ fn test_stop_ends_only_active_duels() {
     duel.stop();
     assert_eq!(duel, Duel::Pending);
 
-    let mut duel = Duel::start(1000.0);
+    let mut duel = Duel::start(1000.0, 3);
     duel.stop();
-    assert_eq!(duel, Duel::Ended);
+    assert_eq!(duel, Duel::Ended { group: 3 });
     assert!(duel.has_dueled());
     assert!(duel.has_ended());
     assert_eq!(duel.speed_bonus(), 0.0);
     assert_eq!(duel.acceleration_bonus(), 0.0);
+}
+
+#[test]
+fn test_groups_follow_the_duel_through_its_states() {
+    let mut duel = Duel::Pending;
+    assert_eq!(duel.group(), None);
+    // Without a group there is nothing to move.
+    duel.set_group(5);
+    assert_eq!(duel, Duel::Pending);
+
+    duel.schedule(2);
+    assert_eq!(duel.group(), Some(2));
+    // Scheduling again doesn't change the group.
+    duel.schedule(4);
+    assert_eq!(duel.group(), Some(2));
+
+    for mut duel in [
+        Duel::Starting { group: 2 },
+        Duel::start(1000.0, 2),
+        Duel::Ended { group: 2 },
+    ] {
+        duel.set_group(7);
+        assert_eq!(duel.group(), Some(7));
+    }
+
+    let mut duel = Duel::start(1000.0, 7);
+    duel.stop();
+    assert_eq!(duel.group(), Some(7));
 }
