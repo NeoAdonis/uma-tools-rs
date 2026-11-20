@@ -2741,6 +2741,68 @@ fn test_scoreboard_time() {
     }
 }
 
+/// Solver whose runner crosses the goal line at the next step, at `speed` and
+/// with `hp`.
+fn solver_at_goal(speed: f64, hp: f64) -> RaceSolver<Runner> {
+    let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
+    let runner = &mut solver.runners[0];
+    runner.start_delay = 0.0;
+    runner.is_start_dash = false;
+    runner.position = solver.state.course.length() - 0.1;
+    runner.speed = speed;
+    runner.hp.set_current(hp);
+    solver.step(DELTA_TIME);
+    assert!(solver.runners[0].has_finished());
+    solver
+}
+
+#[test]
+fn test_finished_runner_keeps_hp_and_decelerates_to_target_speed() {
+    let mut solver = solver_at_goal(28.0, 1000.0);
+    // Her target speed settles, in her last spurt, a few frames after the goal.
+    for _ in 0..3 {
+        solver.step(DELTA_TIME);
+    }
+    let hp = solver.runners[0].hp.current();
+    let finish_time = solver.runners[0].finish_time;
+    let target = solver.runners[0].target_speed;
+    assert!(target < 27.0, "{target}");
+    // The first frame after the goal already decelerates at 4 m/s².
+    let speed = solver.runners[0].speed;
+    solver.step(DELTA_TIME);
+    assert_close!(solver.runners[0].speed, speed - 4.0 * DELTA_TIME);
+    for _ in 0..1000 {
+        if solver.runners[0].speed <= target {
+            break;
+        }
+        solver.step(DELTA_TIME);
+        assert!(solver.runners[0].speed >= target);
+    }
+    for _ in 0..10 {
+        solver.step(DELTA_TIME);
+    }
+    let runner = &solver.runners[0];
+    assert_eq!(runner.speed, runner.target_speed);
+    assert_eq!(runner.target_speed, target);
+    assert_eq!(runner.hp.current(), hp);
+    assert_eq!(runner.finish_time, finish_time);
+}
+
+#[test]
+fn test_finished_runner_without_hp_drops_to_minimum_speed_at_4() {
+    let mut solver = solver_at_goal(20.0, 0.0);
+    let runner = &solver.runners[0];
+    let (speed, min_speed, hp) = (runner.speed, runner.min_speed, runner.hp.current());
+    assert!(speed - min_speed > 4.0 * DELTA_TIME);
+    solver.step(DELTA_TIME);
+    assert_close!(solver.runners[0].speed, speed - 4.0 * DELTA_TIME);
+    for _ in 0..200 {
+        solver.step(DELTA_TIME);
+    }
+    assert_eq!(solver.runners[0].speed, min_speed);
+    assert_eq!(solver.runners[0].hp.current(), hp);
+}
+
 #[test]
 fn test_finished_runners_are_not_counted_as_targets() {
     let mut solver = targeting_solver(&[

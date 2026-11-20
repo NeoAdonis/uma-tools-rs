@@ -1182,19 +1182,20 @@ impl RaceSolver<Runner> {
                 // The start dash may end during the speed update, but that frame
                 // still counts as part of it for HP consumption.
                 let start_dash = runner.is_start_dash;
+                // HP is only consumed up to the frame in which she finishes.
+                let was_finished = runner.has_finished();
                 runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
                 let prev_position = runner.position;
                 runner.update_position(delta_time, &self.state);
-                if runner.has_finished() && self.state.finish_time.is_none() {
-                    self.state.finish_time = Some(self.state.elapsed_time);
-                }
                 // The phase follows the position before the move.
                 runner.update_phase(prev_position, &mut self.state);
-                // Before slopes; so that a downhill mode check only changes HP
-                // consumption from the next frame on.
-                // ? Only seen when entering a downhill at the start.
-                runner.update_hp(delta_time, start_dash, &self.state);
-                runner.update_charge_up(delta_time, self.state.elapsed_time);
+                if !was_finished {
+                    // Before slopes; so that a downhill mode check only changes HP consumption from
+                    // the next frame on.
+                    // ? Only seen when entering a downhill at the start.
+                    runner.update_hp(delta_time, start_dash, &self.state);
+                    runner.update_charge_up(delta_time, self.state.elapsed_time);
+                }
                 true
             } else {
                 false
@@ -1212,6 +1213,9 @@ impl RaceSolver<Runner> {
                 runner.update_lane(&self.state.course, delta_time);
             }
             runner.update_slope(&self.state.course.slopes, &transitions.slope, delta_time);
+            if runner.has_finished() && self.state.finish_time.is_none() {
+                self.state.finish_time = Some(self.state.elapsed_time);
+            }
         }
 
         self.runners

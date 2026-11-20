@@ -126,6 +126,10 @@ pub(crate) const MAX_TARGET_SPEED: f64 = 30.0;
 // ? Not documented; it may depend on something not identified yet.
 pub(crate) const START_DASH_MIN_TARGET_SPEED: f64 = 13.0;
 
+/// Deceleration (m/s²) of a runner that has finished the race, applied whenever
+/// her speed is above her target speed, instead of any other deceleration.
+pub(crate) const FINISHED_DECELERATION: f64 = 4.0;
+
 /// Distance from the inner fence above which the force-in modifier applies.
 pub(crate) const FORCE_IN_MIN_LANE: CourseWidths = CourseWidths(0.12);
 
@@ -856,8 +860,12 @@ impl Runner {
     }
 
     /// Calculates decreasing acceleration (i.e., deceleration).
+    ///
+    /// Once she has finished, it's [`FINISHED_DECELERATION`] instead.
     fn decelerate(&mut self) {
-        self.acceleration = if self.hp.is_empty() {
+        self.acceleration = if self.has_finished() {
+            -FINISHED_DECELERATION
+        } else if self.hp.is_empty() {
             -1.2
         } else if self.is_pace_down() {
             -0.5
