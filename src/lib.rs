@@ -71,7 +71,7 @@
 //! # }
 //! ```
 
-#![warn(missing_debug_implementations)]
+#![warn(missing_debug_implementations, unreachable_pub)]
 
 pub mod condition;
 pub mod configuration;
