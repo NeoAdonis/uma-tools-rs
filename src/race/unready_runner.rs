@@ -710,6 +710,7 @@ impl UnreadyRunner {
             pending_hp_loss: 0.0,
             section: 0,
             phase: Phase::from_position(0.0, course),
+            prev_phase: Phase::from_position(0.0, course),
             section_speed_modifiers,
             hp: HpState::new(max_hp),
             position: 0.0,

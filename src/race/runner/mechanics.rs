@@ -25,12 +25,13 @@ use crate::uma::*;
 use super::{POSITIONING_END_SECTION, PositioningStrategy, Runner};
 
 impl Runner {
-    /// Releases conserved power (脚色十分) once `position` reaches the start of the
-    /// last spurt.
+    /// Releases conserved power (脚色十分) once her position reaches the start of
+    /// the last spurt.
     ///
-    /// Called after the position update, so the acceleration bonus starts on the
-    /// next frame.
-    pub(super) fn try_release_charge_up(&mut self, position: f64, state: &RaceState) {
+    /// Called after the acceleration update, so the acceleration bonus starts on
+    /// the next frame.
+    pub(super) fn try_release_charge_up(&mut self, state: &RaceState) {
+        let position = self.position;
         if !self
             .last_spurt
             .is_some_and(|last_spurt| last_spurt.has_started(position))

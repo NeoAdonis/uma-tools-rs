@@ -304,12 +304,13 @@ impl Runner {
         }
     }
 
-    /// Calculates her last spurt from `position` (see
+    /// Calculates her last spurt from her position (see
     /// [`Self::calculate_last_spurt`]), replacing it with the candidate that
     /// starts closest to her pinned start, if any (see [`Pins::last_spurt`]).
     ///
     /// [`Pins::last_spurt`]: crate::race::pins::Pins::last_spurt
-    pub(crate) fn update_last_spurt(&mut self, position: f64, state: &RaceState) {
+    pub(crate) fn decide_last_spurt(&mut self, state: &RaceState) {
+        let position = self.position;
         let calculated = self.calculate_last_spurt(position, state);
         let last_spurt = match self.pinned_last_spurt {
             Some(start) => calculated.starting_near(start, position, state.course.length()),

@@ -581,8 +581,8 @@ fn test_last_spurt_and_charge_up_release_events() {
         runner.charge_up.as_mut().unwrap().conserved = conserved;
         let name = format!("conserved {conserved}, spurt at {target_distance}");
 
-        // Events the runner should have after a frame that updates her phase from
-        // `position` at `time`.
+        // Events the runner should have after a frame that starts at `position`
+        // at `time`.
         let expected = |runner: &Runner, time: f64, position: f64| {
             let mut events = vec![Event::start(EventKind::LastSpurt, time, position)];
             if conserved > 0.0 {
@@ -600,11 +600,9 @@ fn test_last_spurt_and_charge_up_release_events() {
             events
         };
 
-        // The runner already moved on to the next position, so the events are recorded
-        // at the previous one.
-        runner.position = 1010.0;
+        runner.position = 1000.0;
         state.elapsed_time = 50.0;
-        runner.update_phase(1000.0, state);
+        runner.update_last_spurt(state);
         if target_distance > 1000.0 {
             assert!(runner.events().is_empty(), "{name}");
         } else {
@@ -617,8 +615,10 @@ fn test_last_spurt_and_charge_up_release_events() {
             ..last_spurt
         });
         state.elapsed_time = 51.0;
-        runner.update_phase(1010.0, state);
-        runner.update_phase(1020.0, state);
+        for position in [1010.0, 1020.0] {
+            runner.position = position;
+            runner.update_last_spurt(state);
+        }
         let (time, position) = if target_distance > 1000.0 {
             (51.0, 1010.0)
         } else {

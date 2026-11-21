@@ -329,7 +329,7 @@ impl Runner {
 
         // Recalculate last spurt if in Late phase or later (1st Anniv. onward).
         if state.config.game_version >= GameVersion::FirstAnniversary && self.phase >= Phase::Late {
-            self.update_last_spurt(self.position, state);
+            self.decide_last_spurt(state);
         }
     }
 

@@ -28,15 +28,15 @@ fn move_to_section(solver: &mut RaceSolver<Runner>, section: u8) {
     let position = solver.state.course.section_length() * section as f64 + 0.1;
     let runner = &mut solver.runners[0];
     runner.position = position;
-    runner.update_phase(runner.position, &mut solver.state);
+    runner.update_section(&mut solver.state);
 }
 
-/// Move the runner 1m forward and update her phase from where she was.
+/// Update the runner's phase, decide her last spurt and move her 1m forward.
 fn next_frame(solver: &mut RaceSolver<Runner>) {
     let runner = &mut solver.runners[0];
-    let position = runner.position;
+    runner.update_section(&mut solver.state);
+    runner.update_last_spurt(&mut solver.state);
     runner.position += 1.0;
-    runner.update_phase(position, &mut solver.state);
 }
 
 /// Calculate the last spurt of the solver's runner from her position.
@@ -407,7 +407,7 @@ fn test_pinned_start_picks_the_closest_candidate_and_keeps_the_draws() {
         let mut solver = make();
         let runner = &mut solver.runners[0];
         runner.pinned_last_spurt = Some(pin);
-        runner.update_last_spurt(runner.position, &solver.state);
+        runner.decide_last_spurt(&solver.state);
         let last_spurt = solver.runners[0].last_spurt.unwrap();
         assert_eq!(last_spurt.category, LastSpurtCategory::AboveBase, "{pin}");
         // The pin doesn't shift the draws.

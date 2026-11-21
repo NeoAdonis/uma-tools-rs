@@ -452,8 +452,11 @@ pub struct Runner {
     pub(crate) section: u8,
     /// Current race phase (see [`Self::phase`]).
     pub(crate) phase: Phase,
-    /// Last spurt, calculated when entering the Mid phase (see
-    /// [`Self::last_spurt`]).
+    /// Phase in the previous step, which decides when the last spurt is
+    /// calculated.
+    pub(crate) prev_phase: Phase,
+    /// Last spurt, decided in the Late phase (see [`Self::last_spurt`] and
+    /// [`Self::update_last_spurt`]).
     pub(crate) last_spurt: Option<LastSpurt>,
     /// Stamina Limit Break (スタミナ勝負) buff before its random factor, in m/s.
     ///
@@ -1069,16 +1072,23 @@ impl Runner {
         self.initial_state.team != other.initial_state.team
     }
 
-    /// Updates the current section from the current position, before the target
-    /// speed update and the move.
+    /// Updates the current phase and section from the current position, before
+    /// the target speed update and the move.
+    ///
+    /// The target speed and acceleration updates read both, so a new phase and
+    /// a new section's speed modifier apply from the move that starts past
+    /// their boundary. The last spurt and the release of conserved power are
+    /// the exceptions (see [`update_last_spurt`](Self::update_last_spurt)).
     ///
     /// It also updates what depends on the section: the start of a rush and the
-    /// end of a spot struggle. The section speed modifier is read by the target
-    /// speed update, which applies it from this step's move.
+    /// end of a spot struggle.
     ///
     /// Past the goal, where she runs until everyone finishes, she stays in the
     /// last section.
     pub(crate) fn update_section(&mut self, state: &mut RaceState) {
+        self.prev_phase = self.phase;
+        self.phase = Phase::from_position(self.position, &state.course);
+
         let prev_section = self.section;
         let section = state.course.section_from_position(self.position);
         self.section = section.min(SECTION_COUNT - 1);
@@ -1101,33 +1111,31 @@ impl Runner {
         }
     }
 
-    /// Updates the current phase from `position`, the one before the last move.
+    /// Decides the last spurt and starts it and the release of conserved power,
+    /// from the current position, after the speed update and before the move.
     ///
-    /// Because it updates from a previous position, the phase is a frame behind the
-    /// rest of the state derived from the current position, the section included.
-    ///
-    /// The last spurt is decided here a frame after the phase reaches Late,
-    /// from `position`, and conserved power is released from the frame
-    /// `position` reaches its start. So when the spurt starts right away,
-    /// power is released a frame after the phase reaches Late, and skills see
-    /// the spurt a frame later.
-    pub(crate) fn update_phase(&mut self, position: f64, state: &mut RaceState) {
-        // ? Assume the last spurt is decided after the move, so its speed only
-        // applies from the next one.
-        if self.phase >= Phase::Late && self.last_spurt.is_none() {
-            self.update_last_spurt(position, state);
+    /// The last spurt is decided in the second step that starts in the Late
+    /// phase. Its speed applies from the next step, since this one's target
+    /// speed is already set. When it starts right away, it starts, and
+    /// conserved power is released, in that same step, so skills see the
+    /// spurt in the next one.
+    pub(crate) fn update_last_spurt(&mut self, state: &mut RaceState) {
+        // ? Assume the last spurt is decided after the target speed update, so
+        // its speed only applies from the next step, and a step after the
+        // phase reaches Late.
+        if self.prev_phase >= Phase::Late && self.last_spurt.is_none() {
+            self.decide_last_spurt(state);
         }
 
-        self.phase = Phase::from_position(position, &state.course);
-
-        self.try_start_last_spurt(position, state);
-        self.try_release_charge_up(position, state);
+        self.try_start_last_spurt(state);
+        self.try_release_charge_up(state);
     }
 
-    /// Records the start of the last spurt once `position` reaches it.
+    /// Records the start of the last spurt once her position reaches it.
     ///
     /// The last spurt can be recalculated later, but it only starts once.
-    fn try_start_last_spurt(&mut self, position: f64, state: &RaceState) {
+    fn try_start_last_spurt(&mut self, state: &RaceState) {
+        let position = self.position;
         if self
             .last_spurt
             .is_some_and(|last_spurt| last_spurt.has_started(position))

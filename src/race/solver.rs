@@ -1185,10 +1185,8 @@ impl RaceSolver<Runner> {
                 // HP is only consumed up to the frame in which she finishes.
                 let was_finished = runner.has_finished();
                 runner.update_speed(delta_time, self.state.course.base_speed(), speed_limit);
-                let prev_position = runner.position;
+                runner.update_last_spurt(&mut self.state);
                 runner.update_position(delta_time, &self.state);
-                // The phase follows the position before the move.
-                runner.update_phase(prev_position, &mut self.state);
                 if !was_finished {
                     // Before slopes; so that a downhill mode check only changes HP consumption from
                     // the next frame on.

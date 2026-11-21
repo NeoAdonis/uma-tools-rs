@@ -1271,6 +1271,38 @@ fn test_section_speed_modifier_applies_from_the_move_after_entering() {
 }
 
 #[test]
+fn test_phase_applies_from_the_move_after_entering() {
+    let config = Configuration {
+        rushing: Roll::Never,
+        ..seeded_config(0)
+    };
+    for (phase, section) in [(Phase::Early, 4), (Phase::Mid, 16)] {
+        let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], config);
+        let boundary = solver.state.course.section_start(section);
+        solver.state.elapsed_time = 30.0;
+        let runner = &mut solver.runners[0];
+        runner.is_start_dash = false;
+        runner.phase = phase;
+        runner.section = section - 1;
+        // Just past the boundary before moving, as the speed ramps up.
+        runner.position = boundary + 0.01;
+        runner.speed = 10.0;
+        solver.step(DELTA_TIME);
+
+        let RaceSolver { runners, state, .. } = &mut solver;
+        let runner = &mut runners[0];
+        assert!(runner.phase > phase, "{phase:?}");
+        let (target_speed, acceleration) = (runner.target_speed, runner.acceleration);
+        // Decided after the target speed update, it doesn't apply to this move.
+        runner.last_spurt = None;
+        runner.update_target_speed(state);
+        runner.update_acceleration(state.elapsed_time);
+        assert_close!(target_speed, runner.target_speed);
+        assert_close!(acceleration, runner.acceleration);
+    }
+}
+
+#[test]
 fn test_runners_past_the_goal_stay_in_the_last_section() {
     let mut solver = ready_solver(10101, uma(BaseStyle::Pace), vec![], seeded_config(0));
     let RaceSolver { runners, state, .. } = &mut solver;

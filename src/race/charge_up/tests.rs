@@ -63,7 +63,7 @@ fn enter_last_spurt(solver: &mut RaceSolver<Runner>, conserved: f64) {
         category: LastSpurtCategory::Full,
     });
     solver.state.elapsed_time = 60.0;
-    runner.update_phase(runner.position, &mut solver.state);
+    runner.update_last_spurt(&mut solver.state);
 }
 
 #[test]
@@ -329,10 +329,10 @@ fn test_release_follows_position_before_move() {
     let pending =
         |runner: &Runner| runner.charge_up.as_ref().unwrap().outcome == ChargeUpOutcome::Pending;
 
-    // (Position before the move, whether released). The spurt starts at 1400m,
-    // and the runner is already past it.
+    // (Position, whether released). The spurt starts at 1400m.
     for (position, released) in [(1399.0, false), (1400.0, true)] {
-        runner.update_phase(position, &mut solver.state);
+        runner.position = position;
+        runner.update_last_spurt(&mut solver.state);
         assert_eq!(!pending(runner), released, "{position}m");
     }
     let ChargeUpOutcome::Released(release) = &runner.charge_up.as_ref().unwrap().outcome else {
