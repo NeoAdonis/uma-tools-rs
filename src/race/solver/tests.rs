@@ -2061,6 +2061,20 @@ fn test_lane_speed_is_directional_in_course_widths() {
 }
 
 #[test]
+fn test_lane_change_target_is_own_lane_keeps_current_speed() {
+    let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
+    let RaceSolver { runners, state, .. } = &mut solver;
+    let runner = &mut runners[0];
+    runner.lane.current = CourseWidths(0.4);
+    runner.lane.target = CourseWidths(0.4);
+    runner.lane.current_speed = 0.02;
+
+    runner.update_lane(&state.course, DELTA_TIME);
+    assert_eq!(runner.lane.current_speed, 0.02);
+    assert_eq!(runner.lane.speed, 0.0);
+}
+
+#[test]
 fn test_lane_change_reaching_target_resets_current_speed() {
     let mut solver = positioning_solver(&[(EffectiveStyle::Front, 100.0)], GameVersion::LATEST);
     let RaceSolver { runners, state, .. } = &mut solver;

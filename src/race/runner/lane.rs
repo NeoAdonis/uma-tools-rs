@@ -30,7 +30,8 @@ pub(crate) struct LaneState {
     /// Non-directional lane change speed in course widths per second.
     ///
     /// It changes toward the lane change target speed, before skills and direction
-    /// are accounted for, and resets when the target lane is reached.
+    /// are accounted for. It resets when the runner reaches its target lane by
+    /// moving, and is kept while the target is the runner's own lane.
     pub(crate) current_speed: f64,
     /// Time spent moving laterally in the same direction until the last lane
     /// update, in seconds, or zero if she didn't change lanes on it.
@@ -115,7 +116,6 @@ impl Runner {
         let lane_diff = target_lane - self.lane.current;
         if lane_diff.abs() < CourseWidths(0.0001) {
             self.lane.current = target_lane;
-            self.lane.current_speed = 0.0;
             self.lane.speed = 0.0;
             return;
         }
