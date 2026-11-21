@@ -33,6 +33,7 @@ use std::path::Path;
 
 /// Track condition (a.k.a. ground condition).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum TrackCondition {
     /// 良
@@ -47,6 +48,7 @@ pub enum TrackCondition {
 
 /// Weather.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum Weather {
     /// 晴
@@ -61,6 +63,7 @@ pub enum Weather {
 
 /// Season.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum Season {
     /// 春
@@ -79,6 +82,7 @@ pub enum Season {
 
 /// Time of day.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum Time {
     None,

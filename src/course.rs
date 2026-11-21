@@ -53,6 +53,7 @@ pub(crate) const SECTION_COUNT: u8 = 24;
 /// Every phase but [`Phase::RunUp`] spans a fixed number of the 24 sections of
 /// the nominal distance, after the run-up.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(i8)]
 pub enum Phase {
     /// Run-up, from the starting gate to the official start line.

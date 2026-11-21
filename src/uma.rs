@@ -168,6 +168,7 @@ impl EffectiveStyle {
 /// Aptitude levels for distance, track surface, and running style, with the
 /// game's values.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum Aptitude {
     S = 8,
@@ -183,6 +184,7 @@ pub enum Aptitude {
 /// Mood or condition of the Uma, with the game's values from -2 (Awful) to 2
 /// (Great). Affects base stat multipliers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(i8)]
 pub enum Mood {
     /// 絶不調, very bad.

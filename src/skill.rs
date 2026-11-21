@@ -40,6 +40,7 @@ use crate::units::deserialize_ten_thousandths;
 
 /// Type of a skill effect.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize_repr, Hash, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum SkillType {
     /// A modifier of the speed stat.
@@ -326,6 +327,7 @@ impl TryFrom<RawSkillTarget> for SkillTarget {
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum ValueScaling {
     /// No scaling.
@@ -413,6 +415,7 @@ pub enum ValueScaling {
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum AdditionalActivation {
     /// Applies on activation.
@@ -520,6 +523,7 @@ fn default_cooldown() -> f64 {
 ///
 /// Each variant's discriminant is its ID in the skill data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize_repr, TryFromPrimitive)]
+#[num_enum(error_type(name = crate::InvalidValueError, constructor = crate::InvalidValueError::new))]
 #[repr(u8)]
 pub enum DurationScaling {
     /// No scaling.

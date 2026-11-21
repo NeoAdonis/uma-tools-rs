@@ -58,9 +58,6 @@ of unrelated work:
 - Types don't derive `Serialize`
   ([C-SERDE](https://rust-lang.github.io/api-guidelines/interoperability.html#c-serde)).
   Add it only when results need to be exported.
-- Some public enums derive `TryFrom` through `num_enum`, which exposes its
-  `TryFromPrimitiveError` in the public API
-  ([C-STABLE](https://rust-lang.github.io/api-guidelines/necessities.html#c-stable)).
 
 ## Commits
 
@@ -83,6 +80,8 @@ Source code, relative to `src/`:
 - `configuration.rs`: simulation behavior, game version and language settings.
 - `condition.rs`, `condition/`: condition parsing and evaluation.
 - `course.rs`, `course/`: course properties and calculations.
+- `error.rs`: error types shared by several modules (e.g. `InvalidValueError`,
+  returned by the `TryFrom` impls of enums with game values).
 - `race.rs`, `race/`: race properties, mechanics and simulation.
   - `race/solver.rs`: race initialization and simulation.
   - `race/unready_runner.rs`: runner properties and calculations prior to

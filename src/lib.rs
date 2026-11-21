@@ -76,6 +76,7 @@
 pub mod condition;
 pub mod configuration;
 pub mod course;
+mod error;
 pub mod import;
 pub mod names;
 pub mod race;
@@ -91,6 +92,7 @@ mod test_utils;
 pub use condition::parser::ParseError;
 pub use configuration::Configuration;
 pub use course::Course;
+pub use error::InvalidValueError;
 pub use race::parameters::{RaceParameters, RaceParametersData};
 pub use race::pins::Pins;
 pub use race::runner::Runner;

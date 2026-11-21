@@ -1098,7 +1098,7 @@ mod tests {
                 UMA1_UMA2_JSON,
                 r#""mood": 2"#,
                 r#""mood": 3"#,
-                "enum `Mood` matches the value `3`",
+                "invalid value 3",
             ),
             (
                 UMA1_UMA2_JSON,

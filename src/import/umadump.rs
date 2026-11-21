@@ -540,12 +540,12 @@ mod tests {
         invalid(
             r#""proper_ground_turf": 8"#,
             r#""proper_ground_turf": 0"#,
-            "enum `Aptitude` matches the value `0`",
+            "invalid value 0",
         );
         invalid(
             r#""proper_ground_turf": 8"#,
             r#""proper_ground_turf": 9"#,
-            "enum `Aptitude` matches the value `9`",
+            "invalid value 9",
         );
         invalid(
             r#""guts": 604"#,
